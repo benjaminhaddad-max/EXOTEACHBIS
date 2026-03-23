@@ -246,7 +246,7 @@ export interface Post {
 // Planning
 // =============================================
 
-export type EventType = "cours" | "examen" | "reunion" | "autre";
+export type EventType = "cours" | "examen" | "reunion" | "revision" | "autre";
 
 export interface CalendarEvent {
   id: string;
