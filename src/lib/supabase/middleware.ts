@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { UserRole } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -13,7 +14,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -25,23 +26,20 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
 
-  // Public routes that don't need auth
   const isAuthRoute = pathname === "/login" || pathname === "/register";
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isStudentRoute = !isAdminRoute && !isAuthRoute && pathname !== "/";
 
-  // If not logged in and trying to access protected route
+  // Pas connecté → login
   if (!user && !isAuthRoute && pathname !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // If logged in, fetch role and handle redirects
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -49,31 +47,33 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    const role = profile?.role || "eleve";
-    const isAdminRoute = pathname.startsWith("/admin");
-    const isStudentRoute =
-      !isAdminRoute && !isAuthRoute && pathname !== "/";
+    const role = (profile?.role ?? "eleve") as UserRole;
+    const isAdmin = role === "admin" || role === "superadmin";
+    const isProf = role === "prof";
 
-    // Redirect authenticated users away from auth pages
+    // Connecté sur page auth → rediriger
     if (isAuthRoute) {
       const url = request.nextUrl.clone();
-      url.pathname = role === "admin" ? "/admin/dashboard" : "/dashboard";
+      url.pathname = isAdmin ? "/admin/dashboard" : "/dashboard";
       return NextResponse.redirect(url);
     }
 
-    // Prevent students from accessing admin routes
-    if (isAdminRoute && role !== "admin") {
+    // Élève ou prof qui tente d'accéder à /admin → dashboard
+    if (isAdminRoute && !isAdmin) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
     }
 
-    // Redirect admins from student routes to admin dashboard
-    if (isStudentRoute && role === "admin") {
+    // Admin sur route étudiant → admin dashboard
+    if (isStudentRoute && isAdmin) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/dashboard";
       return NextResponse.redirect(url);
     }
+
+    // Les profs peuvent accéder aux routes étudiants (pour voir les cours)
+    // et ont accès à des sections admin limitées (gérées au niveau des pages)
   }
 
   return supabaseResponse;
