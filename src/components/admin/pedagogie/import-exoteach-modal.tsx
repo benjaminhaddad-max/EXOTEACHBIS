@@ -149,8 +149,10 @@ for(var id of ids){
           console.log('  Q'+exNum+' — réponses ont déjà des images (Apollo), skip DOM');
           continue;
         }
-        /* Si nb images == nb réponses sans image → TOUTES sont des images de réponses */
-        var allAreAnswerImgs=(exImgs.length<=answersNeedingImg);
+        /* Logique: 1 seule image = image de la question (énoncé/molécule).
+           N images = N réponses quand N == nb réponses (chaque réponse a sa propre image).
+           Sinon: première image = question, reste = réponses. */
+        var allAreAnswerImgs=(exImgs.length>1&&exImgs.length===answersNeedingImg);
         if(!allAreAnswerImgs){
           /* Première image = image de la question */
           var b64=getImgUrl(exImgs[0]);
