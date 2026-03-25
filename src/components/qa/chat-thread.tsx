@@ -181,8 +181,17 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? inserted : m)));
     }
 
-    // If student sends a message, trigger AI response
-    if (viewerRole === "student" && threadStatus !== "resolved") {
+    // If student sends a message, trigger AI response (always, even after resolved/escalated)
+    if (viewerRole === "student") {
+      // Reopen thread if it was resolved
+      if (threadStatus === "resolved") {
+        await supabase
+          .from("qa_threads")
+          .update({ status: "ai_pending", resolved_at: null, updated_at: new Date().toISOString() })
+          .eq("id", thread.id);
+        setThreadStatus("ai_pending");
+        onStatusChange?.("ai_pending");
+      }
       setAiThinking(true);
       let gotAiResponse = false;
 
@@ -450,28 +459,22 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
         {aiThinking && <TypingIndicator />}
       </div>
 
-      {/* Input bar */}
-      {threadStatus !== "resolved" && (
-        <ChatInputBar
-          onSendText={handleSendText}
-          onSendVoice={handleSendVoice}
-          onSendMedia={handleSendMedia}
-          disabled={sending}
-          placeholder={
-            viewerRole === "student"
-              ? "Posez votre question..."
-              : "Répondez à l'étudiant..."
-          }
-        />
-      )}
-
-      {threadStatus === "resolved" && (
-        <div className="px-4 py-3 bg-emerald-50 border-t border-emerald-100 text-center">
-          <p className="text-sm text-emerald-700 font-medium">
-            ✓ Question résolue
-          </p>
-        </div>
-      )}
+      {/* Input bar — always visible so student can continue the conversation */}
+      <ChatInputBar
+        onSendText={handleSendText}
+        onSendVoice={handleSendVoice}
+        onSendMedia={handleSendMedia}
+        disabled={sending}
+        placeholder={
+          threadStatus === "resolved"
+            ? "Rouvrir la conversation..."
+            : threadStatus === "escalated"
+              ? "Ajouter un message..."
+              : viewerRole === "student"
+                ? "Posez votre question..."
+                : "Répondez à l'étudiant..."
+        }
+      />
     </div>
   );
 }

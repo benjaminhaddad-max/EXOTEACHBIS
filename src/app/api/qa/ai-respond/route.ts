@@ -171,9 +171,9 @@ export async function POST(request: Request) {
       try {
         message = await anthropic.messages.create({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 800,
+          max_tokens: 500,
           system: systemPrompt,
-          messages: cleanedMessages,
+          messages: cleanedMessages.slice(-6), // Keep last 6 messages max for speed
         });
         break; // Success
       } catch (apiErr: any) {
