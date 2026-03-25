@@ -41,18 +41,71 @@ var client=window.__APOLLO_CLIENT__;
 if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
+var wait=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 var ids=${idsJson};
 var series=[];var errs=[];
-for(var id of ids){try{
-var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
-if(r.data&&r.data.qcm)series.push(r.data.qcm);else errs.push(id);
-}catch(e){errs.push(id);}}
+for(var id of ids){
+  try{
+    console.log('📥 Récupération série '+id+'...');
+    var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
+    if(!r.data||!r.data.qcm){errs.push(id);continue;}
+    var qcm=r.data.qcm;
+    /* --- Scrape images depuis le DOM --- */
+    console.log('🖼️ Récupération images série '+id+'...');
+    var origHash=window.location.hash;
+    window.location.hash='#/serie/play/'+id;
+    await wait(2000);
+    /* Cliquer Démarrer si présent */
+    var startBtn=document.querySelector('button[class*="start"], button[class*="demarrer"]');
+    if(!startBtn){var btns=Array.from(document.querySelectorAll('button'));startBtn=btns.find(function(b){return b.textContent.toLowerCase().includes('marrer')||b.textContent.toLowerCase().includes('commencer');});}
+    if(startBtn){startBtn.click();await wait(3000);}
+    /* Extraire les images par question */
+    var qEls=document.querySelectorAll('[class*="question"], [class*="exercice"], .ant-card, [class*="Question"]');
+    if(qEls.length===0)qEls=document.querySelectorAll('div > div > div');
+    var allImgs=Array.from(document.querySelectorAll('img')).filter(function(img){return img.src.includes('/files/')&&img.naturalWidth>30;});
+    /* Associer chaque image à la question la plus proche par position DOM */
+    var qTexts=qcm.questions.map(function(q){return (q.question||'').replace(/<[^>]+>/g,'').trim().substring(0,40);});
+    for(var img of allImgs){
+      var imgSrc=img.src.split('?')[0];
+      /* Remonter le DOM pour trouver le texte de la question parente */
+      var el=img;var found=false;
+      for(var d=0;d<20;d++){el=el.parentElement;if(!el)break;
+        var txt=el.textContent||'';
+        for(var qi=0;qi<qTexts.length;qi++){
+          if(txt.includes(qTexts[qi])){
+            /* Déterminer si c'est une image de question ou de réponse */
+            var isAnswer=false;
+            var ansEl=img.closest('[class*="answer"], [class*="option"], [class*="proposition"], [class*="reponse"]');
+            if(ansEl){
+              var ansTxt=(ansEl.textContent||'').substring(0,60);
+              for(var ai=0;ai<qcm.questions[qi].answers.length;ai++){
+                var aTxt=(qcm.questions[qi].answers[ai].text||'').replace(/<[^>]+>/g,'').substring(0,40);
+                if(ansTxt.includes(aTxt)){qcm.questions[qi].answers[ai].url_image=imgSrc;isAnswer=true;break;}
+              }
+            }
+            if(!isAnswer&&!qcm.questions[qi].url_image_q){qcm.questions[qi].url_image_q=imgSrc;}
+            found=true;break;
+          }
+        }
+        if(found)break;
+      }
+    }
+    /* Retour à la page d'origine */
+    window.location.hash=origHash||'#/planning';
+    await wait(500);
+    series.push(qcm);
+  }catch(e){console.error(e);errs.push(id);}
+}
 if(!series.length){alert('Aucune série trouvée.');return;}
-console.log(series.length+' série(s) récupérée(s), envoi...');
-var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:series,coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}'})});
-var out=await res.json();
-if(out.success)alert('✅ '+out.imported+' série(s) importée(s) !');
-else alert('Erreur: '+(out.error||'inconnue'));
+var msg=series.length+' série(s) prête(s)';
+if(errs.length)msg+='\\n'+errs.length+' erreur(s): '+errs.join(', ');
+console.log('📤 Envoi à ExoTeachBIS...');
+try{
+  var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:series,coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}'})});
+  var out=await res.json();
+  if(out.success)alert('✅ '+out.imported+' série(s) importée(s) avec images !');
+  else alert('Erreur: '+(out.error||'inconnue'));
+}catch(e){alert('Erreur réseau: '+e.message);}
 })();`;
 }
 
