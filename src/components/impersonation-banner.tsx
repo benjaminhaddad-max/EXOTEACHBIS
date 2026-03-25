@@ -1,16 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { ArrowLeft, Eye } from "lucide-react";
+import { Eye, ArrowLeft } from "lucide-react";
+
+function clearAllAuth() {
+  // Remove impersonation flags
+  localStorage.removeItem("impersonate_active");
+  localStorage.removeItem("impersonate_name");
+  localStorage.removeItem("impersonate_admin_access_token");
+  localStorage.removeItem("impersonate_admin_refresh_token");
+  // Clear all Supabase auth storage
+  const keys = Object.keys(localStorage);
+  for (const key of keys) {
+    if (key.startsWith("sb-") || key.includes("supabase")) {
+      localStorage.removeItem(key);
+    }
+  }
+  // Clear cookies
+  document.cookie.split(";").forEach((c) => {
+    const name = c.trim().split("=")[0];
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+  });
+}
 
 export function ImpersonationBanner() {
   const [active, setActive] = useState(false);
   const [name, setName] = useState("");
-  const [returning, setReturning] = useState(false);
-  const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     const isActive = localStorage.getItem("impersonate_active") === "true";
@@ -20,50 +35,9 @@ export function ImpersonationBanner() {
     }
   }, []);
 
-  const handleReturn = async () => {
-    setReturning(true);
-    try {
-      const accessToken = localStorage.getItem("impersonate_admin_access_token");
-      const refreshToken = localStorage.getItem("impersonate_admin_refresh_token");
-
-      if (!accessToken || !refreshToken) {
-        // No saved admin session — redirect to login
-        localStorage.removeItem("impersonate_active");
-        localStorage.removeItem("impersonate_name");
-        localStorage.removeItem("impersonate_admin_access_token");
-        localStorage.removeItem("impersonate_admin_refresh_token");
-        await supabase.auth.signOut();
-        router.push("/login");
-        return;
-      }
-
-      // Sign out the impersonated user
-      await supabase.auth.signOut();
-
-      // Restore admin session
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-
-      // Cleanup localStorage
-      localStorage.removeItem("impersonate_active");
-      localStorage.removeItem("impersonate_name");
-      localStorage.removeItem("impersonate_admin_access_token");
-      localStorage.removeItem("impersonate_admin_refresh_token");
-
-      if (error) {
-        // Token expired — redirect to login
-        router.push("/login");
-        return;
-      }
-
-      router.push("/admin/utilisateurs");
-      router.refresh();
-    } catch {
-      localStorage.removeItem("impersonate_active");
-      router.push("/login");
-    }
+  const handleReturn = () => {
+    clearAllAuth();
+    window.location.href = "/login";
   };
 
   if (!active) return null;
@@ -76,11 +50,10 @@ export function ImpersonationBanner() {
       </span>
       <button
         onClick={handleReturn}
-        disabled={returning}
-        className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full text-xs font-semibold transition-colors"
       >
         <ArrowLeft className="w-3 h-3" />
-        {returning ? "Retour..." : "Revenir admin"}
+        Revenir admin
       </button>
     </div>
   );

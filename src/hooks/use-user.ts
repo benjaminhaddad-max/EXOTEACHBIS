@@ -55,19 +55,31 @@ export function useUser() {
   }, []);
 
   const signOut = async () => {
-    // Sign out client-side
-    await supabase.auth.signOut();
-    // Also clear server-side session/cookies
-    try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
-    // Clear impersonation data
+    // Clear everything immediately — don't wait for async calls
     if (typeof window !== "undefined") {
+      // Clear impersonation
       localStorage.removeItem("impersonate_active");
       localStorage.removeItem("impersonate_name");
       localStorage.removeItem("impersonate_admin_access_token");
       localStorage.removeItem("impersonate_admin_refresh_token");
+      // Clear all Supabase storage
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {
+        if (key.startsWith("sb-") || key.includes("supabase")) {
+          localStorage.removeItem(key);
+        }
+      }
+      // Clear cookies
+      document.cookie.split(";").forEach((c) => {
+        const name = c.trim().split("=")[0];
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      });
     }
     setUser(null);
     setProfile(null);
+    // Fire and forget — don't block on these
+    supabase.auth.signOut().catch(() => {});
+    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
   };
 
   return { user, profile, loading, signOut };
