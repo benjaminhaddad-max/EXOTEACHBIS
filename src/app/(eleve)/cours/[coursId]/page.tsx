@@ -36,7 +36,7 @@ export default async function CoursDetailPage({ params }: Props) {
     .select(`*, series_questions (count), serie_attempts!left (id, score, ended_at)`)
     .eq("cours_id", coursId)
     .eq("visible", true)
-    .order("order_index");
+    .order("created_at");
 
   const seriesEnrichies = (series ?? []).map((s: any) => ({
     ...s,
