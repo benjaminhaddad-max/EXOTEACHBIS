@@ -33,7 +33,7 @@ export function ContextBadge({ contextType, contextLabel, compact }: ContextBadg
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}>
         <Icon className="w-3 h-3" />
-        <span className="truncate max-w-[200px]">{contextLabel}</span>
+        <span className="truncate max-w-[280px]">{contextLabel}</span>
       </span>
     );
   }
@@ -45,7 +45,7 @@ export function ContextBadge({ contextType, contextLabel, compact }: ContextBadg
         <p className="text-[10px] uppercase tracking-wider font-semibold opacity-70">
           Question sur
         </p>
-        <p className="text-sm font-medium truncate">{contextLabel}</p>
+        <p className="text-sm font-medium leading-snug line-clamp-2">{contextLabel}</p>
       </div>
     </div>
   );

@@ -38,10 +38,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validTypes = ["voice", "image", "video"];
+    const validTypes = ["voice", "image", "video", "document"];
     if (!validTypes.includes(contentType)) {
       return NextResponse.json(
-        { error: "content_type doit être 'voice', 'image' ou 'video'." },
+        { error: "content_type doit être 'voice', 'image', 'video' ou 'document'." },
         { status: 400 }
       );
     }

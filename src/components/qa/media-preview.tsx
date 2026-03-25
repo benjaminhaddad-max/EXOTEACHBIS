@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { X, Play } from "lucide-react";
+import { X, Play, FileText, ExternalLink } from "lucide-react";
 
 interface MediaPreviewProps {
   url: string;
-  type: "image" | "video";
+  type: "image" | "video" | "document";
   accent?: "student" | "ai" | "prof";
 }
 
@@ -14,6 +14,27 @@ export function MediaPreview({ url, type, accent = "student" }: MediaPreviewProp
 
   const borderClass =
     accent === "prof" ? "border-white/20" : "border-gray-200";
+
+  if (type === "document") {
+    const fileName = decodeURIComponent(url.split("/").pop()?.replace(/^\d+\./, "") || "Document.pdf");
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${borderClass} bg-white hover:bg-gray-50 transition-colors max-w-[260px]`}
+      >
+        <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+          <FileText className="w-5 h-5 text-red-500" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-800 truncate">{fileName}</p>
+          <p className="text-[11px] text-gray-400">PDF</p>
+        </div>
+        <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
+      </a>
+    );
+  }
 
   if (type === "video") {
     return (

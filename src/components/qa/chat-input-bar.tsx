@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Send, Mic, MicOff, Paperclip, Image, Video, X } from "lucide-react";
+import { Send, Mic, MicOff, Paperclip, Image, Video, FileText, X } from "lucide-react";
 
 interface ChatInputBarProps {
   onSendText: (text: string) => void;
   onSendVoice: (blob: Blob, duration: number) => void;
-  onSendMedia: (file: File, type: "image" | "video") => void;
+  onSendMedia: (file: File, type: "image" | "video" | "document") => void;
   disabled?: boolean;
   placeholder?: string;
 }
@@ -29,6 +29,7 @@ export function ChatInputBar({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -116,7 +117,7 @@ export function ChatInputBar({
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video") => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "video" | "document") => {
     const file = e.target.files?.[0];
     if (file) {
       onSendMedia(file, type);
@@ -157,20 +158,27 @@ export function ChatInputBar({
     <div className="relative">
       {/* Attachment picker */}
       {showAttach && (
-        <div className="absolute bottom-full left-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-100 p-2 flex gap-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="absolute bottom-full left-4 mb-2 bg-white rounded-xl shadow-lg border border-gray-100 p-1.5 flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150 min-w-[140px]">
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 text-gray-700"
+            onClick={() => { fileInputRef.current?.click(); setShowAttach(false); }}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 text-gray-700 w-full"
           >
             <Image className="w-4 h-4 text-emerald-500" />
             Photo
           </button>
           <button
-            onClick={() => videoInputRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 text-gray-700"
+            onClick={() => { videoInputRef.current?.click(); setShowAttach(false); }}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 text-gray-700 w-full"
           >
             <Video className="w-4 h-4 text-blue-500" />
             Vidéo
+          </button>
+          <button
+            onClick={() => { pdfInputRef.current?.click(); setShowAttach(false); }}
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 text-gray-700 w-full"
+          >
+            <FileText className="w-4 h-4 text-red-500" />
+            PDF
           </button>
         </div>
       )}
@@ -235,6 +243,13 @@ export function ChatInputBar({
         accept="video/*"
         className="hidden"
         onChange={(e) => handleFileSelect(e, "video")}
+      />
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={(e) => handleFileSelect(e, "document")}
       />
     </div>
   );

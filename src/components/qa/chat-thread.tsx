@@ -237,7 +237,7 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
   };
 
   // Send media (image/video)
-  const handleSendMedia = async (file: File, type: "image" | "video") => {
+  const handleSendMedia = async (file: File, type: "image" | "video" | "document") => {
     setSending(true);
     const senderType: QaSenderType = viewerRole === "student" ? "student" : "prof";
 
