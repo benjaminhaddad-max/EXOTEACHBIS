@@ -1,28 +1,131 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import type { UserRole } from "@/types/database";
 
 const PATH = "/admin/utilisateurs";
 
-export async function updateUserRole(userId: string, role: string) {
+async function ensureAdminAccess() {
   const supabase = await createClient();
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Non authentifié" as const };
+  }
+
+  const { data: profile } = await supabase
     .from("profiles")
-    .update({ role, updated_at: new Date().toISOString() })
-    .eq("id", userId);
-  if (error) return { error: error.message };
-  revalidatePath(PATH);
-  return { success: true };
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile || !["admin", "superadmin"].includes(profile.role)) {
+    return { error: "Accès refusé" as const };
+  }
+
+  return { userId: user.id };
 }
 
-export async function updateUserGroupe(userId: string, groupeId: string | null) {
-  const supabase = await createClient();
-  const { error } = await supabase
+export async function updateUserAdminProfile(data: {
+  userId: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string | null;
+  role?: UserRole;
+  groupe_id?: string | null;
+  filiere_id?: string | null;
+  access_dossier_id?: string | null;
+  matiere_ids?: string[];
+}) {
+  const adminCheck = await ensureAdminAccess();
+  if ("error" in adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const normalizedEmail = data.email?.trim().toLowerCase();
+
+  if (normalizedEmail) {
+    const { error: authError } = await admin.auth.admin.updateUserById(data.userId, {
+      email: normalizedEmail,
+      email_confirm: true,
+    });
+
+    if (authError) {
+      return { error: authError.message };
+    }
+  }
+
+  const profileUpdate: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data.first_name !== undefined) {
+    profileUpdate.first_name = data.first_name.trim() || null;
+  }
+  if (data.last_name !== undefined) {
+    profileUpdate.last_name = data.last_name.trim() || null;
+  }
+  if (normalizedEmail !== undefined) {
+    profileUpdate.email = normalizedEmail || null;
+  }
+  if (data.phone !== undefined) {
+    profileUpdate.phone = data.phone?.trim() || null;
+  }
+  if (data.role !== undefined) {
+    profileUpdate.role = data.role;
+  }
+  if (data.groupe_id !== undefined) {
+    profileUpdate.groupe_id = data.groupe_id;
+  }
+  if (data.filiere_id !== undefined) {
+    profileUpdate.filiere_id = data.filiere_id;
+  }
+  if (data.access_dossier_id !== undefined) {
+    profileUpdate.access_dossier_id = data.access_dossier_id;
+  }
+
+  const { error: profileError } = await admin
     .from("profiles")
-    .update({ groupe_id: groupeId, updated_at: new Date().toISOString() })
-    .eq("id", userId);
-  if (error) return { error: error.message };
+    .update(profileUpdate)
+    .eq("id", data.userId);
+
+  if (profileError) {
+    return { error: profileError.message };
+  }
+
+  if (data.matiere_ids !== undefined || data.role !== undefined) {
+    const shouldKeepAssignments = (data.role ?? "prof") === "prof";
+
+    const { error: deleteError } = await admin
+      .from("prof_matieres")
+      .delete()
+      .eq("prof_id", data.userId);
+
+    if (deleteError) {
+      return { error: deleteError.message };
+    }
+
+    if (shouldKeepAssignments) {
+      const uniqueMatiereIds = [...new Set(data.matiere_ids ?? [])];
+      if (uniqueMatiereIds.length > 0) {
+        const { error: insertError } = await admin.from("prof_matieres").insert(
+          uniqueMatiereIds.map((matiereId) => ({
+            prof_id: data.userId,
+            matiere_id: matiereId,
+          }))
+        );
+
+        if (insertError) {
+          return { error: insertError.message };
+        }
+      }
+    }
+  }
+
   revalidatePath(PATH);
   return { success: true };
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { CoursCard } from "@/components/cours/cours-card";
+import { canAccessMatiere, getAccessScopeForUser } from "@/lib/access-scope";
 
 interface Props {
   params: Promise<{ matiereId: string }>;
@@ -13,15 +14,16 @@ export default async function MatierePage({ params }: Props) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
+  const scope = await getAccessScopeForUser(supabase, user!.id);
 
   // Charger la matière
   const { data: matiere } = await supabase
     .from("matieres")
-    .select("*, dossier:dossiers(name)")
+    .select("*, dossier:dossiers(id, name)")
     .eq("id", matiereId)
     .single();
 
-  if (!matiere) notFound();
+  if (!matiere || !canAccessMatiere(matiere as any, scope)) notFound();
 
   // Charger les cours avec progression
   const { data: cours } = await supabase

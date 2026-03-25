@@ -197,3 +197,6 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | 2026-03-25 | `examens/[examenId]/resultats/page.tsx` (élève) | Nouveau : classement élève, score personnel, détail par série, rang |
 | 2026-03-25 | `scripts/run-migration-012.cjs`, `package.json`, `.env.example` | Script migration 012 via `DATABASE_URL` (navigateur Cursor ≠ session Supabase connectée ; pas d’accès SQL sans URI Postgres) |
 | 2026-03-25 | `examens-shell.tsx` | ComposeModal enrichi : bouton Nouvelle serie, import Word, export Word (sujet+correction), interface nettoyee |
+| 2026-03-25 | `013_user_profile_scope.sql`, `utilisateurs/*`, `profil/*`, `access-scope.ts` | Profils enrichis : prénom/nom/email/téléphone modifiables côté admin, filière, groupe/classe, périmètre dossier e-learning, matières professeurs |
+| 2026-03-25 | `cours/*`, `exercices/actions.ts` | Début du filtrage fonctionnel par périmètre d’accès contenu : l’arborescence cours et la création d’entraînements respectent désormais le scope utilisateur/groupe |
+| 2026-03-25 | `014_pedagogie_taxonomy.sql`, `pedagogie-shell.tsx`, `pedagogie-structure.ts` | Refonte métier de l’arborescence : offres de formation, types de noeuds (offre, université, semestre, option, période, bloc, matière) et création guidée dans Pédagogie & Exercices |

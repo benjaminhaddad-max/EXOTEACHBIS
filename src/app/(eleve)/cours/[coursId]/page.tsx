@@ -5,6 +5,7 @@ import { PdfViewer } from "@/components/cours/pdf-viewer";
 import { SeriesList } from "@/components/cours/series-list";
 import { FileText } from "lucide-react";
 import { AskQuestionFab } from "@/components/qa/ask-question-fab";
+import { canAccessCours, getAccessScopeForUser } from "@/lib/access-scope";
 
 interface Props {
   params: Promise<{ coursId: string }>;
@@ -15,6 +16,7 @@ export default async function CoursDetailPage({ params }: Props) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
+  const scope = user ? await getAccessScopeForUser(supabase, user.id) : null;
 
   // Fetch cours with optional matière or dossier
   const { data: cours } = await supabase
@@ -28,7 +30,7 @@ export default async function CoursDetailPage({ params }: Props) {
     .eq("visible", true)
     .single();
 
-  if (!cours) notFound();
+  if (!cours || (scope && !canAccessCours(cours as any, scope))) notFound();
 
   // Séries liées au cours
   const { data: series } = await supabase

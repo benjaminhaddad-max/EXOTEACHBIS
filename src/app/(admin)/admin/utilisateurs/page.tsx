@@ -1,16 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { UtilisateursShell } from "@/components/admin/utilisateurs/utilisateurs-shell";
-import type { Profile, Groupe, Dossier } from "@/types/database";
+import type { Profile, Groupe, Dossier, Matiere, Filiere } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
 export default async function UtilisateursPage() {
   const supabase = await createClient();
 
-  const [usersRes, groupesRes, dossiersRes] = await Promise.all([
+  const [usersRes, groupesRes, dossiersRes, matieresRes, filieresRes, profMatieresRes] = await Promise.all([
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     supabase.from("groupes").select("*").order("name"),
     supabase.from("dossiers").select("*").order("order_index"),
+    supabase.from("matieres").select("*").order("name"),
+    supabase.from("filieres").select("*").order("name"),
+    supabase.from("prof_matieres").select("prof_id, matiere_id"),
   ]);
 
   return (
@@ -19,6 +22,9 @@ export default async function UtilisateursPage() {
         initialUsers={(usersRes.data ?? []) as Profile[]}
         initialGroupes={(groupesRes.data ?? []) as Groupe[]}
         initialDossiers={(dossiersRes.data ?? []) as Dossier[]}
+        initialMatieres={(matieresRes.data ?? []) as Matiere[]}
+        initialFilieres={(filieresRes.data ?? []) as Filiere[]}
+        initialProfMatieres={(profMatieresRes.data ?? []) as { prof_id: string; matiere_id: string }[]}
       />
     </div>
   );

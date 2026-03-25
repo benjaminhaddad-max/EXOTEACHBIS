@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 export async function updateProfile(data: {
   first_name: string;
   last_name: string;
+  phone?: string;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -16,6 +17,7 @@ export async function updateProfile(data: {
     .update({
       first_name: data.first_name.trim() || null,
       last_name: data.last_name.trim() || null,
+      phone: data.phone?.trim() || null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", user.id);

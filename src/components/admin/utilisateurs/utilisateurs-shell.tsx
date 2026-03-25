@@ -5,14 +5,15 @@ import {
   Users, Search, Pencil, Trash2, X, Check,
   AlertCircle, Loader2, Plus, ShieldCheck, GraduationCap,
   BookOpen, Crown, ChevronDown, ChevronRight, Folder,
-  FolderOpen, UserMinus, Settings, LogIn,
+  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2,
 } from "lucide-react";
-import type { Profile, Groupe, Dossier } from "@/types/database";
+import type { Profile, Groupe, Dossier, Matiere, Filiere, UserRole } from "@/types/database";
 import {
-  updateUserRole, updateUserGroupe,
+  updateUserAdminProfile,
   createGroupe, updateGroupe, deleteGroupe,
   toggleGroupeDossierAcces,
 } from "@/app/(admin)/admin/utilisateurs/actions";
+import { DOSSIER_TYPE_META, getDossierPathLabel } from "@/lib/pedagogie-structure";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,18 @@ type Modal =
   | { type: "edit_user"; user: Profile }
   | null;
 type Toast = { message: string; kind: "success" | "error" } | null;
+type ProfMatiereAssignment = { prof_id: string; matiere_id: string };
+type AdminUserChanges = {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string | null;
+  role?: UserRole;
+  groupe_id?: string | null;
+  filiere_id?: string | null;
+  access_dossier_id?: string | null;
+  matiere_ids?: string[];
+};
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -85,15 +98,22 @@ export function UtilisateursShell({
   initialUsers,
   initialGroupes,
   initialDossiers,
+  initialMatieres,
+  initialFilieres,
+  initialProfMatieres,
 }: {
   initialUsers: Profile[];
   initialGroupes: Groupe[];
   initialDossiers: Dossier[];
+  initialMatieres: Matiere[];
+  initialFilieres: Filiere[];
+  initialProfMatieres: ProfMatiereAssignment[];
 }) {
   const [view, setView] = useState<"comptes" | "groupe">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
   const [users, setUsers] = useState<Profile[]>(initialUsers);
   const [groupes, setGroupes] = useState<Groupe[]>(initialGroupes);
+  const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
@@ -108,6 +128,13 @@ export function UtilisateursShell({
     const supabase = createClient();
     const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
     if (data) setUsers(data as Profile[]);
+  }, []);
+
+  const refreshProfMatieres = useCallback(async () => {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data } = await supabase.from("prof_matieres").select("prof_id, matiere_id");
+    if (data) setProfMatieres(data as ProfMatiereAssignment[]);
   }, []);
 
   const refreshGroupes = useCallback(async () => {
@@ -142,25 +169,28 @@ export function UtilisateursShell({
     });
   }, [showToast, refreshGroupes]);
 
-  const handleSaveUser = useCallback((userId: string, changes: { role?: string; groupe_id?: string | null }) => {
+  const handleSaveUser = useCallback((userId: string, changes: AdminUserChanges) => {
     startTransition(async () => {
-      if (changes.role !== undefined) {
-        const res = await updateUserRole(userId, changes.role);
-        if ("error" in res) { showToast(res.error!, "error"); return; }
-      }
-      if ("groupe_id" in changes) {
-        const res = await updateUserGroupe(userId, changes.groupe_id ?? null);
-        if ("error" in res) { showToast(res.error!, "error"); return; }
-      }
-      await refreshUsers();
+      const res = await updateUserAdminProfile({ userId, ...changes });
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      await Promise.all([refreshUsers(), refreshProfMatieres()]);
       setModal(null);
       showToast("Modifié", "success");
     });
-  }, [showToast, refreshUsers]);
+  }, [showToast, refreshUsers, refreshProfMatieres]);
 
   const groupTree = useMemo(() => buildGroupTree(groupes), [groupes]);
   const dossierTree = useMemo(() => buildDossierTree(initialDossiers), [initialDossiers]);
   const selectedGroupe = useMemo(() => groupes.find(g => g.id === selectedGroupeId) ?? null, [groupes, selectedGroupeId]);
+  const profMatieresByUser = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const assignment of profMatieres) {
+      const current = map.get(assignment.prof_id) ?? [];
+      current.push(assignment.matiere_id);
+      map.set(assignment.prof_id, current);
+    }
+    return map;
+  }, [profMatieres]);
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -258,6 +288,10 @@ export function UtilisateursShell({
           <ComptesView
             users={users}
             groupes={groupes}
+            dossiers={initialDossiers}
+            filieres={initialFilieres}
+            matieres={initialMatieres}
+            profMatieresByUser={profMatieresByUser}
             onEditUser={(u) => setModal({ type: "edit_user", user: u })}
           />
         )}
@@ -306,6 +340,10 @@ export function UtilisateursShell({
         <EditUserModal
           user={modal.user}
           groupes={groupes}
+          dossiers={initialDossiers}
+          matieres={initialMatieres}
+          filieres={initialFilieres}
+          selectedMatiereIds={profMatieresByUser.get(modal.user.id) ?? []}
           isPending={isPending}
           onSave={handleSaveUser}
           onClose={() => setModal(null)}
@@ -445,10 +483,14 @@ function GroupTreeNode({
 // ─── ComptesView ──────────────────────────────────────────────────────────────
 
 function ComptesView({
-  users, groupes, onEditUser,
+  users, groupes, dossiers, filieres, matieres, profMatieresByUser, onEditUser,
 }: {
   users: Profile[];
   groupes: Groupe[];
+  dossiers: Dossier[];
+  filieres: Filiere[];
+  matieres: Matiere[];
+  profMatieresByUser: Map<string, string[]>;
   onEditUser: (u: Profile) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -466,6 +508,8 @@ function ComptesView({
     for (const g of groupes) m.set(g.id, g);
     return m;
   }, [groupes]);
+  const filiereMap = useMemo(() => new Map(filieres.map((filiere) => [filiere.id, filiere])), [filieres]);
+  const matiereMap = useMemo(() => new Map(matieres.map((matiere) => [matiere.id, matiere])), [matieres]);
 
   return (
     <div className="p-5">
@@ -519,6 +563,11 @@ function ComptesView({
             {filtered.map(u => {
               const rc = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.eleve;
               const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
+              const filiere = u.filiere_id ? filiereMap.get(u.filiere_id) : null;
+              const accessLabel = getDossierPathLabel(u.access_dossier_id, dossiers);
+              const assignedMatieres = (profMatieresByUser.get(u.id) ?? [])
+                .map((matiereId) => matiereMap.get(matiereId)?.name)
+                .filter(Boolean) as string[];
               return (
                 <tr key={u.id} className="transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
                   onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)")}
@@ -532,6 +581,32 @@ function ComptesView({
                       <div>
                         <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.9)" }}>{fullName(u)}</p>
                         <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {u.phone && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)" }}>
+                              <Phone size={9} />
+                              {u.phone}
+                            </span>
+                          )}
+                          {filiere && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#93C5FD" }}>
+                              <GraduationCap size={9} />
+                              {filiere.name}
+                            </span>
+                          )}
+                          {u.access_dossier_id && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#E3C286" }}>
+                              <Building2 size={9} />
+                              <span className="truncate">{accessLabel}</span>
+                            </span>
+                          )}
+                          {u.role === "prof" && assignedMatieres.length > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#BFDBFE" }}>
+                              <BookOpen size={9} />
+                              <span className="truncate">{assignedMatieres.join(", ")}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -1197,22 +1272,62 @@ function GroupeFormModal({
 // ─── EditUserModal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
-  user, groupes, isPending, onSave, onClose,
+  user, groupes, dossiers, matieres, filieres, selectedMatiereIds, isPending, onSave, onClose,
 }: {
   user: Profile;
   groupes: Groupe[];
+  dossiers: Dossier[];
+  matieres: Matiere[];
+  filieres: Filiere[];
+  selectedMatiereIds: string[];
   isPending: boolean;
-  onSave: (userId: string, changes: { role?: string; groupe_id?: string | null }) => void;
+  onSave: (userId: string, changes: AdminUserChanges) => void;
   onClose: () => void;
 }) {
+  const [firstName, setFirstName] = useState(user.first_name ?? "");
+  const [lastName, setLastName] = useState(user.last_name ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+  const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState(user.role);
   const [groupeId, setGroupeId] = useState<string | null>(user.groupe_id);
+  const [filiereId, setFiliereId] = useState<string | null>(user.filiere_id);
+  const [accessDossierId, setAccessDossierId] = useState<string | null>(user.access_dossier_id);
+  const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
 
-  const hasChanges = role !== user.role || groupeId !== user.groupe_id;
+  const matieresByDossier = useMemo(() => {
+    const map = new Map<string, Matiere[]>();
+    for (const matiere of matieres) {
+      const current = map.get(matiere.dossier_id) ?? [];
+      current.push(matiere);
+      map.set(matiere.dossier_id, current);
+    }
+    return map;
+  }, [matieres]);
+
+  const normalizedCurrentMatieres = [...selectedMatiereIds].sort().join("|");
+  const normalizedNextMatieres = [...matiereIds].sort().join("|");
+  const hasChanges =
+    firstName !== (user.first_name ?? "") ||
+    lastName !== (user.last_name ?? "") ||
+    email !== user.email ||
+    phone !== (user.phone ?? "") ||
+    role !== user.role ||
+    groupeId !== user.groupe_id ||
+    filiereId !== user.filiere_id ||
+    accessDossierId !== user.access_dossier_id ||
+    normalizedCurrentMatieres !== normalizedNextMatieres;
+
+  const toggleMatiere = (matiereId: string) => {
+    setMatiereIds((prev) =>
+      prev.includes(matiereId)
+        ? prev.filter((id) => id !== matiereId)
+        : [...prev, matiereId]
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
-      <div className="w-full max-w-sm rounded-2xl shadow-2xl" style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}>
+      <div className="w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden" style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div className="flex items-center gap-2.5">
@@ -1231,8 +1346,53 @@ function EditUserModal({
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Role */}
+        <div className="p-5 space-y-5 overflow-y-auto max-h-[calc(90vh-144px)]">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Prénom</label>
+              <input
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Nom</label>
+              <input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Email</label>
+              <div className="relative">
+                <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.35)" }} />
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Téléphone</label>
+              <div className="relative">
+                <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.35)" }} />
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+33..."
+                  className="w-full rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Rôle</label>
             <div className="grid grid-cols-2 gap-1.5">
@@ -1248,40 +1408,137 @@ function EditUserModal({
             </div>
           </div>
 
-          {/* Groupe */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Classe / groupe</label>
+              <select
+                value={groupeId ?? ""}
+                onChange={e => setGroupeId(e.target.value || null)}
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
+              >
+                <option value="">Aucun groupe</option>
+                {groupes.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Filière santé</label>
+              <select
+                value={filiereId ?? ""}
+                onChange={e => setFiliereId(e.target.value || null)}
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
+              >
+                <option value="">Aucune filière</option>
+                {filieres.map((filiere) => (
+                  <option key={filiere.id} value={filiere.id}>{filiere.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Groupe</label>
+            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Périmètre e-learning</label>
+            <p className="mb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Choisis le noeud qui détermine ce que la personne voit dans l&apos;arborescence cours: université, PASS/LAS, semestre, etc.
+            </p>
             <select
-              value={groupeId ?? ""}
-              onChange={e => setGroupeId(e.target.value || null)}
+              value={accessDossierId ?? ""}
+              onChange={e => setAccessDossierId(e.target.value || null)}
               className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
               style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
             >
-              <option value="">Aucun groupe</option>
-              {groupes.map(g => (
-                <option key={g.id} value={g.id}>{g.name}</option>
+              <option value="">Aucun périmètre direct</option>
+              {dossiers.map((dossier) => (
+                <option key={dossier.id} value={dossier.id}>
+                  [{DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}] {getDossierPathLabel(dossier.id, dossiers)}
+                </option>
               ))}
             </select>
           </div>
+
+          {role === "prof" && (
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Matières enseignées</label>
+              <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                {dossiers
+                  .filter((dossier) => (matieresByDossier.get(dossier.id)?.length ?? 0) > 0)
+                  .map((dossier) => (
+                    <div key={dossier.id}>
+                      <p className="mb-2 text-[11px] font-semibold" style={{ color: "#E3C286" }}>
+                        [{DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}] {getDossierPathLabel(dossier.id, dossiers)}
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
+                          const checked = matiereIds.includes(matiere.id);
+                          return (
+                            <button
+                              key={matiere.id}
+                              type="button"
+                              onClick={() => toggleMatiere(matiere.id)}
+                              className="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors"
+                              style={{
+                                borderColor: checked ? "rgba(201,168,76,0.7)" : "rgba(255,255,255,0.08)",
+                                backgroundColor: checked ? "rgba(201,168,76,0.14)" : "rgba(255,255,255,0.02)",
+                                color: checked ? "#F8E6B0" : "rgba(255,255,255,0.72)",
+                              }}
+                            >
+                              <span
+                                className="h-2.5 w-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: checked ? "#E3C286" : matiere.color }}
+                              />
+                              <span className="truncate">{matiere.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {role !== "prof" && selectedMatiereIds.length > 0 && (
+            <div className="rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)" }}>
+              En changeant le rôle, les matières professeur actuellement assignées seront retirées.
+            </div>
+          )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 pb-5">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs transition-colors"
+        <div className="flex items-center justify-between gap-3 px-5 pb-5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+            Groupe = classe/promo, périmètre e-learning = sous-arbre visible, matières = affectation professeur.
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs transition-colors"
             style={{ color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}
             onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)")}
             onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-            Annuler
-          </button>
-          <button
-            onClick={() => onSave(user.id, { role, groupe_id: groupeId })}
-            disabled={!hasChanges || isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
-            style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
-          >
-            {isPending && <Loader2 size={11} className="animate-spin" />}
-            Enregistrer
-          </button>
+              Annuler
+            </button>
+            <button
+              onClick={() => onSave(user.id, {
+                first_name: firstName,
+                last_name: lastName,
+                email,
+                phone,
+                role,
+                groupe_id: groupeId,
+                filiere_id: filiereId,
+                access_dossier_id: accessDossierId,
+                matiere_ids: matiereIds,
+              })}
+              disabled={!hasChanges || isPending || !email.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+              style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+            >
+              {isPending && <Loader2 size={11} className="animate-spin" />}
+              Enregistrer
+            </button>
+          </div>
         </div>
       </div>
     </div>

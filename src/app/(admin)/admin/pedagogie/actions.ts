@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { FORMATION_OFFERS } from "@/lib/pedagogie-structure";
+import type { DossierType, FormationOffer } from "@/types/database";
 
 const PATH = "/admin/pedagogie";
 
@@ -21,6 +23,8 @@ export async function getAllDossiers() {
 export async function createDossier(data: {
   name: string;
   description?: string;
+  dossier_type?: DossierType;
+  formation_offer?: FormationOffer | null;
   color: string;
   icon_url?: string | null;
   parent_id?: string | null;
@@ -31,6 +35,8 @@ export async function createDossier(data: {
   const { error } = await supabase.from("dossiers").insert({
     name: data.name,
     description: data.description || null,
+    dossier_type: data.dossier_type ?? "generic",
+    formation_offer: data.formation_offer ?? null,
     color: data.color,
     icon_url: data.icon_url || null,
     parent_id: data.parent_id || null,
@@ -47,6 +53,8 @@ export async function updateDossier(
   data: {
     name: string;
     description?: string;
+    dossier_type?: DossierType;
+    formation_offer?: FormationOffer | null;
     color: string;
     icon_url?: string | null;
     visible: boolean;
@@ -59,6 +67,8 @@ export async function updateDossier(
     .update({
       name: data.name,
       description: data.description || null,
+      dossier_type: data.dossier_type ?? "generic",
+      formation_offer: data.formation_offer ?? null,
       color: data.color,
       icon_url: data.icon_url || null,
       visible: data.visible,
@@ -69,6 +79,47 @@ export async function updateDossier(
   if (error) return { error: error.message };
   revalidatePath(PATH);
   return { success: true };
+}
+
+export async function installCanonicalOffers() {
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("dossiers")
+    .select("id, formation_offer")
+    .is("parent_id", null)
+    .eq("dossier_type", "offer");
+
+  const existingOffers = new Set(
+    (existing ?? [])
+      .map((item: any) => item.formation_offer)
+      .filter(Boolean)
+  );
+
+  const missingOffers = FORMATION_OFFERS.filter(
+    (offer) => !existingOffers.has(offer.code)
+  );
+
+  if (missingOffers.length === 0) {
+    return { success: true, created: 0 };
+  }
+
+  const { error } = await supabase.from("dossiers").insert(
+    missingOffers.map((offer, index) => ({
+      name: offer.label,
+      description: offer.description,
+      dossier_type: "offer",
+      formation_offer: offer.code,
+      color: offer.defaultColor,
+      visible: true,
+      order_index: (existing?.length ?? 0) + index,
+    }))
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath(PATH);
+  return { success: true, created: missingOffers.length };
 }
 
 export async function deleteDossier(id: string) {

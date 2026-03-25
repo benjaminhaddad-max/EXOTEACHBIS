@@ -9,6 +9,7 @@ export function ProfilForm({ profile }: { profile: Profile }) {
   const [editing, setEditing] = useState(false);
   const [firstName, setFirstName] = useState(profile.first_name ?? "");
   const [lastName, setLastName] = useState(profile.last_name ?? "");
+  const [phone, setPhone] = useState(profile.phone ?? "");
   const [toast, setToast] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -19,7 +20,7 @@ export function ProfilForm({ profile }: { profile: Profile }) {
 
   const handleSave = () => {
     startTransition(async () => {
-      const res = await updateProfile({ first_name: firstName, last_name: lastName });
+      const res = await updateProfile({ first_name: firstName, last_name: lastName, phone });
       if ("error" in res) { showToast(res.error!, "error"); return; }
       showToast("Profil mis à jour", "success");
       setEditing(false);
@@ -53,7 +54,7 @@ export function ProfilForm({ profile }: { profile: Profile }) {
 
       {editing ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="text-xs text-gray-500 mb-1.5 block">Prénom</label>
               <input
@@ -70,10 +71,23 @@ export function ProfilForm({ profile }: { profile: Profile }) {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30"
               />
             </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1.5 block">Téléphone</label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-navy/30"
+              />
+            </div>
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => { setEditing(false); setFirstName(profile.first_name ?? ""); setLastName(profile.last_name ?? ""); }}
+              onClick={() => {
+                setEditing(false);
+                setFirstName(profile.first_name ?? "");
+                setLastName(profile.last_name ?? "");
+                setPhone(profile.phone ?? "");
+              }}
               className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
             >
               Annuler
@@ -103,6 +117,10 @@ export function ProfilForm({ profile }: { profile: Profile }) {
           <div>
             <p className="text-xs text-gray-400 mb-1">Email</p>
             <p className="text-sm text-gray-700">{profile.email}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Téléphone</p>
+            <p className="text-sm text-gray-700">{profile.phone || "—"}</p>
           </div>
           <div>
             <p className="text-xs text-gray-400 mb-1">Membre depuis</p>

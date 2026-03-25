@@ -3,20 +3,39 @@
 // =============================================
 
 export type UserRole = "superadmin" | "admin" | "prof" | "eleve";
+export type FormationOffer =
+  | "prepa_pass"
+  | "prepa_las"
+  | "prepa_lsps"
+  | "terminale_sante"
+  | "paes_fr_eu"
+  | "premiere_elite";
+export type DossierType =
+  | "generic"
+  | "offer"
+  | "university"
+  | "semester"
+  | "option"
+  | "period"
+  | "module"
+  | "subject";
 
 export interface Profile {
   id: string;
   email: string;
   first_name: string | null;
   last_name: string | null;
+  phone: string | null;
   role: UserRole;
   avatar_url: string | null;
   groupe_id: string | null;
   filiere_id: string | null;
+  access_dossier_id: string | null;
   created_at: string;
   updated_at: string;
   // Relations
   filiere?: Filiere;
+  access_dossier?: Dossier | null;
 }
 
 // =============================================
@@ -28,6 +47,8 @@ export interface Dossier {
   parent_id: string | null;
   name: string;
   description: string | null;
+  dossier_type: DossierType;
+  formation_offer: FormationOffer | null;
   icon_url: string | null;
   color: string;
   order_index: number;

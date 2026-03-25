@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { canAccessCours, filterDossiersByAccess, getAccessScopeForUser } from "@/lib/access-scope";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,15 @@ export async function getExercicesData(): Promise<{
   allCours: CoursNode[];
 }> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { tree: [], allCours: [] };
+  }
+
+  const scope = await getAccessScopeForUser(supabase, user.id);
 
   const [dossiersRes, matieresRes, coursRes, questionsRes] = await Promise.all([
     supabase
@@ -81,7 +91,9 @@ export async function getExercicesData(): Promise<{
   // Map matiere_id → dossier_id (pour les cours attachés via matière)
   const matiereToDossier = new Map<string, string>();
   for (const m of matieresRes.data ?? []) {
-    if (m.id && m.dossier_id) matiereToDossier.set(m.id, m.dossier_id);
+    if (m.id && m.dossier_id && (scope.unrestricted || scope.allowedDossierIds.has(m.dossier_id))) {
+      matiereToDossier.set(m.id, m.dossier_id);
+    }
   }
 
   // Count questions per cours
@@ -103,7 +115,11 @@ export async function getExercicesData(): Promise<{
         nb_questions: qCount.get(c.id) ?? 0,
       };
     })
-    .filter((c) => c.dossier_id && c.nb_questions > 0);
+    .filter((c) =>
+      c.dossier_id &&
+      c.nb_questions > 0 &&
+      (scope.unrestricted || scope.allowedDossierIds.has(c.dossier_id))
+    );
 
   // Group cours by dossier
   const coursPerDossier = new Map<string, CoursNode[]>();
@@ -113,7 +129,7 @@ export async function getExercicesData(): Promise<{
     coursPerDossier.get(c.dossier_id)!.push(c);
   }
 
-  const tree = buildTree(dossiersRes.data ?? [], coursPerDossier);
+  const tree = buildTree(filterDossiersByAccess(dossiersRes.data ?? [], scope), coursPerDossier);
 
   return { tree, allCours };
 }
@@ -135,8 +151,22 @@ export async function buildTrainingSession(params: {
   if (!user) return { error: "Non authentifié" };
   if (params.coursIds.length === 0) return { error: "Aucun cours sélectionné" };
 
+  const scope = await getAccessScopeForUser(supabase, user.id);
+  const { data: selectedCours } = await supabase
+    .from("cours")
+    .select("id, dossier_id, matiere:matieres(dossier_id)")
+    .in("id", params.coursIds);
+
+  const allowedCoursIds = (selectedCours ?? [])
+    .filter((cours) => canAccessCours(cours as any, scope))
+    .map((cours) => cours.id);
+
+  if (allowedCoursIds.length === 0) {
+    return { error: "Aucun cours accessible dans cette sélection." };
+  }
+
   // Build questions query
-  let query = supabase.from("questions").select("id").in("cours_id", params.coursIds);
+  let query = supabase.from("questions").select("id").in("cours_id", allowedCoursIds);
 
   if (params.questionType !== "all") {
     query = query.eq("type", params.questionType);
