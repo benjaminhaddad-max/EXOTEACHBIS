@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -10,7 +10,6 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
 
@@ -38,40 +37,48 @@ export function LoginForm() {
           .single();
         const dest = profile?.role === "admin" || profile?.role === "superadmin"
           ? "/admin/dashboard" : "/dashboard";
-        router.push(dest);
-        router.refresh();
+        window.location.assign(dest);
       } catch { setError("Erreur impersonation"); }
     })();
-  }, [searchParams, supabase, router]);
+  }, [searchParams, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    let redirected = false;
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (authError) {
-      setError("Email ou mot de passe incorrect");
-      setLoading(false);
-      return;
+      if (authError || !data.user) {
+        setError("Email ou mot de passe incorrect");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      const destination =
+        profile?.role === "admin" || profile?.role === "superadmin"
+          ? "/admin/dashboard"
+          : "/dashboard";
+
+      redirected = true;
+      window.location.assign(destination);
+    } catch {
+      setError("La connexion a échoué. Réessaie dans quelques secondes.");
+    } finally {
+      if (!redirected) {
+        setLoading(false);
+      }
     }
-
-    // Fetch role to redirect appropriately
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single();
-
-    const destination =
-      profile?.role === "admin" || profile?.role === "superadmin"
-        ? "/admin/dashboard" : "/dashboard";
-    router.push(destination);
-    router.refresh();
   };
 
   return (
