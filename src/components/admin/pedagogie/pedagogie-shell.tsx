@@ -866,30 +866,40 @@ function SortableTreeNode({
           <GripVertical className="h-3.5 w-3.5" />
         </span>
 
-        <button
-          onClick={() => { onToggle(node.id); onSelect(node); }}
-          className="flex flex-1 items-start gap-1.5 text-left min-w-0"
-        >
-          <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center">
+        <div className="flex flex-1 items-start gap-1.5 min-w-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasChildren) onToggle(node.id);
+            }}
+            className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded hover:bg-black/5"
+          >
             {hasChildren
               ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
               : <span className="w-3.5" />}
-          </span>
-          <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded overflow-hidden" style={{ backgroundColor: node.color + "20" }}>
-            {node.icon_url
-              ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
-              : <Folder className="h-3 w-3" style={{ color: node.color }} />}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
-              {node.name}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelect(node)}
+            className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+          >
+            <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded overflow-hidden" style={{ backgroundColor: node.color + "20" }}>
+              {node.icon_url
+                ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
+                : <Folder className="h-3 w-3" style={{ color: node.color }} />}
             </span>
-            <span className="mt-1 inline-flex rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
-              {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+            <span className="min-w-0 flex-1">
+              <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
+                {node.name}
+              </span>
+              <span className="mt-1 inline-flex rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+              </span>
             </span>
-          </span>
-          {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
-        </button>
+            {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
+          </button>
+        </div>
 
         <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
           <button onClick={(e) => { e.stopPropagation(); onAdd(node.id); }} className="rounded p-1 text-gray-400 hover:bg-navy/10 hover:text-navy" title="Ajouter">
