@@ -113,11 +113,34 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
       return cache.current.get(dossier.id)!;
     }
     const supabase = createClient();
-    const { data: cours } = await supabase
+
+    // Fetch cours directly in this dossier
+    const { data: cours, error: coursError } = await supabase
       .from("cours").select("*")
       .eq("dossier_id", dossier.id).eq("visible", true).order("order_index");
+
+    if (coursError) console.error("Error fetching cours:", coursError);
+
+    // Also fetch cours via matières in this dossier
+    const { data: matieres } = await supabase
+      .from("matieres").select("id, name, dossier_id")
+      .eq("dossier_id", dossier.id).eq("visible", true);
+
+    let matiereCours: Cours[] = [];
+    if (matieres && matieres.length > 0) {
+      const matiereIds = matieres.map((m: any) => m.id);
+      const { data: mc } = await supabase
+        .from("cours").select("*")
+        .in("matiere_id", matiereIds).eq("visible", true).order("order_index");
+      matiereCours = mc ?? [];
+    }
+
+    // Merge and deduplicate
+    const allCours = [...(cours ?? []), ...matiereCours];
+    const uniqueCours = Array.from(new Map(allCours.map(c => [c.id, c])).values());
+
     const entry: CacheEntry = {
-      cours: cours ?? [],
+      cours: uniqueCours,
       children: allDossiers
         .filter((d) => d.parent_id === dossier.id)
         .sort((a, b) => a.order_index - b.order_index),
@@ -144,12 +167,23 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
       setChildDossiers(entry.children);
     } else {
       setLoading(true);
-      const entry = await fetchDossier(dossier);
-      setCoursList(entry.cours);
-      setChildDossiers(entry.children);
-      setLoading(false);
+      try {
+        const entry = await fetchDossier(dossier);
+        setCoursList(entry.cours);
+        setChildDossiers(entry.children);
+      } catch (err) {
+        console.error("Failed to load dossier:", err);
+        setCoursList([]);
+        setChildDossiers(
+          allDossiers
+            .filter((d) => d.parent_id === dossier.id)
+            .sort((a, b) => a.order_index - b.order_index)
+        );
+      } finally {
+        setLoading(false);
+      }
     }
-  }, [fetchDossier]);
+  }, [fetchDossier, allDossiers]);
 
   // Drag to resize
   const onMouseDown = useCallback((e: React.MouseEvent) => {
