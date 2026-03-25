@@ -117,17 +117,34 @@ for(var id of ids){
       var exImgs=imgsByExercice[exNum]||[];
 
       if(exImgs.length>0&&!q.url_image_q){
-        /* Première image = image de la question */
-        var b64=imgToB64(exImgs[0]);
-        if(b64){
-          q.image_base64=b64;
-          console.log('  Q'+exNum+' ✅ image question ('+Math.round(b64.length/1024)+' KB)');
-        }
-        /* Images suivantes = images des réponses (si pas déjà remplies) */
-        for(var ai=0;ai<exImgs.length-1&&ai<(q.answers||[]).length;ai++){
-          if(!q.answers[ai].url_image){
-            var ab=imgToB64(exImgs[ai+1]);
-            if(ab){q.answers[ai].image_base64=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
+        var nAnswers=(q.answers||[]).length;
+        var answersNeedingImg=(q.answers||[]).filter(function(a){return !a.url_image;}).length;
+        /* Si nb images == nb réponses sans image → TOUTES sont des images de réponses */
+        var allAreAnswerImgs=(exImgs.length===answersNeedingImg)||(exImgs.length===nAnswers);
+        if(!allAreAnswerImgs){
+          /* Première image = image de la question */
+          var b64=imgToB64(exImgs[0]);
+          if(b64){
+            q.image_base64=b64;
+            console.log('  Q'+exNum+' ✅ image question ('+Math.round(b64.length/1024)+' KB)');
+          }
+          /* Images suivantes = images des réponses */
+          for(var ai=0,ii=1;ii<exImgs.length&&ai<nAnswers;ai++){
+            if(!q.answers[ai].url_image&&!q.answers[ai].image_base64){
+              var ab=imgToB64(exImgs[ii]);
+              if(ab){q.answers[ai].image_base64=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
+              ii++;
+            }
+          }
+        }else{
+          /* Toutes les images sont des images de réponses */
+          console.log('  Q'+exNum+' — '+exImgs.length+' images = réponses (pas d\\'image question)');
+          for(var ai=0,ii=0;ii<exImgs.length&&ai<nAnswers;ai++){
+            if(!q.answers[ai].url_image&&!q.answers[ai].image_base64){
+              var ab=imgToB64(exImgs[ii]);
+              if(ab){q.answers[ai].image_base64=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
+              ii++;
+            }
           }
         }
       }
