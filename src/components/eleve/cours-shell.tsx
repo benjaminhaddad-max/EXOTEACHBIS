@@ -57,8 +57,8 @@ function TreeNode({
           </span>
         ) : <span className="w-4 shrink-0" />}
         {isExpanded
-          ? <FolderOpen size={14} className="shrink-0 text-blue-400" />
-          : <Folder size={14} className="shrink-0 text-gray-400" />}
+          ? <FolderOpen size={14} className="shrink-0" style={{ color: node.color || "#6B7280" }} />
+          : <Folder size={14} className="shrink-0" style={{ color: node.color || "#9CA3AF" }} />}
         <span className="text-xs font-medium" style={{ wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.3 }}>
           {node.name}
         </span>
@@ -220,8 +220,8 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
     <div className="flex flex-1 overflow-hidden">
       {/* LEFT: Resizable tree */}
       <div
-        className="shrink-0 border-r border-gray-200 bg-white flex flex-col overflow-hidden"
-        style={{ width: sidebarWidth }}
+        className="shrink-0 border-r border-gray-200 flex flex-col overflow-hidden"
+        style={{ backgroundColor: "#F7F8FC", width: sidebarWidth }}
       >
         <div className="px-4 py-3 border-b border-gray-100">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Arborescence</p>
@@ -244,7 +244,7 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
       </div>
 
       {/* RIGHT: Content */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-[#F8F7FF]">
+      <div className="flex flex-1 flex-col overflow-hidden bg-white">
         {selectedDossier ? (
           <>
             {/* Breadcrumb */}
@@ -270,7 +270,7 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {/* Sous-dossiers */}
+                  {/* Sous-dossiers — colored icons like admin */}
                   {childDossiers.length > 0 && (
                     <div>
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Sous-dossiers</p>
@@ -278,8 +278,13 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
                         {childDossiers.map((child) => (
                           <button key={child.id} onClick={() => selectDossier(child)}
                             onMouseEnter={() => prefetch(child)}
-                            className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 hover:border-navy/30 hover:bg-navy/5 transition-all text-left">
-                            <Folder size={18} className="text-gray-400 shrink-0" />
+                            className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 hover:border-navy/30 hover:shadow-sm transition-all text-left">
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: (child.color || "#6B7280") + "18" }}
+                            >
+                              <Folder size={16} style={{ color: child.color || "#6B7280" }} />
+                            </div>
                             <span className="text-sm font-medium text-gray-700 truncate">{child.name}</span>
                           </button>
                         ))}
@@ -287,25 +292,72 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
                     </div>
                   )}
 
-                  {/* Cours */}
+                  {/* Cours — premium navy cards (same as admin) */}
                   {coursList.length > 0 && (
                     <div>
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Cours &amp; Exercices</p>
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                         {coursList.map((c) => (
-                          <button key={c.id} onClick={() => router.push(`/cours/${c.id}`)}
-                            className="rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-md hover:border-navy/20 transition-all text-left group">
-                            <div className="aspect-video bg-navy/90 flex items-center justify-center relative">
-                              <BookOpen size={28} className="text-white/30" />
-                              <div className="absolute bottom-2 left-2 right-2">
-                                <span className="inline-block bg-[#C9A84C]/90 text-[#0e1e35] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
-                                  {selectedDossier.name}
+                          <button
+                            key={c.id}
+                            onClick={() => router.push(`/cours/${c.id}`)}
+                            className="group relative rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_32px_rgba(212,171,80,0.18)] hover:border-[rgba(212,171,80,0.45)] text-left"
+                            style={{
+                              background: "linear-gradient(160deg, #091525 0%, #162d4a 55%, #091525 100%)",
+                              border: "1px solid rgba(212,171,80,0.22)",
+                              boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,171,80,0.08)",
+                            }}
+                          >
+                            <div className="relative overflow-hidden" style={{ minHeight: 130 }}>
+                              {/* Shimmer top */}
+                              <div className="absolute top-0 inset-x-0 h-px pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, rgba(212,171,80,0.45), transparent)" }} />
+                              {/* Golden glow */}
+                              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 70% at 50% 30%, rgba(212,171,80,0.07) 0%, transparent 65%)" }} />
+
+                              {/* Badge "Fiche de cours" + dossier name */}
+                              <div className="relative z-10 flex items-center justify-between px-2.5 pt-2.5 pb-1">
+                                <span
+                                  className="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap"
+                                  style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}
+                                >
+                                  Fiche de cours
+                                </span>
+                                <span className="truncate text-[9px] font-bold whitespace-nowrap tracking-wide" style={{ color: "rgba(212,171,80,0.75)" }}>
+                                  {selectedDossier?.name}
                                 </span>
                               </div>
-                            </div>
-                            <div className="p-3">
-                              <p className="text-sm font-semibold text-gray-800 leading-snug group-hover:text-navy transition-colors">{c.name}</p>
-                              {c.description && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{c.description}</p>}
+
+                              {/* Center: logo watermark */}
+                              <div className="relative flex items-center justify-center" style={{ height: 48 }}>
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.13 }}>
+                                  <BookOpen size={32} className="text-white" />
+                                </div>
+                                <div className="absolute bottom-1 left-3 flex gap-1 pointer-events-none" style={{ opacity: 0.18 }}>
+                                  {[0,1,2].map(i => <div key={i} className="h-0.5 w-0.5 rounded-full bg-white" />)}
+                                </div>
+                                <div className="absolute bottom-1 right-3 flex gap-1 pointer-events-none" style={{ opacity: 0.18 }}>
+                                  {[0,1,2].map(i => <div key={i} className="h-0.5 w-0.5 rounded-full bg-white" />)}
+                                </div>
+                              </div>
+
+                              {/* Gold separator */}
+                              <div className="mx-2.5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(212,171,80,0.35), transparent)" }} />
+
+                              {/* Title */}
+                              <div className="px-2.5 pt-2 pb-2.5">
+                                <div
+                                  className="w-full rounded-xl px-2.5 py-2 text-center"
+                                  style={{
+                                    background: "linear-gradient(135deg, rgba(212,171,80,0.13) 0%, rgba(212,171,80,0.05) 100%)",
+                                    border: "1px solid rgba(212,171,80,0.28)",
+                                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                                  }}
+                                >
+                                  <p className="text-[12px] font-extrabold text-white leading-snug line-clamp-2 tracking-wide">
+                                    {c.name}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </button>
                         ))}
