@@ -94,8 +94,16 @@ for(var id of ids){
     /* Naviguer vers le player pour charger les images */
     console.log('🖼️ Navigation vers le player pour charger les images...');
     window.location.hash='#/serie/play/'+id;
-    await wait(2000);
-    var domImgs=await waitForImages(8000);
+    await wait(3000);
+    /* Cliquer "Démarrer" si le bouton existe */
+    var startBtn=document.querySelector('button');
+    var allBtns=Array.from(document.querySelectorAll('button'));
+    for(var bi=0;bi<allBtns.length;bi++){
+      var bt=allBtns[bi].textContent||'';
+      if(bt.match(/d[eé]marrer|commencer|start|lancer/i)){startBtn=allBtns[bi];startBtn.click();console.log('  ▶️ Bouton Démarrer cliqué');break;}
+    }
+    await wait(3000);
+    var domImgs=await waitForImages(10000);
 
     /* Filtrer: exclure thumbnail (parent w-12) */
     domImgs=domImgs.filter(function(i){return !i.closest('.w-12')&&!i.closest('.w-14');});
