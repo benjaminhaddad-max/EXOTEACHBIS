@@ -67,42 +67,57 @@ function SetupScreen({
   nbQuestions: number;
   onStart: (timed: boolean) => void;
 }) {
-  const typeColor = TYPE_COLORS[serie.type] ?? { bg: "#F9FAFB", text: "#374151" };
+  const [starting, setStarting] = useState(false);
+
+  const handleStart = (timed: boolean) => {
+    setStarting(true);
+    setTimeout(() => onStart(timed), 200);
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "#F8F7FF" }}>
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: "linear-gradient(135deg, #0e1e35 0%, #162d4a 50%, #091525 100%)" }}
+    >
       <div className="w-full max-w-lg">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Top accent */}
-          <div className="h-1.5" style={{ backgroundColor: "#0e1e35" }} />
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.97)",
+            border: "1px solid rgba(201,168,76,0.25)",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.3), 0 0 40px rgba(201,168,76,0.08)",
+          }}
+        >
+          {/* Gold accent top */}
+          <div className="h-1.5" style={{ background: "linear-gradient(90deg, #A8892E, #C9A84C, #E8C97B, #C9A84C, #A8892E)" }} />
 
           <div className="p-8">
             {/* Type badge */}
             <span
-              className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-4"
-              style={{ backgroundColor: typeColor.bg, color: typeColor.text }}
+              className="inline-block text-[11px] font-bold tracking-wide uppercase px-3 py-1.5 rounded-full mb-5"
+              style={{ backgroundColor: "#0e1e35", color: "#C9A84C" }}
             >
               {TYPE_LABELS[serie.type] ?? serie.type}
             </span>
 
             {/* Title */}
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">{serie.name}</h1>
+            <h1 className="text-2xl font-extrabold text-gray-900 mb-2 tracking-tight">{serie.name}</h1>
             {serie.description && (
               <p className="text-sm text-gray-500 mb-6">{serie.description}</p>
             )}
 
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3 mb-8">
-              <div className="rounded-xl bg-gray-50 p-4 text-center">
-                <p className="text-2xl font-bold text-gray-900">{nbQuestions}</p>
-                <p className="text-xs text-gray-500 mt-0.5">questions</p>
+              <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "#0e1e35" }}>
+                <p className="text-2xl font-extrabold" style={{ color: "#C9A84C" }}>{nbQuestions}</p>
+                <p className="text-[11px] text-white/60 mt-0.5 font-medium">questions</p>
               </div>
-              <div className="rounded-xl bg-gray-50 p-4 text-center">
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "#0e1e35" }}>
+                <p className="text-2xl font-extrabold" style={{ color: "#C9A84C" }}>
                   {nbQuestions * 5}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">propositions</p>
+                <p className="text-[11px] text-white/60 mt-0.5 font-medium">propositions</p>
               </div>
             </div>
 
@@ -115,8 +130,11 @@ function SetupScreen({
             )}
 
             {/* Format info */}
-            <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 mb-8 text-xs text-blue-700 flex items-start gap-2">
-              <BookOpen size={14} className="shrink-0 mt-0.5" />
+            <div
+              className="rounded-xl p-3.5 mb-8 text-xs flex items-start gap-2"
+              style={{ backgroundColor: "rgba(14,30,53,0.06)", color: "#0e1e35" }}
+            >
+              <BookOpen size={14} className="shrink-0 mt-0.5 opacity-60" />
               <span>Format PASS/LAS — Pour chaque question, évalue chacune des 5 propositions : <strong>VRAI</strong> ou <strong>FAUX</strong>.</span>
             </div>
 
@@ -124,20 +142,28 @@ function SetupScreen({
             <div className="space-y-3">
               {serie.timed && (
                 <button
-                  onClick={() => onStart(true)}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-colors"
+                  onClick={() => handleStart(true)}
+                  disabled={starting}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-sm transition-all duration-150 active:scale-[0.97] disabled:opacity-60"
                   style={{ backgroundColor: "#0e1e35", color: "white" }}
                 >
                   <Clock size={15} />
-                  Commencer avec chronomètre · {serie.duration_minutes}min
+                  {starting ? "Chargement..." : `Commencer avec chronomètre · ${serie.duration_minutes}min`}
                 </button>
               )}
               <button
-                onClick={() => onStart(false)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm border-2 transition-colors hover:bg-gray-50"
-                style={{ borderColor: "#0e1e35", color: "#0e1e35" }}
+                onClick={() => handleStart(false)}
+                disabled={starting}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-sm transition-all duration-150 active:scale-[0.97] disabled:opacity-60"
+                style={{
+                  backgroundColor: "#C9A84C",
+                  color: "#0e1e35",
+                  boxShadow: "0 4px 15px rgba(201,168,76,0.3)",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#E8C97B"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(201,168,76,0.45)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#C9A84C"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(201,168,76,0.3)"; }}
               >
-                Commencer sans chronomètre
+                {starting ? "Chargement..." : "Commencer sans chronomètre"}
               </button>
             </div>
           </div>
@@ -379,7 +405,7 @@ function PlayingScreen({
                     >
                       {i + 1}
                     </div>
-                    <span className="text-sm font-bold text-gray-800">Exercice {i + 1}</span>
+                    <span className="text-sm font-bold text-gray-800">QCM {i + 1}</span>
                     {(serie as any).cours?.name && (
                       <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
                         {(serie as any).cours.name}

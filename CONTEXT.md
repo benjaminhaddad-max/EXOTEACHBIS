@@ -116,7 +116,7 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 6. [ ] Rendu LaTeX automatique dans les QCMs (MathText component existe)
 7. [x] Système Q&A temps réel (migration 011, composants qa/, hooks realtime)
 8. [x] Système examens enrichi avec coefficients, filières, résultats (migration 012)
-9. [ ] Exécuter migration 012 en production Supabase
+9. [ ] Exécuter migration 012 en production Supabase (SQL Editor ou `DATABASE_URL` + `npm run migrate:012`)
 
 ---
 
@@ -195,3 +195,4 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | 2026-03-25 | `resultats-shell.tsx` | Nouveau : classement admin avec stats, moyennes par série, filtre filière, export CSV |
 | 2026-03-25 | `examens/page.tsx` (élève) | Refonte : scores pondérés, coefficients affichés, lien classement, card score |
 | 2026-03-25 | `examens/[examenId]/resultats/page.tsx` (élève) | Nouveau : classement élève, score personnel, détail par série, rang |
+| 2026-03-25 | `scripts/run-migration-012.cjs`, `package.json`, `.env.example` | Script migration 012 via `DATABASE_URL` (navigateur Cursor ≠ session Supabase connectée ; pas d’accès SQL sans URI Postgres) |
