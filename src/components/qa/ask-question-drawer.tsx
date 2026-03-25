@@ -77,7 +77,7 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
 
   // Create a new thread when user sends first message
   const handleFirstMessage = useCallback(async (text: string) => {
-    if (!userId || !resolvedMatiereId) return;
+    if (!userId) return;
     setCreating(true);
 
     const { data: newThread, error } = await supabase
@@ -86,7 +86,7 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
         student_id: userId,
         context_type: ctx.contextType,
         dossier_id: ctx.dossierId ?? null,
-        matiere_id: resolvedMatiereId,
+        matiere_id: resolvedMatiereId || null,
         cours_id: ctx.coursId ?? null,
         question_id: ctx.questionId ?? null,
         option_id: ctx.optionId ?? null,

@@ -17,7 +17,7 @@ export interface QaContextIds {
 }
 
 export interface ResolvedQaContext {
-  matiereId: string;
+  matiereId: string; // May be "" if no matière could be resolved
   contextLabel: string;
 }
 
@@ -120,15 +120,22 @@ export async function resolveQaContext(
     }
   }
 
-  if (!matiereId) {
-    throw new Error(
-      "Could not resolve matiere_id from the provided context. " +
-        "matiere_id is required for professor routing."
-    );
+  // matiere_id may be null for courses directly under a dossier (no matière).
+  // Try to pick the first matière of the dossier if one exists.
+  if (!matiereId && dossierId) {
+    const { data: fallbackMatiere } = await supabase
+      .from("matieres")
+      .select("id, name")
+      .eq("dossier_id", dossierId)
+      .limit(1)
+      .single();
+    if (fallbackMatiere) {
+      matiereId = fallbackMatiere.id;
+    }
   }
 
   return {
-    matiereId,
+    matiereId: matiereId ?? "",
     contextLabel: labels.join(" > "),
   };
 }
