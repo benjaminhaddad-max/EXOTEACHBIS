@@ -332,15 +332,19 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     setSending(false);
   };
 
-  // Edit a student message — delete old and prefill input
+  // Edit a student message inline in the bubble
   const [editText, setEditText] = useState("");
-  const handleEditMessage = async (msg: QaMessage) => {
-    const text = msg.content || "";
-    // Delete the message from DB and state
-    await supabase.from("qa_messages").delete().eq("id", msg.id);
-    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    // Prefill the input bar
-    setEditText(text);
+  const handleEditMessage = async (msg: QaMessage, newText: string) => {
+    // Update in DB
+    await supabase
+      .from("qa_messages")
+      .update({ content: newText })
+      .eq("id", msg.id);
+
+    // Update in local state
+    setMessages((prev) =>
+      prev.map((m) => m.id === msg.id ? { ...m, content: newText } : m)
+    );
   };
 
   const handleDeleteMessage = async (messageId: string) => {

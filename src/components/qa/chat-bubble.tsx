@@ -1,9 +1,10 @@
 "use client";
 
-import type { QaMessage, QaSenderType } from "@/types/qa";
+import { useState, useRef, useEffect } from "react";
+import type { QaMessage } from "@/types/qa";
 import { VoiceNotePlayer } from "./voice-note-player";
 import { MediaPreview } from "./media-preview";
-import { Check, CheckCheck, Bot, User, GraduationCap, Pencil, Trash2 } from "lucide-react";
+import { Check, CheckCheck, Bot, User, GraduationCap, Pencil, Trash2, X as XIcon, Check as CheckIcon } from "lucide-react";
 
 interface ChatBubbleProps {
   message: QaMessage;
@@ -11,15 +12,54 @@ interface ChatBubbleProps {
   viewerRole: "student" | "prof";
   showAvatar?: boolean;
   senderName?: string;
-  /** Called when student wants to edit their message */
-  onEdit?: (message: QaMessage) => void;
+  /** Called when student saves an inline edit */
+  onEdit?: (message: QaMessage, newText: string) => void;
   /** Called when student wants to delete their message */
   onDelete?: (messageId: string) => void;
-  /** Whether edit/delete is allowed (e.g. prof hasn't responded yet) */
+  /** Whether edit/delete is allowed */
   canModify?: boolean;
 }
 
 export function ChatBubble({ message, viewerRole, showAvatar = true, senderName, onEdit, onDelete, canModify }: ChatBubbleProps) {
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(message.content || "");
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.setSelectionRange(editText.length, editText.length);
+      // Auto-resize
+      editRef.current.style.height = "auto";
+      editRef.current.style.height = editRef.current.scrollHeight + "px";
+    }
+  }, [editing]);
+
+  const handleSaveEdit = () => {
+    const trimmed = editText.trim();
+    if (!trimmed || trimmed === message.content) {
+      setEditing(false);
+      setEditText(message.content || "");
+      return;
+    }
+    onEdit?.(message, trimmed);
+    setEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditText(message.content || "");
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSaveEdit();
+    }
+    if (e.key === "Escape") {
+      handleCancelEdit();
+    }
+  };
   const isMine =
     (viewerRole === "student" && message.sender_type === "student") ||
     (viewerRole === "prof" && message.sender_type === "prof");
@@ -84,7 +124,36 @@ export function ChatBubble({ message, viewerRole, showAvatar = true, senderName,
         {/* Content */}
         {message.content_type === "text" && message.content && (
           <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-            {isAi ? (
+            {editing ? (
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  ref={editRef}
+                  value={editText}
+                  onChange={(e) => {
+                    setEditText(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = e.target.scrollHeight + "px";
+                  }}
+                  onKeyDown={handleEditKeyDown}
+                  className="w-full bg-white/20 text-inherit rounded-lg px-2 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-white/30 min-h-[36px]"
+                  rows={1}
+                />
+                <div className="flex items-center gap-1.5 justify-end">
+                  <button
+                    onClick={handleCancelEdit}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/20 hover:bg-white/30 transition-colors"
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            ) : isAi ? (
               <div
                 className="prose prose-sm max-w-none [&_strong]:font-bold [&_em]:italic [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_li]:my-0.5 [&_p]:my-1"
                 dangerouslySetInnerHTML={{
@@ -134,11 +203,11 @@ export function ChatBubble({ message, viewerRole, showAvatar = true, senderName,
       </div>
 
       {/* Edit/Delete buttons (hover, only for own student messages that can be modified) */}
-      {isMine && canModify && message.sender_type === "student" && message.content_type === "text" && (
+      {isMine && canModify && message.sender_type === "student" && message.content_type === "text" && !editing && (
         <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-center">
           {onEdit && (
             <button
-              onClick={() => onEdit(message)}
+              onClick={() => setEditing(true)}
               className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
               title="Modifier"
             >
