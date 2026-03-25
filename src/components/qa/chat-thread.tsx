@@ -340,42 +340,56 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
 
         {messages.map((msg, i) => {
           const isAiMsg = msg.sender_type === "ai";
+          // Show accept/escalate buttons on the last AI message when student view
           const showActions =
             viewerRole === "student" &&
             isAiMsg &&
-            threadStatus === "ai_answered" &&
-            i === messages.length - 1;
-
-          if (showActions && msg.content) {
-            return (
-              <AiResponseCard
-                key={msg.id}
-                content={msg.content}
-                onAccept={handleAcceptAi}
-                onEscalate={handleEscalate}
-                disabled={sending}
-              />
-            );
-          }
+            (threadStatus === "ai_answered" || threadStatus === "ai_pending") &&
+            // Last AI message in the list
+            !messages.slice(i + 1).some(m => m.sender_type === "ai");
 
           return (
-            <ChatBubble
-              key={msg.id}
-              message={msg}
-              viewerRole={viewerRole}
-              showAvatar={
-                i === 0 || messages[i - 1]?.sender_type !== msg.sender_type
-              }
-              senderName={
-                isAiMsg
-                  ? "Assistant IA"
-                  : msg.sender_type === "prof"
-                  ? thread.assigned_prof
-                    ? `${thread.assigned_prof.first_name ?? ""} ${thread.assigned_prof.last_name ?? ""}`.trim() || "Professeur"
-                    : "Professeur"
-                  : undefined
-              }
-            />
+            <div key={msg.id}>
+              <ChatBubble
+                message={msg}
+                viewerRole={viewerRole}
+                showAvatar={
+                  i === 0 || messages[i - 1]?.sender_type !== msg.sender_type
+                }
+                senderName={
+                  isAiMsg
+                    ? "Assistant IA"
+                    : msg.sender_type === "prof"
+                    ? thread.assigned_prof
+                      ? `${thread.assigned_prof.first_name ?? ""} ${thread.assigned_prof.last_name ?? ""}`.trim() || "Professeur"
+                      : "Professeur"
+                    : undefined
+                }
+              />
+              {/* Action buttons under the AI bubble — only when AI just answered */}
+              {showActions && (
+                <div className="flex gap-2 px-12 mt-1 mb-2">
+                  <button
+                    onClick={handleAcceptAi}
+                    disabled={sending}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium
+                      bg-emerald-50 text-emerald-700 border border-emerald-200
+                      hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                  >
+                    ✓ Satisfaisante
+                  </button>
+                  <button
+                    onClick={handleEscalate}
+                    disabled={sending}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium
+                      bg-orange-50 text-orange-700 border border-orange-200
+                      hover:bg-orange-100 transition-colors disabled:opacity-50"
+                  >
+                    Demander au prof
+                  </button>
+                </div>
+              )}
+            </div>
           );
         })}
 

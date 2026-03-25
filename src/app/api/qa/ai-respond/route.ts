@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const serviceClient = getServiceClient();
     const { data: thread, error: threadError } = await serviceClient
       .from("qa_threads")
-      .select("id, student_id")
+      .select("id, student_id, question_id, cours_id, context_type, context_label")
       .eq("id", thread_id)
       .single();
 
@@ -89,18 +89,36 @@ export async function POST(request: Request) {
       .order("created_at", { ascending: true })
       .limit(20);
 
+    // Enrich context: load the actual QCM question + options if available
+    let qcmContext = "";
+    if (thread.question_id) {
+      const { data: qcmQ } = await serviceClient
+        .from("questions")
+        .select("text, explanation, options(label, text, is_correct)")
+        .eq("id", thread.question_id)
+        .single();
+      if (qcmQ) {
+        qcmContext += `\nQuestion QCM complète :\n"${qcmQ.text}"\n`;
+        if (qcmQ.options && Array.isArray(qcmQ.options)) {
+          qcmContext += "Propositions :\n";
+          for (const opt of qcmQ.options as any[]) {
+            qcmContext += `  ${opt.label}. ${opt.text} ${opt.is_correct ? "(VRAI)" : "(FAUX)"}\n`;
+          }
+        }
+        if (qcmQ.explanation) {
+          qcmContext += `Explication officielle : ${qcmQ.explanation}\n`;
+        }
+      }
+    }
+
     // Build context preamble
     let contextPreamble = "";
     if (context) {
       const parts: string[] = [];
       if (context.matiere_name) parts.push(`Matière : ${context.matiere_name}`);
       if (context.cours_name) parts.push(`Cours : ${context.cours_name}`);
-      if (context.qcm_question_text)
-        parts.push(`Question QCM : ${context.qcm_question_text}`);
-      if (context.qcm_option_text)
-        parts.push(`Proposition concernée : ${context.qcm_option_text}`);
-      if (context.context_label)
-        parts.push(`Contexte : ${context.context_label}`);
+      if (context.context_label) parts.push(`Contexte : ${context.context_label}`);
+      if (qcmContext) parts.push(qcmContext);
 
       if (parts.length > 0) {
         contextPreamble = "Contexte de la question :\n" + parts.join("\n") + "\n\n";
