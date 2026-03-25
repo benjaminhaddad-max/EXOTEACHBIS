@@ -25,17 +25,18 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
 
   // Initialize: resolve context + find existing thread + get user
   useEffect(() => {
+    let timeout: NodeJS.Timeout;
     async function init() {
       try {
+        // Safety timeout — never spin forever
+        timeout = setTimeout(() => setLoading(false), 8000);
+
         // Get current user
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setLoading(false);
-          return;
-        }
+        if (!user) return;
         setUserId(user.id);
 
-        // Resolve context
+        // Resolve context (skip if already provided)
         if (!ctx.contextLabel || !ctx.matiereId) {
           try {
             const resolved = await resolveQaContextClient(ctx.contextType, {
@@ -54,31 +55,37 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
         }
 
         // Look for existing open thread with same context
-        let query = supabase
-          .from("qa_threads")
-          .select("*, matiere:matieres(id, name, color)")
-          .eq("student_id", user.id)
-          .eq("context_type", ctx.contextType)
-          .in("status", ["ai_pending", "ai_answered", "escalated", "prof_answered"])
-          .order("created_at", { ascending: false })
-          .limit(1);
+        try {
+          let query = supabase
+            .from("qa_threads")
+            .select("*, matiere:matieres(id, name, color)")
+            .eq("student_id", user.id)
+            .eq("context_type", ctx.contextType)
+            .in("status", ["ai_pending", "ai_answered", "escalated", "prof_answered"])
+            .order("created_at", { ascending: false })
+            .limit(1);
 
-        if (ctx.questionId) query = query.eq("question_id", ctx.questionId);
-        else if (ctx.coursId) query = query.eq("cours_id", ctx.coursId);
-        else if (ctx.matiereId) query = query.eq("matiere_id", ctx.matiereId);
-        else if (ctx.dossierId) query = query.eq("dossier_id", ctx.dossierId);
+          if (ctx.questionId) query = query.eq("question_id", ctx.questionId);
+          else if (ctx.coursId) query = query.eq("cours_id", ctx.coursId);
+          else if (ctx.matiereId) query = query.eq("matiere_id", ctx.matiereId);
+          else if (ctx.dossierId) query = query.eq("dossier_id", ctx.dossierId);
 
-        const { data } = await query;
-        if (data && data.length > 0) {
-          setThread(data[0] as QaThread);
+          const { data } = await query;
+          if (data && data.length > 0) {
+            setThread(data[0] as QaThread);
+          }
+        } catch {
+          // Ignore — show new thread form
         }
       } catch (err) {
         console.error("Q&A drawer init error:", err);
       } finally {
+        clearTimeout(timeout);
         setLoading(false);
       }
     }
     init();
+    return () => clearTimeout(timeout);
   }, []);
 
   // Create a new thread when user sends first message
