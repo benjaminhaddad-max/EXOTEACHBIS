@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Construire l'URL de vérification OTP
-    const redirectUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/verify?token=${token}&type=magiclink&redirect_to=${encodeURIComponent(req.nextUrl.origin + "/dashboard")}`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.headers.get("origin") || "https://exoteachbis.vercel.app";
+    const redirectUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/verify?token=${token}&type=magiclink&redirect_to=${encodeURIComponent(siteUrl + "/dashboard")}`;
 
     return NextResponse.json({ url: redirectUrl });
   } catch (e: any) {
