@@ -77,9 +77,23 @@ export function ChatBubble({ message, viewerRole, showAvatar = true, senderName 
 
         {/* Content */}
         {message.content_type === "text" && message.content && (
-          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-            {message.content}
-          </p>
+          <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            {isAi ? (
+              <div
+                className="prose prose-sm max-w-none [&_strong]:font-bold [&_em]:italic [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_li]:my-0.5 [&_p]:my-1"
+                dangerouslySetInnerHTML={{
+                  __html: message.content
+                    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+                    .replace(/^- (.+)$/gm, "<li>$1</li>")
+                    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+                    .replace(/\n/g, "<br/>"),
+                }}
+              />
+            ) : (
+              message.content
+            )}
+          </div>
         )}
 
         {message.content_type === "voice" && message.media_url && (
