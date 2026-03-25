@@ -459,7 +459,8 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
         {aiThinking && <TypingIndicator />}
       </div>
 
-      {/* Input bar — always visible so student can continue the conversation */}
+      {/* Input bar — always visible, pinned at bottom */}
+      <div className="shrink-0">
       <ChatInputBar
         onSendText={handleSendText}
         onSendVoice={handleSendVoice}
@@ -475,6 +476,7 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
                 : "Répondez à l'étudiant..."
         }
       />
+      </div>
     </div>
   );
 }
