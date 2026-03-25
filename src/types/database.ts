@@ -322,6 +322,12 @@ export interface GroupeDossierAcces {
   created_at: string;
 }
 
+export interface ProfileDossierAcces {
+  profile_id: string;
+  dossier_id: string;
+  created_at: string;
+}
+
 export interface GroupeMember {
   groupe_id: string;
   user_id: string;

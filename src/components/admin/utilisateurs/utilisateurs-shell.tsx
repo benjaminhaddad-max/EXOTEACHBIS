@@ -7,11 +7,20 @@ import {
   BookOpen, Crown, ChevronDown, ChevronRight, Folder,
   FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2,
 } from "lucide-react";
-import type { Profile, Groupe, Dossier, Matiere, Filiere, UserRole } from "@/types/database";
+import type {
+  Profile,
+  Groupe,
+  Dossier,
+  Matiere,
+  Filiere,
+  UserRole,
+  GroupeDossierAcces,
+  ProfileDossierAcces,
+} from "@/types/database";
 import {
   updateUserAdminProfile,
   createGroupe, updateGroupe, deleteGroupe,
-  toggleGroupeDossierAcces,
+  setGroupeDossierAcces as saveGroupeDossierAcces,
 } from "@/app/(admin)/admin/utilisateurs/actions";
 import { DOSSIER_TYPE_META, getDossierPathLabel } from "@/lib/pedagogie-structure";
 
@@ -35,6 +44,7 @@ type AdminUserChanges = {
   groupe_id?: string | null;
   filiere_id?: string | null;
   access_dossier_id?: string | null;
+  access_dossier_ids?: string[];
   matiere_ids?: string[];
 };
 
@@ -92,6 +102,25 @@ function buildDossierTree(dossiers: Dossier[]): DossierNode[] {
   return roots;
 }
 
+function collectNodeIds(node: DossierNode): string[] {
+  return [node.id, ...node.children.flatMap(collectNodeIds)];
+}
+
+function buildAccessMap<T extends { dossier_id: string }>(
+  rows: T[],
+  key: keyof T
+) {
+  const map = new Map<string, string[]>();
+  for (const row of rows) {
+    const ownerId = row[key];
+    if (typeof ownerId !== "string") continue;
+    const current = map.get(ownerId) ?? [];
+    current.push(row.dossier_id);
+    map.set(ownerId, current);
+  }
+  return map;
+}
+
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 export function UtilisateursShell({
@@ -101,6 +130,8 @@ export function UtilisateursShell({
   initialMatieres,
   initialFilieres,
   initialProfMatieres,
+  initialGroupeDossierAcces,
+  initialProfileDossierAcces,
 }: {
   initialUsers: Profile[];
   initialGroupes: Groupe[];
@@ -108,12 +139,16 @@ export function UtilisateursShell({
   initialMatieres: Matiere[];
   initialFilieres: Filiere[];
   initialProfMatieres: ProfMatiereAssignment[];
+  initialGroupeDossierAcces: GroupeDossierAcces[];
+  initialProfileDossierAcces: ProfileDossierAcces[];
 }) {
   const [view, setView] = useState<"comptes" | "groupe">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
   const [users, setUsers] = useState<Profile[]>(initialUsers);
   const [groupes, setGroupes] = useState<Groupe[]>(initialGroupes);
   const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
+  const [groupeDossierAcces, setGroupeDossierAcces] = useState<GroupeDossierAcces[]>(initialGroupeDossierAcces);
+  const [profileDossierAcces, setProfileDossierAcces] = useState<ProfileDossierAcces[]>(initialProfileDossierAcces);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
@@ -142,6 +177,20 @@ export function UtilisateursShell({
     const supabase = createClient();
     const { data } = await supabase.from("groupes").select("*").order("name");
     if (data) setGroupes(data as Groupe[]);
+  }, []);
+
+  const refreshGroupeDossierAcces = useCallback(async () => {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data } = await supabase.from("groupe_dossier_acces").select("groupe_id, dossier_id");
+    if (data) setGroupeDossierAcces(data as GroupeDossierAcces[]);
+  }, []);
+
+  const refreshProfileDossierAcces = useCallback(async () => {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data } = await supabase.from("profile_dossier_acces").select("profile_id, dossier_id");
+    if (data) setProfileDossierAcces(data as ProfileDossierAcces[]);
   }, []);
 
   const handleDeleteGroupe = useCallback((id: string) => {
@@ -173,11 +222,20 @@ export function UtilisateursShell({
     startTransition(async () => {
       const res = await updateUserAdminProfile({ userId, ...changes });
       if ("error" in res) { showToast(res.error!, "error"); return; }
-      await Promise.all([refreshUsers(), refreshProfMatieres()]);
+      await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces()]);
       setModal(null);
       showToast("Modifié", "success");
     });
-  }, [showToast, refreshUsers, refreshProfMatieres]);
+  }, [showToast, refreshUsers, refreshProfMatieres, refreshProfileDossierAcces]);
+
+  const handleSaveGroupeAccess = useCallback((groupeId: string, dossierIds: string[]) => {
+    startTransition(async () => {
+      const res = await saveGroupeDossierAcces(groupeId, dossierIds);
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      await Promise.all([refreshGroupeDossierAcces(), refreshUsers()]);
+      showToast("Accès de classe mis à jour", "success");
+    });
+  }, [refreshGroupeDossierAcces, refreshUsers, showToast]);
 
   const groupTree = useMemo(() => buildGroupTree(groupes), [groupes]);
   const dossierTree = useMemo(() => buildDossierTree(initialDossiers), [initialDossiers]);
@@ -191,6 +249,14 @@ export function UtilisateursShell({
     }
     return map;
   }, [profMatieres]);
+  const groupeAccessById = useMemo(
+    () => buildAccessMap(groupeDossierAcces, "groupe_id"),
+    [groupeDossierAcces]
+  );
+  const profileAccessById = useMemo(
+    () => buildAccessMap(profileDossierAcces, "profile_id"),
+    [profileDossierAcces]
+  );
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -292,6 +358,8 @@ export function UtilisateursShell({
             filieres={initialFilieres}
             matieres={initialMatieres}
             profMatieresByUser={profMatieresByUser}
+            groupeAccessById={groupeAccessById}
+            profileAccessById={profileAccessById}
             onEditUser={(u) => setModal({ type: "edit_user", user: u })}
           />
         )}
@@ -301,11 +369,15 @@ export function UtilisateursShell({
             allGroupes={groupes}
             allUsers={users}
             dossierTree={dossierTree}
+            dossierList={initialDossiers}
+            accessIds={groupeAccessById.get(selectedGroupe.id) ?? []}
+            isPending={isPending}
             onEditGroupe={(g) => setModal({ type: "edit_groupe", groupe: g })}
             onDeleteGroupe={handleDeleteGroupe}
             onEditUser={(u) => setModal({ type: "edit_user", user: u })}
             onRemoveUser={(u) => handleSaveUser(u.id, { groupe_id: null })}
             onAddUser={(userId) => handleSaveUser(userId, { groupe_id: selectedGroupe.id })}
+            onSaveAccess={handleSaveGroupeAccess}
             showToast={showToast}
           />
         )}
@@ -341,9 +413,12 @@ export function UtilisateursShell({
           user={modal.user}
           groupes={groupes}
           dossiers={initialDossiers}
+          dossierTree={dossierTree}
           matieres={initialMatieres}
           filieres={initialFilieres}
           selectedMatiereIds={profMatieresByUser.get(modal.user.id) ?? []}
+          directAccessIds={profileAccessById.get(modal.user.id) ?? (modal.user.access_dossier_id ? [modal.user.access_dossier_id] : [])}
+          groupeAccessById={groupeAccessById}
           isPending={isPending}
           onSave={handleSaveUser}
           onClose={() => setModal(null)}
@@ -483,7 +558,7 @@ function GroupTreeNode({
 // ─── ComptesView ──────────────────────────────────────────────────────────────
 
 function ComptesView({
-  users, groupes, dossiers, filieres, matieres, profMatieresByUser, onEditUser,
+  users, groupes, dossiers, filieres, matieres, profMatieresByUser, groupeAccessById, profileAccessById, onEditUser,
 }: {
   users: Profile[];
   groupes: Groupe[];
@@ -491,6 +566,8 @@ function ComptesView({
   filieres: Filiere[];
   matieres: Matiere[];
   profMatieresByUser: Map<string, string[]>;
+  groupeAccessById: Map<string, string[]>;
+  profileAccessById: Map<string, string[]>;
   onEditUser: (u: Profile) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -565,6 +642,8 @@ function ComptesView({
               const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
               const filiere = u.filiere_id ? filiereMap.get(u.filiere_id) : null;
               const accessLabel = getDossierPathLabel(u.access_dossier_id, dossiers);
+              const directAccessIds = profileAccessById.get(u.id) ?? (u.access_dossier_id ? [u.access_dossier_id] : []);
+              const groupAccessIds = u.groupe_id ? (groupeAccessById.get(u.groupe_id) ?? []) : [];
               const assignedMatieres = (profMatieresByUser.get(u.id) ?? [])
                 .map((matiereId) => matiereMap.get(matiereId)?.name)
                 .filter(Boolean) as string[];
@@ -598,6 +677,18 @@ function ComptesView({
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#E3C286" }}>
                               <Building2 size={9} />
                               <span className="truncate">{accessLabel}</span>
+                            </span>
+                          )}
+                          {directAccessIds.length > 1 && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#F5D78E" }}>
+                              <Check size={9} />
+                              {directAccessIds.length} accès perso
+                            </span>
+                          )}
+                          {groupe && groupAccessIds.length > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(16,185,129,0.14)", color: "#86EFAC" }}>
+                              <Users size={9} />
+                              Classe: {groupAccessIds.length} accès
                             </span>
                           )}
                           {u.role === "prof" && assignedMatieres.length > 0 && (
@@ -679,18 +770,22 @@ function ComptesView({
 // ─── GroupeDetail ─────────────────────────────────────────────────────────────
 
 function GroupeDetail({
-  groupe, allGroupes, allUsers, dossierTree,
-  onEditGroupe, onDeleteGroupe, onEditUser, onRemoveUser, onAddUser, showToast,
+  groupe, allGroupes, allUsers, dossierTree, dossierList, accessIds,
+  isPending, onEditGroupe, onDeleteGroupe, onEditUser, onRemoveUser, onAddUser, onSaveAccess, showToast,
 }: {
   groupe: Groupe;
   allGroupes: Groupe[];
   allUsers: Profile[];
   dossierTree: DossierNode[];
+  dossierList: Dossier[];
+  accessIds: string[];
+  isPending: boolean;
   onEditGroupe: (g: Groupe) => void;
   onDeleteGroupe: (id: string) => void;
   onEditUser: (u: Profile) => void;
   onRemoveUser: (u: Profile) => void;
   onAddUser: (userId: string) => void;
+  onSaveAccess: (groupeId: string, dossierIds: string[]) => void;
   showToast: (msg: string, kind: "success" | "error") => void;
 }) {
   const [tab, setTab] = useState<"membres" | "acces" | "parametres">("membres");
@@ -765,7 +860,15 @@ function GroupeDetail({
         />
       )}
       {tab === "acces" && (
-        <AccesTab groupe={groupe} dossierTree={dossierTree} showToast={showToast} />
+        <AccesTab
+          groupe={groupe}
+          dossierTree={dossierTree}
+          dossierList={dossierList}
+          initialAccessIds={accessIds}
+          isPending={isPending}
+          onSave={onSaveAccess}
+          showToast={showToast}
+        />
       )}
       {tab === "parametres" && (
         <ParamètresTab groupe={groupe} onEdit={onEditGroupe} onDelete={onDeleteGroupe} />
@@ -902,105 +1005,152 @@ function MembresTab({
 
 // ─── AccesTab ─────────────────────────────────────────────────────────────────
 
-function AccesTab({
-  groupe, dossierTree, showToast,
+function countSelectedNodes(node: DossierNode, ids: Set<string>) {
+  return collectNodeIds(node).reduce((count, nodeId) => count + (ids.has(nodeId) ? 1 : 0), 0);
+}
+
+function collectExpandableIds(nodes: DossierNode[]) {
+  const ids = new Set<string>();
+  const visit = (node: DossierNode) => {
+    if (node.children.length > 0) ids.add(node.id);
+    node.children.forEach(visit);
+  };
+  nodes.forEach(visit);
+  return ids;
+}
+
+function getAncestorIds(nodeId: string, parentMap: Map<string, string | null>) {
+  const ancestors: string[] = [];
+  let current = parentMap.get(nodeId) ?? null;
+  while (current) {
+    ancestors.push(current);
+    current = parentMap.get(current) ?? null;
+  }
+  return ancestors;
+}
+
+function AccessScopeTree({
+  dossierTree,
+  dossierList,
+  selectedIds,
+  inheritedIds = [],
+  onChange,
+  disabled = false,
+  readOnly = false,
+  accent = "gold",
 }: {
-  groupe: Groupe;
   dossierTree: DossierNode[];
-  showToast: (msg: string, kind: "success" | "error") => void;
+  dossierList: Dossier[];
+  selectedIds: string[];
+  inheritedIds?: string[];
+  onChange?: (nextIds: string[]) => void;
+  disabled?: boolean;
+  readOnly?: boolean;
+  accent?: "gold" | "green";
 }) {
-  const [accessIds, setAccessIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const inheritedSet = useMemo(() => new Set(inheritedIds), [inheritedIds]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => collectExpandableIds(dossierTree));
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of collectExpandableIds(dossierTree)) next.add(id);
+      return next;
+    });
+  }, [dossierTree]);
 
-    async function load() {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("groupe_dossier_acces")
-        .select("dossier_id")
-        .eq("groupe_id", groupe.id);
+  const parentMap = useMemo(
+    () => new Map(dossierList.map((dossier) => [dossier.id, dossier.parent_id])),
+    [dossierList]
+  );
 
-      if (!cancelled) {
-        if (error) {
-          // Table missing = migration not run; otherwise show real error
-          const msg = error.message?.includes("does not exist") || error.code === "42P01"
-            ? "Migration SQL requise : exécutez 006_groupe_hierarchy_access.sql dans Supabase Dashboard > SQL Editor."
-            : `Erreur : ${error.message}`;
-          setLoadError(msg);
-        } else if (data) {
-          setAccessIds(new Set(data.map((r: { dossier_id: string }) => r.dossier_id)));
-        }
-        setLoading(false);
-      }
+  const handleToggle = (node: DossierNode) => {
+    if (readOnly || disabled || !onChange) return;
+
+    const next = new Set(selectedSet);
+    const subtreeIds = collectNodeIds(node);
+    const descendantIds = subtreeIds.slice(1);
+    const isDirectSelected = next.has(node.id);
+
+    if (isDirectSelected) {
+      subtreeIds.forEach((id) => next.delete(id));
+      onChange([...next]);
+      return;
     }
 
-    load().catch((e: Error) => { if (!cancelled) { setLoadError(`Erreur : ${e?.message ?? "inconnue"}`); setLoading(false); } });
-    return () => { cancelled = true; };
-  }, [groupe.id]);
-
-  async function toggle(dossierId: string) {
-    setTogglingIds(prev => new Set([...prev, dossierId]));
-    try {
-      const result = await toggleGroupeDossierAcces(groupe.id, dossierId);
-      if (result.error) {
-        showToast(result.error, "error");
-      } else {
-        setAccessIds(prev => {
-          const next = new Set(prev);
-          if (next.has(dossierId)) next.delete(dossierId);
-          else next.add(dossierId);
-          return next;
-        });
-      }
-    } finally {
-      setTogglingIds(prev => {
-        const next = new Set(prev);
-        next.delete(dossierId);
-        return next;
-      });
+    descendantIds.forEach((id) => next.delete(id));
+    for (const ancestorId of getAncestorIds(node.id, parentMap)) {
+      next.delete(ancestorId);
     }
+    next.add(node.id);
+    onChange([...next]);
+  };
+
+  const toggleExpanded = (nodeId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  };
+
+  if (dossierTree.length === 0) {
+    return (
+      <div className="text-center py-8 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+        Aucun dossier disponible
+      </div>
+    );
   }
 
-  if (loading) return (
-    <div className="flex justify-center py-8">
-      <Loader2 size={20} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
-    </div>
-  );
-
-  if (loadError) return (
-    <div className="rounded-xl p-4 text-sm" style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "rgb(252,165,165)" }}>
-      <p className="font-medium mb-1">Erreur de chargement</p>
-      <p className="text-[12px] opacity-80">{loadError}</p>
-    </div>
-  );
-
-  if (dossierTree.length === 0) return (
-    <div className="text-center py-8 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-      Aucun dossier disponible
-    </div>
-  );
-
   return (
-    <div>
-      <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.4)" }}>
-        Cochez les dossiers et sous-dossiers auxquels ce groupe a accès.
-      </p>
-      <div className="space-y-0.5">
-        {dossierTree.map(d => (
-          <DossierAccessNode
-            key={d.id}
-            node={d}
+    <div className="rounded-2xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => onChange?.([])}
+            disabled={disabled || selectedIds.length === 0}
+            className="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:opacity-40"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
+          >
+            Tout décocher
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setExpandedIds(collectExpandableIds(dossierTree))}
+          className="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
+          style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.62)" }}
+        >
+          Tout déplier
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpandedIds(new Set())}
+          className="rounded-full px-3 py-1 text-[11px] font-semibold transition-colors"
+          style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.62)" }}
+        >
+          Tout replier
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        {dossierTree.map((node) => (
+          <AccessScopeTreeNode
+            key={node.id}
+            node={node}
+            dossierList={dossierList}
             depth={0}
-            accessIds={accessIds}
-            togglingIds={togglingIds}
-            onToggle={toggle}
+            selectedSet={selectedSet}
+            inheritedSet={inheritedSet}
+            expandedIds={expandedIds}
+            readOnly={readOnly}
+            disabled={disabled}
+            accent={accent}
+            onToggleExpanded={toggleExpanded}
+            onToggleSelection={handleToggle}
           />
         ))}
       </div>
@@ -1008,82 +1158,247 @@ function AccesTab({
   );
 }
 
-function DossierAccessNode({
-  node, depth, accessIds, togglingIds, onToggle,
+function AccessScopeTreeNode({
+  node,
+  dossierList,
+  depth,
+  selectedSet,
+  inheritedSet,
+  expandedIds,
+  readOnly,
+  disabled,
+  accent,
+  onToggleExpanded,
+  onToggleSelection,
 }: {
   node: DossierNode;
+  dossierList: Dossier[];
   depth: number;
-  accessIds: Set<string>;
-  togglingIds: Set<string>;
-  onToggle: (id: string) => void;
+  selectedSet: Set<string>;
+  inheritedSet: Set<string>;
+  expandedIds: Set<string>;
+  readOnly: boolean;
+  disabled: boolean;
+  accent: "gold" | "green";
+  onToggleExpanded: (nodeId: string) => void;
+  onToggleSelection: (node: DossierNode) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const expanded = expandedIds.has(node.id);
   const hasChildren = node.children.length > 0;
-  const hasAccess = accessIds.has(node.id);
-  const isToggling = togglingIds.has(node.id);
+  const directChecked = selectedSet.has(node.id);
+  const inheritedChecked = !directChecked && inheritedSet.has(node.id);
+  const selectedDescendants = node.children.reduce((count, child) => count + countSelectedNodes(child, selectedSet), 0);
+  const inheritedDescendants = node.children.reduce((count, child) => count + countSelectedNodes(child, inheritedSet), 0);
+  const partial = !directChecked && selectedDescendants > 0;
+  const inheritedPartial = !inheritedChecked && inheritedDescendants > 0;
+  const accentColor = accent === "gold" ? "#E3C286" : "#86EFAC";
+  const accentBg = accent === "gold" ? "rgba(201,168,76,0.16)" : "rgba(16,185,129,0.16)";
 
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-1.5 pr-2 rounded-lg transition-colors"
-        style={{ paddingLeft: depth * 20 + 4 }}
-        onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)")}
-        onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+        className="flex items-start gap-2 rounded-2xl px-2 py-2 transition-colors"
+        style={{
+          marginLeft: depth * 18,
+          backgroundColor: directChecked || inheritedChecked || partial || inheritedPartial
+            ? "rgba(255,255,255,0.05)"
+            : "transparent",
+        }}
       >
         <button
-          onClick={() => hasChildren && setExpanded(p => !p)}
-          className="w-4 h-4 flex items-center justify-center shrink-0"
-          style={{ color: "rgba(255,255,255,0.3)" }}
+          type="button"
+          onClick={() => hasChildren && onToggleExpanded(node.id)}
+          className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+          style={{ color: "rgba(255,255,255,0.35)" }}
         >
-          {hasChildren
-            ? (expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />)
-            : <span className="w-4" />}
+          {hasChildren ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : <span className="w-3" />}
         </button>
-
-        <div className="w-4 h-4 flex items-center justify-center shrink-0" style={{ color: node.color }}>
-          {hasAccess ? <FolderOpen size={14} /> : <Folder size={14} />}
-        </div>
-
-        <span className="text-sm flex-1 truncate" style={{ color: hasAccess ? "white" : "rgba(255,255,255,0.5)", fontWeight: hasAccess ? 500 : 400 }}>
-          {node.name}
-        </span>
 
         <button
-          onClick={() => onToggle(node.id)}
-          disabled={isToggling}
-          className="shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all"
+          type="button"
+          onClick={() => onToggleSelection(node)}
+          disabled={readOnly || disabled}
+          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all disabled:cursor-default"
           style={{
-            backgroundColor: hasAccess ? "#C9A84C" : "transparent",
-            border: hasAccess ? "none" : "1px solid rgba(255,255,255,0.2)",
-            color: hasAccess ? "#0e1e35" : "transparent",
-          }}
-          onMouseOver={e => {
-            if (!hasAccess) (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.5)";
-          }}
-          onMouseOut={e => {
-            if (!hasAccess) (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.2)";
+            borderColor: directChecked || partial ? accentColor : inheritedChecked || inheritedPartial ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)",
+            backgroundColor: directChecked ? accentColor : partial ? accentBg : inheritedChecked ? "rgba(255,255,255,0.08)" : "transparent",
+            color: directChecked ? "#0e1e35" : partial || inheritedChecked || inheritedPartial ? accentColor : "transparent",
           }}
         >
-          {isToggling
-            ? <Loader2 size={10} className="animate-spin" style={{ color: hasAccess ? "#0e1e35" : "rgba(255,255,255,0.5)" }} />
-            : <Check size={11} />}
+          {directChecked ? (
+            <Check size={11} />
+          ) : partial || inheritedChecked || inheritedPartial ? (
+            <div className="h-2 w-2 rounded-sm" style={{ backgroundColor: accentColor }} />
+          ) : null}
         </button>
+
+        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${node.color}22`, color: node.color }}>
+          {directChecked || inheritedChecked ? <FolderOpen size={14} /> : <Folder size={14} />}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium leading-tight" style={{ color: directChecked || inheritedChecked || partial || inheritedPartial ? "white" : "rgba(255,255,255,0.72)" }}>
+              {node.name}
+            </span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" }}>
+              {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+            </span>
+            {directChecked && (
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: accentBg, color: accentColor }}>
+                Direct
+              </span>
+            )}
+            {inheritedChecked && (
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "#C7D2FE" }}>
+                Hérité
+              </span>
+            )}
+            {partial && (
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: accentBg, color: accentColor }}>
+                {selectedDescendants} sous-niveau{selectedDescendants > 1 ? "x" : ""}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.38)" }}>
+            {getDossierPathLabel(node.id, dossierList) || node.name}
+          </p>
+        </div>
       </div>
 
       {expanded && hasChildren && (
-        <div>
-          {node.children.map(child => (
-            <DossierAccessNode
+        <div className="space-y-1">
+          {node.children.map((child) => (
+            <AccessScopeTreeNode
               key={child.id}
               node={child}
+              dossierList={dossierList}
               depth={depth + 1}
-              accessIds={accessIds}
-              togglingIds={togglingIds}
-              onToggle={onToggle}
+              selectedSet={selectedSet}
+              inheritedSet={inheritedSet}
+              expandedIds={expandedIds}
+              readOnly={readOnly}
+              disabled={disabled}
+              accent={accent}
+              onToggleExpanded={onToggleExpanded}
+              onToggleSelection={onToggleSelection}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function AccessBadges({
+  title,
+  dossierIds,
+  dossiers,
+  accent = "gold",
+  emptyLabel,
+}: {
+  title: string;
+  dossierIds: string[];
+  dossiers: Dossier[];
+  accent?: "gold" | "green";
+  emptyLabel: string;
+}) {
+  const bg = accent === "gold" ? "rgba(201,168,76,0.14)" : "rgba(16,185,129,0.14)";
+  const color = accent === "gold" ? "#F5D78E" : "#86EFAC";
+
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+        {title}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {dossierIds.length === 0 ? (
+          <span className="rounded-full px-3 py-1 text-[11px]" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.35)" }}>
+            {emptyLabel}
+          </span>
+        ) : (
+          dossierIds.map((dossierId) => (
+            <span
+              key={dossierId}
+              className="inline-flex max-w-full items-center gap-1 rounded-full px-3 py-1 text-[11px]"
+              style={{ backgroundColor: bg, color }}
+            >
+              <Folder size={10} />
+              <span className="truncate">{getDossierPathLabel(dossierId, dossiers)}</span>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccesTab({
+  groupe,
+  dossierTree,
+  dossierList,
+  initialAccessIds,
+  isPending,
+  onSave,
+}: {
+  groupe: Groupe;
+  dossierTree: DossierNode[];
+  dossierList: Dossier[];
+  initialAccessIds: string[];
+  isPending: boolean;
+  onSave: (groupeId: string, dossierIds: string[]) => void;
+  showToast: (msg: string, kind: "success" | "error") => void;
+}) {
+  const [accessIds, setAccessIds] = useState<string[]>(initialAccessIds);
+
+  useEffect(() => {
+    setAccessIds(initialAccessIds);
+  }, [initialAccessIds, groupe.id]);
+
+  const normalizedInitial = [...initialAccessIds].sort().join("|");
+  const normalizedCurrent = [...accessIds].sort().join("|");
+  const hasChanges = normalizedInitial !== normalizedCurrent;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-4" style={{ backgroundColor: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.16)" }}>
+        <p className="text-sm font-semibold" style={{ color: "#A7F3D0" }}>
+          Les membres de cette classe héritent automatiquement de ce périmètre.
+        </p>
+        <p className="mt-1 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+          Tu peux donc définir le niveau d&apos;accès une seule fois ici, puis simplement rattacher les élèves ou les professeurs à la bonne classe.
+        </p>
+      </div>
+
+      <AccessBadges
+        title="Accès de la classe"
+        dossierIds={accessIds}
+        dossiers={dossierList}
+        accent="green"
+        emptyLabel="Aucun accès de classe défini"
+      />
+
+      <AccessScopeTree
+        dossierTree={dossierTree}
+        dossierList={dossierList}
+        selectedIds={accessIds}
+        onChange={setAccessIds}
+        disabled={isPending}
+        accent="green"
+      />
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => onSave(groupe.id, accessIds)}
+          disabled={!hasChanges || isPending}
+          className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          style={{ backgroundColor: "#34D399", color: "#052e28" }}
+        >
+          {isPending && <Loader2 size={14} className="animate-spin" />}
+          Enregistrer les accès de classe
+        </button>
+      </div>
     </div>
   );
 }
@@ -1272,14 +1587,17 @@ function GroupeFormModal({
 // ─── EditUserModal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
-  user, groupes, dossiers, matieres, filieres, selectedMatiereIds, isPending, onSave, onClose,
+  user, groupes, dossiers, dossierTree, matieres, filieres, selectedMatiereIds, directAccessIds, groupeAccessById, isPending, onSave, onClose,
 }: {
   user: Profile;
   groupes: Groupe[];
   dossiers: Dossier[];
+  dossierTree: DossierNode[];
   matieres: Matiere[];
   filieres: Filiere[];
   selectedMatiereIds: string[];
+  directAccessIds: string[];
+  groupeAccessById: Map<string, string[]>;
   isPending: boolean;
   onSave: (userId: string, changes: AdminUserChanges) => void;
   onClose: () => void;
@@ -1291,8 +1609,12 @@ function EditUserModal({
   const [role, setRole] = useState(user.role);
   const [groupeId, setGroupeId] = useState<string | null>(user.groupe_id);
   const [filiereId, setFiliereId] = useState<string | null>(user.filiere_id);
-  const [accessDossierId, setAccessDossierId] = useState<string | null>(user.access_dossier_id);
+  const [personalAccessIds, setPersonalAccessIds] = useState<string[]>(directAccessIds);
   const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
+
+  useEffect(() => {
+    setPersonalAccessIds(directAccessIds);
+  }, [directAccessIds, user.id]);
 
   const matieresByDossier = useMemo(() => {
     const map = new Map<string, Matiere[]>();
@@ -1306,6 +1628,9 @@ function EditUserModal({
 
   const normalizedCurrentMatieres = [...selectedMatiereIds].sort().join("|");
   const normalizedNextMatieres = [...matiereIds].sort().join("|");
+  const normalizedCurrentDirectAccess = [...directAccessIds].sort().join("|");
+  const normalizedNextDirectAccess = [...personalAccessIds].sort().join("|");
+  const inheritedAccessIds = groupeId ? (groupeAccessById.get(groupeId) ?? []) : [];
   const hasChanges =
     firstName !== (user.first_name ?? "") ||
     lastName !== (user.last_name ?? "") ||
@@ -1314,7 +1639,7 @@ function EditUserModal({
     role !== user.role ||
     groupeId !== user.groupe_id ||
     filiereId !== user.filiere_id ||
-    accessDossierId !== user.access_dossier_id ||
+    normalizedCurrentDirectAccess !== normalizedNextDirectAccess ||
     normalizedCurrentMatieres !== normalizedNextMatieres;
 
   const toggleMatiere = (matiereId: string) => {
@@ -1443,21 +1768,45 @@ function EditUserModal({
           <div>
             <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Périmètre e-learning</label>
             <p className="mb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Choisis le noeud qui détermine ce que la personne voit dans l&apos;arborescence cours: université, PASS/LAS, semestre, etc.
+              La classe donne un accès automatique. Tu peux ensuite ajouter un accès perso complémentaire avec l&apos;arborescence ci-dessous.
             </p>
-            <select
-              value={accessDossierId ?? ""}
-              onChange={e => setAccessDossierId(e.target.value || null)}
-              className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
-              style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
-            >
-              <option value="">Aucun périmètre direct</option>
-              {dossiers.map((dossier) => (
-                <option key={dossier.id} value={dossier.id}>
-                  [{DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}] {getDossierPathLabel(dossier.id, dossiers)}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-4">
+              <AccessBadges
+                title="Accès hérité de la classe"
+                dossierIds={inheritedAccessIds}
+                dossiers={dossiers}
+                accent="green"
+                emptyLabel="Aucun accès hérité pour cette classe"
+              />
+
+              {groupeId && inheritedAccessIds.length > 0 && (
+                <AccessScopeTree
+                  dossierTree={dossierTree}
+                  dossierList={dossiers}
+                  selectedIds={[]}
+                  inheritedIds={inheritedAccessIds}
+                  readOnly
+                  accent="green"
+                />
+              )}
+
+              <AccessBadges
+                title="Accès perso complémentaire"
+                dossierIds={personalAccessIds}
+                dossiers={dossiers}
+                accent="gold"
+                emptyLabel="Aucun accès perso complémentaire"
+              />
+
+              <AccessScopeTree
+                dossierTree={dossierTree}
+                dossierList={dossiers}
+                selectedIds={personalAccessIds}
+                onChange={setPersonalAccessIds}
+                disabled={isPending}
+                accent="gold"
+              />
+            </div>
           </div>
 
           {role === "prof" && (
@@ -1528,7 +1877,8 @@ function EditUserModal({
                 role,
                 groupe_id: groupeId,
                 filiere_id: filiereId,
-                access_dossier_id: accessDossierId,
+                access_dossier_id: personalAccessIds[0] ?? null,
+                access_dossier_ids: personalAccessIds,
                 matiere_ids: matiereIds,
               })}
               disabled={!hasChanges || isPending || !email.trim()}

@@ -40,6 +40,7 @@ export async function updateUserAdminProfile(data: {
   groupe_id?: string | null;
   filiere_id?: string | null;
   access_dossier_id?: string | null;
+  access_dossier_ids?: string[];
   matiere_ids?: string[];
 }) {
   const adminCheck = await ensureAdminAccess();
@@ -95,8 +96,12 @@ export async function updateUserAdminProfile(data: {
   if (data.filiere_id !== undefined) {
     profileUpdate.filiere_id = data.filiere_id;
   }
-  if (data.access_dossier_id !== undefined) {
-    profileUpdate.access_dossier_id = data.access_dossier_id;
+  if (data.access_dossier_id !== undefined || data.access_dossier_ids !== undefined) {
+    const uniqueAccessIds = [...new Set(data.access_dossier_ids ?? [])];
+    profileUpdate.access_dossier_id =
+      data.access_dossier_id !== undefined
+        ? data.access_dossier_id
+        : uniqueAccessIds[0] ?? null;
   }
 
   const { error: profileError } = await admin
@@ -106,6 +111,33 @@ export async function updateUserAdminProfile(data: {
 
   if (profileError) {
     return { error: profileError.message };
+  }
+
+  if (data.access_dossier_ids !== undefined) {
+    const { error: deleteAccessError } = await admin
+      .from("profile_dossier_acces")
+      .delete()
+      .eq("profile_id", data.userId);
+
+    if (deleteAccessError) {
+      return { error: deleteAccessError.message };
+    }
+
+    const uniqueAccessIds = [...new Set(data.access_dossier_ids)];
+    if (uniqueAccessIds.length > 0) {
+      const { error: insertAccessError } = await admin
+        .from("profile_dossier_acces")
+        .insert(
+          uniqueAccessIds.map((dossierId) => ({
+            profile_id: data.userId,
+            dossier_id: dossierId,
+          }))
+        );
+
+      if (insertAccessError) {
+        return { error: insertAccessError.message };
+      }
+    }
   }
 
   if (data.matiere_ids !== undefined || data.role !== undefined) {
@@ -217,6 +249,34 @@ export async function toggleGroupeDossierAcces(groupeId: string, dossierId: stri
       .from("groupe_dossier_acces")
       .insert({ groupe_id: groupeId, dossier_id: dossierId });
     if (error) return { error: error.message };
+  }
+
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function setGroupeDossierAcces(groupeId: string, dossierIds: string[]) {
+  const supabase = await createClient();
+  const uniqueDossierIds = [...new Set(dossierIds)];
+
+  const { error: deleteError } = await supabase
+    .from("groupe_dossier_acces")
+    .delete()
+    .eq("groupe_id", groupeId);
+
+  if (deleteError) return { error: deleteError.message };
+
+  if (uniqueDossierIds.length > 0) {
+    const { error: insertError } = await supabase
+      .from("groupe_dossier_acces")
+      .insert(
+        uniqueDossierIds.map((dossierId) => ({
+          groupe_id: groupeId,
+          dossier_id: dossierId,
+        }))
+      );
+
+    if (insertError) return { error: insertError.message };
   }
 
   revalidatePath(PATH);

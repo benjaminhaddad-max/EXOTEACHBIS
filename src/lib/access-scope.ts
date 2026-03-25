@@ -76,7 +76,7 @@ export async function getAccessScopeForUser(
     };
   }
 
-  const [dossiersRes, groupAccessRes] = await Promise.all([
+  const [dossiersRes, groupAccessRes, profileAccessRes] = await Promise.all([
     supabase
       .from("dossiers")
       .select("id, parent_id")
@@ -87,12 +87,22 @@ export async function getAccessScopeForUser(
           .select("dossier_id")
           .eq("groupe_id", typedProfile.groupe_id)
       : Promise.resolve({ data: [] }),
+    supabase
+      .from("profile_dossier_acces")
+      .select("dossier_id")
+      .eq("profile_id", userId),
   ]);
 
   const rootIds = new Set<string>();
 
   if (typedProfile.access_dossier_id) {
     rootIds.add(typedProfile.access_dossier_id);
+  }
+
+  for (const access of profileAccessRes.data ?? []) {
+    if (access?.dossier_id) {
+      rootIds.add(access.dossier_id);
+    }
   }
 
   for (const access of groupAccessRes.data ?? []) {
