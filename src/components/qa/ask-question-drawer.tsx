@@ -157,34 +157,38 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
       return;
     }
 
-    // Upload media via API route
-    const formData = new FormData();
-    formData.append("file", file instanceof File ? file : new File([file], `voice_${Date.now()}.webm`, { type: file.type || "audio/webm" }));
-    formData.append("thread_id", newThread.id);
-    formData.append("content_type", contentType);
+    // Upload media directly via Supabase Storage client (no API route needed)
+    const ext = contentType === "voice" ? "webm"
+      : contentType === "document" ? "pdf"
+      : file instanceof File ? (file.name.split(".").pop() || "bin") : "bin";
+    const storagePath = `${contentType}/${newThread.id}/${Date.now()}.${ext}`;
+    const mimeType = file.type || (contentType === "voice" ? "audio/webm" : "application/octet-stream");
 
     try {
-      const resp = await fetch("/api/qa/upload-media", { method: "POST", body: formData });
-      const data = await resp.json();
-      if (data.error) {
-        console.error("Upload API error:", data.error);
-        // Still insert a placeholder text message so the thread isn't empty
+      const { error: uploadErr } = await supabase.storage
+        .from("qa-media")
+        .upload(storagePath, file, { contentType: mimeType, upsert: true });
+
+      if (uploadErr) {
+        console.error("Storage upload error:", uploadErr);
+        // Fallback: insert text message
         await supabase.from("qa_messages").insert({
           thread_id: newThread.id,
           sender_id: userId,
           sender_type: "student",
           content_type: "text",
-          content: `[${title} envoyé(e) — erreur upload: ${data.error}]`,
+          content: `[${title} — erreur upload: ${uploadErr.message}]`,
           read_by_student: true,
         });
-      } else if (data.url) {
+      } else {
+        const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
         const dbType = contentType === "document" ? "text" : contentType;
         const { error: msgErr } = await supabase.from("qa_messages").insert({
           thread_id: newThread.id,
           sender_id: userId,
           sender_type: "student",
           content_type: dbType,
-          media_url: data.url,
+          media_url: urlData.publicUrl,
           media_duration_s: duration ?? null,
           read_by_student: true,
         });
@@ -192,7 +196,6 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
       }
     } catch (err) {
       console.error("Upload failed:", err);
-      // Insert fallback text message
       await supabase.from("qa_messages").insert({
         thread_id: newThread.id,
         sender_id: userId,

@@ -206,28 +206,27 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     setSending(true);
     const senderType: QaSenderType = viewerRole === "student" ? "student" : "prof";
 
-    // Upload
-    const formData = new FormData();
-    formData.append("file", blob, `voice-${Date.now()}.webm`);
-    formData.append("thread_id", thread.id);
-    formData.append("content_type", "voice");
+    // Upload directly via Supabase Storage client (no API route)
+    const storagePath = `voice/${thread.id}/${Date.now()}.webm`;
+    const { error: uploadErr } = await supabase.storage
+      .from("qa-media")
+      .upload(storagePath, blob, { contentType: blob.type || "audio/webm", upsert: true });
 
-    const uploadResp = await fetch("/api/qa/upload-media", {
-      method: "POST",
-      body: formData,
-    });
-    const uploadResult = await uploadResp.json();
-    if (uploadResult.error) {
+    if (uploadErr) {
+      console.error("Voice upload error:", uploadErr);
       setSending(false);
       return;
     }
 
+    const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
+
+    // Insert message — will appear via Realtime subscription
     await supabase.from("qa_messages").insert({
       thread_id: thread.id,
       sender_id: viewerId,
       sender_type: senderType,
       content_type: "voice",
-      media_url: uploadResult.url,
+      media_url: urlData.publicUrl,
       media_duration_s: Math.round(duration),
       read_by_student: viewerRole === "student",
       read_by_prof: viewerRole === "prof",
@@ -236,32 +235,33 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     setSending(false);
   };
 
-  // Send media (image/video)
+  // Send media (image/video/document)
   const handleSendMedia = async (file: File, type: "image" | "video" | "document") => {
     setSending(true);
     const senderType: QaSenderType = viewerRole === "student" ? "student" : "prof";
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("thread_id", thread.id);
-    formData.append("content_type", type);
+    // Upload directly via Supabase Storage client
+    const ext = file.name.split(".").pop() || "bin";
+    const storagePath = `${type}/${thread.id}/${Date.now()}.${ext}`;
+    const { error: uploadErr } = await supabase.storage
+      .from("qa-media")
+      .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: true });
 
-    const uploadResp = await fetch("/api/qa/upload-media", {
-      method: "POST",
-      body: formData,
-    });
-    const uploadResult = await uploadResp.json();
-    if (uploadResult.error) {
+    if (uploadErr) {
+      console.error("Media upload error:", uploadErr);
       setSending(false);
       return;
     }
+
+    const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
+    const dbType = type === "document" ? "image" : type;
 
     await supabase.from("qa_messages").insert({
       thread_id: thread.id,
       sender_id: viewerId,
       sender_type: senderType,
-      content_type: type,
-      media_url: uploadResult.url,
+      content_type: dbType,
+      media_url: urlData.publicUrl,
       read_by_student: viewerRole === "student",
       read_by_prof: viewerRole === "prof",
     });
