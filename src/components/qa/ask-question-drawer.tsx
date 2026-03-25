@@ -159,16 +159,27 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
 
     // Upload media via API route
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", file instanceof File ? file : new File([file], `voice_${Date.now()}.webm`, { type: file.type || "audio/webm" }));
     formData.append("thread_id", newThread.id);
     formData.append("content_type", contentType);
 
     try {
       const resp = await fetch("/api/qa/upload-media", { method: "POST", body: formData });
       const data = await resp.json();
-      if (data.url) {
-        const dbType = contentType === "document" ? "image" : contentType; // DB content_type
+      if (data.error) {
+        console.error("Upload API error:", data.error);
+        // Still insert a placeholder text message so the thread isn't empty
         await supabase.from("qa_messages").insert({
+          thread_id: newThread.id,
+          sender_id: userId,
+          sender_type: "student",
+          content_type: "text",
+          content: `[${title} envoyé(e) — erreur upload: ${data.error}]`,
+          read_by_student: true,
+        });
+      } else if (data.url) {
+        const dbType = contentType === "document" ? "text" : contentType;
+        const { error: msgErr } = await supabase.from("qa_messages").insert({
           thread_id: newThread.id,
           sender_id: userId,
           sender_type: "student",
@@ -177,9 +188,19 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
           media_duration_s: duration ?? null,
           read_by_student: true,
         });
+        if (msgErr) console.error("Message insert error:", msgErr);
       }
     } catch (err) {
       console.error("Upload failed:", err);
+      // Insert fallback text message
+      await supabase.from("qa_messages").insert({
+        thread_id: newThread.id,
+        sender_id: userId,
+        sender_type: "student",
+        content_type: "text",
+        content: `[${title} — échec de l'envoi]`,
+        read_by_student: true,
+      });
     }
 
     setThread(newThread as QaThread);
