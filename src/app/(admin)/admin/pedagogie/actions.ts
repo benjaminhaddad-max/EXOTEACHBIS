@@ -197,6 +197,125 @@ export async function installCanonicalOffers() {
 
 export async function deleteDossier(id: string) {
   const supabase = await createClient();
+
+  const { data: dossier, error: dossierError } = await supabase
+    .from("dossiers")
+    .select("id, parent_id")
+    .eq("id", id)
+    .single();
+
+  if (dossierError || !dossier) {
+    return { error: dossierError?.message ?? "Dossier introuvable" };
+  }
+
+  const targetParentId = dossier.parent_id ?? null;
+
+  const [
+    childrenRes,
+    matieresRes,
+    coursRes,
+  ] = await Promise.all([
+    supabase
+      .from("dossiers")
+      .select("id, order_index")
+      .eq("parent_id", id)
+      .order("order_index"),
+    supabase
+      .from("matieres")
+      .select("id")
+      .eq("dossier_id", id),
+    supabase
+      .from("cours")
+      .select("id")
+      .eq("dossier_id", id),
+  ]);
+
+  if (childrenRes.error) return { error: childrenRes.error.message };
+  if (matieresRes.error) return { error: matieresRes.error.message };
+  if (coursRes.error) return { error: coursRes.error.message };
+
+  if (!targetParentId && (matieresRes.data?.length ?? 0) > 0) {
+    return {
+      error:
+        "Impossible de supprimer ce dossier racine sans perdre ses matières directes. Déplace d'abord ses matières ou ses sous-dossiers.",
+    };
+  }
+
+  let siblingQuery = supabase
+    .from("dossiers")
+    .select("order_index")
+    .neq("id", id)
+    .order("order_index", { ascending: false })
+    .limit(1);
+
+  siblingQuery = targetParentId
+    ? siblingQuery.eq("parent_id", targetParentId)
+    : siblingQuery.is("parent_id", null);
+
+  const { data: siblingRows, error: siblingError } = await siblingQuery;
+  if (siblingError) return { error: siblingError.message };
+
+  const baseOrder = siblingRows?.[0]?.order_index != null
+    ? siblingRows[0].order_index + 1
+    : 0;
+
+  if ((childrenRes.data?.length ?? 0) > 0) {
+    const childMoveResults = await Promise.all(
+      (childrenRes.data ?? []).map((child, index) =>
+        supabase
+          .from("dossiers")
+          .update({
+            parent_id: targetParentId,
+            order_index: baseOrder + index,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", child.id)
+      )
+    );
+
+    const childMoveError = childMoveResults.find((result) => result.error)?.error;
+    if (childMoveError) return { error: childMoveError.message };
+  }
+
+  if (targetParentId) {
+
+    if ((matieresRes.data?.length ?? 0) > 0) {
+      const { error: moveMatieresError } = await supabase
+        .from("matieres")
+        .update({
+          dossier_id: targetParentId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("dossier_id", id);
+
+      if (moveMatieresError) return { error: moveMatieresError.message };
+    }
+
+    if ((coursRes.data?.length ?? 0) > 0) {
+      const { error: moveCoursError } = await supabase
+        .from("cours")
+        .update({
+          dossier_id: targetParentId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("dossier_id", id);
+
+      if (moveCoursError) return { error: moveCoursError.message };
+    }
+  } else {
+    if ((coursRes.data?.length ?? 0) > 0) {
+      const { error: moveCoursError } = await supabase
+        .from("cours")
+        .update({
+          dossier_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("dossier_id", id);
+
+      if (moveCoursError) return { error: moveCoursError.message };
+    }
+  }
+
   const { error } = await supabase.from("dossiers").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(PATH);
