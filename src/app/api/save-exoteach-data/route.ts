@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
             name: qcm.titre || `ExoTeach #${qcm.id_qcm}`,
             cours_id: coursId || null,
             type: serieType || "entrainement",
-            timed: false, visible: false, score_definitif: false,
+            timed: false, visible: true, score_definitif: false,
           })
           .select("id").single();
 
@@ -50,23 +50,30 @@ export async function POST(req: NextRequest) {
 
         for (let qi = 0; qi < (qcm.questions || []).length; qi++) {
           const q = qcm.questions[qi];
-          const { data: newQ } = await supabase.from("questions").insert({
-            text: stripHtml(q.question),
-            type: "qcm_multiple", difficulty: 2,
+          const { data: newQ, error: qErr } = await supabase.from("questions").insert({
+            text: stripHtml(q.question) || `Question ${qi + 1}`,
+            type: "qcm_multiple",
+            difficulty: 2,
             cours_id: coursId || null,
-            justification: stripHtml(q.explications) || null,
+            explanation: stripHtml(q.explications) || null,
             image_url: q.url_image_q || null,
+            tags: [],
+            matiere_id: null,
           }).select("id").single();
 
-          if (!newQ) continue;
+          if (qErr || !newQ) {
+            console.error("Question insert error:", qErr?.message, "data:", JSON.stringify(q).substring(0, 200));
+            continue;
+          }
 
           await supabase.from("options").insert(
             (q.answers || []).map((ans: any, idx: number) => ({
-              question_id: newQ.id, label: indexToLabel(idx),
-              text: stripHtml(ans.text), is_correct: ans.isTrue === true,
+              question_id: newQ.id,
+              label: indexToLabel(idx),
+              text: stripHtml(ans.text) || `Option ${indexToLabel(idx)}`,
+              is_correct: ans.isTrue === true,
               order_index: idx,
               justification: stripHtml(ans.explanation) || null,
-              image_url: ans.url_image || null,
             }))
           );
 
