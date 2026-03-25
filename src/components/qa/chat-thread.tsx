@@ -69,7 +69,6 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
   // Auto-trigger AI if thread is ai_pending (just created, AI hasn't responded yet)
   useEffect(() => {
     if (threadStatus !== "ai_pending" || viewerRole !== "student" || messages.length === 0) return;
-    // Find the last student message to use as question text
     const lastStudentMsg = [...messages].reverse().find(m => m.sender_type === "student");
     if (!lastStudentMsg?.content) return;
 
@@ -77,6 +76,7 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     setAiThinking(true);
 
     (async () => {
+      let gotResponse = false;
       try {
         const resp = await fetch("/api/qa/ai-respond", {
           method: "POST",
@@ -98,12 +98,37 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
           });
           setThreadStatus("ai_answered");
           onStatusChange?.("ai_answered");
+          gotResponse = true;
         }
       } catch (err) {
-        console.error("AI auto-trigger error:", err);
-      } finally {
-        if (!cancelled) setAiThinking(false);
+        console.error("AI auto-trigger fetch error:", err);
       }
+
+      // Fallback polling if fetch failed
+      if (!cancelled && !gotResponse) {
+        for (let i = 0; i < 15 && !cancelled; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const { data: aiMsgs } = await supabase
+            .from("qa_messages")
+            .select("*")
+            .eq("thread_id", thread.id)
+            .eq("sender_type", "ai")
+            .order("created_at", { ascending: false })
+            .limit(1);
+          if (!cancelled && aiMsgs && aiMsgs.length > 0) {
+            const aiMsg = aiMsgs[0];
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === aiMsg.id)) return prev;
+              return [...prev, aiMsg];
+            });
+            setThreadStatus("ai_answered");
+            onStatusChange?.("ai_answered");
+            break;
+          }
+        }
+      }
+
+      if (!cancelled) setAiThinking(false);
     })();
 
     return () => { cancelled = true; };
@@ -156,9 +181,11 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? inserted : m)));
     }
 
-    // If student sends a message, always trigger AI (even if escalated — AI continues to help while waiting for prof)
+    // If student sends a message, trigger AI response
     if (viewerRole === "student" && threadStatus !== "resolved") {
       setAiThinking(true);
+      let gotAiResponse = false;
+
       try {
         const resp = await fetch("/api/qa/ai-respond", {
           method: "POST",
@@ -180,12 +207,39 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
           });
           setThreadStatus("ai_answered");
           onStatusChange?.("ai_answered");
+          gotAiResponse = true;
         }
       } catch (err) {
-        console.error("AI response error:", err);
-      } finally {
-        setAiThinking(false);
+        console.error("AI response fetch error:", err);
       }
+
+      // Fallback: if fetch failed (e.g. auth issue with impersonation),
+      // poll the DB for the AI response
+      if (!gotAiResponse) {
+        for (let attempt = 0; attempt < 15; attempt++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const { data: newMsgs } = await supabase
+            .from("qa_messages")
+            .select("*")
+            .eq("thread_id", thread.id)
+            .eq("sender_type", "ai")
+            .order("created_at", { ascending: false })
+            .limit(1);
+          if (newMsgs && newMsgs.length > 0) {
+            const aiMsg = newMsgs[0];
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === aiMsg.id)) return prev;
+              return [...prev, aiMsg];
+            });
+            setThreadStatus("ai_answered");
+            onStatusChange?.("ai_answered");
+            gotAiResponse = true;
+            break;
+          }
+        }
+      }
+
+      setAiThinking(false);
     }
 
     // If prof replies, update status
