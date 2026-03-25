@@ -41,6 +41,27 @@ var client=window.__APOLLO_CLIENT__;
 if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
+
+/* Fetch une image et la convertir en base64 data URL */
+async function fetchImgB64(url){
+  try{
+    if(!url)return null;
+    var full=url.startsWith('http')?url:'https://diploma.exoteach.com'+url;
+    var r=await fetch(full,{credentials:'include'});
+    if(!r.ok)return null;
+    var blob=await r.blob();
+    if(blob.size<100)return null;
+    return await new Promise(function(ok){var rd=new FileReader();rd.onloadend=function(){ok(rd.result);};rd.readAsDataURL(blob);});
+  }catch(e){return null;}
+}
+
+/* Extraire src des <img> dans du HTML */
+function extractImg(html){
+  if(!html)return null;
+  var m=html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m?m[1]:null;
+}
+
 var ids=${idsJson};
 var series=[];var errs=[];
 for(var id of ids){
@@ -49,62 +70,29 @@ for(var id of ids){
     var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
     if(!r.data||!r.data.qcm){errs.push(id);continue;}
     var qcm=JSON.parse(JSON.stringify(r.data.qcm));
-    /* --- Scrape images depuis le DOM (si on est sur la page du QCM) --- */
-    var allImgs=Array.from(document.querySelectorAll('img')).filter(function(i){return i.src.includes('/files/')&&i.naturalWidth>30;});
-    if(allImgs.length>0){
-      console.log('🖼️ '+allImgs.length+' image(s) trouvée(s) dans la page');
-      /* Trier images par position Y */
-      var imgsByY=allImgs.map(function(i){return{src:i.src,y:i.getBoundingClientRect().top+window.scrollY};}).sort(function(a,b){return a.y-b.y;});
-      /* Trouver les positions Y des "Exercice N" dans le DOM */
-      var exHeaders=[];
-      document.querySelectorAll('*').forEach(function(el){
-        var t=el.textContent||'';
-        var m=t.match(/^\\s*Exercice\\s+(\\d+)/);
-        if(m&&el.offsetHeight>0&&el.offsetHeight<80){
-          var y=el.getBoundingClientRect().top+window.scrollY;
-          var n=parseInt(m[1])-1;
-          if(!exHeaders[n])exHeaders[n]={y:y,idx:n};
-        }
-      });
-      /* Fallback: si pas de headers "Exercice N", chercher par texte des questions */
-      if(exHeaders.filter(Boolean).length===0){
-        var qSnippets=qcm.questions.map(function(q){return(q.question||'').replace(/<[^>]+>/g,'').trim().substring(0,25);});
-        document.querySelectorAll('p,div,span').forEach(function(el){
-          if(el.offsetHeight===0||el.children.length>8)return;
-          var t=el.textContent||'';
-          qSnippets.forEach(function(qs,qi){
-            if(qs.length>5&&t.includes(qs)&&!exHeaders[qi]){
-              exHeaders[qi]={y:el.getBoundingClientRect().top+window.scrollY,idx:qi};
-            }
-          });
-        });
+
+    /* --- Télécharger les images en base64 (ZERO DOM scraping) --- */
+    for(var qi=0;qi<qcm.questions.length;qi++){
+      var q=qcm.questions[qi];
+      /* Image de la question: url_image_q OU embedded <img> dans le HTML */
+      var qImgUrl=q.url_image_q||extractImg(q.question);
+      if(qImgUrl){
+        console.log('  Q'+(qi+1)+' 🖼️ image trouvée: '+qImgUrl.substring(0,60)+'...');
+        var b64=await fetchImgB64(qImgUrl);
+        if(b64){q.image_base64=b64;console.log('  Q'+(qi+1)+' ✅ image téléchargée');}
+        else{console.log('  Q'+(qi+1)+' ⚠️ échec téléchargement image');}
+      }else{
+        console.log('  Q'+(qi+1)+' — pas d\\'image dans l\\'API');
       }
-      console.log('📍 '+exHeaders.filter(Boolean).length+' position(s) de questions trouvée(s)');
-      /* Matcher chaque image à la question la plus proche AU-DESSUS */
-      imgsByY.forEach(function(img){
-        var bestQ=-1;var bestDist=Infinity;
-        exHeaders.forEach(function(h,qi){
-          if(!h)return;
-          var d=img.y-h.y;
-          if(d>-20&&d<bestDist){bestDist=d;bestQ=qi;}
-        });
-        if(bestQ<0||bestQ>=qcm.questions.length)return;
-        var q=qcm.questions[bestQ];
-        if(!q.url_image_q){
-          q.url_image_q=img.src;
-          console.log('  Q'+(bestQ+1)+' ← image ('+img.src.split('/').pop().split('?')[0].substring(0,25)+')');
-        }else{
-          for(var ai=0;ai<q.answers.length;ai++){
-            if(!q.answers[ai].url_image){
-              q.answers[ai].url_image=img.src;
-              console.log('  Q'+(bestQ+1)+'.'+String.fromCharCode(65+ai)+' ← image réponse');
-              break;
-            }
-          }
+      /* Images des réponses */
+      for(var ai=0;ai<(q.answers||[]).length;ai++){
+        var ans=q.answers[ai];
+        var aImgUrl=ans.url_image||extractImg(ans.text);
+        if(aImgUrl){
+          var ab64=await fetchImgB64(aImgUrl);
+          if(ab64){ans.image_base64=ab64;console.log('  Q'+(qi+1)+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
         }
-      });
-    }else{
-      console.log('⚠️ Aucune image dans le DOM — ouvre la série dans le player ExoTeach AVANT de coller le script !');
+      }
     }
     series.push(qcm);
   }catch(e){console.error(e);errs.push(id);}
@@ -216,8 +204,7 @@ export function ImportExoteachModal({
             <div className="rounded-xl border border-green-400/20 bg-green-500/5 p-4 space-y-2 animate-in fade-in">
               <p className="text-xs font-bold text-green-300">Maintenant :</p>
               <ol className="text-[12px] text-white/70 space-y-2 list-decimal list-inside">
-                <li>Va sur <a href="https://diploma.exoteach.com" target="_blank" rel="noreferrer" className="text-[#C9A84C] underline">diploma.exoteach.com</a></li>
-                <li className="text-yellow-300/90">⚡ <strong>Ouvre la série</strong> dans le player (pour que les images se chargent)</li>
+                <li>Va sur <a href="https://diploma.exoteach.com" target="_blank" rel="noreferrer" className="text-[#C9A84C] underline">diploma.exoteach.com</a> (n&apos;importe quelle page, connecté)</li>
                 <li>Ouvre la console : <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">F12</kbd> → onglet <span className="font-semibold">Console</span></li>
                 <li>Tape <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">allow pasting</kbd> + Entrée (1ère fois)</li>
                 <li>Colle avec <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Cmd+V</kbd> puis <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Entrée</kbd></li>

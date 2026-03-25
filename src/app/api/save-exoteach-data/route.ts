@@ -104,8 +104,9 @@ export async function POST(req: NextRequest) {
           const q = qcm.questions[qi];
 
           const questionText = convertHtml(q.question) || `Question ${qi + 1}`;
-          // Image: d'abord url_image_q, sinon chercher dans le HTML de la question
-          const questionImg = resolveImageUrl(q.url_image_q)
+          // Image: base64 (prioritaire), sinon url_image_q, sinon chercher dans le HTML
+          const questionImg = q.image_base64
+            || resolveImageUrl(q.url_image_q)
             || resolveImageUrl(extractImagesFromHtml(q.question)[0])
             || null;
           const explanationText = convertHtml(q.explications) || null;
@@ -133,7 +134,8 @@ export async function POST(req: NextRequest) {
             is_correct: ans.isTrue === true,
             order_index: idx,
             justification: convertHtml(ans.explanation) || null,
-            image_url: resolveImageUrl(ans.url_image)
+            image_url: ans.image_base64
+              || resolveImageUrl(ans.url_image)
               || resolveImageUrl(extractImagesFromHtml(ans.text)[0])
               || null,
           }));

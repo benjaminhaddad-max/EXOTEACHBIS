@@ -9,8 +9,15 @@
 
 - **Nom** : ExoTeach BIS — plateforme de prépa médecine
 - **URL prod** : https://exoteachbis.vercel.app
+- **Repo GitHub** : https://github.com/benjaminhaddad-max/EXOTEACHBIS (branche `main`)
 - **Repo local** : `/Users/benjaminhaddad-diplomasante/Desktop/Plateformes Ben/EXOTEACHBIS-main`
-- **Stack** : Next.js 14 (App Router, Turbopack), Supabase (PostgreSQL + Storage + Auth), Vercel, TailwindCSS
+- **Stack** : Next.js 16 (App Router, Turbopack), React 19, Supabase (PostgreSQL + Storage + Auth), Vercel, TailwindCSS 4
+- **Déploiement** : Push → GitHub `main` → auto-deploy Vercel (Production)
+
+### Outils CLI configurés
+- **GitHub CLI** (`~/bin/gh`) : authentifié compte `benjaminhaddad-max`
+- **Vercel CLI** : authentifié compte `benjaminhaddad-max`
+- **Node** : v20.20.1 via nvm (`export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh"` requis avant npm/npx)
 
 ---
 
