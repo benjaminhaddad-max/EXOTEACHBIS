@@ -451,7 +451,7 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
                 }
                 onEdit={viewerRole === "student" ? handleEditMessage : undefined}
                 onDelete={viewerRole === "student" ? handleDeleteMessage : undefined}
-                canModify={viewerRole === "student" && !hasProfReply}
+                canModify={viewerRole === "student"}
               />
               {/* Action buttons under the AI bubble — only when AI just answered */}
               {showActions && (
