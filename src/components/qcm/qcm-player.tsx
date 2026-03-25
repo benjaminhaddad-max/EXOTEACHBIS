@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Clock, Check, X, RotateCcw, BookOpen, Lightbulb, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Check, X, RotateCcw, BookOpen, Lightbulb, AlertTriangle, MessageCircleQuestion } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Question, Serie } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
+import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -398,6 +399,14 @@ function PlayingScreen({
                           En cours
                         </span>
                       )}
+                      <AskQuestionFab
+                        mini
+                        contextType="qcm_question"
+                        questionId={q.id}
+                        serieId={serie.id}
+                        coursId={serie.cours_id ?? undefined}
+                        matiereId={serie.matiere_id ?? undefined}
+                      />
                     </div>
                   </div>
 
