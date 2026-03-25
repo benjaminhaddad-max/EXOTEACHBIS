@@ -42,23 +42,35 @@ if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
 
-/* Extraire l'URL publique d'une image DOM (sans le token) */
+/* Convertir une image DOM en data:image/png;base64 via canvas */
 function getImgUrl(imgEl){
   try{
-    var src=imgEl.src||'';
-    /* Retirer le token de l'URL pour avoir une URL stable */
-    var base=src.split('?')[0];
-    if(base.includes('medibox2-api/files/')||base.includes('qcm/uploads/')){
-      return base;
-    }
-    /* Fallback: essayer canvas pour les images same-origin */
-    try{
-      var c=document.createElement('canvas');
-      c.width=imgEl.naturalWidth;c.height=imgEl.naturalHeight;
+    /* Priorité 1: canvas base64 (fonctionne si same-origin) */
+    var c=document.createElement('canvas');
+    c.width=imgEl.naturalWidth||imgEl.width;
+    c.height=imgEl.naturalHeight||imgEl.height;
+    if(c.width>0&&c.height>0){
       c.getContext('2d').drawImage(imgEl,0,0);
-      return c.toDataURL('image/png');
-    }catch(e){return null;}
-  }catch(e){console.log('  ⚠️ img error:',e.message);return null;}
+      var d=c.toDataURL('image/png');
+      if(d&&d.length>100)return d;
+    }
+  }catch(e){
+    /* Cross-origin: canvas tainted — essayer fetch+blob */
+    console.log('  ⚠️ canvas tainted, trying fetch...');
+  }
+  /* Priorité 2: fetch l'image avec les cookies du navigateur et convertir en base64 */
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET',imgEl.src,false);
+    xhr.responseType='arraybuffer';
+    xhr.send();
+    if(xhr.status===200){
+      var bytes=new Uint8Array(xhr.response);
+      var binary='';for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+      return 'data:image/png;base64,'+btoa(binary);
+    }
+  }catch(e2){console.log('  ⚠️ fetch fallback failed:',e2.message);}
+  return null;
 }
 
 /* Attendre que les images se chargent sur la page */
