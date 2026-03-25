@@ -126,9 +126,15 @@ for(var id of ids){
 
       if(exImgs.length>0&&!q.url_image_q){
         var nAnswers=(q.answers||[]).length;
-        var answersNeedingImg=(q.answers||[]).filter(function(a){return !a.url_image;}).length;
+        var answersWithImg=(q.answers||[]).filter(function(a){return !!a.url_image;}).length;
+        var answersNeedingImg=nAnswers-answersWithImg;
+        /* Si les réponses ont DÉJÀ des images depuis Apollo, ignorer les images DOM */
+        if(answersWithImg>0&&answersNeedingImg===0){
+          console.log('  Q'+exNum+' — réponses ont déjà des images (Apollo), skip DOM');
+          continue;
+        }
         /* Si nb images == nb réponses sans image → TOUTES sont des images de réponses */
-        var allAreAnswerImgs=(exImgs.length===answersNeedingImg)||(exImgs.length===nAnswers);
+        var allAreAnswerImgs=(exImgs.length<=answersNeedingImg);
         if(!allAreAnswerImgs){
           /* Première image = image de la question */
           var b64=imgToB64(exImgs[0]);
