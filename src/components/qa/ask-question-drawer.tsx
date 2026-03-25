@@ -288,11 +288,13 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
             <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
           </div>
         ) : thread ? (
-          <ChatThread
-            thread={thread}
-            viewerRole="student"
-            viewerId={userId}
-          />
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ChatThread
+              thread={thread}
+              viewerRole="student"
+              viewerId={userId}
+            />
+          </div>
         ) : (
           /* New thread — show context + first message input */
           <div className="flex-1 flex flex-col">

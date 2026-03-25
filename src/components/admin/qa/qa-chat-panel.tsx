@@ -84,11 +84,13 @@ export function QaChatPanel({ thread, userId, onResolve }: QaChatPanelProps) {
       </div>
 
       {/* Chat */}
-      <ChatThread
-        thread={thread}
-        viewerRole="prof"
-        viewerId={userId}
-      />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ChatThread
+          thread={thread}
+          viewerRole="prof"
+          viewerId={userId}
+        />
+      </div>
     </div>
   );
 }
