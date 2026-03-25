@@ -54,44 +54,57 @@ for(var id of ids){
     if(allImgs.length>0){
       console.log('🖼️ '+allImgs.length+' image(s) trouvée(s) dans la page');
       /* Trier images par position Y */
-      var imgsByY=allImgs.map(function(i){return{src:i.src.split('?')[0],y:i.getBoundingClientRect().top+window.scrollY,w:i.naturalWidth};}).sort(function(a,b){return a.y-b.y;});
-      /* Trouver les positions Y des questions */
-      var qTexts=qcm.questions.map(function(q){return(q.question||'').replace(/<[^>]+>/g,'').trim().substring(0,30);});
-      var qPositions=[];
-      qTexts.forEach(function(qt,qi){
-        document.querySelectorAll('p,div,span,h1,h2,h3,h4').forEach(function(el){
-          if(el.children.length<5&&el.textContent.trim().substring(0,30)===qt&&!qPositions[qi]){
-            qPositions[qi]={y:el.getBoundingClientRect().top+window.scrollY,qi:qi};
-          }
-        });
+      var imgsByY=allImgs.map(function(i){return{src:i.src,y:i.getBoundingClientRect().top+window.scrollY};}).sort(function(a,b){return a.y-b.y;});
+      /* Trouver les positions Y des "Exercice N" dans le DOM */
+      var exHeaders=[];
+      document.querySelectorAll('*').forEach(function(el){
+        var t=el.textContent||'';
+        var m=t.match(/^\\s*Exercice\\s+(\\d+)/);
+        if(m&&el.offsetHeight>0&&el.offsetHeight<80){
+          var y=el.getBoundingClientRect().top+window.scrollY;
+          var n=parseInt(m[1])-1;
+          if(!exHeaders[n])exHeaders[n]={y:y,idx:n};
+        }
       });
-      /* Matcher: pour chaque image, trouver la question juste AU-DESSUS (Y le plus proche mais inférieur) */
-      imgsByY.forEach(function(img){
-        var bestQ=-1;var bestDist=99999;
-        qPositions.forEach(function(qp,qi){
-          if(!qp)return;
-          var dist=img.y-qp.y;
-          if(dist>0&&dist<bestDist){bestDist=dist;bestQ=qi;}
+      /* Fallback: si pas de headers "Exercice N", chercher par texte des questions */
+      if(exHeaders.filter(Boolean).length===0){
+        var qSnippets=qcm.questions.map(function(q){return(q.question||'').replace(/<[^>]+>/g,'').trim().substring(0,25);});
+        document.querySelectorAll('p,div,span').forEach(function(el){
+          if(el.offsetHeight===0||el.children.length>8)return;
+          var t=el.textContent||'';
+          qSnippets.forEach(function(qs,qi){
+            if(qs.length>5&&t.includes(qs)&&!exHeaders[qi]){
+              exHeaders[qi]={y:el.getBoundingClientRect().top+window.scrollY,idx:qi};
+            }
+          });
         });
-        if(bestQ>=0){
-          var q=qcm.questions[bestQ];
-          /* Si distance < 400px → image de la question; sinon → image d'une réponse */
-          var nextQ=qPositions[bestQ+1];
-          var isQuestionImg=!nextQ||img.y<(qp_y(qPositions,bestQ)+400);
-          function qp_y(ps,i){return ps[i]?ps[i].y:0;}
-          if(!q.url_image_q&&bestDist<500){
-            q.url_image_q=img.src;
-            console.log('  Q'+(bestQ+1)+' ← image question');
-          }else{
-            /* Essayer de matcher à une réponse */
-            for(var ai=0;ai<q.answers.length;ai++){
-              if(!q.answers[ai].url_image){q.answers[ai].url_image=img.src;console.log('  Q'+(bestQ+1)+'.'+String.fromCharCode(65+ai)+' ← image réponse');break;}
+      }
+      console.log('📍 '+exHeaders.filter(Boolean).length+' position(s) de questions trouvée(s)');
+      /* Matcher chaque image à la question la plus proche AU-DESSUS */
+      imgsByY.forEach(function(img){
+        var bestQ=-1;var bestDist=Infinity;
+        exHeaders.forEach(function(h,qi){
+          if(!h)return;
+          var d=img.y-h.y;
+          if(d>-20&&d<bestDist){bestDist=d;bestQ=qi;}
+        });
+        if(bestQ<0||bestQ>=qcm.questions.length)return;
+        var q=qcm.questions[bestQ];
+        if(!q.url_image_q){
+          q.url_image_q=img.src;
+          console.log('  Q'+(bestQ+1)+' ← image ('+img.src.split('/').pop().split('?')[0].substring(0,25)+')');
+        }else{
+          for(var ai=0;ai<q.answers.length;ai++){
+            if(!q.answers[ai].url_image){
+              q.answers[ai].url_image=img.src;
+              console.log('  Q'+(bestQ+1)+'.'+String.fromCharCode(65+ai)+' ← image réponse');
+              break;
             }
           }
         }
       });
     }else{
-      console.log('⚠️ Pas d\\'images dans le DOM. Pour importer les images, ouvre d\\'abord la série sur ExoTeach puis recolle le script.');
+      console.log('⚠️ Aucune image dans le DOM — ouvre la série dans le player ExoTeach AVANT de coller le script !');
     }
     series.push(qcm);
   }catch(e){console.error(e);errs.push(id);}
