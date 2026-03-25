@@ -42,7 +42,7 @@ function convertHtml(html: string | null | undefined): string {
   // Mais garder +/- en texte normal (charges chimiques mal placées dans <sub>)
   s = s.replace(/<sub[^>]*>(.*?)<\/sub>/gi, (_, c) => {
     const trimmed = c.replace(/<[^>]+>/g, "").trim();
-    if (/^[+\-−_]+$/.test(trimmed)) return trimmed.replace(/−/g, "-");
+    if (/^[+\-−_]+$/.test(trimmed)) return trimmed.replace(/[−_]/g, "-");
     return toUnicode(c.replace(/<[^>]+>/g, ""), SUB);
   });
   // Convertir <sup> → exposants Unicode (M⁺, x², etc.)
