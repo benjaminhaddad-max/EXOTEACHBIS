@@ -202,6 +202,14 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
     window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
   }, [treeWidth]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    setExpandedIds((prev) => {
+      if (prev.has(selectedId)) return prev;
+      return new Set([...prev, selectedId]);
+    });
+  }, [selectedId]);
+
   const fetchDossierData = async (dossierId: string) => {
     // Utilise les Server Actions (createClient server-side) pour bypass RLS anon
     const [ressResult, coursResult] = await Promise.all([
@@ -871,7 +879,10 @@ function SortableTreeNode({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              if (hasChildren) onToggle(node.id);
+              if (hasChildren) {
+                onToggle(node.id);
+              }
+              onSelect(node);
             }}
             className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded hover:bg-black/5"
           >
