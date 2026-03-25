@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useMemo } from "react";
+import { useState, useTransition, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -104,6 +104,8 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
   const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null);
   const [treeWidth, setTreeWidth] = useState(360);
   const [isResizingTree, setIsResizingTree] = useState(false);
+  const treeWidthRef = useRef(treeWidth);
+  const resizeStartRef = useRef<{ mouseX: number; width: number } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -174,14 +176,20 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
     if (!isResizingTree || typeof window === "undefined") return;
 
     const handleMouseMove = (event: MouseEvent) => {
+      if (!resizeStartRef.current) return;
       const viewportMax = Math.min(TREE_MAX_WIDTH, Math.floor(window.innerWidth * 0.55));
-      const nextWidth = Math.max(TREE_MIN_WIDTH, Math.min(viewportMax, event.clientX - 32));
+      const delta = event.clientX - resizeStartRef.current.mouseX;
+      const nextWidth = Math.max(
+        TREE_MIN_WIDTH,
+        Math.min(viewportMax, resizeStartRef.current.width + delta)
+      );
       setTreeWidth(nextWidth);
     };
 
     const handleMouseUp = () => {
       setIsResizingTree(false);
-      window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
+      resizeStartRef.current = null;
+      window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidthRef.current));
     };
 
     document.body.style.cursor = "col-resize";
@@ -195,10 +203,11 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isResizingTree, treeWidth]);
+  }, [isResizingTree]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    treeWidthRef.current = treeWidth;
     window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
   }, [treeWidth]);
 
@@ -393,7 +402,13 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
         role="separator"
         aria-orientation="vertical"
         aria-label="Redimensionner l'arborescence"
-        onMouseDown={() => setIsResizingTree(true)}
+        onMouseDown={(event) => {
+          resizeStartRef.current = {
+            mouseX: event.clientX,
+            width: treeWidthRef.current,
+          };
+          setIsResizingTree(true);
+        }}
         onDoubleClick={() => {
           setTreeWidth(360);
           if (typeof window !== "undefined") {
