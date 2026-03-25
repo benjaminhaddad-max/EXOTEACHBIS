@@ -65,13 +65,18 @@ function SetupScreen({
 }: {
   serie: Serie;
   nbQuestions: number;
-  onStart: (timed: boolean) => void;
+  onStart: (timed: boolean) => Promise<void> | void;
 }) {
   const [starting, setStarting] = useState(false);
 
-  const handleStart = (timed: boolean) => {
+  const handleStart = async (timed: boolean) => {
     setStarting(true);
-    setTimeout(() => onStart(timed), 200);
+    try {
+      await onStart(timed);
+    } catch (err) {
+      console.error("Failed to start game:", err);
+      setStarting(false);
+    }
   };
 
   return (
@@ -764,11 +769,15 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
   const startGame = async (withTimer: boolean) => {
     setTimed(withTimer);
     setStartTime(new Date());
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("serie_attempts")
       .insert({ user_id: userId, series_id: serie.id, timed: withTimer })
       .select("id")
       .single();
+    if (error) {
+      console.error("Failed to create attempt:", error);
+      // Still allow playing even if attempt creation fails
+    }
     if (data) setAttemptId(data.id);
     setPlayerState("playing");
   };
