@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     // Verify the user owns the thread
     const { data: thread, error: threadError } = await supabase
       .from("qa_threads")
-      .select("id, user_id")
+      .select("id, student_id")
       .eq("id", thread_id)
       .single();
 
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (thread.user_id !== user.id) {
+    if (thread.student_id !== user.id) {
       return NextResponse.json(
         { error: "Accès refusé à ce thread." },
         { status: 403 }
