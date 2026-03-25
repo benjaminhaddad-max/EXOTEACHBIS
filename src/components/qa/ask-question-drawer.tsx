@@ -116,26 +116,7 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
 
     setThread(newThread as QaThread);
     setCreating(false);
-
-    // Trigger AI response
-    try {
-      const resp = await fetch("/api/qa/ai-respond", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          thread_id: newThread.id,
-          question_text: text,
-          context: {
-            matiere_name: (newThread as QaThread).matiere?.name ?? "",
-            context_label: resolvedLabel,
-          },
-        }),
-      });
-      await resp.json();
-      // Thread will update via realtime
-    } catch (err) {
-      console.error("AI respond error:", err);
-    }
+    // AI response will be triggered by ChatThread's ai_pending auto-trigger
   }, [userId, resolvedMatiereId, resolvedLabel, ctx, supabase]);
 
   return (

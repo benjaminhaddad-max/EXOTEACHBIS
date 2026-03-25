@@ -40,15 +40,17 @@ src/
   app/
     (auth)/           — login, register
     (eleve)/          — dashboard, cours, cours/[coursId], serie/[serieId],
-                        exercices, flashcards, examens, forum, annonces,
-                        notifications, profil, progression, agenda, equipe
+                        exercices, flashcards, examens, examens/[examenId]/resultats,
+                        forum, annonces, notifications, profil, progression, agenda, equipe
     (admin)/admin/    — dashboard, pedagogie, cours/[coursId], utilisateurs,
-                        exercices, examens, flashcards, annonces, planning,
+                        exercices, examens, examens/[examenId]/resultats,
+                        examens/coefficients, flashcards, annonces, planning,
                         configuration, aide, abonnements, questions-reponses
     api/              — import-exoteach, generate-questions, upload-pdf,
                         upload-image, export-serie, qa/upload-media, qa/ai-respond...
   components/
-    admin/            — pédagogie, cours, examens, exercices, flashcards, QA, annonces
+    admin/            — pédagogie, cours, examens (examens-shell, coefficients-shell,
+                        resultats-shell), exercices, flashcards, QA, annonces
     auth/             — login-form, register-form
     cours/            — arborescence, cartes, PDF, séries, révisions, ressources
     qcm/              — qcm-player
@@ -63,7 +65,7 @@ src/
   hooks/              — use-user, use-qa-realtime, use-qa-unread-count, use-voice-recorder
   types/              — database.ts, qa.ts
 supabase/
-  migrations/         — 001 à 011 (schema, contenu, flashcards, QCM, QA, etc.)
+  migrations/         — 001 à 012 (schema, contenu, flashcards, QCM, QA, examens coefficients/filières)
   seed.sql
 scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 ```
@@ -83,6 +85,14 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 - Forum, annonces, planning, notifications
 - Profil, progression, agenda
 - Espace admin complet (utilisateurs, exercices, examens, flashcards, configuration, abonnements)
+- **Système d'examens enrichi** :
+  - Séries avec coefficients (×0.5 à ×10)
+  - Toggle résultats visibles/masqués
+  - Notation configurable (/20, /100, etc.)
+  - Filières de santé (Médecine, Dentaire, Pharmacie, Maïeutique, Kinésithérapie)
+  - Coefficients matière × filière configurables
+  - Page résultats admin : classement, moyennes, stats, export CSV, filtre par filière
+  - Page résultats élève : score personnel, classement, détail par série
 
 ---
 
@@ -92,6 +102,7 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
   - **Pourquoi** : Bug racine résolu — `series_questions(count)` dans les selects Supabase faisait disparaître tous les cours/séries après deploy. Supprimé dans 4 fichiers.
 - **Base de données** : pas de Prisma — le schéma vit dans les migrations SQL sous `supabase/migrations/`. Toute modification de schéma = nouveau fichier de migration.
 - **Tailwind v4** : la config est dans `src/app/globals.css` via `@theme`, pas dans un fichier `tailwind.config.js`.
+- **Migration 012** : doit être exécutée en prod pour activer le système examens enrichi (filières, coefficients, résultats).
 
 ---
 
@@ -104,6 +115,8 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 5. [ ] Upload d'image dans les questions/options QCM (bucket `question-images` créé, colonnes `image_url` ajoutées)
 6. [ ] Rendu LaTeX automatique dans les QCMs (MathText component existe)
 7. [x] Système Q&A temps réel (migration 011, composants qa/, hooks realtime)
+8. [x] Système examens enrichi avec coefficients, filières, résultats (migration 012)
+9. [ ] Exécuter migration 012 en production Supabase
 
 ---
 
@@ -128,16 +141,33 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | Hooks user | `src/hooks/use-user.ts` |
 | Hooks QA realtime | `src/hooks/use-qa-realtime.ts` |
 | Globals CSS (thème) | `src/app/globals.css` |
+| **Examens admin shell** | `src/components/admin/examens/examens-shell.tsx` |
+| **Examens actions** | `src/app/(admin)/admin/examens/actions.ts` |
+| **Coefficients filières** | `src/components/admin/examens/coefficients-shell.tsx` |
+| **Résultats admin** | `src/components/admin/examens/resultats-shell.tsx` |
+| **Examens élève** | `src/app/(eleve)/examens/page.tsx` |
+| **Résultats élève** | `src/app/(eleve)/examens/[examenId]/resultats/page.tsx` |
+| **Migration examens** | `supabase/migrations/012_examens_coefficients_filieres.sql` |
 
 ---
 
-## Fichiers avec modifications non commitées (au 2026-03-25)
+## Schéma DB examens (migration 012)
 
-| Fichier | Statut |
-|---------|--------|
-| `src/app/(eleve)/cours/[coursId]/page.tsx` | Modifié |
-| `src/components/qa/ask-question-drawer.tsx` | Modifié |
-| `src/components/sidebar/admin-sidebar.tsx` | Modifié |
+### Tables créées
+- `filieres` : Médecine, Dentaire, Pharmacie, Maïeutique, Kinésithérapie (+ CRUD admin)
+- `matiere_coefficients` : poids de chaque matière pour chaque filière (ex: Anatomie ×3 pour MED, ×1 pour PHAR)
+- `examen_results` : score global par élève par examen (score_raw, score_20, nb_series_done)
+- `examen_serie_results` : détail par série dans un examen
+
+### Colonnes ajoutées
+- `examens_series.coefficient` : poids de chaque série dans un examen (numeric 4,2, défaut 1)
+- `examens.results_visible` : toggle admin pour rendre les résultats visibles aux élèves
+- `examens.notation_sur` : notation configurable (défaut 20)
+- `examens.created_by` : qui a créé l'examen
+- `profiles.filiere_id` : filière de l'élève
+
+### RLS activée sur
+- `filieres`, `matiere_coefficients`, `examens_series`, `examens_groupes`, `examen_results`, `examen_serie_results`
 
 ---
 
@@ -157,5 +187,11 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | 2026-03-25 | Multiples fichiers import | Images ExoTeach : évolution scraping DOM → canvas base64, matching Y-position, deep clone objets Apollo |
 | 2026-03-25 | Système Q&A complet | Q&A temps réel avec médias, IA (Anthropic), migration 011, composants drawer/chat/FAB |
 | 2026-03-25 | `CONTEXT.md` | Mise à jour complète : architecture, dépendances, fichiers clés, état actuel, règles |
-| 2026-03-25 | Supabase DB | Exécution migration 011 en prod : tables `prof_matieres`, `qa_threads`, `qa_messages` créées + RLS policies + Realtime activé + bucket `qa-media` |
-| 2026-03-25 | Vérification prod | Dashboard Q&A admin vérifié en production (stats cards, filtres, layout 2 colonnes). Build ✅ |
+| 2026-03-25 | Migration 012 | Système examens enrichi : filières, coefficients matière×filière, coefficients série, résultats, notation configurable |
+| 2026-03-25 | `types/database.ts` | Ajout types Filiere, MatiereCoefficient, ExamenSerie, ExamenResult, ExamenSerieResult + enrichissement Examen et Profile |
+| 2026-03-25 | `admin/examens/actions.ts` | CRUD enrichi : coefficients, toggle résultats, filières, matiere_coefficients, getExamenResults |
+| 2026-03-25 | `examens-shell.tsx` | Refonte complète : coefficients par série, toggle résultats, lien résultats détaillés, notation_sur |
+| 2026-03-25 | `coefficients-shell.tsx` | Nouveau : grille matière × filière pour configurer les coefficients + CRUD filières |
+| 2026-03-25 | `resultats-shell.tsx` | Nouveau : classement admin avec stats, moyennes par série, filtre filière, export CSV |
+| 2026-03-25 | `examens/page.tsx` (élève) | Refonte : scores pondérés, coefficients affichés, lien classement, card score |
+| 2026-03-25 | `examens/[examenId]/resultats/page.tsx` (élève) | Nouveau : classement élève, score personnel, détail par série, rang |

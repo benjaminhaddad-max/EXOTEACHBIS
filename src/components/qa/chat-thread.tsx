@@ -66,6 +66,49 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       .eq("id", msg.id);
   }, [viewerRole]));
 
+  // Auto-trigger AI if thread is ai_pending (just created, AI hasn't responded yet)
+  useEffect(() => {
+    if (threadStatus !== "ai_pending" || viewerRole !== "student" || messages.length === 0) return;
+    // Find the last student message to use as question text
+    const lastStudentMsg = [...messages].reverse().find(m => m.sender_type === "student");
+    if (!lastStudentMsg?.content) return;
+
+    let cancelled = false;
+    setAiThinking(true);
+
+    (async () => {
+      try {
+        const resp = await fetch("/api/qa/ai-respond", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            thread_id: thread.id,
+            question_text: lastStudentMsg.content,
+            context: {
+              matiere_name: thread.matiere?.name ?? "",
+              context_label: thread.context_label,
+            },
+          }),
+        });
+        const result = await resp.json();
+        if (!cancelled && result.success && result.message) {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === result.message.id)) return prev;
+            return [...prev, result.message];
+          });
+          setThreadStatus("ai_answered");
+          onStatusChange?.("ai_answered");
+        }
+      } catch (err) {
+        console.error("AI auto-trigger error:", err);
+      } finally {
+        if (!cancelled) setAiThinking(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [threadStatus, messages.length, viewerRole]);
+
   // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
