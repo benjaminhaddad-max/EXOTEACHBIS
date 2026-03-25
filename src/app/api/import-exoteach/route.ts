@@ -8,9 +8,9 @@ const SIGN_IN = `mutation SignIn($login: String!, $password: String!) {
 }`;
 
 async function getExoteachToken(): Promise<string> {
-  const login = process.env.EXOTEACH_LOGIN;
-  const password = process.env.EXOTEACH_PASSWORD;
-  if (!login || !password) throw new Error("EXOTEACH_LOGIN / EXOTEACH_PASSWORD manquants dans .env.local");
+  const login = process.env.EXOTEACH_LOGIN?.trim();
+  const password = process.env.EXOTEACH_PASSWORD?.trim();
+  if (!login || !password) throw new Error("EXOTEACH_LOGIN / EXOTEACH_PASSWORD manquants dans les variables Vercel");
 
   const res = await fetch(EXOTEACH_API, {
     method: "POST",
@@ -18,8 +18,10 @@ async function getExoteachToken(): Promise<string> {
     body: JSON.stringify({ query: SIGN_IN, variables: { login, password } }),
   });
   const json = await res.json();
-  if (json.errors) throw new Error(json.errors[0]?.message || "Erreur signIn");
-  return json.data.signIn.token;
+  if (json.errors) throw new Error(`signIn échoué : ${json.errors[0]?.message}`);
+  const token = json.data?.signIn?.token;
+  if (!token) throw new Error("signIn n'a pas retourné de token — vérifier EXOTEACH_LOGIN et EXOTEACH_PASSWORD dans Vercel");
+  return token;
 }
 
 const GET_SERIE = `
@@ -83,7 +85,12 @@ export async function POST(req: NextRequest) {
         // 1. Fetch depuis ExoTeach
         const gqlRes = await fetch(EXOTEACH_API, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            "X-Nexus-Token": token,
+            nexustoken: token,
+          },
           body: JSON.stringify({ query: GET_SERIE, variables: { id: String(id) } }),
         });
         const gqlJson = await gqlRes.json();
