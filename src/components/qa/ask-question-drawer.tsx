@@ -119,6 +119,81 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
     // AI response will be triggered by ChatThread's ai_pending auto-trigger
   }, [userId, resolvedMatiereId, resolvedLabel, ctx, supabase]);
 
+  // Helper: create thread then upload media as first message
+  const createThreadAndUploadMedia = useCallback(async (
+    file: File | Blob,
+    contentType: "voice" | "image" | "video" | "document",
+    duration?: number,
+  ) => {
+    if (!userId) return;
+    setCreating(true);
+
+    const title = contentType === "voice" ? "Note vocale"
+      : contentType === "document" ? "Document PDF"
+      : contentType === "video" ? "Vidéo"
+      : "Photo";
+
+    const { data: newThread, error } = await supabase
+      .from("qa_threads")
+      .insert({
+        student_id: userId,
+        context_type: ctx.contextType,
+        dossier_id: ctx.dossierId ?? null,
+        matiere_id: resolvedMatiereId || null,
+        cours_id: ctx.coursId ?? null,
+        question_id: ctx.questionId ?? null,
+        option_id: ctx.optionId ?? null,
+        serie_id: ctx.serieId ?? null,
+        context_label: resolvedLabel,
+        title,
+        status: "ai_pending",
+      })
+      .select("*, matiere:matieres(id, name, color)")
+      .single();
+
+    if (error || !newThread) {
+      console.error("Failed to create thread:", error);
+      setCreating(false);
+      return;
+    }
+
+    // Upload media via API route
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("thread_id", newThread.id);
+    formData.append("content_type", contentType);
+
+    try {
+      const resp = await fetch("/api/qa/upload-media", { method: "POST", body: formData });
+      const data = await resp.json();
+      if (data.url) {
+        const dbType = contentType === "document" ? "image" : contentType; // DB content_type
+        await supabase.from("qa_messages").insert({
+          thread_id: newThread.id,
+          sender_id: userId,
+          sender_type: "student",
+          content_type: dbType,
+          media_url: data.url,
+          media_duration_s: duration ?? null,
+          read_by_student: true,
+        });
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
+    }
+
+    setThread(newThread as QaThread);
+    setCreating(false);
+  }, [userId, resolvedMatiereId, resolvedLabel, ctx, supabase]);
+
+  const handleFirstVoice = useCallback(async (blob: Blob, duration: number) => {
+    await createThreadAndUploadMedia(blob, "voice", duration);
+  }, [createThreadAndUploadMedia]);
+
+  const handleFirstMedia = useCallback(async (file: File, type: "image" | "video" | "document") => {
+    await createThreadAndUploadMedia(file, type);
+  }, [createThreadAndUploadMedia]);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
@@ -167,22 +242,24 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
         ) : (
           /* New thread — show context + first message input */
           <div className="flex-1 flex flex-col">
-            <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
-                <MessageCircleQuestion className="w-8 h-8 text-blue-500" />
+            <div className="flex-1 flex flex-col items-center justify-start pt-6 px-5 text-center">
+              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mb-3">
+                <MessageCircleQuestion className="w-6 h-6 text-blue-500" />
               </div>
-              <h4 className="text-base font-semibold text-gray-900 mb-1">
+              <h4 className="text-sm font-semibold text-gray-900 mb-1">
                 Posez votre question
               </h4>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-xs text-gray-500 mb-3 max-w-[320px]">
                 L&apos;IA vous répondra immédiatement. Si la réponse ne vous convient pas,
                 vous pourrez demander l&apos;aide d&apos;un professeur.
               </p>
               {resolvedLabel && (
-                <ContextBadge
-                  contextType={ctx.contextType}
-                  contextLabel={resolvedLabel}
-                />
+                <div className="max-w-full">
+                  <ContextBadge
+                    contextType={ctx.contextType}
+                    contextLabel={resolvedLabel}
+                  />
+                </div>
               )}
             </div>
 
@@ -194,8 +271,8 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
             ) : (
               <ChatInputBar
                 onSendText={handleFirstMessage}
-                onSendVoice={async () => {}}
-                onSendMedia={async () => {}}
+                onSendVoice={handleFirstVoice}
+                onSendMedia={handleFirstMedia}
                 placeholder="Écrivez votre question..."
               />
             )}

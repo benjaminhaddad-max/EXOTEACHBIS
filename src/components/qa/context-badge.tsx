@@ -39,13 +39,13 @@ export function ContextBadge({ contextType, contextLabel, compact }: ContextBadg
   }
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${color}`}>
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border max-w-full overflow-hidden ${color}`}>
       <Icon className="w-4 h-4 shrink-0" />
-      <div className="min-w-0">
+      <div className="min-w-0 overflow-hidden">
         <p className="text-[10px] uppercase tracking-wider font-semibold opacity-70">
           Question sur
         </p>
-        <p className="text-sm font-medium leading-snug line-clamp-2">{contextLabel}</p>
+        <p className="text-xs font-medium leading-snug line-clamp-2 break-words">{contextLabel}</p>
       </div>
     </div>
   );

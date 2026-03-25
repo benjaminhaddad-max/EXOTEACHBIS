@@ -173,7 +173,7 @@ export async function batchCreateQuestions(questions: Array<{
 export async function createSerie(data: {
   name: string;
   description?: string;
-  type: "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";
+  type: "entrainement" | "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";
   timed: boolean;
   duration_minutes?: number | null;
   score_definitif: boolean;
@@ -210,7 +210,7 @@ export async function updateSerie(
   data: {
     name: string;
     description?: string;
-    type: "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";
+    type: "entrainement" | "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";
     timed: boolean;
     duration_minutes?: number | null;
     score_definitif: boolean;
@@ -326,7 +326,7 @@ export async function batchCreateQuestionsWithSerie(
   }[],
   serie?: {
     name: string;
-    type: "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";
+    type: "entrainement" | "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";
     matiere_id?: string | null;
   }
 ) {
