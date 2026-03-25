@@ -21,6 +21,18 @@ function toUnicode(text: string, map: Record<string, string>): string {
   return text.split("").map(c => map[c] || c).join("");
 }
 
+/** Extrait les URLs d'images depuis le HTML (balises <img>) */
+function extractImagesFromHtml(html: string | null | undefined): string[] {
+  if (!html) return [];
+  const imgs: string[] = [];
+  const re = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    imgs.push(m[1]);
+  }
+  return imgs;
+}
+
 /** Convertit HTML ExoTeach en texte propre avec indices/exposants Unicode */
 function convertHtml(html: string | null | undefined): string {
   if (!html) return "";
@@ -37,7 +49,7 @@ function convertHtml(html: string | null | undefined): string {
   // &nbsp; → espace
   s = s.replace(/&nbsp;/g, " ");
 
-  // Strip les autres tags HTML
+  // Strip les tags HTML (y compris <img> — les images sont extraites séparément)
   s = s.replace(/<[^>]+>/g, " ");
 
   // Décoder les entités HTML restantes
@@ -92,7 +104,10 @@ export async function POST(req: NextRequest) {
           const q = qcm.questions[qi];
 
           const questionText = convertHtml(q.question) || `Question ${qi + 1}`;
-          const questionImg = resolveImageUrl(q.url_image_q);
+          // Image: d'abord url_image_q, sinon chercher dans le HTML de la question
+          const questionImg = resolveImageUrl(q.url_image_q)
+            || resolveImageUrl(extractImagesFromHtml(q.question)[0])
+            || null;
           const explanationText = convertHtml(q.explications) || null;
 
           const { data: newQ, error: qErr } = await supabase.from("questions").insert({
@@ -118,7 +133,9 @@ export async function POST(req: NextRequest) {
             is_correct: ans.isTrue === true,
             order_index: idx,
             justification: convertHtml(ans.explanation) || null,
-            image_url: resolveImageUrl(ans.url_image),
+            image_url: resolveImageUrl(ans.url_image)
+              || resolveImageUrl(extractImagesFromHtml(ans.text)[0])
+              || null,
           }));
 
           const { error: optErr } = await supabase.from("options").insert(options);
