@@ -42,34 +42,33 @@ if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
 
-/* Convertir une image DOM en data:image/png;base64 via canvas */
-function getImgUrl(imgEl){
+/* Convertir une image DOM en data:image/png;base64 — ASYNC */
+async function getImgUrl(imgEl){
+  /* Méthode 1: canvas (same-origin uniquement) */
   try{
-    /* Priorité 1: canvas base64 (fonctionne si same-origin) */
     var c=document.createElement('canvas');
     c.width=imgEl.naturalWidth||imgEl.width;
     c.height=imgEl.naturalHeight||imgEl.height;
     if(c.width>0&&c.height>0){
       c.getContext('2d').drawImage(imgEl,0,0);
       var d=c.toDataURL('image/png');
-      if(d&&d.length>100)return d;
+      if(d&&d.length>200)return d;
     }
-  }catch(e){
-    /* Cross-origin: canvas tainted — essayer fetch+blob */
-    console.log('  ⚠️ canvas tainted, trying fetch...');
-  }
-  /* Priorité 2: fetch l'image avec les cookies du navigateur et convertir en base64 */
+  }catch(e){}
+  /* Méthode 2: fetch async avec credentials (cookies JWT) → blob → base64 */
   try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('GET',imgEl.src,false);
-    xhr.responseType='arraybuffer';
-    xhr.send();
-    if(xhr.status===200){
-      var bytes=new Uint8Array(xhr.response);
-      var binary='';for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
-      return 'data:image/png;base64,'+btoa(binary);
+    var resp=await fetch(imgEl.src,{credentials:'include'});
+    if(resp.ok){
+      var blob=await resp.blob();
+      if(blob.size>100){
+        return await new Promise(function(resolve){
+          var reader=new FileReader();
+          reader.onloadend=function(){resolve(reader.result);};
+          reader.readAsDataURL(blob);
+        });
+      }
     }
-  }catch(e2){console.log('  ⚠️ fetch fallback failed:',e2.message);}
+  }catch(e2){console.log('  ⚠️ fetch failed:',e2.message);}
   return null;
 }
 
@@ -167,7 +166,7 @@ for(var id of ids){
         var allAreAnswerImgs=(exImgs.length>1&&exImgs.length===answersNeedingImg);
         if(!allAreAnswerImgs){
           /* Première image = image de la question */
-          var b64=getImgUrl(exImgs[0]);
+          var b64=await getImgUrl(exImgs[0]);
           if(b64){
             q.image_url_scraped=b64;
             console.log('  Q'+exNum+' ✅ image question ('+Math.round(b64.length/1024)+' KB)');
@@ -175,7 +174,7 @@ for(var id of ids){
           /* Images suivantes = images des réponses */
           for(var ai=0,ii=1;ii<exImgs.length&&ai<nAnswers;ai++){
             if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
-              var ab=getImgUrl(exImgs[ii]);
+              var ab=await getImgUrl(exImgs[ii]);
               if(ab){q.answers[ai].image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
               ii++;
             }
@@ -185,7 +184,7 @@ for(var id of ids){
           console.log('  Q'+exNum+' — '+exImgs.length+' images = réponses (pas d\\'image question)');
           for(var ai=0,ii=0;ii<exImgs.length&&ai<nAnswers;ai++){
             if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
-              var ab=getImgUrl(exImgs[ii]);
+              var ab=await getImgUrl(exImgs[ii]);
               if(ab){q.answers[ai].image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
               ii++;
             }
