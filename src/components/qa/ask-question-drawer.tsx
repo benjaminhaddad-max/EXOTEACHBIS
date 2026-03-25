@@ -26,51 +26,57 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
   // Initialize: resolve context + find existing thread + get user
   useEffect(() => {
     async function init() {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
-
-      // Resolve context
-      if (!ctx.contextLabel || !ctx.matiereId) {
-        try {
-          const resolved = await resolveQaContextClient(ctx.contextType, {
-            dossierId: ctx.dossierId,
-            matiereId: ctx.matiereId,
-            coursId: ctx.coursId,
-            questionId: ctx.questionId,
-            optionId: ctx.optionId,
-            serieId: ctx.serieId,
-          });
-          setResolvedLabel(resolved.contextLabel);
-          setResolvedMatiereId(resolved.matiereId);
-        } catch {
-          // If we can't resolve, use what we have
-          setResolvedLabel(ctx.contextLabel ?? ctx.contextType);
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
         }
+        setUserId(user.id);
+
+        // Resolve context
+        if (!ctx.contextLabel || !ctx.matiereId) {
+          try {
+            const resolved = await resolveQaContextClient(ctx.contextType, {
+              dossierId: ctx.dossierId,
+              matiereId: ctx.matiereId,
+              coursId: ctx.coursId,
+              questionId: ctx.questionId,
+              optionId: ctx.optionId,
+              serieId: ctx.serieId,
+            });
+            setResolvedLabel(resolved.contextLabel);
+            setResolvedMatiereId(resolved.matiereId);
+          } catch {
+            setResolvedLabel(ctx.contextLabel ?? ctx.contextType);
+          }
+        }
+
+        // Look for existing open thread with same context
+        let query = supabase
+          .from("qa_threads")
+          .select("*, matiere:matieres(id, name, color)")
+          .eq("student_id", user.id)
+          .eq("context_type", ctx.contextType)
+          .in("status", ["ai_pending", "ai_answered", "escalated", "prof_answered"])
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (ctx.questionId) query = query.eq("question_id", ctx.questionId);
+        else if (ctx.coursId) query = query.eq("cours_id", ctx.coursId);
+        else if (ctx.matiereId) query = query.eq("matiere_id", ctx.matiereId);
+        else if (ctx.dossierId) query = query.eq("dossier_id", ctx.dossierId);
+
+        const { data } = await query;
+        if (data && data.length > 0) {
+          setThread(data[0] as QaThread);
+        }
+      } catch (err) {
+        console.error("Q&A drawer init error:", err);
+      } finally {
+        setLoading(false);
       }
-
-      // Look for existing open thread with same context
-      let query = supabase
-        .from("qa_threads")
-        .select("*, matiere:matieres(id, name, color)")
-        .eq("student_id", user.id)
-        .eq("context_type", ctx.contextType)
-        .in("status", ["ai_pending", "ai_answered", "escalated", "prof_answered"])
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (ctx.questionId) query = query.eq("question_id", ctx.questionId);
-      else if (ctx.coursId) query = query.eq("cours_id", ctx.coursId);
-      else if (ctx.matiereId) query = query.eq("matiere_id", ctx.matiereId);
-      else if (ctx.dossierId) query = query.eq("dossier_id", ctx.dossierId);
-
-      const { data } = await query;
-      if (data && data.length > 0) {
-        setThread(data[0] as QaThread);
-      }
-
-      setLoading(false);
     }
     init();
   }, []);
