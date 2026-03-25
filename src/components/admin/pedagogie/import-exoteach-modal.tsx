@@ -41,7 +41,6 @@ var client=window.__APOLLO_CLIENT__;
 if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
-var wait=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 var ids=${idsJson};
 var series=[];var errs=[];
 for(var id of ids){
@@ -50,60 +49,59 @@ for(var id of ids){
     var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
     if(!r.data||!r.data.qcm){errs.push(id);continue;}
     var qcm=r.data.qcm;
-    /* --- Scrape images depuis le DOM --- */
-    console.log('🖼️ Récupération images série '+id+'...');
-    var origHash=window.location.hash;
-    window.location.hash='#/serie/play/'+id;
-    await wait(2000);
-    /* Cliquer Démarrer si présent */
-    var startBtn=document.querySelector('button[class*="start"], button[class*="demarrer"]');
-    if(!startBtn){var btns=Array.from(document.querySelectorAll('button'));startBtn=btns.find(function(b){return b.textContent.toLowerCase().includes('marrer')||b.textContent.toLowerCase().includes('commencer');});}
-    if(startBtn){startBtn.click();await wait(3000);}
-    /* Extraire les images par question */
-    var qEls=document.querySelectorAll('[class*="question"], [class*="exercice"], .ant-card, [class*="Question"]');
-    if(qEls.length===0)qEls=document.querySelectorAll('div > div > div');
-    var allImgs=Array.from(document.querySelectorAll('img')).filter(function(img){return img.src.includes('/files/')&&img.naturalWidth>30;});
-    /* Associer chaque image à la question la plus proche par position DOM */
-    var qTexts=qcm.questions.map(function(q){return (q.question||'').replace(/<[^>]+>/g,'').trim().substring(0,40);});
-    for(var img of allImgs){
-      var imgSrc=img.src.split('?')[0];
-      /* Remonter le DOM pour trouver le texte de la question parente */
-      var el=img;var found=false;
-      for(var d=0;d<20;d++){el=el.parentElement;if(!el)break;
-        var txt=el.textContent||'';
-        for(var qi=0;qi<qTexts.length;qi++){
-          if(txt.includes(qTexts[qi])){
-            /* Déterminer si c'est une image de question ou de réponse */
-            var isAnswer=false;
-            var ansEl=img.closest('[class*="answer"], [class*="option"], [class*="proposition"], [class*="reponse"]');
-            if(ansEl){
-              var ansTxt=(ansEl.textContent||'').substring(0,60);
-              for(var ai=0;ai<qcm.questions[qi].answers.length;ai++){
-                var aTxt=(qcm.questions[qi].answers[ai].text||'').replace(/<[^>]+>/g,'').substring(0,40);
-                if(ansTxt.includes(aTxt)){qcm.questions[qi].answers[ai].url_image=imgSrc;isAnswer=true;break;}
-              }
+    /* --- Scrape images depuis le DOM (si on est sur la page du QCM) --- */
+    var allImgs=Array.from(document.querySelectorAll('img')).filter(function(i){return i.src.includes('/files/')&&i.naturalWidth>30;});
+    if(allImgs.length>0){
+      console.log('🖼️ '+allImgs.length+' image(s) trouvée(s) dans la page');
+      /* Trier images par position Y */
+      var imgsByY=allImgs.map(function(i){return{src:i.src.split('?')[0],y:i.getBoundingClientRect().top+window.scrollY,w:i.naturalWidth};}).sort(function(a,b){return a.y-b.y;});
+      /* Trouver les positions Y des questions */
+      var qTexts=qcm.questions.map(function(q){return(q.question||'').replace(/<[^>]+>/g,'').trim().substring(0,30);});
+      var qPositions=[];
+      qTexts.forEach(function(qt,qi){
+        document.querySelectorAll('p,div,span,h1,h2,h3,h4').forEach(function(el){
+          if(el.children.length<5&&el.textContent.trim().substring(0,30)===qt&&!qPositions[qi]){
+            qPositions[qi]={y:el.getBoundingClientRect().top+window.scrollY,qi:qi};
+          }
+        });
+      });
+      /* Matcher: pour chaque image, trouver la question juste AU-DESSUS (Y le plus proche mais inférieur) */
+      imgsByY.forEach(function(img){
+        var bestQ=-1;var bestDist=99999;
+        qPositions.forEach(function(qp,qi){
+          if(!qp)return;
+          var dist=img.y-qp.y;
+          if(dist>0&&dist<bestDist){bestDist=dist;bestQ=qi;}
+        });
+        if(bestQ>=0){
+          var q=qcm.questions[bestQ];
+          /* Si distance < 400px → image de la question; sinon → image d'une réponse */
+          var nextQ=qPositions[bestQ+1];
+          var isQuestionImg=!nextQ||img.y<(qp_y(qPositions,bestQ)+400);
+          function qp_y(ps,i){return ps[i]?ps[i].y:0;}
+          if(!q.url_image_q&&bestDist<500){
+            q.url_image_q=img.src;
+            console.log('  Q'+(bestQ+1)+' ← image question');
+          }else{
+            /* Essayer de matcher à une réponse */
+            for(var ai=0;ai<q.answers.length;ai++){
+              if(!q.answers[ai].url_image){q.answers[ai].url_image=img.src;console.log('  Q'+(bestQ+1)+'.'+String.fromCharCode(65+ai)+' ← image réponse');break;}
             }
-            if(!isAnswer&&!qcm.questions[qi].url_image_q){qcm.questions[qi].url_image_q=imgSrc;}
-            found=true;break;
           }
         }
-        if(found)break;
-      }
+      });
+    }else{
+      console.log('⚠️ Pas d\\'images dans le DOM. Pour importer les images, ouvre d\\'abord la série sur ExoTeach puis recolle le script.');
     }
-    /* Retour à la page d'origine */
-    window.location.hash=origHash||'#/planning';
-    await wait(500);
     series.push(qcm);
   }catch(e){console.error(e);errs.push(id);}
 }
 if(!series.length){alert('Aucune série trouvée.');return;}
-var msg=series.length+' série(s) prête(s)';
-if(errs.length)msg+='\\n'+errs.length+' erreur(s): '+errs.join(', ');
-console.log('📤 Envoi à ExoTeachBIS...');
+console.log('📤 Envoi de '+series.length+' série(s) à ExoTeachBIS...');
 try{
   var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:series,coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}'})});
   var out=await res.json();
-  if(out.success)alert('✅ '+out.imported+' série(s) importée(s) avec images !');
+  if(out.success)alert('✅ '+out.imported+' série(s) importée(s) !\\n(Rafraîchis ExoTeachBIS pour voir les séries)');
   else alert('Erreur: '+(out.error||'inconnue'));
 }catch(e){alert('Erreur réseau: '+e.message);}
 })();`;
@@ -204,11 +202,13 @@ export function ImportExoteachModal({
           {copied && (
             <div className="rounded-xl border border-green-400/20 bg-green-500/5 p-4 space-y-2 animate-in fade-in">
               <p className="text-xs font-bold text-green-300">Maintenant :</p>
-              <ol className="text-[12px] text-white/70 space-y-1.5 list-decimal list-inside">
+              <ol className="text-[12px] text-white/70 space-y-2 list-decimal list-inside">
                 <li>Va sur <a href="https://diploma.exoteach.com" target="_blank" rel="noreferrer" className="text-[#C9A84C] underline">diploma.exoteach.com</a></li>
+                <li className="text-yellow-300/90">⚡ <strong>Ouvre la série</strong> dans le player (pour que les images se chargent)</li>
                 <li>Ouvre la console : <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">F12</kbd> → onglet <span className="font-semibold">Console</span></li>
-                <li>Colle avec <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Ctrl+V</kbd> puis <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Entrée</kbd></li>
-                <li>C&apos;est fait ! Reviens ici et rafraîchis</li>
+                <li>Tape <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">allow pasting</kbd> + Entrée (1ère fois)</li>
+                <li>Colle avec <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Cmd+V</kbd> puis <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Entrée</kbd></li>
+                <li>Reviens ici et rafraîchis ✓</li>
               </ol>
             </div>
           )}
