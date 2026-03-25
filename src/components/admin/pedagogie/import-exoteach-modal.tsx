@@ -42,7 +42,7 @@ if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
 
-/* Fetch une image et la convertir en base64 data URL */
+/* Fetch image → base64 */
 async function fetchImgB64(url){
   try{
     if(!url)return null;
@@ -55,47 +55,118 @@ async function fetchImgB64(url){
   }catch(e){return null;}
 }
 
-/* Extraire src des <img> dans du HTML */
-function extractImg(html){
-  if(!html)return null;
-  var m=html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  return m?m[1]:null;
+/* Trouver un champ image dans un objet (cherche TOUS les noms possibles) */
+function findImgField(obj){
+  if(!obj)return null;
+  var names=['url_image_q','url_image','image','imageUrl','image_url','fichier','file','media','photo','illustration','img','picture','src_image'];
+  for(var n of names){
+    if(obj[n]&&typeof obj[n]==='string'&&obj[n].length>5)return obj[n];
+  }
+  /* Chercher dans toutes les valeurs string qui ressemblent à des URLs d'image */
+  for(var k of Object.keys(obj)){
+    var v=obj[k];
+    if(typeof v==='string'&&(v.includes('/files/')||v.includes('/uploads/')||v.includes('.png')||v.includes('.jpg')||v.includes('.jpeg')||v.includes('.gif')||v.includes('.webp'))&&v.length>10){
+      return v;
+    }
+  }
+  return null;
+}
+
+/* Résoudre les __ref dans le cache Apollo */
+function resolveRef(ref,cache){
+  if(!ref)return null;
+  if(typeof ref==='object'&&ref.__ref)return cache[ref.__ref]||null;
+  return ref;
 }
 
 var ids=${idsJson};
 var series=[];var errs=[];
+var cache=client.cache.extract();
+
+/* ÉTAPE 0 : Introspection — afficher tous les champs d'une Question en cache */
+var allKeys=Object.keys(cache);
+var qKey=allKeys.find(function(k){return k.startsWith('Question:');});
+if(qKey){
+  console.log('🔍 Champs Question en cache: '+Object.keys(cache[qKey]).join(', '));
+  var sample=cache[qKey];
+  for(var sk of Object.keys(sample)){
+    var sv=sample[sk];
+    if(sv&&typeof sv==='string'&&sv.length>5&&sv.length<500){
+      console.log('  '+sk+' = '+sv.substring(0,80));
+    }else if(sv&&typeof sv==='object'){
+      console.log('  '+sk+' = '+JSON.stringify(sv).substring(0,120));
+    }
+  }
+}else{
+  console.log('⚠️ Aucune Question dans le cache Apollo. Navigue vers une série sur ExoTeach d\\'abord.');
+}
+
 for(var id of ids){
   try{
     console.log('📥 Récupération série '+id+'...');
+    /* D'abord via la query Apollo (pour s'assurer que les données sont en cache) */
     var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
     if(!r.data||!r.data.qcm){errs.push(id);continue;}
     var qcm=JSON.parse(JSON.stringify(r.data.qcm));
 
-    /* --- Télécharger les images en base64 (ZERO DOM scraping) --- */
+    /* Relire le cache APRÈS la query — il a maintenant les données complètes */
+    cache=client.cache.extract();
+
     for(var qi=0;qi<qcm.questions.length;qi++){
       var q=qcm.questions[qi];
-      /* Image de la question: url_image_q OU embedded <img> dans le HTML */
-      var qImgUrl=q.url_image_q||extractImg(q.question);
-      if(qImgUrl){
-        console.log('  Q'+(qi+1)+' 🖼️ image trouvée: '+qImgUrl.substring(0,60)+'...');
-        var b64=await fetchImgB64(qImgUrl);
-        if(b64){q.image_base64=b64;console.log('  Q'+(qi+1)+' ✅ image téléchargée');}
-        else{console.log('  Q'+(qi+1)+' ⚠️ échec téléchargement image');}
-      }else{
-        console.log('  Q'+(qi+1)+' — pas d\\'image dans l\\'API');
+
+      /* Enrichir avec le cache Apollo (qui a PLUS de champs que notre query) */
+      var cacheKey='Question:'+q.id_question;
+      var cached=cache[cacheKey];
+      if(cached){
+        var imgUrl=findImgField(cached);
+        if(imgUrl&&!q.url_image_q){
+          q.url_image_q=imgUrl;
+          console.log('  Q'+(qi+1)+' 🖼️ image trouvée dans cache: '+imgUrl.substring(0,60));
+        }
+        /* Aussi vérifier les réponses dans le cache */
+        if(cached.answers){
+          var ansRefs=Array.isArray(cached.answers)?cached.answers:[];
+          for(var ai=0;ai<ansRefs.length;ai++){
+            var cachedAns=resolveRef(ansRefs[ai],cache);
+            if(cachedAns&&q.answers&&q.answers[ai]){
+              var ansImg=findImgField(cachedAns);
+              if(ansImg&&!q.answers[ai].url_image){
+                q.answers[ai].url_image=ansImg;
+              }
+            }
+          }
+        }
       }
-      /* Images des réponses */
+
+      /* Télécharger les images trouvées en base64 */
+      var qImgUrl=q.url_image_q;
+      if(!qImgUrl){
+        /* Dernier recours: chercher <img> dans le HTML */
+        var m=(q.question||'').match(/<img[^>]+src=["']([^"']+)["']/i);
+        if(m)qImgUrl=m[1];
+      }
+      if(qImgUrl){
+        var b64=await fetchImgB64(qImgUrl);
+        if(b64){q.image_base64=b64;console.log('  Q'+(qi+1)+' ✅ image téléchargée ('+Math.round(b64.length/1024)+' KB)');}
+        else{console.log('  Q'+(qi+1)+' ⚠️ échec download: '+qImgUrl.substring(0,60));}
+      }else{
+        console.log('  Q'+(qi+1)+' — aucune image trouvée (API ni cache ni HTML)');
+      }
+
+      /* Images réponses */
       for(var ai=0;ai<(q.answers||[]).length;ai++){
         var ans=q.answers[ai];
-        var aImgUrl=ans.url_image||extractImg(ans.text);
-        if(aImgUrl){
-          var ab64=await fetchImgB64(aImgUrl);
-          if(ab64){ans.image_base64=ab64;console.log('  Q'+(qi+1)+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
+        var aUrl=ans.url_image;
+        if(!aUrl){var am=(ans.text||'').match(/<img[^>]+src=["']([^"']+)["']/i);if(am)aUrl=am[1];}
+        if(aUrl){
+          var ab=await fetchImgB64(aUrl);
+          if(ab){ans.image_base64=ab;console.log('  Q'+(qi+1)+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
         }
       }
     }
     series.push(qcm);
-  }catch(e){console.error(e);errs.push(id);}
+  }catch(e){console.error('❌ Erreur série '+id+':',e);errs.push(id);}
 }
 if(!series.length){alert('Aucune série trouvée.');return;}
 console.log('📤 Envoi de '+series.length+' série(s) à ExoTeachBIS...');
