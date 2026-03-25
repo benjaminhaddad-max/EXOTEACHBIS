@@ -114,9 +114,9 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 4. [x] Images ExoTeach : scraping DOM via canvas base64, stockage dans `image_url`
 5. [ ] Upload d'image dans les questions/options QCM (bucket `question-images` créé, colonnes `image_url` ajoutées)
 6. [ ] Rendu LaTeX automatique dans les QCMs (MathText component existe)
-7. [x] Système Q&A temps réel (migration 011, composants qa/, hooks realtime)
+7. [x] Système Q&A temps réel (migration 011, composants qa/, hooks realtime) — testé end-to-end 25/03: FAB→drawer→IA→escalade→dashboard prof OK. Bugs corrigés: matiere_id nullable, student_id vs user_id, AI auto-trigger sans Realtime
 8. [x] Système examens enrichi avec coefficients, filières, résultats (migration 012)
-9. [ ] Exécuter migration 012 en production Supabase (SQL Editor ou `DATABASE_URL` + `npm run migrate:012`)
+9. [x] Exécuter migration 012 en production Supabase (fait via Management API + `SUPABASE_ACCESS_TOKEN`)
 
 ---
 
@@ -141,7 +141,7 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | Hooks user | `src/hooks/use-user.ts` |
 | Hooks QA realtime | `src/hooks/use-qa-realtime.ts` |
 | Globals CSS (thème) | `src/app/globals.css` |
-| **Examens admin shell** | `src/components/admin/examens/examens-shell.tsx` |
+| **Examens admin shell** | `src/components/admin/examens/examens-shell.tsx` — ComposeModal avec créer série, import Word, export Word, coefficients |
 | **Examens actions** | `src/app/(admin)/admin/examens/actions.ts` |
 | **Coefficients filières** | `src/components/admin/examens/coefficients-shell.tsx` |
 | **Résultats admin** | `src/components/admin/examens/resultats-shell.tsx` |
@@ -196,3 +196,4 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | 2026-03-25 | `examens/page.tsx` (élève) | Refonte : scores pondérés, coefficients affichés, lien classement, card score |
 | 2026-03-25 | `examens/[examenId]/resultats/page.tsx` (élève) | Nouveau : classement élève, score personnel, détail par série, rang |
 | 2026-03-25 | `scripts/run-migration-012.cjs`, `package.json`, `.env.example` | Script migration 012 via `DATABASE_URL` (navigateur Cursor ≠ session Supabase connectée ; pas d’accès SQL sans URI Postgres) |
+| 2026-03-25 | `examens-shell.tsx` | ComposeModal enrichi : bouton Nouvelle serie, import Word, export Word (sujet+correction), interface nettoyee |

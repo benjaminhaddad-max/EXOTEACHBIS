@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import {
   Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2,
   Calendar, Clock, Eye, EyeOff, ListPlus, ListMinus, Layers,
-  BarChart3, ChevronRight, Settings2,
+  BarChart3, ChevronRight, Settings2, Upload, Download, FileText,
 } from "lucide-react";
-import type { Serie, Filiere } from "@/types/database";
+import type { Serie, Filiere, SerieType } from "@/types/database";
 import {
   createExamen, updateExamen, deleteExamen,
   addSerieToExamen, removeSerieFromExamen,
   updateSerieCoefficient, toggleResultsVisibility,
 } from "@/app/(admin)/admin/examens/actions";
+import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -72,6 +73,7 @@ export function ExamensShell({
   filieres: Filiere[];
 }) {
   const [examens, setExamens] = useState<ExamenWithSeries[]>(initialExamens);
+  const [seriesList, setSeriesList] = useState<Serie[]>(allSeries);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
@@ -81,6 +83,12 @@ export function ExamensShell({
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const refreshSeries = async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from("series").select("*").eq("visible", true).order("name");
+    if (data) setSeriesList(data as Serie[]);
   };
 
   const refreshExamens = async () => {
@@ -324,13 +332,18 @@ export function ExamensShell({
             {modal.type === "compose" && (
               <ComposeModal
                 examen={modal.examen}
-                allSeries={allSeries}
+                allSeries={seriesList}
                 composeSeries={composeSeries}
                 onAdd={(s) => handleAddSerie(modal.examen, s)}
                 onRemove={(id) => handleRemoveSerie(modal.examen, id)}
                 onCoeffChange={(serieId, coeff) => handleCoeffChange(modal.examen, serieId, coeff)}
+                onSerieCreated={async (newSerie) => {
+                  await refreshSeries();
+                  handleAddSerie(modal.examen, newSerie);
+                }}
                 onClose={() => { setModal(null); refreshExamens(); }}
                 isPending={isPending}
+                showToast={showToast}
               />
             )}
           </div>
@@ -478,8 +491,16 @@ function ExamenForm({
 }
 
 // =============================================
-// COMPOSE MODAL (with coefficients)
+// COMPOSE MODAL (with coefficients + create + import/export)
 // =============================================
+
+const SERIE_TYPES: { value: SerieType; label: string }[] = [
+  { value: "concours_blanc", label: "Concours blanc" },
+  { value: "revision", label: "Révision" },
+  { value: "annales", label: "Annales" },
+  { value: "entrainement", label: "Entraînement" },
+  { value: "qcm_supplementaires", label: "QCM supplémentaires" },
+];
 
 function ComposeModal({
   examen,
@@ -488,8 +509,10 @@ function ComposeModal({
   onAdd,
   onRemove,
   onCoeffChange,
+  onSerieCreated,
   onClose,
   isPending,
+  showToast,
 }: {
   examen: ExamenWithSeries;
   allSeries: Serie[];
@@ -497,13 +520,121 @@ function ComposeModal({
   onAdd: (s: Serie) => void;
   onRemove: (serieId: string) => void;
   onCoeffChange: (serieId: string, coeff: number) => void;
+  onSerieCreated: (s: Serie) => void;
   onClose: () => void;
   isPending: boolean;
+  showToast: (msg: string, kind: "success" | "error") => void;
 }) {
   const inExamen = new Set(composeSeries.map((s) => s.series_id));
   const available = allSeries.filter((s) => !inExamen.has(s.id));
   const [search, setSearch] = useState("");
   const filtered = available.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<SerieType>("concours_blanc");
+  const [creating, setCreating] = useState(false);
+
+  const [importing, setImporting] = useState(false);
+  const [importName, setImportName] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCreateSerie = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await createSerie({
+        name: newName.trim(),
+        type: newType,
+        timed: false,
+        score_definitif: false,
+        visible: true,
+      });
+      if ("error" in res) {
+        showToast(res.error!, "error");
+        return;
+      }
+      const newSerie: Serie = {
+        id: res.id!,
+        name: newName.trim(),
+        type: newType,
+        description: null,
+        cours_id: null,
+        matiere_id: null,
+        timed: false,
+        duration_minutes: null,
+        score_definitif: false,
+        visible: true,
+        annee: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      onSerieCreated(newSerie);
+      setNewName("");
+      setShowCreate(false);
+      showToast("Série créée et ajoutée", "success");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleImportWord = async (file: File) => {
+    if (!importName.trim()) {
+      showToast("Donnez un nom à la série", "error");
+      return;
+    }
+    setImporting(true);
+    try {
+      const res = await createSerie({
+        name: importName.trim(),
+        type: "concours_blanc",
+        timed: false,
+        score_definitif: false,
+        visible: true,
+      });
+      if ("error" in res) {
+        showToast(res.error!, "error");
+        return;
+      }
+      const serieId = res.id!;
+      const formData = new FormData();
+      formData.append("serieId", serieId);
+      formData.append("file", file);
+      const importRes = await fetch("/api/import-serie", { method: "POST", body: formData });
+      const importData = await importRes.json();
+      if (!importRes.ok || importData.error) {
+        showToast(importData.error || "Erreur d'import", "error");
+        return;
+      }
+      const newSerie: Serie = {
+        id: serieId,
+        name: importName.trim(),
+        type: "concours_blanc",
+        description: null,
+        cours_id: null,
+        matiere_id: null,
+        timed: false,
+        duration_minutes: null,
+        score_definitif: false,
+        visible: true,
+        annee: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      onSerieCreated(newSerie);
+      setImportName("");
+      setShowImport(false);
+      showToast(importData.message || "Série importée et ajoutée", "success");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const exportSerie = (serieId: string, corrections: boolean) => {
+    window.open(`/api/export-serie?serieId=${serieId}&corrections=${corrections ? "1" : "0"}`, "_blank");
+  };
 
   return (
     <div className="p-6 space-y-5">
@@ -511,6 +642,99 @@ function ComposeModal({
         <h2 className="text-base font-semibold text-white">Séries & Coefficients — {examen.name}</h2>
         <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
       </div>
+
+      {/* Actions : créer ou importer */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => { setShowCreate(!showCreate); setShowImport(false); }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            showCreate ? "bg-[#C9A84C] text-[#0e1e35]" : "bg-white/10 text-white/70 hover:bg-white/15"
+          }`}
+        >
+          <Plus size={13} /> Nouvelle série
+        </button>
+        <button
+          onClick={() => { setShowImport(!showImport); setShowCreate(false); }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            showImport ? "bg-[#C9A84C] text-[#0e1e35]" : "bg-white/10 text-white/70 hover:bg-white/15"
+          }`}
+        >
+          <Upload size={13} /> Importer Word
+        </button>
+      </div>
+
+      {/* Formulaire de création */}
+      {showCreate && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <p className="text-xs text-white/50 font-medium">Créer une nouvelle série</p>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Nom de la série…"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+            onKeyDown={(e) => e.key === "Enter" && handleCreateSerie()}
+          />
+          <select
+            value={newType}
+            onChange={(e) => setNewType(e.target.value as SerieType)}
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-white/30"
+          >
+            {SERIE_TYPES.map((t) => (
+              <option key={t.value} value={t.value} className="bg-[#0e1e35]">{t.label}</option>
+            ))}
+          </select>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowCreate(false)}
+              className="px-3 py-1.5 text-xs text-white/50 hover:text-white transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleCreateSerie}
+              disabled={creating || !newName.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] disabled:opacity-50 transition-colors"
+            >
+              {creating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Créer & ajouter
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Formulaire d'import Word */}
+      {showImport && (
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <p className="text-xs text-white/50 font-medium">Importer depuis un fichier Word (.docx)</p>
+          <input
+            value={importName}
+            onChange={(e) => setImportName(e.target.value)}
+            placeholder="Nom de la série…"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".docx,.doc"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleImportWord(f);
+            }}
+            className="w-full text-xs text-white/60 file:mr-3 file:py-1.5 file:px-3 file:bg-white/10 file:border-0 file:text-xs file:text-white/70 file:rounded-lg file:cursor-pointer hover:file:bg-white/20"
+          />
+          {importing && (
+            <div className="flex items-center gap-2 text-xs text-white/50">
+              <Loader2 size={12} className="animate-spin" /> Import en cours…
+            </div>
+          )}
+          <button
+            onClick={() => setShowImport(false)}
+            className="px-3 py-1.5 text-xs text-white/50 hover:text-white transition-colors"
+          >
+            Annuler
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-6">
         {/* In exam */}
@@ -535,6 +759,22 @@ function ComposeModal({
                     onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
                     className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
                   />
+                </div>
+                <div className="flex gap-0.5 shrink-0">
+                  <button
+                    onClick={() => exportSerie(es.series_id, false)}
+                    title="Export sujet"
+                    className="p-1 text-white/20 hover:text-white/60 transition-colors"
+                  >
+                    <FileText size={11} />
+                  </button>
+                  <button
+                    onClick={() => exportSerie(es.series_id, true)}
+                    title="Export correction"
+                    className="p-1 text-white/20 hover:text-green-400/60 transition-colors"
+                  >
+                    <Download size={11} />
+                  </button>
                 </div>
                 <button
                   onClick={() => onRemove(es.series_id)}
@@ -563,6 +803,22 @@ function ComposeModal({
             ) : filtered.map((s) => (
               <div key={s.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
                 <p className="flex-1 text-xs text-white/80 line-clamp-1">{s.name}</p>
+                <div className="flex gap-0.5 shrink-0">
+                  <button
+                    onClick={() => exportSerie(s.id, false)}
+                    title="Export sujet"
+                    className="p-1 text-white/20 hover:text-white/60 transition-colors"
+                  >
+                    <FileText size={11} />
+                  </button>
+                  <button
+                    onClick={() => exportSerie(s.id, true)}
+                    title="Export correction"
+                    className="p-1 text-white/20 hover:text-green-400/60 transition-colors"
+                  >
+                    <Download size={11} />
+                  </button>
+                </div>
                 <button
                   onClick={() => onAdd(s)}
                   disabled={isPending}

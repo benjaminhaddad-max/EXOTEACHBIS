@@ -5,7 +5,7 @@ import {
   Users, Search, Pencil, Trash2, X, Check,
   AlertCircle, Loader2, Plus, ShieldCheck, GraduationCap,
   BookOpen, Crown, ChevronDown, ChevronRight, Folder,
-  FolderOpen, UserMinus, Settings,
+  FolderOpen, UserMinus, Settings, LogIn,
 } from "lucide-react";
 import type { Profile, Groupe, Dossier } from "@/types/database";
 import {
@@ -551,15 +551,38 @@ function ComptesView({
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onEditUser(u)}
-                      className="p-1.5 rounded-lg transition-colors"
-                      style={{ color: "rgba(255,255,255,0.3)" }}
-                      onMouseOver={e => (e.currentTarget.style.color = "rgba(255,255,255,0.8)")}
-                      onMouseOut={e => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-                    >
-                      <Pencil size={13} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/admin/impersonate", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ userId: u.id }),
+                            });
+                            const data = await res.json();
+                            if (data.url) window.open(data.url, "_blank");
+                            else alert(data.error || "Erreur");
+                          } catch { alert("Erreur réseau"); }
+                        }}
+                        title="Se connecter en tant que cet utilisateur"
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: "rgba(201,168,76,0.5)" }}
+                        onMouseOver={e => (e.currentTarget.style.color = "#C9A84C")}
+                        onMouseOut={e => (e.currentTarget.style.color = "rgba(201,168,76,0.5)")}
+                      >
+                        <LogIn size={13} />
+                      </button>
+                      <button
+                        onClick={() => onEditUser(u)}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: "rgba(255,255,255,0.3)" }}
+                        onMouseOver={e => (e.currentTarget.style.color = "rgba(255,255,255,0.8)")}
+                        onMouseOut={e => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
