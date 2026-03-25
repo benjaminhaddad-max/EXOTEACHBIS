@@ -82,46 +82,63 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
   }, []);
 
   // Create a new thread when user sends first message
+  const [errorMsg, setErrorMsg] = useState("");
   const handleFirstMessage = useCallback(async (text: string) => {
-    if (!userId) return;
-    setCreating(true);
-
-    const { data: newThread, error } = await supabase
-      .from("qa_threads")
-      .insert({
-        student_id: userId,
-        context_type: ctx.contextType,
-        dossier_id: ctx.dossierId ?? null,
-        matiere_id: resolvedMatiereId || null,
-        cours_id: ctx.coursId ?? null,
-        question_id: ctx.questionId ?? null,
-        option_id: ctx.optionId ?? null,
-        serie_id: ctx.serieId ?? null,
-        context_label: resolvedLabel,
-        title: text.slice(0, 120),
-        status: "ai_pending",
-      })
-      .select("*, matiere:matieres(id, name, color)")
-      .single();
-
-    if (error || !newThread) {
-      console.error("Failed to create thread:", error);
-      setCreating(false);
+    if (!userId) {
+      setErrorMsg("Session expirée — reconnecte-toi.");
       return;
     }
+    setCreating(true);
+    setErrorMsg("");
 
-    // Insert the student's first message
-    await supabase.from("qa_messages").insert({
-      thread_id: newThread.id,
-      sender_id: userId,
-      sender_type: "student",
-      content_type: "text",
-      content: text,
-      read_by_student: true,
-    });
+    try {
+      const { data: newThread, error } = await supabase
+        .from("qa_threads")
+        .insert({
+          student_id: userId,
+          context_type: ctx.contextType,
+          dossier_id: ctx.dossierId ?? null,
+          matiere_id: resolvedMatiereId || null,
+          cours_id: ctx.coursId ?? null,
+          question_id: ctx.questionId ?? null,
+          option_id: ctx.optionId ?? null,
+          serie_id: ctx.serieId ?? null,
+          context_label: resolvedLabel || ctx.contextType,
+          title: text.slice(0, 120),
+          status: "ai_pending",
+        })
+        .select("*, matiere:matieres(id, name, color)")
+        .single();
 
-    setThread(newThread as QaThread);
-    setCreating(false);
+      if (error || !newThread) {
+        console.error("Failed to create thread:", error);
+        setErrorMsg("Erreur: " + (error?.message ?? "impossible de créer le thread"));
+        setCreating(false);
+        return;
+      }
+
+      // Insert the student's first message
+      const { error: msgErr } = await supabase.from("qa_messages").insert({
+        thread_id: newThread.id,
+        sender_id: userId,
+        sender_type: "student",
+        content_type: "text",
+        content: text,
+        read_by_student: true,
+      });
+
+      if (msgErr) {
+        console.error("Failed to insert message:", msgErr);
+        setErrorMsg("Thread créé mais message non envoyé: " + msgErr.message);
+      }
+
+      setThread(newThread as QaThread);
+    } catch (err: any) {
+      console.error("handleFirstMessage error:", err);
+      setErrorMsg("Erreur inattendue: " + (err?.message ?? "inconnue"));
+    } finally {
+      setCreating(false);
+    }
     // AI response will be triggered by ChatThread's ai_pending auto-trigger
   }, [userId, resolvedMatiereId, resolvedLabel, ctx, supabase]);
 
@@ -283,6 +300,11 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
                 L&apos;IA vous répondra immédiatement. Si la réponse ne vous convient pas,
                 vous pourrez demander l&apos;aide d&apos;un professeur.
               </p>
+              {errorMsg && (
+                <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 max-w-full">
+                  {errorMsg}
+                </div>
+              )}
               {resolvedLabel && (
                 <div className="max-w-full">
                   <ContextBadge
