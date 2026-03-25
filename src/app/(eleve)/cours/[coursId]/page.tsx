@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { Header } from "@/components/header";
 import { PdfViewer } from "@/components/cours/pdf-viewer";
 import { SeriesList } from "@/components/cours/series-list";
-import { ModuleRevisions } from "@/components/cours/module-revisions";
-import { FileText, BookOpen } from "lucide-react";
+import { FileText } from "lucide-react";
 import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 
 interface Props {
@@ -47,13 +46,6 @@ export default async function CoursDetailPage({ params }: Props) {
     serie_attempts: undefined,
   }));
 
-  // Questions pour module révisions
-  const { data: questions } = await supabase
-    .from("questions")
-    .select("id, text, type, explanation, options (id, label, text, is_correct, order_index)")
-    .eq("cours_id", coursId)
-    .order("created_at");
-
   // Progression utilisateur
   const { data: progress } = user
     ? await supabase
@@ -68,8 +60,6 @@ export default async function CoursDetailPage({ params }: Props) {
   const dossier = (cours as any).dossier;
   const breadcrumbDossier = matiere?.dossier ?? dossier;
 
-  const hasSeries = seriesEnrichies.length > 0;
-  const hasRevisions = (questions?.length ?? 0) > 0;
   const hasPdf = !!cours.pdf_url;
 
   return (
@@ -124,18 +114,7 @@ export default async function CoursDetailPage({ params }: Props) {
 
           {/* ── COLONNE DROITE : Séries + Révisions ── */}
           <div className="lg:col-span-2 space-y-4">
-            {hasSeries ? (
-              <SeriesList series={seriesEnrichies} />
-            ) : (
-              <div className="rounded-xl border border-gray-100 bg-white p-6 text-center shadow-sm">
-                <BookOpen className="mx-auto h-8 w-8 text-gray-200" />
-                <p className="mt-2 text-sm text-gray-400">Aucune série d'exercices pour l'instant</p>
-              </div>
-            )}
-
-            {hasRevisions && (
-              <ModuleRevisions coursId={cours.id} questions={questions as any} />
-            )}
+            <SeriesList series={seriesEnrichies} />
           </div>
         </div>
       </div>

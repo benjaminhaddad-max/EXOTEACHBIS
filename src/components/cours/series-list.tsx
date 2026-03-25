@@ -42,6 +42,13 @@ export function SeriesList({ series }: SeriesListProps) {
       </div>
 
       <div className="divide-y divide-gray-100">
+        {series.length === 0 && (
+          <div className="px-4 py-8 text-center">
+            <ClipboardList className="mx-auto h-8 w-8 text-gray-200" />
+            <p className="mt-2 text-sm text-gray-400">Aucune série disponible</p>
+            <p className="text-xs text-gray-300 mt-1">Le professeur ajoutera des exercices bientôt</p>
+          </div>
+        )}
         {series.map((serie) => {
           const done = serie.last_attempt?.ended_at != null;
           const score = serie.last_attempt?.score;
