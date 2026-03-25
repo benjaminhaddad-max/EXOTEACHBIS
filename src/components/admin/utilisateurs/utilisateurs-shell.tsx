@@ -562,17 +562,8 @@ function ComptesView({
                             });
                             const data = await res.json();
                             if (data.access_token) {
-                              // Ouvrir un nouvel onglet qui set la session
-                              const w = window.open("about:blank", "_blank");
-                              if (w) {
-                                w.document.write(`<html><body><script>
-                                  localStorage.setItem('sb-impersonate', JSON.stringify({
-                                    access_token: "${data.access_token}",
-                                    refresh_token: "${data.refresh_token}"
-                                  }));
-                                  window.location.href = "${window.location.origin}/login?impersonate=1";
-                                </` + `script></body></html>`);
-                              }
+                              const url = window.location.origin + "/impersonate#access_token=" + data.access_token + "&refresh_token=" + data.refresh_token;
+                              window.open(url, "_blank");
                             } else alert(data.error || "Erreur");
                           } catch { alert("Erreur réseau"); }
                         }}
