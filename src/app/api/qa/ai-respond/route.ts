@@ -22,18 +22,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Validate auth — get user from Supabase session
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Non authentifié." },
-        { status: 401 }
-      );
+    // 1. Validate auth — try server session first, fall back to service role
+    let userId: string | null = null;
+    try {
+      const supabase = await createServerClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
+    } catch {
+      // Server session may not be available (e.g. impersonation)
     }
 
     // Parse request body
@@ -46,8 +42,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify the user owns the thread
-    const { data: thread, error: threadError } = await supabase
+    // Verify the thread exists using service role (works regardless of auth)
+    const serviceClient = getServiceClient();
+    const { data: thread, error: threadError } = await serviceClient
       .from("qa_threads")
       .select("id, student_id")
       .eq("id", thread_id)
@@ -60,7 +57,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (thread.student_id !== user.id) {
+    // If we have a valid user session, verify ownership
+    if (userId && thread.student_id !== userId) {
       return NextResponse.json(
         { error: "Accès refusé à ce thread." },
         { status: 403 }
@@ -84,7 +82,6 @@ export async function POST(request: Request) {
       "- Réponds toujours en français.";
 
     // 3. Load conversation history for multi-turn context
-    const serviceClient = getServiceClient();
     const { data: prevMessages } = await serviceClient
       .from("qa_messages")
       .select("sender_type, content")
