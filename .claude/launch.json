@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "exoteach-next",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["/tmp/start-exoteach.sh"],
+      "port": 3000
+    }
+  ]
+}

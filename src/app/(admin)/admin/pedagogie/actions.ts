@@ -1,0 +1,426 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+
+const PATH = "/admin/pedagogie";
+
+// =============================================
+// DOSSIERS
+// =============================================
+
+export async function getAllDossiers() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("dossiers")
+    .select("*")
+    .order("order_index");
+  return { data: data ?? [] };
+}
+
+export async function createDossier(data: {
+  name: string;
+  description?: string;
+  color: string;
+  icon_url?: string | null;
+  parent_id?: string | null;
+  order_index?: number;
+  visible: boolean;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("dossiers").insert({
+    name: data.name,
+    description: data.description || null,
+    color: data.color,
+    icon_url: data.icon_url || null,
+    parent_id: data.parent_id || null,
+    order_index: data.order_index ?? 0,
+    visible: data.visible,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function updateDossier(
+  id: string,
+  data: {
+    name: string;
+    description?: string;
+    color: string;
+    icon_url?: string | null;
+    visible: boolean;
+    order_index?: number;
+  }
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("dossiers")
+    .update({
+      name: data.name,
+      description: data.description || null,
+      color: data.color,
+      icon_url: data.icon_url || null,
+      visible: data.visible,
+      order_index: data.order_index ?? 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function deleteDossier(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("dossiers").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+// =============================================
+// RESSOURCES (attachées à un dossier)
+// =============================================
+
+export async function getRessourcesByDossier(dossierId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ressources")
+    .select("*")
+    .eq("dossier_id", dossierId)
+    .order("order_index");
+  if (error) return { error: error.message, data: [] };
+  return { data: data ?? [] };
+}
+
+export async function createRessource(data: {
+  dossier_id: string;
+  titre: string;
+  sous_titre?: string;
+  type: string;
+  pdf_url?: string;
+  pdf_path?: string;
+  video_url?: string;
+  vimeo_id?: string;
+  lien_url?: string;
+  lien_label?: string;
+  order_index?: number;
+  visible: boolean;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("ressources").insert({
+    dossier_id: data.dossier_id,
+    cours_id: null,
+    titre: data.titre,
+    sous_titre: data.sous_titre || null,
+    type: data.type,
+    pdf_url: data.pdf_url || null,
+    pdf_path: data.pdf_path || null,
+    video_url: data.video_url || null,
+    vimeo_id: data.vimeo_id || null,
+    lien_url: data.lien_url || null,
+    lien_label: data.lien_label || null,
+    order_index: data.order_index ?? 0,
+    visible: data.visible,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function updateRessource(
+  id: string,
+  data: {
+    titre: string;
+    sous_titre?: string;
+    type: string;
+    pdf_url?: string;
+    pdf_path?: string;
+    video_url?: string;
+    vimeo_id?: string;
+    lien_url?: string;
+    lien_label?: string;
+    order_index?: number;
+    visible: boolean;
+  }
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("ressources")
+    .update({
+      titre: data.titre,
+      sous_titre: data.sous_titre || null,
+      type: data.type,
+      pdf_url: data.pdf_url || null,
+      pdf_path: data.pdf_path || null,
+      video_url: data.video_url || null,
+      vimeo_id: data.vimeo_id || null,
+      lien_url: data.lien_url || null,
+      lien_label: data.lien_label || null,
+      order_index: data.order_index ?? 0,
+      visible: data.visible,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function deleteRessource(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("ressources").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+// =============================================
+// COURS (attachés à un dossier)
+// =============================================
+
+export async function getCourssByDossier(dossierId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cours")
+    .select("*")
+    .eq("dossier_id", dossierId)
+    .order("order_index");
+  if (error) return { error: error.message, data: [] };
+  return { data: data ?? [] };
+}
+
+export async function createCoursInDossier(data: {
+  dossier_id: string;
+  name: string;
+  description?: string;
+  pdf_url?: string;
+  pdf_path?: string;
+  nb_pages?: number;
+  order_index?: number;
+  visible: boolean;
+}) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("cours").insert({
+    dossier_id: data.dossier_id,
+    matiere_id: null,
+    name: data.name,
+    description: data.description || null,
+    pdf_url: data.pdf_url || null,
+    pdf_path: data.pdf_path || null,
+    nb_pages: data.nb_pages ?? 0,
+    tags: [],
+    order_index: data.order_index ?? 0,
+    visible: data.visible,
+    version: 1,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function updateCoursInDossier(
+  id: string,
+  data: {
+    name: string;
+    description?: string;
+    pdf_url?: string;
+    pdf_path?: string;
+    nb_pages?: number;
+    visible: boolean;
+  }
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cours")
+    .update({
+      name: data.name,
+      description: data.description || null,
+      pdf_url: data.pdf_url || null,
+      pdf_path: data.pdf_path || null,
+      nb_pages: data.nb_pages ?? 0,
+      visible: data.visible,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function deleteCoursFromDossier(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("cours").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function reorderCours(updates: { id: string; order_index: number }[]) {
+  const supabase = await createClient();
+  await Promise.all(
+    updates.map(({ id, order_index }) =>
+      supabase.from("cours").update({ order_index }).eq("id", id)
+    )
+  );
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+// Mettre à jour l'ordre de plusieurs dossiers
+export async function reorderDossiers(updates: { id: string; order_index: number }[]) {
+  const supabase = await createClient();
+  await Promise.all(
+    updates.map(({ id, order_index }) =>
+      supabase.from("dossiers").update({ order_index }).eq("id", id)
+    )
+  );
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+// Mettre à jour l'ordre de plusieurs ressources
+export async function reorderRessources(updates: { id: string; order_index: number }[]) {
+  const supabase = await createClient();
+  await Promise.all(
+    updates.map(({ id, order_index }) =>
+      supabase.from("ressources").update({ order_index }).eq("id", id)
+    )
+  );
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+// Legacy — gardé pour compatibilité avec les cours existants
+export async function getDossiers() {
+  return getAllDossiers();
+}
+
+export async function getSeriesByDossier(dossierId: string) {
+  const supabase = await createClient();
+
+  // Get all dossiers to build subtree
+  const { data: allDossiers } = await supabase.from("dossiers").select("id, parent_id");
+
+  function getSubtreeIds(rootId: string, dossiers: { id: string; parent_id: string | null }[]): string[] {
+    const ids = [rootId];
+    dossiers.filter((d) => d.parent_id === rootId).forEach((d) => ids.push(...getSubtreeIds(d.id, dossiers)));
+    return ids;
+  }
+
+  const subtreeIds = getSubtreeIds(dossierId, allDossiers ?? []);
+
+  // Cours via dossier_id direct
+  const { data: coursDirect } = await supabase
+    .from("cours")
+    .select("id, name, dossier_id")
+    .in("dossier_id", subtreeIds);
+
+  // Matieres dans le sous-arbre → pour trouver cours via matiere_id
+  const { data: matieres } = await supabase
+    .from("matieres")
+    .select("id")
+    .in("dossier_id", subtreeIds);
+  const matiereIds = (matieres ?? []).map((m: any) => m.id);
+
+  // Cours via matiere_id (si matieres trouvées)
+  const { data: coursViaMatiere } = matiereIds.length > 0
+    ? await supabase.from("cours").select("id, name, matiere_id").in("matiere_id", matiereIds)
+    : { data: [] };
+
+  // Dédupliquer les cours
+  const coursMap = new Map<string, any>();
+  for (const c of [...(coursDirect ?? []), ...(coursViaMatiere ?? [])]) coursMap.set(c.id, c);
+  const cours = Array.from(coursMap.values());
+  const coursIds = cours.map((c: any) => c.id);
+
+  // Séries par cours_id
+  const seriesMap = new Map<string, any>();
+  if (coursIds.length > 0) {
+    const { data: seriesByCours } = await supabase
+      .from("series")
+      .select("id, name, type, visible, timed, duration_minutes, score_definitif, cours_id, annee")
+      .in("cours_id", coursIds)
+      .order("created_at", { ascending: false });
+    for (const s of seriesByCours ?? []) seriesMap.set(s.id, s);
+  }
+
+  // Séries par matiere_id (séries "toute la matière")
+  if (matiereIds.length > 0) {
+    const { data: seriesByMatiere } = await supabase
+      .from("series")
+      .select("id, name, type, visible, timed, duration_minutes, score_definitif, cours_id, annee")
+      .in("matiere_id", matiereIds)
+      .order("created_at", { ascending: false });
+    for (const s of seriesByMatiere ?? []) seriesMap.set(s.id, s);
+  }
+
+  const VALID_TYPES = ["annales", "qcm_supplementaires", "concours_blanc", "revision"];
+  const series = Array.from(seriesMap.values()).filter((s: any) => VALID_TYPES.includes(s.type));
+
+  return {
+    series: series.map((s: any) => ({ ...s, nb_questions: 0 })),
+    cours,
+    matiereIds,
+  };
+}
+
+// ─── Données panel cours ────────────────────────────────────────────────────
+
+export async function getSeriesForCours(coursId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("series")
+    .select("*, series_questions(question_id)")
+    .eq("cours_id", coursId)
+    .order("created_at");
+  if (error) console.error("[getSeriesForCours]", error.message);
+  return (data ?? []).map((s: any) => ({
+    ...s,
+    nb_questions: Array.isArray(s.series_questions) ? s.series_questions.length : 0,
+    series_questions: undefined,
+  }));
+}
+
+export async function getBankQuestionsForSerie(coursId: string, serieId: string) {
+  const supabase = await createClient();
+  const [sqRes, qRes] = await Promise.all([
+    supabase.from("series_questions").select("question_id").eq("series_id", serieId),
+    supabase.from("questions").select("id, text, difficulty, type").eq("cours_id", coursId).order("created_at"),
+  ]);
+  const inSerie = new Set((sqRes.data ?? []).map((r: any) => r.question_id));
+  return (qRes.data ?? []).filter((q: any) => !inSerie.has(q.id));
+}
+
+export async function getSerieQuestions(serieId: string) {
+  const supabase = await createClient();
+  // Étape 1 : question_ids dans l'ordre
+  const { data: sqData, error: sqErr } = await supabase
+    .from("series_questions")
+    .select("question_id, order_index")
+    .eq("series_id", serieId)
+    .order("order_index");
+  if (sqErr) { console.error("[getSerieQuestions] sq error:", sqErr.message); return []; }
+  const questionIds = (sqData ?? []).map((r: any) => r.question_id).filter(Boolean);
+  if (questionIds.length === 0) return [];
+  // Étape 2 : questions + options
+  const { data: qData, error: qErr } = await supabase
+    .from("questions")
+    .select("*, options(*)")
+    .in("id", questionIds);
+  if (qErr) { console.error("[getSerieQuestions] q error:", qErr.message); return []; }
+  const qMap = new Map((qData ?? []).map((q: any) => [q.id, q]));
+  return questionIds.map((id: string) => qMap.get(id)).filter(Boolean);
+}
+
+export async function getQuestionsForCours(coursId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("questions")
+    .select("*, options(*)")
+    .eq("cours_id", coursId)
+    .order("created_at");
+  if (error) console.error("[getQuestionsForCours]", error.message);
+  return data ?? [];
+}

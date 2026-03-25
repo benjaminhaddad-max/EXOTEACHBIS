@@ -1,0 +1,34 @@
+-- =============================================
+-- ExoTeach Bis — Données de démonstration
+-- =============================================
+-- Ce fichier est fourni à titre de référence.
+-- Le seeding réel s'effectue via GET /api/seed
+-- (nécessite SUPABASE_SERVICE_ROLE_KEY dans .env.local)
+--
+-- Comptes démo créés par /api/seed :
+--
+--   Admin    : admin@diplomasante.fr    / Demo1234!  (role: superadmin)
+--   Professeur: prof@diplomasante.fr   / Demo1234!  (role: prof)
+--   Élève 1  : eleve1@diplomasante.fr  / Demo1234!  (role: eleve, groupe: PASS 2025)
+--   Élève 2  : eleve2@diplomasante.fr  / Demo1234!  (role: eleve, groupe: PASS 2025)
+--
+-- Contenu inséré :
+--   - 2 groupes (PASS 2025, L.AS 2025)
+--   - 3 dossiers UE (UE1, UE2, UE4)
+--   - 5 matières
+--   - 11 cours
+--   - 50 questions QCM + 250 options
+--   - 4 séries (entraînement, révision, concours blanc)
+--   - 1 examen blanc (28 mars 2026)
+--   - 6 événements planning
+--   - 6 posts (2 annonces + 2 questions forum + 2 réponses)
+--   - 2 decks flashcards + 9 cartes
+--   - 4 notifications pour eleve1
+--
+-- =============================================
+-- PRÉREQUIS : Exécuter d'abord les migrations
+-- =============================================
+-- 001_initial_schema.sql
+-- 002_content_schema.sql
+-- 003_flashcards_notifications.sql
+-- =============================================

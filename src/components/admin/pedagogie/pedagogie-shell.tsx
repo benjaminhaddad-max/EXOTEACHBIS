@@ -1,0 +1,1352 @@
+"use client";
+
+import { useState, useTransition, useEffect } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import {
+  Plus, Pencil, Trash2, ChevronRight, ChevronDown,
+  Folder, FolderOpen, X, Eye, EyeOff, Upload,
+  FileText, Loader2, Check, AlertCircle,
+  Link as LinkIcon, Video, FileVideo, LayoutList, Search,
+  FolderPlus, Home, GripVertical, BookOpen, Layers, Sparkles,
+} from "lucide-react";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, useSortable,
+  verticalListSortingStrategy, rectSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type { Dossier, Ressource, Cours } from "@/types/database";
+import { uploadPdf } from "@/lib/upload-pdf";
+import { CoursDetailPanel } from "./cours-detail-panel";
+import { DossierExercicesView } from "./dossier-exercices-view";
+import {
+  getAllDossiers,
+  createDossier, updateDossier, deleteDossier,
+  createRessource, updateRessource, deleteRessource, getRessourcesByDossier,
+  reorderDossiers, reorderRessources,
+  getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
+} from "@/app/(admin)/admin/pedagogie/actions";
+
+// =============================================
+// TYPES
+// =============================================
+
+type DossierNode = Dossier & { children: DossierNode[] };
+
+type ModalState =
+  | { type: "add_picker"; parentId: string | null }
+  | { type: "create_dossier"; parentId: string | null }
+  | { type: "edit_dossier"; dossier: Dossier }
+  | { type: "create_ressource"; dossierId: string; ressourceType: string }
+  | { type: "edit_ressource"; ressource: Ressource }
+  | { type: "create_cours"; dossierId: string }
+  | { type: "edit_cours"; cours: Cours }
+  | null;
+
+const COLORS = [
+  "#0e1e35", "#3B82F6", "#10B981", "#F59E0B", "#EF4444",
+  "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16", "#F97316",
+  "#C9A84C", "#6366F1", "#14B8A6", "#FB923C", "#A855F7",
+];
+
+// =============================================
+// TREE HELPERS
+// =============================================
+
+function buildTree(flat: Dossier[], parentId: string | null = null): DossierNode[] {
+  return flat
+    .filter((d) => d.parent_id === parentId)
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((d) => ({ ...d, children: buildTree(flat, d.id) }));
+}
+
+// =============================================
+// MAIN SHELL
+// =============================================
+
+export type DossierWithMatieres = Dossier & { matieres?: any[] };
+
+export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[] }) {
+  const searchParams = useSearchParams();
+  const [allDossiers, setAllDossiers] = useState<Dossier[]>(initialDossiers);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCours, setSelectedCours] = useState<Cours | null>(null);
+  const [dossierTab, setDossierTab] = useState<"contenu" | "exercices">("contenu");
+  const [allCoursFlat, setAllCoursFlat] = useState<Cours[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [ressourcesMap, setRessourcesMap] = useState<Record<string, Ressource[]>>({});
+  const [coursMap, setCoursMap] = useState<Record<string, Cours[]>>({});
+  const [loadingRessources, setLoadingRessources] = useState(false);
+  const [modal, setModal] = useState<ModalState>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const tree: DossierNode[] = buildTree(allDossiers as Dossier[]);
+  const selectedDossier = allDossiers.find((d) => d.id === selectedId) ?? null;
+  const childDossiers = allDossiers
+    .filter((d) => d.parent_id === selectedId)
+    .sort((a, b) => a.order_index - b.order_index);
+  const ressources = selectedId ? (ressourcesMap[selectedId] ?? []) : [];
+  const coursList = selectedId ? (coursMap[selectedId] ?? []) : [];
+
+  // Breadcrumb
+  const getBreadcrumb = (id: string | null): Dossier[] => {
+    if (!id) return [];
+    const d = allDossiers.find((x) => x.id === id);
+    if (!d) return [];
+    return [...getBreadcrumb(d.parent_id), d];
+  };
+  const breadcrumb = getBreadcrumb(selectedId);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // Auto-select dossier from URL query param (when navigating back from a cours)
+  useEffect(() => {
+    const dossierId = searchParams.get("dossier");
+    if (!dossierId) return;
+    const dossier = initialDossiers.find((d) => d.id === dossierId);
+    if (!dossier) return;
+    // Expand all ancestors
+    const expandAncestors = (id: string | null) => {
+      if (!id) return;
+      setExpandedIds((prev) => new Set([...prev, id]));
+      const parent = initialDossiers.find((d) => d.id === id);
+      if (parent?.parent_id) expandAncestors(parent.parent_id);
+    };
+    if (dossier.parent_id) expandAncestors(dossier.parent_id);
+    selectDossier(dossier);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchDossierData = async (dossierId: string) => {
+    // Utilise les Server Actions (createClient server-side) pour bypass RLS anon
+    const [ressResult, coursResult] = await Promise.all([
+      getRessourcesByDossier(dossierId),
+      getCourssByDossier(dossierId),
+    ]);
+    const ressources = ressResult.data ?? [];
+    const cours = (coursResult.data ?? []) as Cours[];
+    return { ressources, cours };
+  };
+
+  const selectDossier = async (dossier: Dossier) => {
+    setSelectedId(dossier.id);
+    setSelectedCours(null);
+    setDossierTab("contenu");
+    setExpandedIds((prev) => new Set([...prev, dossier.id]));
+    // Toujours refetch (pas de cache stale après deploy)
+    setLoadingRessources(true);
+    const { ressources, cours } = await fetchDossierData(dossier.id);
+    setRessourcesMap((prev) => ({ ...prev, [dossier.id]: ressources as Ressource[] }));
+    setCoursMap((prev) => ({ ...prev, [dossier.id]: cours }));
+    setAllCoursFlat((prev) => {
+      const existingIds = new Set(prev.map((c) => c.id));
+      return [...prev, ...cours.filter((c) => !existingIds.has(c.id))];
+    });
+    setLoadingRessources(false);
+  };
+
+  const refreshAll = async () => {
+    const result = await getAllDossiers();
+    setAllDossiers(result.data as Dossier[]);
+    if (selectedId) {
+      const { ressources, cours } = await fetchDossierData(selectedId);
+      setRessourcesMap((prev) => ({ ...prev, [selectedId]: ressources as Ressource[] }));
+      setCoursMap((prev) => ({ ...prev, [selectedId]: cours }));
+    }
+  };
+
+  // Drag end — sous-dossiers dans le panneau droit
+  const handleDragEndChildren = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = childDossiers.findIndex((d) => d.id === active.id);
+    const newIndex = childDossiers.findIndex((d) => d.id === over.id);
+    const reordered = arrayMove(childDossiers, oldIndex, newIndex);
+    // Optimistic update
+    setAllDossiers((prev) => {
+      const others = prev.filter((d) => d.parent_id !== selectedId || !reordered.find((r) => r.id === d.id));
+      return [...others, ...reordered.map((d, i) => ({ ...d, order_index: i }))];
+    });
+    await reorderDossiers(reordered.map((d, i) => ({ id: d.id, order_index: i })));
+  };
+
+  // Drag end — cours dans le panneau droit
+  const handleDragEndCours = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selectedId) return;
+    const list = coursMap[selectedId] ?? [];
+    const oldIndex = list.findIndex((c) => c.id === active.id);
+    const newIndex = list.findIndex((c) => c.id === over.id);
+    const reordered = arrayMove(list, oldIndex, newIndex);
+    setCoursMap((prev) => ({ ...prev, [selectedId]: reordered }));
+    await reorderCours(reordered.map((c, i) => ({ id: c.id, order_index: i })));
+  };
+
+  // Drag end — ressources dans le panneau droit
+  const handleDragEndRessources = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selectedId) return;
+    const list = ressourcesMap[selectedId] ?? [];
+    const oldIndex = list.findIndex((r) => r.id === active.id);
+    const newIndex = list.findIndex((r) => r.id === over.id);
+    const reordered = arrayMove(list, oldIndex, newIndex);
+    setRessourcesMap((prev) => ({ ...prev, [selectedId]: reordered }));
+    await reorderRessources(reordered.map((r, i) => ({ id: r.id, order_index: i })));
+  };
+
+  // Drag end — arbre gauche (même niveau parent)
+  const handleDragEndTree = async (event: DragEndEvent, parentId: string | null) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const siblings = allDossiers
+      .filter((d) => d.parent_id === parentId)
+      .sort((a, b) => a.order_index - b.order_index);
+    const oldIndex = siblings.findIndex((d) => d.id === active.id);
+    const newIndex = siblings.findIndex((d) => d.id === over.id);
+    const reordered = arrayMove(siblings, oldIndex, newIndex);
+    setAllDossiers((prev) => {
+      const others = prev.filter((d) => d.parent_id !== parentId);
+      return [...others, ...reordered.map((d, i) => ({ ...d, order_index: i }))];
+    });
+    await reorderDossiers(reordered.map((d, i) => ({ id: d.id, order_index: i })));
+  };
+
+  const handleAction = async (action: () => Promise<{ error?: string; success?: boolean }>) => {
+    startTransition(async () => {
+      const result = await action();
+      if (result.error) {
+        showToast(result.error, "error");
+      } else {
+        showToast("Sauvegardé", "success");
+        setModal(null);
+        await refreshAll();
+      }
+    });
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+      {/* ── LEFT: Arborescence ── */}
+      <div className="flex w-72 flex-shrink-0 flex-col border-r border-gray-100 bg-[#F7F8FC]">
+        <div className="flex items-center justify-between border-b border-gray-200 bg-navy px-4 py-3">
+          <h2 className="text-sm font-semibold text-white/90">Arborescence</h2>
+          <button
+            onClick={() => setModal({ type: "add_picker", parentId: null })}
+            className="flex items-center gap-1 rounded-lg bg-gold/20 border border-gold/30 px-2.5 py-1.5 text-xs font-medium text-gold transition hover:bg-gold/30"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {tree.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FolderPlus className="mb-2 h-8 w-8 text-gray-200" />
+              <p className="text-xs text-gray-400">Aucun dossier</p>
+              <button
+                onClick={() => setModal({ type: "add_picker", parentId: null })}
+                className="mt-2 text-xs text-navy underline"
+              >
+                Créer le premier dossier
+              </button>
+            </div>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(e) => handleDragEndTree(e, null)}
+            >
+              <SortableContext
+                items={tree.map((n) => n.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {tree.map((node) => (
+                  <SortableTreeNode
+                    key={node.id}
+                    node={node}
+                    selectedId={selectedId}
+                    expandedIds={expandedIds}
+                    sensors={sensors}
+                    onSelect={selectDossier}
+                    onToggle={toggleExpanded}
+                    onAdd={(parentId) => setModal({ type: "add_picker", parentId })}
+                    onEdit={(d) => setModal({ type: "edit_dossier", dossier: d })}
+                    onDelete={(d) => setConfirmDelete({ label: `le dossier "${d.name}"`, onConfirm: () => handleAction(() => deleteDossier(d.id)) })}
+                    onDragEndChildren={handleDragEndTree}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+      </div>
+
+      {/* ── RIGHT: Contenu du dossier sélectionné ou cours détail ── */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {selectedCours ? (
+          <CoursDetailPanel cours={selectedCours} onBack={() => setSelectedCours(null)} />
+        ) : selectedDossier ? (
+          <>
+            {/* Header */}
+            <div className="border-b border-gray-200 px-5 pt-3 pb-0">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1 text-xs text-gray-400">
+                  <button onClick={() => setSelectedId(null)} className="hover:text-gray-600">
+                    <Home className="h-3 w-3" />
+                  </button>
+                  {breadcrumb.map((d, i) => (
+                    <span key={d.id} className="flex items-center gap-1">
+                      <ChevronRight className="h-3 w-3" />
+                      <button
+                        onClick={() => selectDossier(d)}
+                        className={i === breadcrumb.length - 1 ? "font-semibold text-gray-700" : "hover:text-gray-600"}
+                      >
+                        {d.name}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setModal({ type: "edit_dossier", dossier: selectedDossier })}
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  {dossierTab === "contenu" && (
+                    <button
+                      onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
+                      className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Ajouter
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Tabs — Exercices tab only when there are cours cards */}
+              <div className="flex gap-0">
+                <button
+                  onClick={() => setDossierTab("contenu")}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "contenu" ? "border-navy text-navy" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Contenu
+                </button>
+                {coursList.length > 0 && (
+                  <button
+                    onClick={() => setDossierTab("exercices")}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "exercices" ? "border-gold text-gold-dark" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Exercices
+                    <span className="ml-1 rounded-full bg-gold/15 px-1.5 py-0.5 text-[9px] font-bold text-gold">
+                      {coursList.length}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Exercices tab */}
+            {dossierTab === "exercices" ? (
+              <div className="flex flex-col flex-1 overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+                <DossierExercicesView
+                  dossierId={selectedDossier.id}
+                  dossierName={selectedDossier.name}
+                  allDossiers={allDossiers}
+                  onNewSerie={() => {}}
+                />
+              </div>
+            ) : (
+
+            /* Contenu tab */
+            <div className="flex-1 overflow-y-auto p-5">
+              {childDossiers.length === 0 && ressources.length === 0 && coursList.length === 0 && !loadingRessources ? (
+                <EmptyDossier onAdd={() => setModal({ type: "add_picker", parentId: selectedId })} />
+              ) : (
+                <div className="space-y-5">
+                  {/* Sous-dossiers — drag & drop grille */}
+                  {childDossiers.length > 0 && (
+                    <div>
+                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                        <span className="h-px flex-1 bg-navy/10" />
+                        Sous-dossiers
+                        <span className="h-px flex-1 bg-navy/10" />
+                      </p>
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndChildren}>
+                        <SortableContext items={childDossiers.map((d) => d.id)} strategy={rectSortingStrategy}>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {childDossiers.map((child) => (
+                              <SortableSubDossierCard
+                                key={child.id}
+                                dossier={child}
+                                onClick={() => selectDossier(child)}
+                                onEdit={() => setModal({ type: "edit_dossier", dossier: child })}
+                                onDelete={() => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) })}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                  )}
+
+                  {/* Cours — drag & drop grille */}
+                  {loadingRessources ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                    </div>
+                  ) : coursList.length > 0 ? (
+                    <div>
+                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                        <span className="h-px flex-1 bg-navy/10" />
+                        Cours
+                        <span className="h-px flex-1 bg-navy/10" />
+                      </p>
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
+                        <SortableContext items={coursList.map((c) => c.id)} strategy={rectSortingStrategy}>
+                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                            {coursList.map((c) => (
+                              <SortableCoursCard
+                                key={c.id}
+                                cours={c}
+                                matiereLabel={selectedDossier?.name ?? ""}
+                                onSelect={() => setSelectedCours(c)}
+                                onEdit={() => setModal({ type: "edit_cours", cours: c })}
+                                onDelete={() => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) })}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                  ) : null}
+
+                  {/* Ressources — drag & drop liste */}
+                  {!loadingRessources && ressources.length > 0 && (
+                    <div>
+                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                        <span className="h-px flex-1 bg-navy/10" />
+                        Ressources
+                        <span className="h-px flex-1 bg-navy/10" />
+                      </p>
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndRessources}>
+                        <SortableContext items={ressources.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                          <div className="space-y-2">
+                            {ressources.map((r) => (
+                              <SortableRessourceRow
+                                key={r.id}
+                                ressource={r}
+                                onEdit={() => setModal({ type: "edit_ressource", ressource: r })}
+                                onDelete={() => setConfirmDelete({ label: `la ressource "${r.titre}"`, onConfirm: () => handleAction(() => deleteRessource(r.id)) })}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center text-center px-8">
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-navy/5 ring-1 ring-navy/10">
+              <img src="/logo-ds.svg" alt="" className="h-16 w-16 object-contain opacity-60" />
+            </div>
+            <p className="text-sm font-semibold text-navy/60">Sélectionnez un dossier</p>
+            <p className="mt-1.5 text-xs text-gray-400 max-w-[180px] leading-relaxed">Choisissez un dossier dans l'arborescence pour voir et gérer son contenu</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── MODALS ── */}
+      {modal && (
+        <ModalOverlay onClose={() => setModal(null)}>
+
+          {/* Picker "+" — style ExoTeach */}
+          {modal.type === "add_picker" && (
+            <AddPickerModal
+              onCreateDossier={() => setModal({ type: "create_dossier", parentId: modal.parentId })}
+              onCreateCours={() => {
+                if (modal.parentId) {
+                  setModal({ type: "create_cours", dossierId: modal.parentId });
+                } else {
+                  setModal(null);
+                }
+              }}
+              onCreateRessource={(type) => {
+                if (modal.parentId) {
+                  setModal({ type: "create_ressource", dossierId: modal.parentId, ressourceType: type });
+                } else {
+                  setModal(null);
+                }
+              }}
+              canAddContent={!!modal.parentId}
+              onClose={() => setModal(null)}
+            />
+          )}
+
+          {modal.type === "create_dossier" && (
+            <DossierForm
+              title={modal.parentId ? "Nouveau sous-dossier" : "Nouveau dossier"}
+              onSubmit={(data) => handleAction(() => createDossier({ ...data, parent_id: modal.parentId }))}
+              onClose={() => setModal(null)}
+              isPending={isPending}
+            />
+          )}
+
+          {modal.type === "edit_dossier" && (
+            <DossierForm
+              title="Modifier le dossier"
+              initialData={modal.dossier}
+              onSubmit={(data) => handleAction(() => updateDossier(modal.dossier.id, data))}
+              onClose={() => setModal(null)}
+              isPending={isPending}
+            />
+          )}
+
+          {modal.type === "create_ressource" && (
+            <RessourceForm
+              title="Nouveau contenu"
+              dossierId={modal.dossierId}
+              defaultType={modal.ressourceType}
+              onSubmit={(data) => handleAction(() => createRessource({ ...data, dossier_id: modal.dossierId }))}
+              onClose={() => setModal(null)}
+              isPending={isPending}
+            />
+          )}
+
+          {modal.type === "edit_ressource" && (
+            <RessourceForm
+              title="Modifier le contenu"
+              dossierId={modal.ressource.dossier_id ?? ""}
+              initialData={modal.ressource}
+              onSubmit={(data) => handleAction(() => updateRessource(modal.ressource.id, data))}
+              onClose={() => setModal(null)}
+              isPending={isPending}
+            />
+          )}
+
+          {modal.type === "create_cours" && (
+            <CoursForm
+              title="Nouveau cours"
+              dossierId={modal.dossierId}
+              onSubmit={(data) => handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId }))}
+              onClose={() => setModal(null)}
+              isPending={isPending}
+            />
+          )}
+
+          {modal.type === "edit_cours" && (
+            <CoursForm
+              title="Modifier le cours"
+              dossierId={modal.cours.dossier_id ?? ""}
+              initialData={modal.cours}
+              onSubmit={(data) => handleAction(() => updateCoursInDossier(modal.cours.id, data))}
+              onClose={() => setModal(null)}
+              isPending={isPending}
+            />
+          )}
+        </ModalOverlay>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
+          {toast.type === "success" ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          {toast.message}
+        </div>
+      )}
+
+      {/* Confirm delete */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-3 px-6 pt-6 pb-4 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Confirmer la suppression</h3>
+              <p className="text-sm text-gray-500">
+                Voulez-vous vraiment supprimer <span className="font-medium text-gray-700">{confirmDelete.label}</span> ? Cette action est irréversible.
+              </p>
+            </div>
+            <div className="flex gap-2 border-t border-gray-100 px-6 py-4">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => { confirmDelete.onConfirm(); setConfirmDelete(null); }}
+                className="flex-1 rounded-xl bg-red-500 py-2 text-sm font-semibold text-white hover:bg-red-600 transition"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// ADD PICKER MODAL — style ExoTeach
+// =============================================
+
+const CONTENT_TYPES = [
+  { type: "pdf",   label: "PDF",   icon: <FileText className="h-8 w-8" />,  color: "text-red-500",  bg: "hover:bg-red-50 hover:border-red-200" },
+  { type: "video", label: "Vidéo", icon: <Video className="h-8 w-8" />,     color: "text-blue-500", bg: "hover:bg-blue-50 hover:border-blue-200" },
+  { type: "vimeo", label: "Vimeo", icon: <FileVideo className="h-8 w-8" />, color: "text-cyan-500", bg: "hover:bg-cyan-50 hover:border-cyan-200" },
+  { type: "lien",  label: "Lien",  icon: <LinkIcon className="h-8 w-8" />,      color: "text-green-500",bg: "hover:bg-green-50 hover:border-green-200" },
+];
+
+function AddPickerModal({
+  onCreateDossier, onCreateCours, onCreateRessource, canAddContent, onClose,
+}: {
+  onCreateDossier: () => void;
+  onCreateCours: () => void;
+  onCreateRessource: (type: string) => void;
+  canAddContent: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-sm">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <h3 className="text-sm font-semibold text-gray-900">Que voulez-vous ajouter ?</h3>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
+          <X className="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Dossier */}
+        <button
+          onClick={onCreateDossier}
+          className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-navy/30 hover:bg-navy/5"
+        >
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-navy/5 text-navy transition group-hover:bg-navy/10">
+            <FolderPlus className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900">Créer un dossier</p>
+            <p className="text-xs text-gray-400">Organiser en sous-dossiers</p>
+          </div>
+        </button>
+
+        {/* Cours */}
+        {canAddContent && (
+          <button
+            onClick={onCreateCours}
+            className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+          >
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition group-hover:bg-indigo-100">
+              <BookOpen className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Créer un cours</p>
+              <p className="text-xs text-gray-400">PDF + séries d'exercices</p>
+            </div>
+          </button>
+        )}
+
+        {/* Contenu */}
+        {canAddContent ? (
+          <div>
+            <p className="mb-2 text-xs font-medium text-gray-500">Ajouter une ressource</p>
+            <div className="grid grid-cols-4 gap-2">
+              {CONTENT_TYPES.map(({ type, label, icon, color, bg }) => (
+                <button
+                  key={type}
+                  onClick={() => onCreateRessource(type)}
+                  className={`flex flex-col items-center gap-2 rounded-xl border border-gray-200 p-3 text-center transition ${bg}`}
+                >
+                  <span className={color}>{icon}</span>
+                  <span className="text-xs font-medium text-gray-700">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700">
+            Sélectionnez un dossier dans l'arborescence pour y ajouter du contenu.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// SORTABLE TREE NODE (récursif avec DnD)
+// =============================================
+
+function SortableTreeNode({
+  node, selectedId, expandedIds, depth = 0, sensors,
+  onSelect, onToggle, onAdd, onEdit, onDelete, onDragEndChildren,
+}: {
+  node: DossierNode;
+  selectedId: string | null;
+  expandedIds: Set<string>;
+  depth?: number;
+  sensors: ReturnType<typeof useSensors>;
+  onSelect: (d: Dossier) => void;
+  onToggle: (id: string) => void;
+  onAdd: (parentId: string) => void;
+  onEdit: (d: Dossier) => void;
+  onDelete: (d: Dossier) => void;
+  onDragEndChildren: (event: DragEndEvent, parentId: string | null) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+
+  const expanded = expandedIds.has(node.id);
+  const selected = selectedId === node.id;
+  const hasChildren = node.children.length > 0;
+
+  return (
+    <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "12px" : 0 }}>
+      <div className={`group mb-0.5 flex items-center gap-1 rounded-lg px-1 py-1.5 transition ${selected ? "bg-navy/10 ring-1 ring-navy/5" : "hover:bg-white/80"}`}>
+        {/* Grip DnD */}
+        <span
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 cursor-grab touch-none p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </span>
+
+        <button
+          onClick={() => { onToggle(node.id); onSelect(node); }}
+          className="flex flex-1 items-center gap-1.5 text-left min-w-0"
+        >
+          <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+            {hasChildren
+              ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+              : <span className="w-3.5" />}
+          </span>
+          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded overflow-hidden" style={{ backgroundColor: node.color + "20" }}>
+            {node.icon_url
+              ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
+              : <Folder className="h-3 w-3" style={{ color: node.color }} />}
+          </span>
+          <span className={`flex-1 truncate text-xs ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
+            {node.name}
+          </span>
+          {!node.visible && <EyeOff className="h-3 w-3 flex-shrink-0 text-gray-300" />}
+        </button>
+
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0">
+          <button onClick={(e) => { e.stopPropagation(); onAdd(node.id); }} className="rounded p-1 text-gray-400 hover:bg-navy/10 hover:text-navy" title="Ajouter">
+            <Plus className="h-3 w-3" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500" title="Modifier">
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500" title="Supprimer">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* Enfants récursifs avec DnD */}
+      {expanded && hasChildren && (
+        <div className="border-l border-gray-100 ml-3">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
+            <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+              {node.children.map((child) => (
+                <SortableTreeNode
+                  key={child.id}
+                  node={child}
+                  selectedId={selectedId}
+                  expandedIds={expandedIds}
+                  depth={depth + 1}
+                  sensors={sensors}
+                  onSelect={onSelect}
+                  onToggle={onToggle}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onDragEndChildren={onDragEndChildren}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// SORTABLE SUB-DOSSIER CARD (grille drag & drop)
+// =============================================
+
+function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossier: Dossier; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dossier.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 10 : undefined };
+
+  return (
+    <div ref={setNodeRef} style={style} className="group relative flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:border-gray-200 hover:shadow">
+      {/* Grip */}
+      <span {...attributes} {...listeners} className="absolute left-1.5 top-1.5 cursor-grab touch-none text-gray-200 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <GripVertical className="h-4 w-4" />
+      </span>
+
+      <button onClick={onClick} className="flex flex-col items-center gap-2 w-full">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden" style={{ backgroundColor: dossier.color + "20" }}>
+          {dossier.icon_url
+            ? <img src={dossier.icon_url} alt="" className="h-7 w-7 object-contain" />
+            : <Folder className="h-6 w-6" style={{ color: dossier.color }} />}
+        </div>
+        <p className="text-center text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">{dossier.name}</p>
+      </button>
+
+      <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+        <button onClick={onEdit} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500"><Pencil className="h-3 w-3" /></button>
+        <button onClick={onDelete} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// SORTABLE RESSOURCE ROW
+// =============================================
+
+const TYPE_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pdf:   { label: "PDF",   color: "text-red-600 bg-red-50",     icon: <FileText className="h-4 w-4" /> },
+  video: { label: "Vidéo", color: "text-blue-600 bg-blue-50",   icon: <Video className="h-4 w-4" /> },
+  vimeo: { label: "Vimeo", color: "text-cyan-600 bg-cyan-50",   icon: <FileVideo className="h-4 w-4" /> },
+  lien:  { label: "Lien",  color: "text-green-600 bg-green-50", icon: <LinkIcon className="h-4 w-4" /> },
+};
+
+function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ressource; onEdit: () => void; onDelete: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ressource.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const meta = TYPE_META[ressource.type] ?? TYPE_META.lien;
+
+  return (
+    <div ref={setNodeRef} style={style} className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-gray-200 hover:shadow">
+      {/* Grip */}
+      <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <GripVertical className="h-4 w-4" />
+      </span>
+      <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${meta.color}`}>{meta.icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-gray-800">{ressource.titre}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${meta.color}`}>{meta.label}</span>
+          {ressource.sous_titre && <span className="text-xs text-gray-400 truncate">{ressource.sous_titre}</span>}
+          {!ressource.visible && <span className="text-xs text-gray-400">Masqué</span>}
+        </div>
+      </div>
+      <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+        <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
+        <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// SORTABLE COURS CARD (grille drag & drop)
+// =============================================
+
+function DiplomaLogoMini() {
+  return (
+    <img
+      src="/logo-diploma-sante-white.svg"
+      alt="Diploma Santé"
+      style={{ width: 78, height: "auto" }}
+    />
+  );
+}
+
+function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: { cours: Cours; matiereLabel?: string; onSelect?: () => void; onEdit: () => void; onDelete: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cours.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 10 : undefined };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        ...style,
+        background: "linear-gradient(160deg, #091525 0%, #162d4a 55%, #091525 100%)",
+        border: "1px solid rgba(212,171,80,0.22)",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,171,80,0.08)",
+      }}
+      className="group relative rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_32px_rgba(212,171,80,0.18)] hover:border-[rgba(212,171,80,0.45)]"
+    >
+      {/* Grip */}
+      <span {...attributes} {...listeners} className="absolute left-2 top-2 z-20 cursor-grab touch-none text-white/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <GripVertical className="h-3 w-3" />
+      </span>
+
+      <div onClick={onSelect} className="block cursor-pointer">
+        <div className="relative overflow-hidden" style={{ minHeight: 130 }}>
+          {/* Shimmer haut */}
+          <div className="absolute top-0 inset-x-0 h-px pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, rgba(212,171,80,0.45), transparent)" }} />
+          {/* Glow doré */}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 70% at 50% 30%, rgba(212,171,80,0.07) 0%, transparent 65%)" }} />
+
+          {/* ── Ligne 1 : badge "Fiche de cours" + matière ── */}
+          <div className="relative z-10 flex items-center justify-between px-2.5 pt-2.5 pb-1">
+            <span
+              className="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap"
+              style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}
+            >
+              Fiche de cours
+            </span>
+            <div className="flex items-center gap-1 min-w-0">
+              {!cours.visible && (
+                <span className="rounded-full px-1.5 py-0.5 text-[8px] font-medium text-amber-400/60 whitespace-nowrap" style={{ background: "rgba(251,191,36,0.08)" }}>Masqué</span>
+              )}
+              {matiereLabel && (
+                <span className="truncate text-[9px] font-bold whitespace-nowrap tracking-wide" style={{ color: "rgba(212,171,80,0.75)" }}>
+                  {matiereLabel}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* ── Zone centrale : logo filigrane ── */}
+          <div className="relative flex items-center justify-center" style={{ height: 48 }}>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.13 }}>
+              <DiplomaLogoMini />
+            </div>
+            {/* Points déco */}
+            <div className="absolute bottom-1 left-3 flex gap-1 pointer-events-none" style={{ opacity: 0.18 }}>
+              {[0,1,2].map(i => <div key={i} className="h-0.5 w-0.5 rounded-full bg-white" />)}
+            </div>
+            <div className="absolute bottom-1 right-3 flex gap-1 pointer-events-none" style={{ opacity: 0.18 }}>
+              {[0,1,2].map(i => <div key={i} className="h-0.5 w-0.5 rounded-full bg-white" />)}
+            </div>
+          </div>
+
+          {/* Séparateur doré */}
+          <div className="mx-2.5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(212,171,80,0.35), transparent)" }} />
+
+          {/* ── Ligne 3 : titre ── */}
+          <div className="px-2.5 pt-2 pb-2.5">
+            <div
+              className="w-full rounded-xl px-2.5 py-2 text-center"
+              style={{
+                background: "linear-gradient(135deg, rgba(212,171,80,0.13) 0%, rgba(212,171,80,0.05) 100%)",
+                border: "1px solid rgba(212,171,80,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+              }}
+            >
+              <p className="text-[12px] font-extrabold text-white leading-snug line-clamp-2 tracking-wide">
+                {cours.name}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Actions hover */}
+      <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-20">
+        <button onClick={onEdit} className="rounded-lg p-1 text-white/50 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// EMPTY STATE
+// =============================================
+
+function EmptyDossier({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
+      <Plus className="mb-3 h-10 w-10 text-gray-200" />
+      <p className="text-sm font-medium text-gray-400">Dossier vide</p>
+      <p className="mt-1 text-xs text-gray-300">Ajoutez des sous-dossiers ou du contenu</p>
+      <button
+        onClick={onAdd}
+        className="mt-4 flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy-light transition-colors"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Ajouter
+      </button>
+    </div>
+  );
+}
+
+// =============================================
+// DOSSIER FORM
+// =============================================
+
+function DossierForm({ title, initialData, onSubmit, onClose, isPending }: {
+  title: string;
+  initialData?: Partial<Dossier>;
+  onSubmit: (data: any) => void;
+  onClose: () => void;
+  isPending: boolean;
+}) {
+  const [name, setName] = useState(initialData?.name ?? "");
+  const [description, setDescription] = useState(initialData?.description ?? "");
+  const [color, setColor] = useState(initialData?.color ?? "#0e1e35");
+  const [iconUrl, setIconUrl] = useState(initialData?.icon_url ?? "");
+  const [visible, setVisible] = useState(initialData?.visible ?? true);
+
+  return (
+    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, color, icon_url: iconUrl, visible })} isPending={isPending}>
+      <FormField label="Nom *">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: PASS, Droit, Informatique..." required className={inputCls} />
+      </FormField>
+      <FormField label="Description">
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte..." className={inputCls} />
+      </FormField>
+      <IconPicker value={iconUrl} onChange={setIconUrl} />
+      <ColorPicker value={color} onChange={setColor} />
+      <VisibleToggle value={visible} onChange={setVisible} />
+    </FormShell>
+  );
+}
+
+// =============================================
+// RESSOURCE FORM
+// =============================================
+
+function RessourceForm({ title, dossierId, defaultType = "pdf", initialData, onSubmit, onClose, isPending }: {
+  title: string;
+  dossierId: string;
+  defaultType?: string;
+  initialData?: Partial<Ressource>;
+  onSubmit: (data: any) => void;
+  onClose: () => void;
+  isPending: boolean;
+}) {
+  const [titre, setTitre] = useState(initialData?.titre ?? "");
+  const [sousTitre, setSousTitre] = useState(initialData?.sous_titre ?? "");
+  const [type, setType] = useState(initialData?.type ?? defaultType);
+  const [pdfUrl, setPdfUrl] = useState(initialData?.pdf_url ?? "");
+  const [pdfPath, setPdfPath] = useState(initialData?.pdf_path ?? "");
+  const [videoUrl, setVideoUrl] = useState(initialData?.video_url ?? "");
+  const [vimeoId, setVimeoId] = useState(initialData?.vimeo_id ?? "");
+  const [lienUrl, setLienUrl] = useState(initialData?.lien_url ?? "");
+  const [lienLabel, setLienLabel] = useState(initialData?.lien_label ?? "");
+  const [visible, setVisible] = useState(initialData?.visible ?? true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") { setUploadProgress("Format PDF requis"); return; }
+    setUploading(true);
+    setUploadProgress("Upload en cours...");
+    const result = await uploadPdf(file, `ressources/${dossierId}`);
+    if ("error" in result) { setUploadProgress(`Erreur: ${result.error}`); setUploading(false); return; }
+    setPdfUrl(result.url);
+    setPdfPath(result.path);
+    setUploadProgress(file.name);
+    setUploading(false);
+  };
+
+  return (
+    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ titre, sous_titre: sousTitre, type, pdf_url: pdfUrl, pdf_path: pdfPath, video_url: videoUrl, vimeo_id: vimeoId, lien_url: lienUrl, lien_label: lienLabel, visible })} isPending={isPending}>
+      <FormField label="Titre *">
+        <input value={titre} onChange={(e) => setTitre(e.target.value)} placeholder="Ex: Cours introduction" required className={inputCls} />
+      </FormField>
+      <FormField label="Sous-titre">
+        <input value={sousTitre} onChange={(e) => setSousTitre(e.target.value)} placeholder="Ex: Partie 1" className={inputCls} />
+      </FormField>
+
+      {/* Type selector */}
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-gray-700">Type</label>
+        <div className="grid grid-cols-4 gap-2">
+          {(["pdf", "video", "vimeo", "lien"] as const).map((t) => {
+            const m = TYPE_META[t];
+            return (
+              <button key={t} type="button" onClick={() => setType(t)}
+                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-medium transition ${type === t ? "border-navy bg-navy/5 text-navy" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}>
+                <span className={type === t ? "text-navy" : m.color.split(" ")[0]}>{m.icon}</span>
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {type === "pdf" && (
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-700">Fichier PDF</label>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-gray-200 p-3 transition hover:border-navy/30 hover:bg-gray-50">
+            <Upload className="h-4 w-4 text-gray-400" />
+            <span className="flex-1 text-sm text-gray-600">{uploadProgress || (pdfUrl ? "PDF chargé" : "Cliquer pour uploader")}</span>
+            <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={uploading} />
+          </label>
+          {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-blue-600 underline">Voir le PDF</a>}
+          <div className="mt-2">
+            <label className="mb-1 block text-xs text-gray-500">Ou URL directe</label>
+            <input value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+          </div>
+        </div>
+      )}
+      {type === "video" && (
+        <FormField label="URL de la vidéo">
+          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+        </FormField>
+      )}
+      {type === "vimeo" && (
+        <FormField label="ID ou URL Vimeo">
+          <input value={vimeoId} onChange={(e) => setVimeoId(e.target.value)} placeholder="Ex: 123456789" className={inputCls} />
+        </FormField>
+      )}
+      {type === "lien" && (
+        <>
+          <FormField label="URL">
+            <input value={lienUrl} onChange={(e) => setLienUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+          </FormField>
+          <FormField label="Label">
+            <input value={lienLabel} onChange={(e) => setLienLabel(e.target.value)} placeholder="Ex: Voir la ressource" className={inputCls} />
+          </FormField>
+        </>
+      )}
+      <VisibleToggle value={visible} onChange={setVisible} />
+    </FormShell>
+  );
+}
+
+// =============================================
+// COURS FORM
+// =============================================
+
+function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending }: {
+  title: string;
+  dossierId: string;
+  initialData?: Partial<Cours>;
+  onSubmit: (data: any) => void;
+  onClose: () => void;
+  isPending: boolean;
+}) {
+  const [name, setName] = useState(initialData?.name ?? "");
+  const [description, setDescription] = useState(initialData?.description ?? "");
+  const [pdfUrl, setPdfUrl] = useState(initialData?.pdf_url ?? "");
+  const [pdfPath, setPdfPath] = useState(initialData?.pdf_path ?? "");
+  const [nbPages, setNbPages] = useState(initialData?.nb_pages ?? 0);
+  const [visible, setVisible] = useState(initialData?.visible ?? true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") { setUploadProgress("Format PDF requis"); return; }
+    setUploading(true);
+    setUploadProgress("Upload en cours...");
+    const result = await uploadPdf(file, `cours/${dossierId}`);
+    if ("error" in result) { setUploadProgress(`Erreur: ${result.error}`); setUploading(false); return; }
+    setPdfUrl(result.url);
+    setPdfPath(result.path);
+    setUploadProgress(file.name);
+    setUploading(false);
+  };
+
+  return (
+    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible })} isPending={isPending}>
+      <FormField label="Nom du cours *">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Biochimie Structurale" required className={inputCls} />
+      </FormField>
+      <FormField label="Description">
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte du cours..." className={inputCls} />
+      </FormField>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-gray-700">Fiche PDF <span className="text-gray-400 font-normal">(optionnel)</span></label>
+        <label className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed p-3 transition ${uploading ? "border-indigo-200 bg-indigo-50/40 cursor-wait" : "border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30"}`}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin text-indigo-500" /> : <Upload className="h-4 w-4 text-gray-400" />}
+          <span className="flex-1 text-sm text-gray-600">{uploadProgress || (pdfUrl ? "PDF chargé" : "Uploader la fiche de cours")}</span>
+          <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={uploading} />
+        </label>
+        {pdfUrl && !uploading && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-blue-600 underline">Voir le PDF</a>}
+        <div className="mt-2">
+          <label className="mb-1 block text-xs text-gray-500">Ou URL directe</label>
+          <input value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+        </div>
+      </div>
+      <FormField label="Nombre de pages">
+        <input type="number" min={0} value={nbPages} onChange={(e) => setNbPages(Number(e.target.value))} className={inputCls} />
+      </FormField>
+      <VisibleToggle value={visible} onChange={setVisible} />
+    </FormShell>
+  );
+}
+
+// =============================================
+// ICON PICKER
+// =============================================
+
+function IconPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [icons, setIcons] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const search = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    try {
+      const res = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(query.trim())}&limit=32`);
+      const data = await res.json();
+      setIcons(data.icons ?? []);
+    } catch { setIcons([]); }
+    finally { setLoading(false); }
+  };
+
+  const getUrl = (id: string) => {
+    const [prefix, name] = id.split(":");
+    return `https://api.iconify.design/${prefix}/${name}.svg`;
+  };
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-gray-700">Icône</label>
+      {value && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+          <img src={value} alt="" className="h-5 w-5 object-contain" />
+          <span className="flex-1 text-xs text-gray-500">Icône sélectionnée</span>
+          <button type="button" onClick={() => onChange("")} className="text-xs text-red-500 hover:text-red-700">Retirer</button>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="Ex: biology, law, book..." className={inputCls} />
+        <button type="button" onClick={search} disabled={loading} className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-50 whitespace-nowrap">
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+          Chercher
+        </button>
+      </div>
+      {searched && !loading && icons.length === 0 && <p className="mt-1.5 text-xs text-gray-400">Aucun résultat.</p>}
+      {icons.length > 0 && (
+        <div className="mt-2 grid grid-cols-8 gap-1 max-h-32 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+          {icons.map((id) => {
+            const url = getUrl(id);
+            return (
+              <button key={id} type="button" onClick={() => onChange(url)} title={id.split(":")[1]}
+                className={`flex items-center justify-center rounded-lg p-1.5 transition hover:bg-white hover:shadow-sm ${value === url ? "bg-white ring-2 ring-[#0e1e35] shadow-sm" : ""}`}>
+                <img src={url} alt={id} className="h-5 w-5 object-contain" loading="lazy" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// UI PRIMITIVES
+// =============================================
+
+function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-lg">{children}</div>
+    </div>
+  );
+}
+
+function FormShell({ title, children, onClose, onSubmit, isPending }: {
+  title: string; children: React.ReactNode; onClose: () => void; onSubmit: () => void; isPending: boolean;
+}) {
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 sticky top-0 bg-white z-10">
+        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
+          <X className="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+      <div className="space-y-4 p-5">
+        {children}
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+          <button onClick={onSubmit} disabled={isPending} className="flex items-center gap-2 rounded-lg bg-[#0e1e35] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60">
+            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Sauvegarder
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-gray-700">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-gray-700">Couleur</label>
+      <div className="flex flex-wrap gap-2">
+        {COLORS.map((c) => (
+          <button key={c} type="button" onClick={() => onChange(c)}
+            className="h-6 w-6 rounded-full transition hover:scale-110"
+            style={{ backgroundColor: c, outline: value === c ? `2px solid ${c}` : "none", outlineOffset: "2px" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VisibleToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        {value ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
+        <span className="text-xs font-medium text-gray-700">Visible aux étudiants</span>
+      </div>
+      <button type="button" onClick={() => onChange(!value)} className={`relative h-5 w-9 rounded-full transition-colors ${value ? "bg-green-500" : "bg-gray-300"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4" : "translate-x-0.5"}`} />
+      </button>
+    </div>
+  );
+}
+
+const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#0e1e35] focus:outline-none focus:ring-1 focus:ring-[#0e1e35]/20";
