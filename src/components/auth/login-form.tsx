@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -11,7 +11,38 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  // Impersonation: si on arrive avec ?impersonate=1, utiliser les tokens stockés
+  useEffect(() => {
+    if (searchParams.get("impersonate") !== "1") return;
+    const raw = localStorage.getItem("sb-impersonate");
+    if (!raw) return;
+    localStorage.removeItem("sb-impersonate");
+    (async () => {
+      try {
+        const { access_token, refresh_token } = JSON.parse(raw);
+        const { data, error: sessErr } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+        if (sessErr || !data.user) {
+          setError("Impersonation échouée: " + (sessErr?.message || "session invalide"));
+          return;
+        }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+        const dest = profile?.role === "admin" || profile?.role === "superadmin"
+          ? "/admin/dashboard" : "/dashboard";
+        router.push(dest);
+        router.refresh();
+      } catch { setError("Erreur impersonation"); }
+    })();
+  }, [searchParams, supabase, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +68,8 @@ export function LoginForm() {
       .single();
 
     const destination =
-      profile?.role === "admin" ? "/admin/dashboard" : "/dashboard";
+      profile?.role === "admin" || profile?.role === "superadmin"
+        ? "/admin/dashboard" : "/dashboard";
     router.push(destination);
     router.refresh();
   };

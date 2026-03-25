@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
 
 export default function LoginPage() {
@@ -6,7 +7,9 @@ export default function LoginPage() {
       <h2 className="mb-6 text-center text-xl font-bold text-gray-900">
         Connexion
       </h2>
-      <LoginForm />
+      <Suspense>
+        <LoginForm />
+      </Suspense>
     </div>
   );
 }

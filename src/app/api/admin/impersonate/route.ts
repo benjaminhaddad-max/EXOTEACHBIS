@@ -37,32 +37,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
     }
 
-    // 3. Générer un magic link via service role (bypasses all auth)
+    // 3. Générer une session via service role
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
+    // Utiliser generateLink pour obtenir les tokens directement
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
       type: "magiclink",
       email: target.email,
     });
 
     if (linkErr || !linkData) {
-      return NextResponse.json({ error: linkErr?.message || "Échec génération lien" }, { status: 500 });
+      return NextResponse.json({ error: linkErr?.message || "Échec" }, { status: 500 });
     }
 
-    // Le hashed_token est dans les properties du lien
-    const token = linkData.properties?.hashed_token;
-    if (!token) {
-      return NextResponse.json({ error: "Token non généré" }, { status: 500 });
+    // Vérifier le token côté serveur pour obtenir une vraie session
+    const { data: session, error: verifyErr } = await admin.auth.verifyOtp({
+      token_hash: linkData.properties.hashed_token,
+      type: "magiclink",
+    });
+
+    if (verifyErr || !session.session) {
+      return NextResponse.json({ error: verifyErr?.message || "Vérification échouée" }, { status: 500 });
     }
 
-    // 4. Construire l'URL de vérification OTP
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.headers.get("origin") || "https://exoteachbis.vercel.app";
-    const redirectUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/verify?token=${token}&type=magiclink&redirect_to=${encodeURIComponent(siteUrl + "/dashboard")}`;
-
-    return NextResponse.json({ url: redirectUrl });
+    // 4. Retourner access_token + refresh_token — le client va les utiliser pour se connecter
+    return NextResponse.json({
+      access_token: session.session.access_token,
+      refresh_token: session.session.refresh_token,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

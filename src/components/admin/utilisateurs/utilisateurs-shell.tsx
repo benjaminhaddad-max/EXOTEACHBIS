@@ -561,8 +561,19 @@ function ComptesView({
                               body: JSON.stringify({ userId: u.id }),
                             });
                             const data = await res.json();
-                            if (data.url) window.open(data.url, "_blank");
-                            else alert(data.error || "Erreur");
+                            if (data.access_token) {
+                              // Ouvrir un nouvel onglet qui set la session
+                              const w = window.open("about:blank", "_blank");
+                              if (w) {
+                                w.document.write(`<html><body><script>
+                                  localStorage.setItem('sb-impersonate', JSON.stringify({
+                                    access_token: "${data.access_token}",
+                                    refresh_token: "${data.refresh_token}"
+                                  }));
+                                  window.location.href = "${window.location.origin}/login?impersonate=1";
+                                </` + `script></body></html>`);
+                              }
+                            } else alert(data.error || "Erreur");
                           } catch { alert("Erreur réseau"); }
                         }}
                         title="Se connecter en tant que cet utilisateur"
