@@ -332,17 +332,15 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     setSending(false);
   };
 
-  // Edit a student message — put content back in input
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const handleEditMessage = (msg: QaMessage) => {
-    setEditingId(msg.id);
-    // The ChatInputBar doesn't have a "set value" prop, so we'll delete the old message
-    // and let the student retype. A simpler UX: delete + prefill would need a ref.
-    // For now: delete the message from DB and state
-    supabase.from("qa_messages").delete().eq("id", msg.id).then(() => {
-      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-      setEditingId(null);
-    });
+  // Edit a student message — delete old and prefill input
+  const [editText, setEditText] = useState("");
+  const handleEditMessage = async (msg: QaMessage) => {
+    const text = msg.content || "";
+    // Delete the message from DB and state
+    await supabase.from("qa_messages").delete().eq("id", msg.id);
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    // Prefill the input bar
+    setEditText(text);
   };
 
   const handleDeleteMessage = async (messageId: string) => {
@@ -486,10 +484,11 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       {/* Input bar — always visible, pinned at bottom */}
       <div className="shrink-0">
       <ChatInputBar
-        onSendText={handleSendText}
+        onSendText={(t) => { setEditText(""); handleSendText(t); }}
         onSendVoice={handleSendVoice}
         onSendMedia={handleSendMedia}
         disabled={sending}
+        prefillText={editText}
         placeholder={
           threadStatus === "resolved"
             ? "Rouvrir la conversation..."

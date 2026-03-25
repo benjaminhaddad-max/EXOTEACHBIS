@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Mic, MicOff, Paperclip, Image, Video, FileText, X } from "lucide-react";
 
 interface ChatInputBarProps {
@@ -9,6 +9,8 @@ interface ChatInputBarProps {
   onSendMedia: (file: File, type: "image" | "video" | "document") => void;
   disabled?: boolean;
   placeholder?: string;
+  /** Pre-fill the input (e.g. when editing a message) */
+  prefillText?: string;
 }
 
 export function ChatInputBar({
@@ -17,11 +19,21 @@ export function ChatInputBar({
   onSendMedia,
   disabled,
   placeholder = "Votre message...",
+  prefillText,
 }: ChatInputBarProps) {
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const [showAttach, setShowAttach] = useState(false);
+
+  // Handle prefill from parent (e.g. editing a message)
+  useEffect(() => {
+    if (prefillText) {
+      setText(prefillText);
+      // Focus the textarea
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [prefillText]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
