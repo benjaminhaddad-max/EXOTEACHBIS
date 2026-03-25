@@ -31,7 +31,9 @@ import {
   getAllowedChildTypes,
   getContentCreationLabel,
   getDefaultChildType,
+  getDossierPathLabel,
   getOfferLabel,
+  inferOfferFromAncestors,
 } from "@/lib/pedagogie-structure";
 import {
   getAllDossiers,
@@ -551,6 +553,7 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
           {modal.type === "create_dossier" && (
             <DossierForm
               title={modal.parentId ? "Nouveau sous-dossier" : "Nouveau dossier"}
+              allDossiers={allDossiers}
               parentDossier={modal.parentId ? allDossiers.find((d) => d.id === modal.parentId) ?? null : null}
               onSubmit={(data) => handleAction(() => createDossier({ ...data, parent_id: modal.parentId }))}
               onClose={() => setModal(null)}
@@ -561,6 +564,7 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
           {modal.type === "edit_dossier" && (
             <DossierForm
               title="Modifier le dossier"
+              allDossiers={allDossiers}
               parentDossier={modal.dossier.parent_id ? allDossiers.find((d) => d.id === modal.dossier.parent_id) ?? null : null}
               initialData={modal.dossier}
               onSubmit={(data) => handleAction(() => updateDossier(modal.dossier.id, data))}
@@ -1070,21 +1074,25 @@ function EmptyDossier({ onAdd }: { onAdd: () => void }) {
 // DOSSIER FORM
 // =============================================
 
-function DossierForm({ title, parentDossier, initialData, onSubmit, onClose, isPending }: {
+function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit, onClose, isPending }: {
   title: string;
+  allDossiers: Dossier[];
   parentDossier?: Dossier | null;
   initialData?: Partial<Dossier>;
   onSubmit: (data: any) => void;
   onClose: () => void;
   isPending: boolean;
 }) {
-  const allowedChildTypes = getAllowedChildTypes(parentDossier ?? null);
+  const initialParentId = initialData?.parent_id ?? parentDossier?.id ?? null;
+  const [parentId, setParentId] = useState<string | null>(initialParentId);
+  const selectedParent = parentId ? allDossiers.find((d) => d.id === parentId) ?? null : null;
+  const allowedChildTypes = getAllowedChildTypes(selectedParent);
   const initialType =
     initialData?.dossier_type ??
-    (parentDossier ? getDefaultChildType(parentDossier) : initialData ? "generic" : "offer");
+    (selectedParent ? getDefaultChildType(selectedParent) : initialData ? "generic" : "offer");
   const inheritedOffer =
     initialData?.formation_offer ??
-    parentDossier?.formation_offer ??
+    (selectedParent ? inferOfferFromAncestors(selectedParent, allDossiers) : null) ??
     null;
 
   const [name, setName] = useState(initialData?.name ?? "");
@@ -1096,7 +1104,7 @@ function DossierForm({ title, parentDossier, initialData, onSubmit, onClose, isP
   const [visible, setVisible] = useState(initialData?.visible ?? true);
 
   useEffect(() => {
-    if (!parentDossier && dossierType === "offer" && formationOffer) {
+    if (!selectedParent && dossierType === "offer" && formationOffer) {
       const offer = FORMATION_OFFERS.find((item) => item.code === formationOffer);
       if (offer && (!initialData?.name || initialData.name === name)) {
         setName(offer.label);
@@ -1106,7 +1114,55 @@ function DossierForm({ title, parentDossier, initialData, onSubmit, onClose, isP
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formationOffer, dossierType, parentDossier]);
+  }, [formationOffer, dossierType, selectedParent]);
+
+  useEffect(() => {
+    if (selectedParent) {
+      const allowed = getAllowedChildTypes(selectedParent);
+      if (allowed.length > 0 && !allowed.includes(dossierType)) {
+        setDossierType(allowed[0]);
+      }
+      const nextOffer = inferOfferFromAncestors(selectedParent, allDossiers);
+      if (nextOffer) {
+        setFormationOffer(nextOffer);
+      }
+    } else if (dossierType !== "offer") {
+      setFormationOffer(initialData?.formation_offer ?? null);
+    }
+  }, [selectedParent, dossierType, allDossiers, initialData?.formation_offer]);
+
+  const descendants = useMemo(() => {
+    if (!initialData?.id) return new Set<string>();
+    const ids = new Set<string>();
+    const stack = [initialData.id];
+    while (stack.length > 0) {
+      const currentId = stack.pop()!;
+      for (const dossier of allDossiers) {
+        if (dossier.parent_id === currentId && !ids.has(dossier.id)) {
+          ids.add(dossier.id);
+          stack.push(dossier.id);
+        }
+      }
+    }
+    return ids;
+  }, [allDossiers, initialData?.id]);
+
+  const parentOptions = useMemo(
+    () =>
+      allDossiers
+        .filter((dossier) =>
+          dossier.id !== initialData?.id &&
+          !descendants.has(dossier.id) &&
+          getAllowedChildTypes(dossier).length > 0
+        )
+        .sort((a, b) =>
+          getDossierPathLabel(a.id, allDossiers).localeCompare(
+            getDossierPathLabel(b.id, allDossiers),
+            "fr"
+          )
+        ),
+    [allDossiers, descendants, initialData?.id]
+  );
 
   return (
     <FormShell
@@ -1115,6 +1171,7 @@ function DossierForm({ title, parentDossier, initialData, onSubmit, onClose, isP
       onSubmit={() => onSubmit({
         name,
         description,
+        parent_id: parentId,
         dossier_type: dossierType,
         formation_offer: formationOffer,
         color,
@@ -1124,12 +1181,29 @@ function DossierForm({ title, parentDossier, initialData, onSubmit, onClose, isP
       isPending={isPending}
     >
       <div className="rounded-xl bg-navy/5 px-3 py-2 text-xs text-navy/70">
-        {parentDossier
-          ? `Niveau parent: ${DOSSIER_TYPE_META[parentDossier.dossier_type]?.label ?? "Dossier"}`
+        {selectedParent
+          ? `Niveau parent: ${DOSSIER_TYPE_META[selectedParent.dossier_type]?.label ?? "Dossier"}`
           : "Racine métier de la plateforme"}
       </div>
 
-      {!parentDossier ? (
+      {!!initialData && (
+        <FormField label="Parent">
+          <select
+            value={parentId ?? ""}
+            onChange={(e) => setParentId(e.target.value || null)}
+            className={inputCls}
+          >
+            <option value="">Racine</option>
+            {parentOptions.map((dossier) => (
+              <option key={dossier.id} value={dossier.id}>
+                {getDossierPathLabel(dossier.id, allDossiers)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      )}
+
+      {!selectedParent ? (
         <>
           <FormField label="Type de noeud">
             <select

@@ -53,6 +53,7 @@ export async function updateDossier(
   data: {
     name: string;
     description?: string;
+    parent_id?: string | null;
     dossier_type?: DossierType;
     formation_offer?: FormationOffer | null;
     color: string;
@@ -62,17 +63,89 @@ export async function updateDossier(
   }
 ) {
   const supabase = await createClient();
+
+  const { data: currentDossier, error: currentError } = await supabase
+    .from("dossiers")
+    .select("id, parent_id")
+    .eq("id", id)
+    .single();
+
+  if (currentError || !currentDossier) {
+    return { error: currentError?.message ?? "Dossier introuvable" };
+  }
+
+  const nextParentId = data.parent_id === undefined
+    ? currentDossier.parent_id
+    : data.parent_id || null;
+
+  if (nextParentId === id) {
+    return { error: "Un dossier ne peut pas devenir son propre parent" };
+  }
+
+  if (nextParentId) {
+    const { data: allDossiers, error: allError } = await supabase
+      .from("dossiers")
+      .select("id, parent_id");
+
+    if (allError) {
+      return { error: allError.message };
+    }
+
+    const descendantIds = new Set<string>();
+    const stack = [id];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop()!;
+      for (const dossier of allDossiers ?? []) {
+        if (dossier.parent_id === currentId && !descendantIds.has(dossier.id)) {
+          descendantIds.add(dossier.id);
+          stack.push(dossier.id);
+        }
+      }
+    }
+
+    if (descendantIds.has(nextParentId)) {
+      return { error: "Impossible de déplacer un dossier dans l'un de ses sous-dossiers" };
+    }
+  }
+
+  let nextOrderIndex = data.order_index ?? 0;
+
+  if (data.parent_id !== undefined && nextParentId !== currentDossier.parent_id) {
+    let siblingQuery = supabase
+      .from("dossiers")
+      .select("order_index")
+      .neq("id", id)
+      .order("order_index", { ascending: false })
+      .limit(1);
+
+    siblingQuery = nextParentId
+      ? siblingQuery.eq("parent_id", nextParentId)
+      : siblingQuery.is("parent_id", null);
+
+    const { data: siblingRows, error: siblingError } = await siblingQuery;
+
+    if (siblingError) {
+      return { error: siblingError.message };
+    }
+
+    nextOrderIndex = siblingRows?.[0]?.order_index != null
+      ? siblingRows[0].order_index + 1
+      : 0;
+  }
+
   const { error } = await supabase
     .from("dossiers")
     .update({
       name: data.name,
       description: data.description || null,
+      parent_id: nextParentId,
       dossier_type: data.dossier_type ?? "generic",
       formation_offer: data.formation_offer ?? null,
       color: data.color,
       icon_url: data.icon_url || null,
       visible: data.visible,
-      order_index: data.order_index ?? 0,
+      order_index: nextOrderIndex,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
