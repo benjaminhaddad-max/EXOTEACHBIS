@@ -50,9 +50,8 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    const role = (profile?.role ?? "eleve") as UserRole;
+    const role = (profile?.role ?? user.user_metadata?.role ?? "eleve") as UserRole;
     const isAdmin = role === "admin" || role === "superadmin";
-    const isProf = role === "prof";
 
     // Connecté sur page auth → rediriger
     if (isAuthRoute) {

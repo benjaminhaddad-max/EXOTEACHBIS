@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import type { UserRole } from "@/types/database";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -17,7 +18,9 @@ export default async function Home() {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role === "admin" || profile?.role === "superadmin") {
+  const role = (profile?.role ?? user.user_metadata?.role ?? "eleve") as UserRole;
+
+  if (role === "admin" || role === "superadmin") {
     redirect("/admin/dashboard");
   }
 

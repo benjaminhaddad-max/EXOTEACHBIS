@@ -47,11 +47,22 @@ export async function updateUserAdminProfile(data: {
 
   const admin = createAdminClient();
   const normalizedEmail = data.email?.trim().toLowerCase();
+  const metadataUpdate: Record<string, string> = {};
 
-  if (normalizedEmail) {
+  if (data.first_name !== undefined) {
+    metadataUpdate.first_name = data.first_name.trim();
+  }
+  if (data.last_name !== undefined) {
+    metadataUpdate.last_name = data.last_name.trim();
+  }
+  if (data.role !== undefined) {
+    metadataUpdate.role = data.role;
+  }
+
+  if (normalizedEmail || Object.keys(metadataUpdate).length > 0) {
     const { error: authError } = await admin.auth.admin.updateUserById(data.userId, {
-      email: normalizedEmail,
-      email_confirm: true,
+      ...(normalizedEmail ? { email: normalizedEmail, email_confirm: true } : {}),
+      ...(Object.keys(metadataUpdate).length > 0 ? { user_metadata: metadataUpdate } : {}),
     });
 
     if (authError) {

@@ -5,6 +5,23 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types/database";
 import type { User } from "@supabase/supabase-js";
 
+function buildProfileFallback(user: User): Profile {
+  return {
+    id: user.id,
+    email: user.email ?? "",
+    first_name: typeof user.user_metadata?.first_name === "string" ? user.user_metadata.first_name : null,
+    last_name: typeof user.user_metadata?.last_name === "string" ? user.user_metadata.last_name : null,
+    role: (user.user_metadata?.role ?? "eleve") as Profile["role"],
+    avatar_url: null,
+    groupe_id: null,
+    filiere_id: null,
+    phone: null,
+    access_dossier_id: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export function useUser() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -25,7 +42,7 @@ export function useUser() {
           .select("*")
           .eq("id", user.id)
           .single();
-        setProfile(profile);
+        setProfile(profile ?? buildProfileFallback(user));
       }
 
       setLoading(false);
@@ -43,7 +60,7 @@ export function useUser() {
           .select("*")
           .eq("id", session.user.id)
           .single();
-        setProfile(profile);
+        setProfile(profile ?? buildProfileFallback(session.user));
       } else {
         setUser(null);
         setProfile(null);
