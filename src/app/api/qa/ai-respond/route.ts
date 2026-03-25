@@ -69,13 +69,31 @@ export async function POST(request: Request) {
 
     // 2. Build system prompt
     const systemPrompt =
-      "Tu es un assistant pédagogique expert pour étudiants en PASS/LAS (médecine). " +
-      "Tu réponds de manière claire, précise et pédagogique. " +
-      "Tu utilises des exemples concrets quand c'est possible.";
+      "Tu es un assistant pédagogique de la plateforme Diploma Santé, " +
+      "spécialisé pour les étudiants PASS/LAS (première année de médecine).\n\n" +
+      "RÈGLES STRICTES :\n" +
+      "- Tu ne réponds QU'AUX questions en rapport avec les études de santé, les matières PASS/LAS, " +
+      "ou le contenu pédagogique de la plateforme.\n" +
+      "- Si le message de l'étudiant n'est PAS une question académique (salutations, messages personnels, " +
+      "hors-sujet), réponds brièvement et poliment en le recentrant : " +
+      "\"Bonjour ! Je suis là pour t'aider avec tes cours. Pose-moi une question sur ta matière et je t'expliquerai.\"\n" +
+      "- Sois concis (3-5 phrases max pour les réponses simples). Va droit au but.\n" +
+      "- Utilise des exemples concrets, des moyens mnémotechniques quand c'est pertinent.\n" +
+      "- Formate ta réponse avec des tirets ou numéros si c'est une liste.\n" +
+      "- Ne dis JAMAIS \"je ne suis qu'une IA\" ou des disclaimers — réponds directement.\n" +
+      "- Réponds toujours en français.";
 
-    // 3. Build user message with context
-    let userMessage = "";
+    // 3. Load conversation history for multi-turn context
+    const serviceClient = getServiceClient();
+    const { data: prevMessages } = await serviceClient
+      .from("qa_messages")
+      .select("sender_type, content")
+      .eq("thread_id", thread_id)
+      .order("created_at", { ascending: true })
+      .limit(20);
 
+    // Build context preamble
+    let contextPreamble = "";
     if (context) {
       const parts: string[] = [];
       if (context.matiere_name) parts.push(`Matière : ${context.matiere_name}`);
@@ -88,18 +106,56 @@ export async function POST(request: Request) {
         parts.push(`Contexte : ${context.context_label}`);
 
       if (parts.length > 0) {
-        userMessage += "Contexte de la question :\n" + parts.join("\n") + "\n\n";
+        contextPreamble = "Contexte de la question :\n" + parts.join("\n") + "\n\n";
       }
     }
 
-    userMessage += `Question de l'étudiant :\n${question_text.trim()}`;
+    // Build multi-turn messages array
+    const apiMessages: { role: "user" | "assistant"; content: string }[] = [];
 
-    // 4. Call Claude
+    // Add context as first user message if this is the start
+    if (prevMessages && prevMessages.length > 0) {
+      for (const pm of prevMessages) {
+        if (pm.sender_type === "student" && pm.content) {
+          const content = apiMessages.length === 0 && contextPreamble
+            ? contextPreamble + pm.content
+            : pm.content;
+          apiMessages.push({ role: "user", content });
+        } else if (pm.sender_type === "ai" && pm.content) {
+          apiMessages.push({ role: "assistant", content: pm.content });
+        }
+        // Skip prof messages for AI context
+      }
+    }
+
+    // Add the new question
+    const newContent = apiMessages.length === 0 && contextPreamble
+      ? contextPreamble + question_text.trim()
+      : question_text.trim();
+    apiMessages.push({ role: "user", content: newContent });
+
+    // Ensure messages alternate correctly (required by Claude API)
+    const cleanedMessages: typeof apiMessages = [];
+    for (const msg of apiMessages) {
+      if (cleanedMessages.length === 0 || cleanedMessages[cleanedMessages.length - 1].role !== msg.role) {
+        cleanedMessages.push(msg);
+      } else {
+        // Merge consecutive same-role messages
+        cleanedMessages[cleanedMessages.length - 1].content += "\n" + msg.content;
+      }
+    }
+
+    // Ensure first message is from user
+    if (cleanedMessages.length > 0 && cleanedMessages[0].role !== "user") {
+      cleanedMessages.unshift({ role: "user", content: contextPreamble || "Bonjour" });
+    }
+
+    // 4. Call Claude with full conversation
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 2000,
+      max_tokens: 1500,
       system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      messages: cleanedMessages,
     });
 
     const content = message.content[0];
@@ -113,8 +169,6 @@ export async function POST(request: Request) {
     const aiResponseText = content.text;
 
     // 5. Insert the AI response as a qa_message using service role client
-    const serviceClient = getServiceClient();
-
     const { data: aiMessage, error: insertError } = await serviceClient
       .from("qa_messages")
       .insert({
