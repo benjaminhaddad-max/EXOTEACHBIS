@@ -100,8 +100,20 @@ CREATE POLICY "Profs update threads for their matieres" ON qa_threads
     )
   );
 
-CREATE POLICY "Admins full access qa_threads" ON qa_threads
-  FOR ALL USING (
+CREATE POLICY "Admins select qa_threads" ON qa_threads
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
+  );
+CREATE POLICY "Admins insert qa_threads" ON qa_threads
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
+  );
+CREATE POLICY "Admins update qa_threads" ON qa_threads
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
+  );
+CREATE POLICY "Admins delete qa_threads" ON qa_threads
+  FOR DELETE USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
   );
 
@@ -138,8 +150,20 @@ CREATE POLICY "Profs insert messages in their threads" ON qa_messages
     )
   );
 
-CREATE POLICY "Admins full access qa_messages" ON qa_messages
-  FOR ALL USING (
+CREATE POLICY "Admins select qa_messages" ON qa_messages
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
+  );
+CREATE POLICY "Admins insert qa_messages" ON qa_messages
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
+  );
+CREATE POLICY "Admins update qa_messages" ON qa_messages
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
+  );
+CREATE POLICY "Admins delete qa_messages" ON qa_messages
+  FOR DELETE USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin','superadmin'))
   );
 
