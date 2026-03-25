@@ -895,7 +895,13 @@ function SortableTreeNode({
             onClick={(e) => {
               e.stopPropagation();
               if (hasChildren) {
+                if (expanded) {
+                  onToggle(node.id);
+                  return;
+                }
                 onToggle(node.id);
+                onSelect(node);
+                return;
               }
               onSelect(node);
             }}
