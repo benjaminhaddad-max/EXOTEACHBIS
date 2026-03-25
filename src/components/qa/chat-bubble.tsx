@@ -1,0 +1,120 @@
+"use client";
+
+import type { QaMessage, QaSenderType } from "@/types/qa";
+import { VoiceNotePlayer } from "./voice-note-player";
+import { MediaPreview } from "./media-preview";
+import { Check, CheckCheck, Bot, User, GraduationCap } from "lucide-react";
+
+interface ChatBubbleProps {
+  message: QaMessage;
+  /** Who is viewing — determines left/right alignment */
+  viewerRole: "student" | "prof";
+  showAvatar?: boolean;
+  senderName?: string;
+}
+
+export function ChatBubble({ message, viewerRole, showAvatar = true, senderName }: ChatBubbleProps) {
+  const isMine =
+    (viewerRole === "student" && message.sender_type === "student") ||
+    (viewerRole === "prof" && message.sender_type === "prof");
+
+  const isAi = message.sender_type === "ai";
+
+  // Alignment
+  const align = isMine ? "justify-end" : "justify-start";
+
+  // Bubble colors (WhatsApp-like)
+  const bubbleBg = isMine
+    ? "bg-[#0e1e35] text-white"
+    : isAi
+    ? "bg-gradient-to-br from-blue-50 to-indigo-50 text-gray-800 border border-blue-100"
+    : "bg-white text-gray-800 border border-gray-100 shadow-sm";
+
+  const bubbleRadius = isMine
+    ? "rounded-2xl rounded-br-md"
+    : "rounded-2xl rounded-bl-md";
+
+  // Timestamp
+  const time = new Date(message.created_at).toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  // Read receipts (only for own messages)
+  const isRead =
+    (viewerRole === "student" && message.read_by_prof) ||
+    (viewerRole === "prof" && message.read_by_student);
+
+  // Avatar
+  const avatarIcon = isAi ? Bot : message.sender_type === "prof" ? GraduationCap : User;
+  const avatarBg = isAi ? "bg-blue-100 text-blue-600" : message.sender_type === "prof" ? "bg-purple-100 text-purple-600" : "bg-gray-100 text-gray-500";
+
+  const accent: "student" | "ai" | "prof" = isMine
+    ? viewerRole === "prof" ? "prof" : "student"
+    : isAi
+    ? "ai"
+    : message.sender_type === "prof"
+    ? "prof"
+    : "student";
+
+  return (
+    <div className={`flex ${align} gap-2 px-3 group`}>
+      {/* Left avatar (not mine) */}
+      {!isMine && showAvatar && (
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-auto ${avatarBg}`}>
+          {(() => { const Icon = avatarIcon; return <Icon className="w-3.5 h-3.5" />; })()}
+        </div>
+      )}
+      {!isMine && !showAvatar && <div className="w-7 shrink-0" />}
+
+      <div className={`max-w-[75%] min-w-[80px] ${bubbleBg} ${bubbleRadius} px-3 py-2`}>
+        {/* Sender name */}
+        {!isMine && senderName && (
+          <p className={`text-[10px] font-semibold mb-0.5 ${isAi ? "text-blue-500" : "text-purple-500"}`}>
+            {isAi ? "Assistant IA" : senderName}
+          </p>
+        )}
+
+        {/* Content */}
+        {message.content_type === "text" && message.content && (
+          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+            {message.content}
+          </p>
+        )}
+
+        {message.content_type === "voice" && message.media_url && (
+          <VoiceNotePlayer
+            url={message.media_url}
+            duration={message.media_duration_s}
+            accent={isMine ? (viewerRole === "prof" ? "prof" : "student") : accent}
+          />
+        )}
+
+        {message.content_type === "image" && message.media_url && (
+          <MediaPreview url={message.media_url} type="image" accent={accent} />
+        )}
+
+        {message.content_type === "video" && message.media_url && (
+          <MediaPreview url={message.media_url} type="video" accent={accent} />
+        )}
+
+        {/* Timestamp + read receipt */}
+        <div className={`flex items-center gap-1 mt-1 ${isMine ? "justify-end" : "justify-end"}`}>
+          <span className={`text-[10px] ${isMine ? "text-white/50" : "text-gray-400"}`}>
+            {time}
+          </span>
+          {isMine && (
+            isRead ? (
+              <CheckCheck className={`w-3.5 h-3.5 ${isMine ? "text-blue-300" : "text-blue-400"}`} />
+            ) : (
+              <Check className={`w-3.5 h-3.5 ${isMine ? "text-white/40" : "text-gray-300"}`} />
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Right spacer (mine, no avatar) */}
+      {isMine && <div className="w-7 shrink-0" />}
+    </div>
+  );
+}

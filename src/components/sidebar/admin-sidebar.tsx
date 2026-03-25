@@ -11,6 +11,7 @@ import {
   Trophy,
   Megaphone,
   Layers,
+  MessageCircleQuestion,
 } from "lucide-react";
 import { SidebarShell } from "./sidebar-shell";
 import { SidebarItem } from "./sidebar-item";
