@@ -157,3 +157,5 @@ scripts/              — scrape-exoteach.mjs, seed-serie-418.mjs
 | 2026-03-25 | Multiples fichiers import | Images ExoTeach : évolution scraping DOM → canvas base64, matching Y-position, deep clone objets Apollo |
 | 2026-03-25 | Système Q&A complet | Q&A temps réel avec médias, IA (Anthropic), migration 011, composants drawer/chat/FAB |
 | 2026-03-25 | `CONTEXT.md` | Mise à jour complète : architecture, dépendances, fichiers clés, état actuel, règles |
+| 2026-03-25 | Supabase DB | Exécution migration 011 en prod : tables `prof_matieres`, `qa_threads`, `qa_messages` créées + RLS policies + Realtime activé + bucket `qa-media` |
+| 2026-03-25 | Vérification prod | Dashboard Q&A admin vérifié en production (stats cards, filtres, layout 2 colonnes). Build ✅ |

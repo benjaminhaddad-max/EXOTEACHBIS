@@ -12,7 +12,7 @@ export async function OPTIONS() {
 }
 
 // Subscript / superscript Unicode maps
-const SUB: Record<string, string> = { "0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉","+":"+","-":"−","=":"₌","(":"₍",")":"₎","a":"ₐ","e":"ₑ","h":"ₕ","k":"ₖ","l":"ₗ","m":"ₘ","n":"ₙ","o":"ₒ","p":"ₚ","s":"ₛ","t":"ₜ","x":"ₓ" };
+const SUB: Record<string, string> = { "0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉","+":"+","-":"-","=":"₌","(":"₍",")":"₎","a":"ₐ","e":"ₑ","h":"ₕ","k":"ₖ","l":"ₗ","m":"ₘ","n":"ₙ","o":"ₒ","p":"ₚ","s":"ₛ","t":"ₜ","x":"ₓ" };
 const SUP: Record<string, string> = { "0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","+":"⁺","-":"⁻","=":"⁼","(":"⁽",")":"⁾","n":"ⁿ","i":"ⁱ" };
 
 const EXOTEACH_IMG_BASE = "https://diploma.exoteach.com";
@@ -39,9 +39,14 @@ function convertHtml(html: string | null | undefined): string {
   let s = html;
 
   // Convertir <sub> → indices Unicode (NH₂, CO₂, etc.)
-  s = s.replace(/<sub[^>]*>(.*?)<\/sub>/gi, (_, c) => toUnicode(c, SUB));
+  // Mais garder +/- en texte normal (charges chimiques mal placées dans <sub>)
+  s = s.replace(/<sub[^>]*>(.*?)<\/sub>/gi, (_, c) => {
+    const trimmed = c.replace(/<[^>]+>/g, "").trim();
+    if (/^[+\-−_]+$/.test(trimmed)) return trimmed.replace(/−/g, "-");
+    return toUnicode(c.replace(/<[^>]+>/g, ""), SUB);
+  });
   // Convertir <sup> → exposants Unicode (M⁺, x², etc.)
-  s = s.replace(/<sup[^>]*>(.*?)<\/sup>/gi, (_, c) => toUnicode(c, SUP));
+  s = s.replace(/<sup[^>]*>(.*?)<\/sup>/gi, (_, c) => toUnicode(c.replace(/<[^>]+>/g, ""), SUP));
 
   // Convertir <br> en retour à la ligne
   s = s.replace(/<br\s*\/?>/gi, "\n");
