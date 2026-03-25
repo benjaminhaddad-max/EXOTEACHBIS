@@ -55,7 +55,17 @@ export function useUser() {
   }, []);
 
   const signOut = async () => {
+    // Sign out client-side
     await supabase.auth.signOut();
+    // Also clear server-side session/cookies
+    try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
+    // Clear impersonation data
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("impersonate_active");
+      localStorage.removeItem("impersonate_name");
+      localStorage.removeItem("impersonate_admin_access_token");
+      localStorage.removeItem("impersonate_admin_refresh_token");
+    }
     setUser(null);
     setProfile(null);
   };
