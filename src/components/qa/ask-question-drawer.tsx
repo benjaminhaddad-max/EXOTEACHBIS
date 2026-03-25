@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { X, Loader2, MessageCircleQuestion } from "lucide-react";
 import type { QaContextProps, QaThread } from "@/types/qa";
-import { resolveQaContextClient } from "@/lib/qa/context";
+import { resolveQaContextClient } from "@/lib/qa/context-client";
 import { ChatThread } from "./chat-thread";
 import { ContextBadge } from "./context-badge";
 import { ChatInputBar } from "./chat-input-bar";
@@ -33,9 +33,21 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
 
       // Resolve context
       if (!ctx.contextLabel || !ctx.matiereId) {
-        const resolved = await resolveQaContextClient(ctx);
-        setResolvedLabel(resolved.contextLabel);
-        setResolvedMatiereId(resolved.matiereId);
+        try {
+          const resolved = await resolveQaContextClient(ctx.contextType, {
+            dossierId: ctx.dossierId,
+            matiereId: ctx.matiereId,
+            coursId: ctx.coursId,
+            questionId: ctx.questionId,
+            optionId: ctx.optionId,
+            serieId: ctx.serieId,
+          });
+          setResolvedLabel(resolved.contextLabel);
+          setResolvedMatiereId(resolved.matiereId);
+        } catch {
+          // If we can't resolve, use what we have
+          setResolvedLabel(ctx.contextLabel ?? ctx.contextType);
+        }
       }
 
       // Look for existing open thread with same context

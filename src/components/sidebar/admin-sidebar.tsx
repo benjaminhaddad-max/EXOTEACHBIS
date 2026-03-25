@@ -21,6 +21,7 @@ const adminNavItems = [
   { href: "/admin/pedagogie", label: "Pédagogie & Exercices", icon: GraduationCap },
   { href: "/admin/examens", label: "Examens", icon: Trophy },
   { href: "/admin/flashcards", label: "Flashcards", icon: Layers },
+  { href: "/admin/questions-reponses", label: "Questions / Réponses", icon: MessageCircleQuestion },
   { href: "/admin/annonces", label: "Annonces", icon: Megaphone },
   { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard },

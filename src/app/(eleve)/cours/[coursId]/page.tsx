@@ -5,6 +5,7 @@ import { PdfViewer } from "@/components/cours/pdf-viewer";
 import { SeriesList } from "@/components/cours/series-list";
 import { ModuleRevisions } from "@/components/cours/module-revisions";
 import { FileText, BookOpen } from "lucide-react";
+import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 
 interface Props {
   params: Promise<{ coursId: string }>;
@@ -138,6 +139,14 @@ export default async function CoursDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Q&A FAB — contextual to this course */}
+      <AskQuestionFab
+        contextType="cours"
+        coursId={cours.id}
+        matiereId={matiere?.id}
+        dossierId={breadcrumbDossier?.id}
+      />
     </div>
   );
 }
