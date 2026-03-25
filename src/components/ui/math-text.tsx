@@ -72,8 +72,8 @@ export function MathText({
   text: string;
   className?: string;
 }) {
-  // Fast path: no LaTeX
-  if (!text.includes("$")) {
+  // Fast path: no LaTeX and no images
+  if (!text.includes("$") && !text.includes("![")) {
     return <span className={className}>{text}</span>;
   }
 
@@ -84,6 +84,19 @@ export function MathText({
       {segments.map((seg, i) => {
         if (seg.kind === "inline") return <KatexSpan key={i} formula={seg.content} display={false} />;
         if (seg.kind === "block") return <KatexSpan key={i} formula={seg.content} display={true} />;
+        // Render markdown images ![alt](url) inside text segments
+        if (seg.content.includes("![")) {
+          const parts = seg.content.split(/!\[([^\]]*)\]\(([^)]+)\)/g);
+          return (
+            <span key={i}>
+              {parts.map((part, j) => {
+                if (j % 3 === 2) return <img key={j} src={part} alt={parts[j - 1] || ""} className="inline-block max-h-40 object-contain my-1" />;
+                if (j % 3 === 1) return null; // alt text consumed by img
+                return part ? <span key={j}>{part}</span> : null;
+              })}
+            </span>
+          );
+        }
         return <span key={i}>{seg.content}</span>;
       })}
     </span>

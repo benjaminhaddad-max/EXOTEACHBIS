@@ -91,15 +91,9 @@ export async function POST(req: NextRequest) {
         for (let qi = 0; qi < (qcm.questions || []).length; qi++) {
           const q = qcm.questions[qi];
 
-          // Construire le texte de la question + image si présente
-          let questionText = convertHtml(q.question) || `Question ${qi + 1}`;
-          const imgUrl = resolveImageUrl(q.url_image_q);
-          if (imgUrl) {
-            questionText += `\n\n![image](${imgUrl})`;
-          }
-
-          // Construire l'explication + image si présente
-          let explanationText = convertHtml(q.explications) || null;
+          const questionText = convertHtml(q.question) || `Question ${qi + 1}`;
+          const questionImg = resolveImageUrl(q.url_image_q);
+          const explanationText = convertHtml(q.explications) || null;
 
           const { data: newQ, error: qErr } = await supabase.from("questions").insert({
             text: questionText,
@@ -107,6 +101,7 @@ export async function POST(req: NextRequest) {
             difficulty: 2,
             cours_id: coursId || null,
             explanation: explanationText,
+            image_url: questionImg,
             tags: [],
             matiere_id: null,
           }).select("id").single();
@@ -116,21 +111,15 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          // Options — pas de justification ni image_url (colonnes absentes)
-          const options = (q.answers || []).map((ans: any, idx: number) => {
-            let optText = convertHtml(ans.text) || `Option ${indexToLabel(idx)}`;
-            const ansImg = resolveImageUrl(ans.url_image);
-            if (ansImg) {
-              optText += ` ![](${ansImg})`;
-            }
-            return {
-              question_id: newQ.id,
-              label: indexToLabel(idx),
-              text: optText,
-              is_correct: ans.isTrue === true,
-              order_index: idx,
-            };
-          });
+          const options = (q.answers || []).map((ans: any, idx: number) => ({
+            question_id: newQ.id,
+            label: indexToLabel(idx),
+            text: convertHtml(ans.text) || `Option ${indexToLabel(idx)}`,
+            is_correct: ans.isTrue === true,
+            order_index: idx,
+            justification: convertHtml(ans.explanation) || null,
+            image_url: resolveImageUrl(ans.url_image),
+          }));
 
           const { error: optErr } = await supabase.from("options").insert(options);
           if (optErr) console.error("Opt insert err:", optErr.message);
