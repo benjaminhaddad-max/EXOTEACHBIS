@@ -170,8 +170,8 @@ export async function POST(request: Request) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         message = await anthropic.messages.create({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1500,
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 800,
           system: systemPrompt,
           messages: cleanedMessages,
         });
