@@ -48,7 +48,7 @@ for(var id of ids){
     console.log('📥 Récupération série '+id+'...');
     var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
     if(!r.data||!r.data.qcm){errs.push(id);continue;}
-    var qcm=r.data.qcm;
+    var qcm=JSON.parse(JSON.stringify(r.data.qcm));
     /* --- Scrape images depuis le DOM (si on est sur la page du QCM) --- */
     var allImgs=Array.from(document.querySelectorAll('img')).filter(function(i){return i.src.includes('/files/')&&i.naturalWidth>30;});
     if(allImgs.length>0){
