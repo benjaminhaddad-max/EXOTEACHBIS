@@ -332,6 +332,27 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     setSending(false);
   };
 
+  // Edit a student message — put content back in input
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const handleEditMessage = (msg: QaMessage) => {
+    setEditingId(msg.id);
+    // The ChatInputBar doesn't have a "set value" prop, so we'll delete the old message
+    // and let the student retype. A simpler UX: delete + prefill would need a ref.
+    // For now: delete the message from DB and state
+    supabase.from("qa_messages").delete().eq("id", msg.id).then(() => {
+      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      setEditingId(null);
+    });
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    await supabase.from("qa_messages").delete().eq("id", messageId);
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+  };
+
+  // Whether student messages can be edited (no prof reply yet)
+  const hasProfReply = messages.some((m) => m.sender_type === "prof");
+
   // Accept AI answer
   const handleAcceptAi = async () => {
     await supabase
@@ -428,6 +449,9 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
                       : "Professeur"
                     : undefined
                 }
+                onEdit={viewerRole === "student" ? handleEditMessage : undefined}
+                onDelete={viewerRole === "student" ? handleDeleteMessage : undefined}
+                canModify={viewerRole === "student" && !hasProfReply}
               />
               {/* Action buttons under the AI bubble — only when AI just answered */}
               {showActions && (

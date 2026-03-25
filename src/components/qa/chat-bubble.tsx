@@ -3,7 +3,7 @@
 import type { QaMessage, QaSenderType } from "@/types/qa";
 import { VoiceNotePlayer } from "./voice-note-player";
 import { MediaPreview } from "./media-preview";
-import { Check, CheckCheck, Bot, User, GraduationCap } from "lucide-react";
+import { Check, CheckCheck, Bot, User, GraduationCap, Pencil, Trash2 } from "lucide-react";
 
 interface ChatBubbleProps {
   message: QaMessage;
@@ -11,9 +11,15 @@ interface ChatBubbleProps {
   viewerRole: "student" | "prof";
   showAvatar?: boolean;
   senderName?: string;
+  /** Called when student wants to edit their message */
+  onEdit?: (message: QaMessage) => void;
+  /** Called when student wants to delete their message */
+  onDelete?: (messageId: string) => void;
+  /** Whether edit/delete is allowed (e.g. prof hasn't responded yet) */
+  canModify?: boolean;
 }
 
-export function ChatBubble({ message, viewerRole, showAvatar = true, senderName }: ChatBubbleProps) {
+export function ChatBubble({ message, viewerRole, showAvatar = true, senderName, onEdit, onDelete, canModify }: ChatBubbleProps) {
   const isMine =
     (viewerRole === "student" && message.sender_type === "student") ||
     (viewerRole === "prof" && message.sender_type === "prof");
@@ -127,8 +133,32 @@ export function ChatBubble({ message, viewerRole, showAvatar = true, senderName 
         </div>
       </div>
 
+      {/* Edit/Delete buttons (hover, only for own student messages that can be modified) */}
+      {isMine && canModify && message.sender_type === "student" && message.content_type === "text" && (
+        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-center">
+          {onEdit && (
+            <button
+              onClick={() => onEdit(message)}
+              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              title="Modifier"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={() => onDelete(message.id)}
+              className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+              title="Supprimer"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Right spacer (mine, no avatar) */}
-      {isMine && <div className="w-7 shrink-0" />}
+      {isMine && !canModify && <div className="w-7 shrink-0" />}
     </div>
   );
 }
