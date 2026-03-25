@@ -165,13 +165,30 @@ export async function POST(request: Request) {
       cleanedMessages.unshift({ role: "user", content: contextPreamble || "Bonjour" });
     }
 
-    // 4. Call Claude with full conversation
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
-      system: systemPrompt,
-      messages: cleanedMessages,
-    });
+    // 4. Call Claude with full conversation (with retry on overload)
+    let message;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        message = await anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1500,
+          system: systemPrompt,
+          messages: cleanedMessages,
+        });
+        break; // Success
+      } catch (apiErr: any) {
+        const isOverloaded = apiErr?.status === 529 || apiErr?.message?.includes("Overloaded");
+        if (isOverloaded && attempt < 2) {
+          // Wait 3-6 seconds before retry
+          await new Promise(r => setTimeout(r, 3000 * (attempt + 1)));
+          continue;
+        }
+        throw apiErr; // Re-throw on final attempt or non-overload error
+      }
+    }
+    if (!message) {
+      return NextResponse.json({ error: "L'IA est temporairement surchargée. Réessaie dans quelques secondes." }, { status: 503 });
+    }
 
     const content = message.content[0];
     if (content.type !== "text") {
