@@ -23,6 +23,13 @@ export default function ImpersonatePage() {
           return;
         }
 
+        // Sauvegarder la session admin actuelle pour pouvoir revenir
+        const { data: currentSession } = await supabase.auth.getSession();
+        if (currentSession?.session) {
+          localStorage.setItem("impersonate_admin_access_token", currentSession.session.access_token);
+          localStorage.setItem("impersonate_admin_refresh_token", currentSession.session.refresh_token);
+        }
+
         // D'abord se déconnecter (vider la session admin)
         await supabase.auth.signOut();
 
@@ -46,6 +53,10 @@ export default function ImpersonatePage() {
 
         const name = `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim();
         setStatus(`Connecté en tant que ${name || data.user.email}...`);
+
+        // Flag pour afficher le bandeau "Retour admin"
+        localStorage.setItem("impersonate_active", "true");
+        localStorage.setItem("impersonate_name", name || data.user.email || "");
 
         const dest = profile?.role === "admin" || profile?.role === "superadmin"
           ? "/admin/dashboard"
