@@ -83,6 +83,10 @@ function buildTree(flat: Dossier[], parentId: string | null = null): DossierNode
 
 export type DossierWithMatieres = Dossier & { matieres?: any[] };
 
+const TREE_WIDTH_STORAGE_KEY = "pedagogie_tree_width_v1";
+const TREE_MIN_WIDTH = 320;
+const TREE_MAX_WIDTH = 720;
+
 export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[] }) {
   const searchParams = useSearchParams();
   const [allDossiers, setAllDossiers] = useState<Dossier[]>(initialDossiers);
@@ -98,6 +102,8 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null);
+  const [treeWidth, setTreeWidth] = useState(360);
+  const [isResizingTree, setIsResizingTree] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -155,6 +161,46 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
     selectDossier(dossier);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedWidth = Number(window.localStorage.getItem(TREE_WIDTH_STORAGE_KEY));
+    if (Number.isFinite(savedWidth) && savedWidth >= TREE_MIN_WIDTH && savedWidth <= TREE_MAX_WIDTH) {
+      setTreeWidth(savedWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingTree || typeof window === "undefined") return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const viewportMax = Math.min(TREE_MAX_WIDTH, Math.floor(window.innerWidth * 0.55));
+      const nextWidth = Math.max(TREE_MIN_WIDTH, Math.min(viewportMax, event.clientX - 32));
+      setTreeWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTree(false);
+      window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingTree, treeWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
+  }, [treeWidth]);
 
   const fetchDossierData = async (dossierId: string) => {
     // Utilise les Server Actions (createClient server-side) pour bypass RLS anon
@@ -267,7 +313,10 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
     <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
       {/* ── LEFT: Arborescence ── */}
-      <div className="flex w-72 flex-shrink-0 flex-col border-r border-gray-100 bg-[#F7F8FC]">
+      <div
+        className="flex flex-shrink-0 flex-col border-r border-gray-100 bg-[#F7F8FC]"
+        style={{ width: treeWidth }}
+      >
         <div className="flex items-center justify-between border-b border-gray-200 bg-navy px-4 py-3">
           <h2 className="text-sm font-semibold text-white/90">Arborescence</h2>
           <div className="flex items-center gap-2">
@@ -330,6 +379,22 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
             </DndContext>
           )}
         </div>
+      </div>
+
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Redimensionner l'arborescence"
+        onMouseDown={() => setIsResizingTree(true)}
+        onDoubleClick={() => {
+          setTreeWidth(360);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, "360");
+          }
+        }}
+        className={`group relative w-2 flex-shrink-0 cursor-col-resize bg-transparent transition ${isResizingTree ? "bg-navy/10" : ""}`}
+      >
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition group-hover:bg-navy/30" />
       </div>
 
       {/* ── RIGHT: Contenu du dossier sélectionné ou cours détail ── */}
@@ -791,40 +856,42 @@ function SortableTreeNode({
 
   return (
     <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "12px" : 0 }}>
-      <div className={`group mb-0.5 flex items-center gap-1 rounded-lg px-1 py-1.5 transition ${selected ? "bg-navy/10 ring-1 ring-navy/5" : "hover:bg-white/80"}`}>
+      <div className={`group mb-0.5 flex items-start gap-1 rounded-lg px-1 py-1.5 transition ${selected ? "bg-navy/10 ring-1 ring-navy/5" : "hover:bg-white/80"}`}>
         {/* Grip DnD */}
         <span
           {...attributes}
           {...listeners}
-          className="flex-shrink-0 cursor-grab touch-none p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+          className="mt-0.5 flex-shrink-0 cursor-grab touch-none p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </span>
 
         <button
           onClick={() => { onToggle(node.id); onSelect(node); }}
-          className="flex flex-1 items-center gap-1.5 text-left min-w-0"
+          className="flex flex-1 items-start gap-1.5 text-left min-w-0"
         >
-          <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+          <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center">
             {hasChildren
               ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
               : <span className="w-3.5" />}
           </span>
-          <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded overflow-hidden" style={{ backgroundColor: node.color + "20" }}>
+          <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded overflow-hidden" style={{ backgroundColor: node.color + "20" }}>
             {node.icon_url
               ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
               : <Folder className="h-3 w-3" style={{ color: node.color }} />}
           </span>
-          <span className={`flex-1 truncate text-xs ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
-            {node.name}
+          <span className="min-w-0 flex-1">
+            <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
+              {node.name}
+            </span>
+            <span className="mt-1 inline-flex rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+              {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+            </span>
           </span>
-          <span className="hidden rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500 md:inline-flex">
-            {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
-          </span>
-          {!node.visible && <EyeOff className="h-3 w-3 flex-shrink-0 text-gray-300" />}
+          {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
         </button>
 
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0">
+        <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
           <button onClick={(e) => { e.stopPropagation(); onAdd(node.id); }} className="rounded p-1 text-gray-400 hover:bg-navy/10 hover:text-navy" title="Ajouter">
             <Plus className="h-3 w-3" />
           </button>
