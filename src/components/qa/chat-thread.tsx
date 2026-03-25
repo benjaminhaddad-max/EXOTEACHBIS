@@ -156,8 +156,8 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? inserted : m)));
     }
 
-    // If student sends first message or any message, trigger AI
-    if (viewerRole === "student" && (threadStatus === "ai_pending" || threadStatus === "ai_answered")) {
+    // If student sends a message, always trigger AI (even if escalated — AI continues to help while waiting for prof)
+    if (viewerRole === "student" && threadStatus !== "resolved") {
       setAiThinking(true);
       try {
         const resp = await fetch("/api/qa/ai-respond", {
