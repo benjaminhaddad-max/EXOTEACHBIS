@@ -42,14 +42,23 @@ if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
 function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
 
-/* Convertir un élément <img> du DOM en base64 via canvas */
-function imgToB64(imgEl){
+/* Extraire l'URL publique d'une image DOM (sans le token) */
+function getImgUrl(imgEl){
   try{
-    var c=document.createElement('canvas');
-    c.width=imgEl.naturalWidth;c.height=imgEl.naturalHeight;
-    c.getContext('2d').drawImage(imgEl,0,0);
-    return c.toDataURL('image/png');
-  }catch(e){console.log('  ⚠️ canvas error:',e.message);return null;}
+    var src=imgEl.src||'';
+    /* Retirer le token de l'URL pour avoir une URL stable */
+    var base=src.split('?')[0];
+    if(base.includes('medibox2-api/files/')||base.includes('qcm/uploads/')){
+      return base;
+    }
+    /* Fallback: essayer canvas pour les images same-origin */
+    try{
+      var c=document.createElement('canvas');
+      c.width=imgEl.naturalWidth;c.height=imgEl.naturalHeight;
+      c.getContext('2d').drawImage(imgEl,0,0);
+      return c.toDataURL('image/png');
+    }catch(e){return null;}
+  }catch(e){console.log('  ⚠️ img error:',e.message);return null;}
 }
 
 /* Attendre que les images se chargent sur la page */
@@ -96,13 +105,20 @@ for(var id of ids){
     window.location.hash='#/serie/play/'+id;
     await wait(3000);
     /* Cliquer "Démarrer" si le bouton existe */
-    var startBtn=document.querySelector('button');
     var allBtns=Array.from(document.querySelectorAll('button'));
     for(var bi=0;bi<allBtns.length;bi++){
       var bt=allBtns[bi].textContent||'';
-      if(bt.match(/d[eé]marrer|commencer|start|lancer/i)){startBtn=allBtns[bi];startBtn.click();console.log('  ▶️ Bouton Démarrer cliqué');break;}
+      if(bt.match(/d[eé]marrer|commencer|start|lancer/i)){allBtns[bi].click();console.log('  ▶️ Bouton Démarrer cliqué');break;}
     }
-    await wait(3000);
+    await wait(2000);
+    /* Cliquer sur la Question 1 dans la sidebar pour afficher le contenu */
+    var qBtns=Array.from(document.querySelectorAll('button')).filter(function(b){return b.textContent&&b.textContent.match(/Question\\s+1/);});
+    if(qBtns.length>0){qBtns[0].click();console.log('  ▶️ Question 1 cliquée');}
+    await wait(2000);
+    /* Scroller vers le bas pour charger toutes les questions visibles */
+    var scrollContainer=document.querySelector('[class*="scroll"]')||document.querySelector('main')||document.documentElement;
+    if(scrollContainer){scrollContainer.scrollTop=scrollContainer.scrollHeight;}
+    await wait(2000);
     var domImgs=await waitForImages(10000);
 
     /* Filtrer: exclure thumbnail (parent w-12) */
@@ -137,16 +153,16 @@ for(var id of ids){
         var allAreAnswerImgs=(exImgs.length<=answersNeedingImg);
         if(!allAreAnswerImgs){
           /* Première image = image de la question */
-          var b64=imgToB64(exImgs[0]);
+          var b64=getImgUrl(exImgs[0]);
           if(b64){
-            q.image_base64=b64;
+            q.image_url_scraped=b64;
             console.log('  Q'+exNum+' ✅ image question ('+Math.round(b64.length/1024)+' KB)');
           }
           /* Images suivantes = images des réponses */
           for(var ai=0,ii=1;ii<exImgs.length&&ai<nAnswers;ai++){
-            if(!q.answers[ai].url_image&&!q.answers[ai].image_base64){
-              var ab=imgToB64(exImgs[ii]);
-              if(ab){q.answers[ai].image_base64=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
+            if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
+              var ab=getImgUrl(exImgs[ii]);
+              if(ab){q.answers[ai].image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
               ii++;
             }
           }
@@ -154,9 +170,9 @@ for(var id of ids){
           /* Toutes les images sont des images de réponses */
           console.log('  Q'+exNum+' — '+exImgs.length+' images = réponses (pas d\\'image question)');
           for(var ai=0,ii=0;ii<exImgs.length&&ai<nAnswers;ai++){
-            if(!q.answers[ai].url_image&&!q.answers[ai].image_base64){
-              var ab=imgToB64(exImgs[ii]);
-              if(ab){q.answers[ai].image_base64=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
+            if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
+              var ab=getImgUrl(exImgs[ii]);
+              if(ab){q.answers[ai].image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse');}
               ii++;
             }
           }
@@ -166,20 +182,20 @@ for(var id of ids){
       /* Si les réponses ont déjà url_image (depuis Apollo), les télécharger en base64 */
       for(var ai=0;ai<(q.answers||[]).length;ai++){
         var ans=q.answers[ai];
-        if(ans.url_image&&!ans.image_base64){
+        if(ans.url_image&&!ans.image_url_scraped){
           try{
             var full=ans.url_image.startsWith('http')?ans.url_image:'https://diploma.exoteach.com'+ans.url_image;
             var resp=await fetch(full,{credentials:'include'});
             if(resp.ok){
               var blob=await resp.blob();
-              ans.image_base64=await new Promise(function(ok){var rd=new FileReader();rd.onloadend=function(){ok(rd.result);};rd.readAsDataURL(blob);});
+              ans.image_url_scraped=await new Promise(function(ok){var rd=new FileReader();rd.onloadend=function(){ok(rd.result);};rd.readAsDataURL(blob);});
               console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image réponse (API)');
             }
           }catch(e){}
         }
       }
 
-      if(!q.image_base64&&!q.url_image_q&&exImgs.length===0){
+      if(!q.image_url_scraped&&!q.url_image_q&&exImgs.length===0){
         console.log('  Q'+exNum+' — pas d\\'image');
       }
     }

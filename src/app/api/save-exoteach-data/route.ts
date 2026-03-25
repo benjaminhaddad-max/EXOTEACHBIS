@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
           const questionText = convertHtml(q.question) || `Question ${qi + 1}`;
           // Image: base64 (prioritaire), sinon url_image_q, sinon chercher dans le HTML
-          const questionImg = q.image_base64
+          const questionImg = q.image_url_scraped
             || resolveImageUrl(q.url_image_q)
             || resolveImageUrl(extractImagesFromHtml(q.question)[0])
             || null;
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
             is_correct: ans.isTrue === true,
             order_index: idx,
             justification: convertHtml(ans.explanation) || null,
-            image_url: ans.image_base64
+            image_url: ans.image_url_scraped
               || resolveImageUrl(ans.url_image)
               || resolveImageUrl(extractImagesFromHtml(ans.text)[0])
               || null,
