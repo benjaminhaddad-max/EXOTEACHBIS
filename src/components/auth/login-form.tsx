@@ -30,14 +30,7 @@ export function LoginForm() {
           setError("Impersonation échouée: " + (sessErr?.message || "session invalide"));
           return;
         }
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
-        const dest = profile?.role === "admin" || profile?.role === "superadmin"
-          ? "/admin/dashboard" : "/dashboard";
-        window.location.assign(dest);
+        window.location.assign("/");
       } catch { setError("Erreur impersonation"); }
     })();
   }, [searchParams, supabase]);
@@ -59,19 +52,8 @@ export function LoginForm() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single();
-
-      const destination =
-        profile?.role === "admin" || profile?.role === "superadmin"
-          ? "/admin/dashboard"
-          : "/dashboard";
-
       redirected = true;
-      window.location.assign(destination);
+      window.location.assign("/");
     } catch {
       setError("La connexion a échoué. Réessaie dans quelques secondes.");
     } finally {
