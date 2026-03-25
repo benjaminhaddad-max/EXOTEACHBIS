@@ -4,13 +4,23 @@ import { useState, useTransition } from "react";
 import {
   Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2,
   Calendar, Clock, Eye, EyeOff, ListPlus, ListMinus, Layers,
+  BarChart3, ChevronRight, Settings2,
 } from "lucide-react";
-import type { Serie } from "@/types/database";
+import type { Serie, Filiere } from "@/types/database";
 import {
   createExamen, updateExamen, deleteExamen,
   addSerieToExamen, removeSerieFromExamen,
+  updateSerieCoefficient, toggleResultsVisibility,
 } from "@/app/(admin)/admin/examens/actions";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
+
+export type ExamenSerieWithCoeff = {
+  series_id: string;
+  order_index: number;
+  coefficient: number;
+  series?: Serie;
+};
 
 export type ExamenWithSeries = {
   id: string;
@@ -19,8 +29,11 @@ export type ExamenWithSeries = {
   debut_at: string;
   fin_at: string;
   visible: boolean;
+  results_visible: boolean;
+  notation_sur: number;
   created_at: string;
   series?: Serie[];
+  examen_series?: ExamenSerieWithCoeff[];
 };
 
 type Modal =
@@ -52,17 +65,18 @@ const STATUS_LABELS = {
 export function ExamensShell({
   initialExamens,
   allSeries,
+  filieres,
 }: {
   initialExamens: ExamenWithSeries[];
   allSeries: Serie[];
+  filieres: Filiere[];
 }) {
   const [examens, setExamens] = useState<ExamenWithSeries[]>(initialExamens);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Compositeur state
-  const [composeSeries, setComposeSeries] = useState<Serie[]>([]);
+  const [composeSeries, setComposeSeries] = useState<ExamenSerieWithCoeff[]>([]);
 
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -73,12 +87,14 @@ export function ExamensShell({
     const supabase = createClient();
     const { data } = await supabase
       .from("examens")
-      .select("*, examens_series(series_id, order_index, series:series(*))")
+      .select("*, examens_series(series_id, order_index, coefficient, series:series(*))")
       .order("debut_at", { ascending: false });
     if (data) {
       setExamens(
         data.map((e: any) => ({
           ...e,
+          examen_series: (e.examens_series ?? [])
+            .sort((a: any, b: any) => a.order_index - b.order_index),
           series: (e.examens_series ?? [])
             .sort((a: any, b: any) => a.order_index - b.order_index)
             .map((es: any) => es.series)
@@ -90,7 +106,7 @@ export function ExamensShell({
   };
 
   const openCompose = (examen: ExamenWithSeries) => {
-    setComposeSeries(examen.series ?? []);
+    setComposeSeries(examen.examen_series ?? []);
     setModal({ type: "compose", examen });
   };
 
@@ -106,19 +122,39 @@ export function ExamensShell({
 
   const handleAddSerie = (examen: ExamenWithSeries, serie: Serie) => {
     startTransition(async () => {
-      const res = await addSerieToExamen(examen.id, serie.id, composeSeries.length);
+      const res = await addSerieToExamen(examen.id, serie.id, composeSeries.length, 1);
       if ("error" in res) { showToast(res.error!, "error"); return; }
-      setComposeSeries((prev) => [...prev, serie]);
+      setComposeSeries((prev) => [...prev, { series_id: serie.id, order_index: prev.length, coefficient: 1, series: serie }]);
       showToast("Série ajoutée", "success");
     });
   };
 
-  const handleRemoveSerie = (examen: ExamenWithSeries, serie: Serie) => {
+  const handleRemoveSerie = (examen: ExamenWithSeries, serieId: string) => {
     startTransition(async () => {
-      const res = await removeSerieFromExamen(examen.id, serie.id);
+      const res = await removeSerieFromExamen(examen.id, serieId);
       if ("error" in res) { showToast(res.error!, "error"); return; }
-      setComposeSeries((prev) => prev.filter((s) => s.id !== serie.id));
+      setComposeSeries((prev) => prev.filter((s) => s.series_id !== serieId));
       showToast("Série retirée", "success");
+    });
+  };
+
+  const handleCoeffChange = (examen: ExamenWithSeries, serieId: string, coeff: number) => {
+    startTransition(async () => {
+      const res = await updateSerieCoefficient(examen.id, serieId, coeff);
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      setComposeSeries((prev) =>
+        prev.map((s) => s.series_id === serieId ? { ...s, coefficient: coeff } : s)
+      );
+    });
+  };
+
+  const handleToggleResults = (examen: ExamenWithSeries) => {
+    startTransition(async () => {
+      const newVal = !examen.results_visible;
+      const res = await toggleResultsVisibility(examen.id, newVal);
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      setExamens((prev) => prev.map((e) => e.id === examen.id ? { ...e, results_visible: newVal } : e));
+      showToast(newVal ? "Résultats rendus visibles" : "Résultats masqués", "success");
     });
   };
 
@@ -141,12 +177,20 @@ export function ExamensShell({
           <h1 className="text-xl font-semibold text-white">Examens blancs</h1>
           <p className="text-xs text-white/50 mt-0.5">{examens.length} examen{examens.length !== 1 ? "s" : ""}</p>
         </div>
-        <button
-          onClick={() => setModal({ type: "create" })}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-sm font-semibold rounded-lg hover:bg-[#A8892E] transition-colors"
-        >
-          <Plus size={14} /> Nouvel examen
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/examens/coefficients"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-white/70 text-sm font-medium rounded-lg hover:bg-white/15 transition-colors"
+          >
+            <Settings2 size={14} /> Coefficients filières
+          </Link>
+          <button
+            onClick={() => setModal({ type: "create" })}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-sm font-semibold rounded-lg hover:bg-[#A8892E] transition-colors"
+          >
+            <Plus size={14} /> Nouvel examen
+          </button>
+        </div>
       </div>
 
       {/* List */}
@@ -171,6 +215,9 @@ export function ExamensShell({
                           {STATUS_LABELS[status]}
                         </span>
                         {!e.visible && <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40">Masqué</span>}
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-white/30">
+                          /{e.notation_sur ?? 20}
+                        </span>
                       </div>
                       {e.description && (
                         <p className="text-xs text-white/50 mt-1">{e.description}</p>
@@ -178,19 +225,47 @@ export function ExamensShell({
                       <div className="flex items-center gap-4 mt-2 text-xs text-white/40">
                         <span className="flex items-center gap-1">
                           <Calendar size={11} />
-                          Début : {new Date(e.debut_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                          {new Date(e.debut_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock size={11} />
-                          Fin : {new Date(e.fin_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                          {new Date(e.fin_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
                         </span>
                         <span className="flex items-center gap-1">
                           <Layers size={11} />
                           {nbSeries} série{nbSeries !== 1 ? "s" : ""}
                         </span>
                       </div>
+                      {/* Serie pills with coefficients */}
+                      {(e.examen_series?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {e.examen_series!.map((es) => (
+                            <span key={es.series_id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 border border-white/10 rounded-md text-xs text-white/60">
+                              {es.series?.name ?? "—"}
+                              <span className="text-[10px] text-[#C9A84C] font-semibold">×{es.coefficient}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => handleToggleResults(e)}
+                        className={`flex items-center gap-1 p-2 rounded-lg transition-colors text-xs ${
+                          e.results_visible
+                            ? "bg-green-500/10 text-green-400 hover:bg-green-500/20"
+                            : "bg-white/5 text-white/30 hover:text-white/50"
+                        }`}
+                        title={e.results_visible ? "Résultats visibles — cliquer pour masquer" : "Résultats masqués — cliquer pour afficher"}
+                      >
+                        {e.results_visible ? <Eye size={13} /> : <EyeOff size={13} />}
+                      </button>
+                      <Link
+                        href={`/admin/examens/${e.id}/resultats`}
+                        className="flex items-center gap-1 p-2 hover:bg-[#C9A84C]/10 rounded-lg text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors text-xs"
+                      >
+                        <BarChart3 size={13} />
+                      </Link>
                       <button
                         onClick={() => openCompose(e)}
                         className="flex items-center gap-1 p-2 hover:bg-[#C9A84C]/10 rounded-lg text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors text-xs"
@@ -252,7 +327,8 @@ export function ExamensShell({
                 allSeries={allSeries}
                 composeSeries={composeSeries}
                 onAdd={(s) => handleAddSerie(modal.examen, s)}
-                onRemove={(s) => handleRemoveSerie(modal.examen, s)}
+                onRemove={(id) => handleRemoveSerie(modal.examen, id)}
+                onCoeffChange={(serieId, coeff) => handleCoeffChange(modal.examen, serieId, coeff)}
                 onClose={() => { setModal(null); refreshExamens(); }}
                 isPending={isPending}
               />
@@ -265,7 +341,7 @@ export function ExamensShell({
 }
 
 // =============================================
-// EXAMEN FORM
+// EXAMEN FORM (with notation_sur + results_visible)
 // =============================================
 
 function ExamenForm({
@@ -289,6 +365,8 @@ function ExamenForm({
   const [debutAt, setDebutAt] = useState(toDatetimeLocal(examen?.debut_at));
   const [finAt, setFinAt] = useState(toDatetimeLocal(examen?.fin_at));
   const [visible, setVisible] = useState(examen?.visible ?? true);
+  const [resultsVisible, setResultsVisible] = useState(examen?.results_visible ?? false);
+  const [notationSur, setNotationSur] = useState(examen?.notation_sur ?? 20);
 
   return (
     <div className="p-6 space-y-5">
@@ -304,7 +382,7 @@ function ExamenForm({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nom de l'examen..."
+          placeholder="Concours Blanc n°X — Faculté"
           className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
         />
       </div>
@@ -340,22 +418,54 @@ function ExamenForm({
         </div>
       </div>
 
-      <label className="flex items-center gap-3 cursor-pointer select-none">
-        <div
-          onClick={() => setVisible(!visible)}
-          className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${visible ? "bg-[#C9A84C]" : "bg-white/15"}`}
-        >
-          <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-4" : ""}`} />
-        </div>
-        <span className="text-sm text-white/70">Visible par les élèves</span>
-      </label>
+      <div>
+        <label className="text-xs text-white/50 mb-1.5 block">Notation sur</label>
+        <input
+          type="number"
+          min={1}
+          max={100}
+          value={notationSur}
+          onChange={(e) => setNotationSur(Number(e.target.value))}
+          className="w-24 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-white/30"
+        />
+      </div>
+
+      <div className="flex gap-6">
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <div
+            onClick={() => setVisible(!visible)}
+            className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${visible ? "bg-[#C9A84C]" : "bg-white/15"}`}
+          >
+            <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-4" : ""}`} />
+          </div>
+          <span className="text-sm text-white/70">Visible par les élèves</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <div
+            onClick={() => setResultsVisible(!resultsVisible)}
+            className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${resultsVisible ? "bg-green-500" : "bg-white/15"}`}
+          >
+            <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${resultsVisible ? "translate-x-4" : ""}`} />
+          </div>
+          <span className="text-sm text-white/70">Résultats visibles</span>
+        </label>
+      </div>
 
       <div className="flex justify-end gap-3 pt-2">
         <button onClick={onClose} className="px-4 py-2 text-sm text-white/60 hover:text-white transition-colors">
           Annuler
         </button>
         <button
-          onClick={() => onSubmit({ name: name.trim(), description: description.trim() || undefined, debut_at: new Date(debutAt).toISOString(), fin_at: new Date(finAt).toISOString(), visible })}
+          onClick={() => onSubmit({
+            name: name.trim(),
+            description: description.trim() || undefined,
+            debut_at: new Date(debutAt).toISOString(),
+            fin_at: new Date(finAt).toISOString(),
+            visible,
+            results_visible: resultsVisible,
+            notation_sur: notationSur,
+          })}
           disabled={isPending || !name.trim() || !debutAt || !finAt}
           className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#0e1e35] text-sm font-semibold rounded-lg hover:bg-[#A8892E] disabled:opacity-50 transition-colors"
         >
@@ -368,7 +478,7 @@ function ExamenForm({
 }
 
 // =============================================
-// COMPOSE MODAL
+// COMPOSE MODAL (with coefficients)
 // =============================================
 
 function ComposeModal({
@@ -377,38 +487,57 @@ function ComposeModal({
   composeSeries,
   onAdd,
   onRemove,
+  onCoeffChange,
   onClose,
   isPending,
 }: {
   examen: ExamenWithSeries;
   allSeries: Serie[];
-  composeSeries: Serie[];
+  composeSeries: ExamenSerieWithCoeff[];
   onAdd: (s: Serie) => void;
-  onRemove: (s: Serie) => void;
+  onRemove: (serieId: string) => void;
+  onCoeffChange: (serieId: string, coeff: number) => void;
   onClose: () => void;
   isPending: boolean;
 }) {
-  const inExamen = new Set(composeSeries.map((s) => s.id));
+  const inExamen = new Set(composeSeries.map((s) => s.series_id));
   const available = allSeries.filter((s) => !inExamen.has(s.id));
+  const [search, setSearch] = useState("");
+  const filtered = available.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-white">Séries — {examen.name}</h2>
+        <h2 className="text-base font-semibold text-white">Séries & Coefficients — {examen.name}</h2>
         <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
+        {/* In exam */}
         <div>
-          <p className="text-xs text-white/50 uppercase tracking-wider mb-3">Dans l'examen ({composeSeries.length})</p>
-          <div className="space-y-2 max-h-80 overflow-auto pr-1">
+          <p className="text-xs text-white/50 uppercase tracking-wider mb-3">
+            Dans l&apos;examen ({composeSeries.length})
+          </p>
+          <div className="space-y-2 max-h-96 overflow-auto pr-1">
             {composeSeries.length === 0 ? (
               <p className="text-xs text-white/30 py-4 text-center">Aucune série</p>
-            ) : composeSeries.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                <p className="flex-1 text-xs text-white/80 line-clamp-1">{s.name}</p>
+            ) : composeSeries.map((es) => (
+              <div key={es.series_id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                <p className="flex-1 text-xs text-white/80 line-clamp-1">{es.series?.name ?? "?"}</p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[10px] text-white/40">Coeff.</span>
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={10}
+                    step={0.5}
+                    value={es.coefficient}
+                    onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
+                    className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
+                  />
+                </div>
                 <button
-                  onClick={() => onRemove(s)}
+                  onClick={() => onRemove(es.series_id)}
                   disabled={isPending}
                   className="text-white/30 hover:text-red-400 transition-colors shrink-0"
                 >
@@ -418,12 +547,20 @@ function ComposeModal({
             ))}
           </div>
         </div>
+
+        {/* Available */}
         <div>
           <p className="text-xs text-white/50 uppercase tracking-wider mb-3">Disponibles ({available.length})</p>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filtrer…"
+            className="w-full mb-2 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+          />
           <div className="space-y-2 max-h-80 overflow-auto pr-1">
-            {available.length === 0 ? (
-              <p className="text-xs text-white/30 py-4 text-center">Tout est ajouté</p>
-            ) : available.map((s) => (
+            {filtered.length === 0 ? (
+              <p className="text-xs text-white/30 py-4 text-center">Aucune série disponible</p>
+            ) : filtered.map((s) => (
               <div key={s.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
                 <p className="flex-1 text-xs text-white/80 line-clamp-1">{s.name}</p>
                 <button

@@ -63,6 +63,10 @@ function convertHtml(html: string | null | undefined): string {
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)));
 
+  // Charges chimiques: M_ → M-, I_ → I-, remplacer _ utilisé comme moins
+  // Pattern: une lettre majuscule suivie de _ en fin de mot = charge négative
+  s = s.replace(/([A-Z])_(?=\s|$|[.,;:!?)])/g, "$1-");
+
   // Nettoyer espaces multiples (garder \n)
   s = s.replace(/[^\S\n]+/g, " ").replace(/\n\s+/g, "\n").trim();
   return s;

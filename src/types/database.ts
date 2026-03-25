@@ -12,8 +12,11 @@ export interface Profile {
   role: UserRole;
   avatar_url: string | null;
   groupe_id: string | null;
+  filiere_id: string | null;
   created_at: string;
   updated_at: string;
+  // Relations
+  filiere?: Filiere;
 }
 
 // =============================================
@@ -190,6 +193,29 @@ export interface UserAnswer {
 }
 
 // =============================================
+// Filières de santé
+// =============================================
+
+export interface Filiere {
+  id: string;
+  name: string;
+  code: string;
+  color: string;
+  order_index: number;
+  created_at: string;
+}
+
+export interface MatiereCoefficient {
+  id: string;
+  matiere_id: string;
+  filiere_id: string;
+  coefficient: number;
+  // Relations
+  matiere?: Matiere;
+  filiere?: Filiere;
+}
+
+// =============================================
 // Examens
 // =============================================
 
@@ -200,10 +226,55 @@ export interface Examen {
   debut_at: string;
   fin_at: string;
   visible: boolean;
+  results_visible: boolean;
+  notation_sur: number;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   // Relations
   series?: Serie[];
+  examen_series?: ExamenSerie[];
+}
+
+export interface ExamenSerie {
+  examen_id: string;
+  series_id: string;
+  order_index: number;
+  coefficient: number;
+  // Relations
+  series?: Serie;
+}
+
+export interface ExamenResult {
+  id: string;
+  examen_id: string;
+  user_id: string;
+  score_raw: number | null;
+  score_20: number | null;
+  nb_series_done: number;
+  nb_series_total: number;
+  started_at: string;
+  completed_at: string | null;
+  // Relations
+  user?: Profile;
+  examen?: Examen;
+  serie_results?: ExamenSerieResult[];
+}
+
+export interface ExamenSerieResult {
+  id: string;
+  examen_result_id: string;
+  examen_id: string;
+  series_id: string;
+  user_id: string;
+  attempt_id: string | null;
+  score: number | null;
+  score_20: number | null;
+  nb_correct: number;
+  nb_total: number;
+  completed_at: string | null;
+  // Relations
+  series?: Serie;
 }
 
 // =============================================
