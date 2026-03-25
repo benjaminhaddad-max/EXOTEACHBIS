@@ -234,13 +234,6 @@ export async function deleteDossier(id: string) {
   if (matieresRes.error) return { error: matieresRes.error.message };
   if (coursRes.error) return { error: coursRes.error.message };
 
-  if (!targetParentId && (matieresRes.data?.length ?? 0) > 0) {
-    return {
-      error:
-        "Impossible de supprimer ce dossier racine sans perdre ses matières directes. Déplace d'abord ses matières ou ses sous-dossiers.",
-    };
-  }
-
   let siblingQuery = supabase
     .from("dossiers")
     .select("order_index")
