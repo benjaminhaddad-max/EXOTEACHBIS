@@ -3275,20 +3275,7 @@ function EditUserModal({
               })()}
             </div>
 
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Filière santé</label>
-              <select
-                value={filiereId ?? ""}
-                onChange={e => setFiliereId(e.target.value || null)}
-                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
-                style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
-              >
-                <option value="">Aucune filière</option>
-                {filieres.map((filiere) => (
-                  <option key={filiere.id} value={filiere.id}>{filiere.name}</option>
-                ))}
-              </select>
-            </div>
+            {/* Filière santé — masqué pour l'instant */}
           </div>
 
           {/* Accès individuels — checkbox tree like classes */}
@@ -3387,13 +3374,28 @@ function EditUserModal({
                                     <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.2)" }}>{subMeta2?.shortLabel ?? ""}</span>
                                   </summary>
                                   {subCours.length > 0 && (
-                                    <div className="ml-8 space-y-0 pb-1">
-                                      {subCours.map(c => (
-                                        <div key={c.id} className="flex items-center gap-2 py-0.5 px-2 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                                          <span className="w-1 h-1 rounded-full bg-white/15 shrink-0" />
-                                          {c.name}
-                                        </div>
-                                      ))}
+                                    <div className="ml-6 space-y-0 pb-1">
+                                      {subCours.map(c => {
+                                        const coursChecked = subHasAccess; // Inherit from parent matière for now
+                                        return (
+                                          <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 cursor-pointer rounded hover:bg-white/[0.02]">
+                                            <input
+                                              type="checkbox"
+                                              checked={coursChecked}
+                                              onChange={() => {
+                                                // For now, toggling a cours toggles its parent matière
+                                                if (subIsClass && !subIsExcluded) setExcludedInheritedAccessIds(prev => [...prev, sub.id]);
+                                                else if (subIsExcluded) setExcludedInheritedAccessIds(prev => prev.filter(id => id !== sub.id));
+                                                else if (subIsPersonal) setPersonalAccessIds(prev => prev.filter(id => id !== sub.id));
+                                                else setPersonalAccessIds(prev => [...prev, sub.id]);
+                                              }}
+                                              className="w-3 h-3 rounded border-gray-600 text-emerald-600 focus:ring-emerald-500"
+                                            />
+                                            <span className="text-[11px]" style={{ color: coursChecked ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)" }}>{c.name}</span>
+                                            <span className="text-[8px] ml-auto" style={{ color: "rgba(255,255,255,0.15)" }}>Chapitre</span>
+                                          </label>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </details>
