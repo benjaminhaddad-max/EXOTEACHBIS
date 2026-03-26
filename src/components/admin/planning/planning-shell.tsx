@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, Pencil, Trash2,
   X, Check, AlertCircle, Loader2, Clock, MapPin, Video, Users,
+  GraduationCap, Building2, ChevronDown, Layers,
 } from "lucide-react";
-import type { Groupe } from "@/types/database";
+import type { Groupe, Dossier } from "@/types/database";
 import { createEvent, updateEvent, deleteEvent } from "@/app/(admin)/admin/planning/actions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -107,9 +108,11 @@ function fmt(date: Date, hour: number, minute = 0): string {
 export function PlanningShell({
   initialEvents,
   groupes,
+  dossiers = [],
 }: {
   initialEvents: CalEvent[];
   groupes: Groupe[];
+  dossiers?: Dossier[];
 }) {
   const today = new Date();
   const [events, setEvents] = useState<CalEvent[]>(initialEvents);
@@ -118,6 +121,7 @@ export function PlanningShell({
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
+  const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
 
   const weekStart = getWeekStart(currentDate);
   const weekDays = getWeekDays(weekStart);
@@ -134,6 +138,12 @@ export function PlanningShell({
     const { data } = await supabase.from("events").select("*").order("start_at");
     if (data) setEvents(data as CalEvent[]);
   };
+
+  // Filter events by selected groupe (null = all events)
+  const filteredEvents = useMemo(() => {
+    if (!selectedGroupeId) return events;
+    return events.filter(e => e.groupe_id === null || e.groupe_id === selectedGroupeId);
+  }, [events, selectedGroupeId]);
 
   const handleDelete = (id: string) => {
     if (!confirm("Supprimer cet événement ?")) return;
@@ -162,7 +172,7 @@ export function PlanningShell({
     : `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="flex h-full min-h-0 overflow-hidden">
 
       {/* Toast */}
       {toast && (
@@ -172,67 +182,80 @@ export function PlanningShell({
         </div>
       )}
 
-      {/* Header toolbar */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
-        <div className="flex items-center gap-2">
-          <button onClick={goToday} className="px-3 py-1.5 text-xs font-medium border border-white/20 rounded-lg text-white/70 hover:bg-white/10 transition-colors">
-            Aujourd'hui
-          </button>
-          <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg text-white/50 hover:bg-white/10 transition-colors">
-            <ChevronLeft size={16} />
-          </button>
-          <button onClick={() => navigate(1)} className="p-1.5 rounded-lg text-white/50 hover:bg-white/10 transition-colors">
-            <ChevronRight size={16} />
-          </button>
-          <span className="text-sm font-semibold text-white ml-1">{navTitle}</span>
-        </div>
+      {/* ── Left sidebar ── */}
+      <PlanningSidebar
+        dossiers={dossiers}
+        groupes={groupes}
+        selectedGroupeId={selectedGroupeId}
+        onSelect={setSelectedGroupeId}
+      />
 
-        <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex rounded-lg border border-white/15 overflow-hidden text-xs">
-            <button
-              onClick={() => setViewMode("week")}
-              className={`px-3 py-1.5 font-medium transition-colors ${viewMode === "week" ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10"}`}
-            >
-              Semaine
+      {/* ── Right: header + calendar ── */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+
+        {/* Header toolbar */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-2">
+            <button onClick={goToday} className="px-3 py-1.5 text-xs font-medium border border-white/20 rounded-lg text-white/70 hover:bg-white/10 transition-colors">
+              Aujourd'hui
             </button>
-            <button
-              onClick={() => setViewMode("month")}
-              className={`px-3 py-1.5 font-medium transition-colors ${viewMode === "month" ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10"}`}
-            >
-              Mois
+            <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg text-white/50 hover:bg-white/10 transition-colors">
+              <ChevronLeft size={16} />
             </button>
+            <button onClick={() => navigate(1)} className="p-1.5 rounded-lg text-white/50 hover:bg-white/10 transition-colors">
+              <ChevronRight size={16} />
+            </button>
+            <span className="text-sm font-semibold text-white ml-1">{navTitle}</span>
           </div>
 
-          <button
-            onClick={() => setModal({ type: "create" })}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] transition-colors"
-          >
-            <Plus size={13} /> Nouvel événement
-          </button>
-        </div>
-      </div>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex rounded-lg border border-white/15 overflow-hidden text-xs">
+              <button
+                onClick={() => setViewMode("week")}
+                className={`px-3 py-1.5 font-medium transition-colors ${viewMode === "week" ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10"}`}
+              >
+                Semaine
+              </button>
+              <button
+                onClick={() => setViewMode("month")}
+                className={`px-3 py-1.5 font-medium transition-colors ${viewMode === "month" ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10"}`}
+              >
+                Mois
+              </button>
+            </div>
 
-      {/* Calendar body */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {viewMode === "week" ? (
-          <WeekView
-            days={weekDays}
-            events={events}
-            groupes={groupes}
-            onCellClick={(date, hour) => setModal({ type: "create", prefill: { date, hour } })}
-            onEventClick={(e) => setModal({ type: "view", event: e })}
-          />
-        ) : (
-          <MonthView
-            year={currentDate.getFullYear()}
-            month={currentDate.getMonth()}
-            cells={monthDays}
-            events={events}
-            onCellClick={(date) => setModal({ type: "create", prefill: { date, hour: 9 } })}
-            onEventClick={(e) => setModal({ type: "view", event: e })}
-          />
-        )}
+            <button
+              onClick={() => setModal({ type: "create" })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] transition-colors"
+            >
+              <Plus size={13} /> Nouvel événement
+            </button>
+          </div>
+        </div>
+
+        {/* Calendar body */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {viewMode === "week" ? (
+            <WeekView
+              days={weekDays}
+              events={filteredEvents}
+              groupes={groupes}
+              onCellClick={(date, hour) => setModal({ type: "create", prefill: { date, hour } })}
+              onEventClick={(e) => setModal({ type: "view", event: e })}
+            />
+          ) : (
+            <MonthView
+              year={currentDate.getFullYear()}
+              month={currentDate.getMonth()}
+              cells={monthDays}
+              events={filteredEvents}
+              onCellClick={(date) => setModal({ type: "create", prefill: { date, hour: 9 } })}
+              onEventClick={(e) => setModal({ type: "view", event: e })}
+            />
+          )}
+        </div>
+
       </div>
 
       {/* Modals */}
@@ -276,6 +299,203 @@ export function PlanningShell({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Planning Sidebar ─────────────────────────────────────────────────────────
+
+function PlanningSidebar({
+  dossiers, groupes, selectedGroupeId, onSelect,
+}: {
+  dossiers: Dossier[];
+  groupes: Groupe[];
+  selectedGroupeId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  // Build offer → groups mapping via formation_dossier_id
+  // Offers are dossiers with dossier_type = "offer"
+  const offers = useMemo(
+    () => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index),
+    [dossiers]
+  );
+
+  // Groups by formation_dossier_id
+  const groupsByOffer = useMemo(() => {
+    const map = new Map<string, Groupe[]>();
+    for (const g of groupes) {
+      const key = g.formation_dossier_id;
+      if (key) {
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(g);
+      }
+    }
+    return map;
+  }, [groupes]);
+
+  // Groups with no formation_dossier_id (orphan)
+  const orphanGroupes = useMemo(
+    () => groupes.filter(g => !g.formation_dossier_id),
+    [groupes]
+  );
+
+  // Auto-expand all offers
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(offers.map(o => o.id)));
+
+  const toggleExpand = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const totalEvents = (groupeId: string | null) => groupeId; // just for UI meaning
+
+  return (
+    <div
+      className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto"
+      style={{ width: 220, backgroundColor: "rgba(0,0,0,0.15)" }}
+    >
+      {/* Header */}
+      <div className="px-4 pt-4 pb-2 shrink-0">
+        <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
+          Formations &amp; Classes
+        </p>
+      </div>
+
+      {/* "Tout afficher" */}
+      <div className="px-3 pb-1">
+        <button
+          onClick={() => onSelect(null)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all"
+          style={{
+            backgroundColor: selectedGroupeId === null ? "rgba(201,168,76,0.15)" : "transparent",
+            color: selectedGroupeId === null ? "#E3C286" : "rgba(255,255,255,0.5)",
+            border: selectedGroupeId === null ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent",
+          }}
+          onMouseOver={e => { if (selectedGroupeId !== null) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.05)"; }}
+          onMouseOut={e => { if (selectedGroupeId !== null) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+        >
+          <Layers size={12} />
+          Toutes les classes
+        </button>
+      </div>
+
+      {/* Offers + their groups */}
+      <div className="px-3 pb-4 space-y-0.5 flex-1">
+        {offers.map(offer => {
+          const offerGroups = groupsByOffer.get(offer.id) ?? [];
+          const isOpen = expanded.has(offer.id);
+          return (
+            <div key={offer.id}>
+              {/* Offer row */}
+              <button
+                onClick={() => toggleExpand(offer.id)}
+                className="w-full flex items-center gap-2 px-2 py-2 rounded-lg transition-all"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+                onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+                onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(201,168,76,0.18)" }}>
+                  <GraduationCap size={11} style={{ color: "#C9A84C" }} />
+                </div>
+                <span className="flex-1 text-left text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>
+                  {offer.name}
+                </span>
+                <ChevronDown
+                  size={11}
+                  style={{
+                    color: "rgba(255,255,255,0.3)",
+                    transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                    transition: "transform 0.2s",
+                    flexShrink: 0,
+                  }}
+                />
+              </button>
+
+              {/* Groups under this offer */}
+              {isOpen && offerGroups.length > 0 && (
+                <div className="ml-2 space-y-0.5 mt-0.5">
+                  {offerGroups.map(g => {
+                    const isSelected = selectedGroupeId === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => onSelect(isSelected ? null : g.id)}
+                        className="w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-lg transition-all text-left"
+                        style={{
+                          backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : "transparent",
+                          borderLeft: isSelected ? "2px solid #C9A84C" : "2px solid transparent",
+                        }}
+                        onMouseOver={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+                        onMouseOut={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                      >
+                        <span
+                          className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                          style={{ backgroundColor: g.color }}
+                        >
+                          {g.name[0]?.toUpperCase()}
+                        </span>
+                        <span
+                          className="flex-1 text-[11px] truncate font-medium"
+                          style={{ color: isSelected ? "#E3C286" : "rgba(255,255,255,0.65)" }}
+                        >
+                          {g.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {isOpen && offerGroups.length === 0 && (
+                <p className="pl-9 pb-1 text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>
+                  Aucune classe
+                </p>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Orphan groups (no formation) */}
+        {orphanGroupes.length > 0 && (
+          <div>
+            <p className="px-2 pt-3 pb-1 text-[9px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>
+              Sans formation
+            </p>
+            {orphanGroupes.map(g => {
+              const isSelected = selectedGroupeId === g.id;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => onSelect(isSelected ? null : g.id)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
+                  style={{
+                    backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : "transparent",
+                    borderLeft: isSelected ? "2px solid #C9A84C" : "2px solid transparent",
+                  }}
+                  onMouseOver={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+                  onMouseOut={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                >
+                  <span
+                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                    style={{ backgroundColor: g.color }}
+                  >
+                    {g.name[0]?.toUpperCase()}
+                  </span>
+                  <span
+                    className="flex-1 text-[11px] truncate font-medium"
+                    style={{ color: isSelected ? "#E3C286" : "rgba(255,255,255,0.65)" }}
+                  >
+                    {g.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
