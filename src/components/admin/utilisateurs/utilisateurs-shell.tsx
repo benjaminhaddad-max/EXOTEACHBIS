@@ -3289,70 +3289,28 @@ function EditUserModal({
             </div>
           </div>
 
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Périmètre e-learning</label>
-            <p className="mb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-              La classe donne un accès automatique. Tu peux ensuite ajouter un accès perso complémentaire avec l&apos;arborescence ci-dessous.
-            </p>
-            <div className="space-y-4">
-              <AccessBadges
-                title="Accès hérité de la classe"
-                dossierIds={inheritedAccessIds}
-                dossiers={dossiers}
-                accent="green"
-                emptyLabel="Aucun accès hérité pour cette classe"
-              />
-
-              {groupeId && inheritedAccessIds.length > 0 && (
-                <AccessScopeTree
-                  dossierTree={inheritedTree}
-                  dossierList={dossiers}
-                  selectedIds={[]}
-                  inheritedIds={inheritedAccessIds}
-                  readOnly
-                  accent="green"
-                />
-              )}
-
-              {groupeId && inheritedExpandedIds.length > 0 && (
-                <>
-                  <AccessBadges
-                    title="Accès retirés sur héritage"
-                    dossierIds={excludedInheritedAccessIds}
-                    dossiers={dossiers}
-                    accent="red"
-                    emptyLabel="Aucun retrait perso sur l'accès hérité"
-                  />
-
-                  <AccessScopeTree
-                    dossierTree={inheritedTree}
-                    dossierList={dossiers}
-                    selectedIds={excludedInheritedAccessIds}
-                    onChange={setExcludedInheritedAccessIds}
-                    disabled={isPending}
-                    accent="red"
-                  />
-                </>
-              )}
-
-              <AccessBadges
-                title="Accès perso complémentaire"
-                dossierIds={personalAccessIds}
-                dossiers={dossiers}
-                accent="gold"
-                emptyLabel="Aucun accès perso complémentaire"
-              />
-
-              <AccessScopeTree
-                dossierTree={dossierTree}
-                dossierList={dossiers}
-                selectedIds={personalAccessIds}
-                onChange={setPersonalAccessIds}
-                disabled={isPending}
-                accent="gold"
-              />
+          {/* Accès — simple summary */}
+          {groupeId && inheritedAccessIds.length > 0 && (
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Accès (via la classe)</label>
+              <div className="rounded-xl p-3" style={{ backgroundColor: "rgba(52,211,153,0.05)", border: "1px solid rgba(52,211,153,0.15)" }}>
+                <div className="flex flex-wrap gap-1.5">
+                  {inheritedAccessIds.map(id => {
+                    const d = dossiers.find(dd => dd.id === id);
+                    if (!d) return null;
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: "rgba(52,211,153,0.1)", color: "#6EE7B7" }}>
+                        {d.name}
+                      </span>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  Les accès sont gérés via la classe. Pour modifier, va dans l&apos;onglet Administration → clique sur l&apos;université.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           {role === "prof" && (
             <div>
@@ -3403,9 +3361,7 @@ function EditUserModal({
         </div>
 
         <div className="flex items-center justify-between gap-3 px-5 pb-5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Groupe = classe/promo, formation = rattachement pédagogique, périmètre e-learning = sous-arbre visible, matières = affectation professeur.
-          </div>
+          <div />
           <div className="flex items-center justify-end gap-2">
             <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs transition-colors"
             style={{ color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}
