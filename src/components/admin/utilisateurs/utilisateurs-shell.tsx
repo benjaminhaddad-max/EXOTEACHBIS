@@ -691,6 +691,10 @@ function AdministrationView({
     () => allGroupes.find((groupe) => groupe.id === selectedAdminGroupeId) ?? null,
     [allGroupes, selectedAdminGroupeId]
   );
+  const selectedOffer = useMemo(
+    () => offers.find((offer) => offer.code === selectedOfferCode) ?? offers[0] ?? null,
+    [offers, selectedOfferCode]
+  );
 
   const normalizedInitialOffers = JSON.stringify(formationOffers);
   const normalizedInitialPresets = JSON.stringify(dossierNamePresets);
@@ -748,141 +752,29 @@ function AdministrationView({
   };
 
   return (
-    <div className="p-5 space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-white">Administration pédagogique</h2>
-        <p className="mt-1 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
-          Ici tu pilotes les offres de formation visibles et les suggestions de noms proposées dans l&apos;arborescence pédagogie.
-        </p>
-      </div>
-
-      <section className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Offres de formation</h3>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-              Ces réglages servent à l&apos;installation des offres racines et au formulaire de création des dossiers.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleAddOffer}
-            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-            style={{ backgroundColor: "rgba(201,168,76,0.16)", color: "#F5D78E" }}
-          >
-            <Plus size={12} className="mr-1 inline-block" />
-            Ajouter une offre
-          </button>
-        </div>
-        <div className="space-y-3">
-          {offers.map((offer, index) => (
-            <div key={offer.code} className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: offer.defaultColor }} />
-                  <p className="text-sm font-semibold text-white">{offer.code}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, enabled: !item.enabled } : item))}
-                    className="rounded-full px-3 py-1 text-[11px] font-semibold"
-                    style={{
-                      backgroundColor: offer.enabled ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.06)",
-                      color: offer.enabled ? "#86EFAC" : "rgba(255,255,255,0.5)",
-                    }}
-                  >
-                    {offer.enabled ? "Active" : "Masquée"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteOffer(offer.code)}
-                    className="rounded-lg p-2 text-red-300"
-                    style={{ backgroundColor: "rgba(239,68,68,0.1)" }}
-                    title="Supprimer l'offre"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Code</label>
-                  <input
-                    value={offer.code}
-                    onChange={(e) => upsertOfferCode(offer.code, e.target.value)}
-                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Nom affiché</label>
-                  <input
-                    value={offer.label}
-                    onChange={(e) => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, label: e.target.value } : item))}
-                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Couleur</label>
-                  <input
-                    value={offer.defaultColor}
-                    onChange={(e) => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, defaultColor: e.target.value } : item))}
-                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                  />
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Description</label>
-                <textarea
-                  value={offer.description}
-                  onChange={(e) => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, description: e.target.value } : item))}
-                  rows={2}
-                  className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                />
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={index === 0}
-                  onClick={() => setOffers((prev) => {
-                    const next = [...prev];
-                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                    return next.map((item, itemIndex) => ({ ...item, orderIndex: itemIndex }));
-                  })}
-                  className="rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
-                >
-                  Monter
-                </button>
-                <button
-                  type="button"
-                  disabled={index === offers.length - 1}
-                  onClick={() => setOffers((prev) => {
-                    const next = [...prev];
-                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
-                    return next.map((item, itemIndex) => ({ ...item, orderIndex: itemIndex }));
-                  })}
-                  className="rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
-                  style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
-                >
-                  Descendre
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
+    <div className="p-5">
       <section className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-white">Offres, classes et accès</h3>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-            Ici tu pilotes les classes rattachées à chaque offre, leurs membres et leurs accès à l&apos;arborescence e-learning.
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-white">Offres, classes et accès</h2>
+              <p className="mt-1 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
+                Clique sur une offre pour la modifier, ou sur une classe pour gérer ses utilisateurs et ses accès.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddOffer}
+              className="rounded-lg px-3 py-2 text-xs font-semibold"
+              style={{ backgroundColor: "rgba(201,168,76,0.16)", color: "#F5D78E" }}
+            >
+              <Plus size={12} className="mr-1 inline-block" />
+              Ajouter une offre
+            </button>
+          </div>
+          <div className="mt-3 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+            Les suggestions de noms restent en fond, mais ne prennent plus de place ici.
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -901,7 +793,10 @@ function AdministrationView({
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => setSelectedOfferCode(bucket.code)}
+                      onClick={() => {
+                        setSelectedOfferCode(bucket.code);
+                        setSelectedAdminGroupeId(null);
+                      }}
                       className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     >
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: bucket.color }} />
@@ -983,135 +878,210 @@ function AdministrationView({
                 onSaveAccess={onSaveAccess}
                 showToast={showToast}
               />
+            ) : selectedOffer ? (
+              <OfferEditorPanel
+                offer={selectedOffer}
+                offerIndex={offers.findIndex((item) => item.code === selectedOffer.code)}
+                offerCount={offers.length}
+                linkedClassCount={selectedOfferBucket?.groups.length ?? 0}
+                hasChanges={hasChanges}
+                isPending={isPending}
+                onChange={(changes) => setOffers((prev) => prev.map((item) => item.code === selectedOffer.code ? { ...item, ...changes } : item))}
+                onChangeCode={(nextCodeRaw) => upsertOfferCode(selectedOffer.code, nextCodeRaw)}
+                onMoveUp={() => setOffers((prev) => {
+                  const index = prev.findIndex((item) => item.code === selectedOffer.code);
+                  if (index <= 0) return prev;
+                  const next = [...prev];
+                  [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                  return next.map((item, itemIndex) => ({ ...item, orderIndex: itemIndex }));
+                })}
+                onMoveDown={() => setOffers((prev) => {
+                  const index = prev.findIndex((item) => item.code === selectedOffer.code);
+                  if (index === -1 || index >= prev.length - 1) return prev;
+                  const next = [...prev];
+                  [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                  return next.map((item, itemIndex) => ({ ...item, orderIndex: itemIndex }));
+                })}
+                onDelete={() => handleDeleteOffer(selectedOffer.code)}
+                onSave={() => onSave(offers, presets)}
+                onCreateClass={() => onCreateGroupe(selectedOfferBucket?.rootDossierId ?? null)}
+              />
             ) : (
               <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
-                <p className="text-sm font-semibold text-white">
-                  {selectedOfferBucket ? `Aucune classe dans ${selectedOfferBucket.label}` : "Aucune offre disponible"}
-                </p>
+                <p className="text-sm font-semibold text-white">Aucune offre disponible</p>
                 <p className="mt-2 max-w-md text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                  Crée une première classe pour cette offre, puis tu pourras y gérer les utilisateurs et les accès aux dossiers de l&apos;arborescence.
+                  Crée une offre de formation, puis tu pourras y rattacher des classes et leurs accès.
                 </p>
-                {selectedOfferBucket && (
-                  <button
-                    type="button"
-                    onClick={() => onCreateGroupe(selectedOfferBucket.rootDossierId)}
-                    className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold"
-                    style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
-                  >
-                    Créer une classe
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleAddOffer}
+                  className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold"
+                  style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+                >
+                  Créer une offre
+                </button>
               </div>
             )}
           </div>
         </div>
       </section>
+    </div>
+  );
+}
 
-      <section className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Suggestions de noms d&apos;arborescence</h3>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-              Ces suggestions apparaissent ensuite dans le formulaire de création des dossiers dans `Pédagogie`.
-            </p>
+function OfferEditorPanel({
+  offer,
+  offerIndex,
+  offerCount,
+  linkedClassCount,
+  hasChanges,
+  isPending,
+  onChange,
+  onChangeCode,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+  onSave,
+  onCreateClass,
+}: {
+  offer: FormationOfferSetting;
+  offerIndex: number;
+  offerCount: number;
+  linkedClassCount: number;
+  hasChanges: boolean;
+  isPending: boolean;
+  onChange: (changes: Partial<FormationOfferSetting>) => void;
+  onChangeCode: (nextCode: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDelete: () => void;
+  onSave: () => void;
+  onCreateClass: () => void;
+}) {
+  return (
+    <div className="p-5">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: offer.defaultColor }} />
+            <h3 className="truncate text-lg font-bold text-white">{offer.label}</h3>
+            <span
+              className="rounded-full px-3 py-1 text-[11px] font-semibold"
+              style={{
+                backgroundColor: offer.enabled ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.06)",
+                color: offer.enabled ? "#86EFAC" : "rgba(255,255,255,0.5)",
+              }}
+            >
+              {offer.enabled ? "Active" : "Masquée"}
+            </span>
           </div>
+          <p className="mt-2 text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+            {linkedClassCount} classe{linkedClassCount !== 1 ? "s" : ""} rattachée{linkedClassCount !== 1 ? "s" : ""} à cette offre.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            disabled={offers.length === 0}
-            onClick={() => setPresets((prev) => [
-              ...prev,
-              {
-                id: `custom_${Date.now()}`,
-                formationOffer: offers[0]?.code ?? "prepa_pass",
-                dossierType: "period",
-                title: "Nouveau preset",
-                suggestions: [],
-              },
-            ])}
-            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
+            onClick={() => onChange({ enabled: !offer.enabled })}
+            className="rounded-xl px-3 py-2 text-xs font-semibold"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
+          >
+            {offer.enabled ? "Masquer l’offre" : "Activer l’offre"}
+          </button>
+          <button
+            type="button"
+            onClick={onCreateClass}
+            className="rounded-xl px-3 py-2 text-xs font-semibold"
             style={{ backgroundColor: "rgba(201,168,76,0.16)", color: "#F5D78E" }}
           >
-            <Plus size={12} className="inline-block mr-1" />
-            Ajouter un preset
+            <Plus size={12} className="mr-1 inline-block" />
+            Ajouter une classe
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-xl px-3 py-2 text-xs font-semibold text-red-300"
+            style={{ backgroundColor: "rgba(239,68,68,0.1)" }}
+          >
+            <Trash2 size={12} className="mr-1 inline-block" />
+            Supprimer l’offre
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Code</label>
+          <input
+            value={offer.code}
+            onChange={(e) => onChangeCode(e.target.value)}
+            className="w-full rounded-xl px-3 py-2 text-sm text-white"
+            style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Nom affiché</label>
+          <input
+            value={offer.label}
+            onChange={(e) => onChange({ label: e.target.value })}
+            className="w-full rounded-xl px-3 py-2 text-sm text-white"
+            style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Couleur</label>
+          <input
+            value={offer.defaultColor}
+            onChange={(e) => onChange({ defaultColor: e.target.value })}
+            className="w-full rounded-xl px-3 py-2 text-sm text-white"
+            style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Description</label>
+        <textarea
+          value={offer.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          rows={3}
+          className="w-full rounded-xl px-3 py-2 text-sm text-white"
+          style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+        />
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={offerIndex <= 0}
+            onClick={onMoveUp}
+            className="rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
+          >
+            Monter
+          </button>
+          <button
+            type="button"
+            disabled={offerIndex === -1 || offerIndex >= offerCount - 1}
+            onClick={onMoveDown}
+            className="rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
+          >
+            Descendre
           </button>
         </div>
 
-        <div className="space-y-3">
-          {presets.map((preset) => (
-            <div key={preset.id} className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <input
-                  value={preset.title}
-                  onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? { ...item, title: e.target.value } : item))}
-                  className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setPresets((prev) => prev.filter((item) => item.id !== preset.id))}
-                  className="rounded-lg p-2 text-red-300"
-                  style={{ backgroundColor: "rgba(239,68,68,0.1)" }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Offre</label>
-                  <select
-                    value={preset.formationOffer}
-                    onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? { ...item, formationOffer: e.target.value as any } : item))}
-                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                    style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
-                  >
-                    {offers.map((offer) => (
-                      <option key={offer.code} value={offer.code}>{offer.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Type de dossier</label>
-                  <select
-                    value={preset.dossierType}
-                    onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? { ...item, dossierType: e.target.value as any } : item))}
-                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                    style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
-                  >
-                    {Object.entries(DOSSIER_TYPE_META).map(([type, meta]) => (
-                      <option key={type} value={type}>{meta.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Suggestions</label>
-                <textarea
-                  value={preset.suggestions.join(", ")}
-                  onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? {
-                    ...item,
-                    suggestions: e.target.value.split(",").map((value) => value.trim()).filter(Boolean),
-                  } : item))}
-                  rows={3}
-                  placeholder="Ex: Université Paris-Cité, Sorbonne Université, Université Paris-Saclay"
-                  className="w-full rounded-xl px-3 py-2 text-sm text-white"
-                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => onSave(offers, presets)}
+          onClick={onSave}
           disabled={!hasChanges || isPending}
           className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
           style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
         >
           {isPending && <Loader2 size={14} className="animate-spin" />}
-          Enregistrer l&apos;administration
+          Enregistrer la formation
         </button>
       </div>
     </div>
