@@ -56,9 +56,16 @@ interface DossierGroupTreeProps {
 
 // ─── Build tree ───────────────────────────────────────────────────────────
 
+// Only show offer + university levels in the admin tree
+// Semesters/subjects/chapters are managed via checkboxes in the right panel
+const ADMIN_TREE_TYPES = new Set(["offer", "university"]);
+
 function buildDossierTree(dossiers: Dossier[]): DossierNode[] {
+  // Filter to only show offer and university dossiers
+  const filtered = dossiers.filter(d => ADMIN_TREE_TYPES.has(d.dossier_type));
+
   const map = new Map<string, DossierNode>();
-  for (const d of dossiers) map.set(d.id, { ...d, children: [] });
+  for (const d of filtered) map.set(d.id, { ...d, children: [] });
 
   const roots: DossierNode[] = [];
   for (const node of map.values()) {
