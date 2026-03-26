@@ -33,6 +33,7 @@ import { DOSSIER_TYPE_META, getDossierPathLabel, inferOfferFromAncestors } from 
 import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 import { expandDossierTree } from "@/lib/access-scope";
 import { DossierGroupTree } from "./dossier-group-tree";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -194,6 +195,7 @@ export function UtilisateursShell({
   initialFormationOffers,
   initialDossierNamePresets,
   initialCours = [],
+  initialGroupeCoursAcces = [],
 }: {
   initialUsers: Profile[];
   initialGroupes: Groupe[];
@@ -207,6 +209,7 @@ export function UtilisateursShell({
   initialFormationOffers: FormationOfferSetting[];
   initialDossierNamePresets: DossierNamePreset[];
   initialCours?: { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[];
+  initialGroupeCoursAcces?: { groupe_id: string; cours_id: string }[];
 }) {
   const [view, setView] = useState<"comptes" | "groupe" | "administration" | "dossier_summary">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
@@ -215,6 +218,7 @@ export function UtilisateursShell({
   const [groupes, setGroupes] = useState<Groupe[]>(initialGroupes);
   const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
   const [groupeDossierAcces, setGroupeDossierAcces] = useState<GroupeDossierAcces[]>(initialGroupeDossierAcces);
+  const [groupeCoursAcces, setGroupeCoursAcces] = useState<{ groupe_id: string; cours_id: string }[]>(initialGroupeCoursAcces);
   const [profileDossierAcces, setProfileDossierAcces] = useState<ProfileDossierAcces[]>(initialProfileDossierAcces);
   const [profileDossierAccessExclusions, setProfileDossierAccessExclusions] = useState<ProfileDossierAccesExclusion[]>(initialProfileDossierAccessExclusions);
   const [formationOffers, setFormationOffers] = useState<FormationOfferSetting[]>(initialFormationOffers);
@@ -625,7 +629,16 @@ export function UtilisateursShell({
                       Classes ({directGroups.length})
                     </h3>
                     <button
-                      onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
+                      onClick={() => {
+                        const name = prompt("Nom de la classe :");
+                        if (!name?.trim()) return;
+                        startTransition(async () => {
+                          const res = await createGroupe({ name: name.trim(), formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
+                          if ("error" in res) { showToast(res.error!, "error"); return; }
+                          showToast("Classe créée", "success");
+                          window.location.reload();
+                        });
+                      }}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-gold hover:bg-gold/5 transition-colors border border-gold/20"
                     >
                       <Plus size={10} /> Nouvelle classe
@@ -637,6 +650,9 @@ export function UtilisateursShell({
                     const groupAccessIds = groupeDossierAcces
                       .filter(a => a.groupe_id === g.id)
                       .map(a => a.dossier_id);
+                    const groupCoursAccessIds = new Set(
+                      groupeCoursAcces.filter(a => a.groupe_id === g.id).map(a => a.cours_id)
+                    );
 
                     return (
                       <details key={g.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden group/class">
@@ -662,16 +678,17 @@ export function UtilisateursShell({
                             const accessSet = new Set(groupAccessIds);
 
                             const toggleAccess = (dossierId: string) => {
-                              const next = accessSet.has(dossierId)
+                              const has = accessSet.has(dossierId);
+                              const next = has
                                 ? groupAccessIds.filter(id => id !== dossierId)
                                 : [...groupAccessIds, dossierId];
-                              startTransition(async () => {
-                                await saveGroupeDossierAcces(g.id, next);
-                                setGroupeDossierAcces(prev => [
-                                  ...prev.filter(a => a.groupe_id !== g.id),
-                                  ...next.map(did => ({ groupe_id: g.id, dossier_id: did, created_at: "" }))
-                                ]);
-                              });
+                              // Optimistic update (instant)
+                              setGroupeDossierAcces(prev => [
+                                ...prev.filter(a => a.groupe_id !== g.id),
+                                ...next.map(did => ({ groupe_id: g.id, dossier_id: did, created_at: "" }))
+                              ]);
+                              // Server update (async, no blocking)
+                              saveGroupeDossierAcces(g.id, next).catch(() => {});
                             };
 
                             return (
@@ -714,10 +731,29 @@ export function UtilisateursShell({
                                                 {subCours2.length > 0 && (
                                                   <div className="ml-7 space-y-0">
                                                     {subCours2.map(c => (
-                                                      <div key={c.id} className="flex items-center gap-2 py-0.5 px-2 text-[11px] text-gray-500">
-                                                        <FileText size={10} className="text-gray-300 shrink-0" />
-                                                        {c.name}
-                                                      </div>
+                                                      <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
+                                                        <input
+                                                          type="checkbox"
+                                                          checked={groupCoursAccessIds.has(c.id)}
+                                                          onChange={() => {
+                                                            const has = groupCoursAccessIds.has(c.id);
+                                                            // Optimistic update
+                                                            setGroupeCoursAcces(prev => has
+                                                              ? prev.filter(a => !(a.groupe_id === g.id && a.cours_id === c.id))
+                                                              : [...prev, { groupe_id: g.id, cours_id: c.id }]
+                                                            );
+                                                            // Server update
+                                                            const sb = createBrowserClient();
+                                                            if (has) {
+                                                              sb.from("groupe_cours_acces").delete().eq("groupe_id", g.id).eq("cours_id", c.id).then(() => {});
+                                                            } else {
+                                                              sb.from("groupe_cours_acces").insert({ groupe_id: g.id, cours_id: c.id }).then(() => {});
+                                                            }
+                                                          }}
+                                                          className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                                        />
+                                                        <span className="text-[11px] text-gray-600">{c.name}</span>
+                                                      </label>
                                                     ))}
                                                   </div>
                                                 )}
@@ -730,10 +766,27 @@ export function UtilisateursShell({
                                       {childCours.length > 0 && subChildren.length === 0 && (
                                         <div className="ml-8 space-y-0">
                                           {childCours.map(c => (
-                                            <div key={c.id} className="flex items-center gap-2 py-0.5 px-2 text-[11px] text-gray-500">
-                                              <FileText size={10} className="text-gray-300 shrink-0" />
-                                              {c.name}
-                                            </div>
+                                            <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={groupCoursAccessIds.has(c.id)}
+                                                onChange={() => {
+                                                  const has = groupCoursAccessIds.has(c.id);
+                                                  setGroupeCoursAcces(prev => has
+                                                    ? prev.filter(a => !(a.groupe_id === g.id && a.cours_id === c.id))
+                                                    : [...prev, { groupe_id: g.id, cours_id: c.id }]
+                                                  );
+                                                  const sb = createBrowserClient();
+                                                  if (has) {
+                                                    sb.from("groupe_cours_acces").delete().eq("groupe_id", g.id).eq("cours_id", c.id).then(() => {});
+                                                  } else {
+                                                    sb.from("groupe_cours_acces").insert({ groupe_id: g.id, cours_id: c.id }).then(() => {});
+                                                  }
+                                                }}
+                                                className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                              />
+                                              <span className="text-[11px] text-gray-600">{c.name}</span>
+                                            </label>
                                           ))}
                                         </div>
                                       )}
@@ -786,7 +839,16 @@ export function UtilisateursShell({
                   <Users className="mx-auto h-8 w-8 text-gray-300 mb-2" />
                   <p className="text-sm font-medium text-gray-400">Aucune classe ici</p>
                   <button
-                    onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
+                    onClick={() => {
+                      const name = prompt("Nom de la classe :");
+                      if (!name?.trim()) return;
+                      startTransition(async () => {
+                        const res = await createGroupe({ name: name.trim(), formation_dossier_id: dossier.id, color: "#3B82F6", annee: "2026-2027" });
+                        if ("error" in res) { showToast(res.error!, "error"); return; }
+                        showToast("Classe créée", "success");
+                        window.location.reload();
+                      });
+                    }}
                     className="mt-3 flex items-center gap-1.5 mx-auto px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
                     style={{ backgroundColor: "#0e1e35" }}
                   >
