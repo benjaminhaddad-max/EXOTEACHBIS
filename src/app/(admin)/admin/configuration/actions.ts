@@ -149,3 +149,34 @@ export async function deleteFormField(fieldId: string) {
   revalidatePath(STUDENT_COACHING_PATH);
   return { success: true };
 }
+
+export async function saveFormFieldOrder(data: {
+  form_template_id: string;
+  field_ids: string[];
+}) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const updates = data.field_ids.map((fieldId, index) =>
+    admin
+      .from("form_fields")
+      .update({
+        order_index: (index + 1) * 10,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", fieldId)
+      .eq("form_template_id", data.form_template_id)
+  );
+
+  const results = await Promise.all(updates);
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    return { error: failed.error.message };
+  }
+
+  revalidatePath(CONFIGURATION_PATH);
+  revalidatePath(COACHING_PATH);
+  revalidatePath(STUDENT_COACHING_PATH);
+  return { success: true };
+}
