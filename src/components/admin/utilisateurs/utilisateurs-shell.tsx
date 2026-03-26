@@ -5,7 +5,7 @@ import {
   Users, Search, Pencil, Trash2, X, Check,
   AlertCircle, Loader2, Plus, ShieldCheck, GraduationCap,
   BookOpen, Crown, ChevronDown, ChevronRight, Folder,
-  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2, FileText,
+  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2, FileText, Copy,
 } from "lucide-react";
 import type {
   Profile,
@@ -457,7 +457,7 @@ export function UtilisateursShell({
             }}
           >
             <Users size={12} />
-            {users.length} comptes
+            Liste des utilisateurs
           </button>
         </div>
 
@@ -544,6 +544,7 @@ export function UtilisateursShell({
             dossierTree={dossierTree}
             dossierList={initialDossiers}
             accessIds={groupeAccessById.get(selectedGroupe.id) ?? []}
+            groupeAccessById={groupeAccessById}
             isPending={isPending}
             onEditGroupe={(g) => setModal({ type: "edit_groupe", groupe: g })}
             onDeleteGroupe={handleDeleteGroupe}
@@ -2018,6 +2019,7 @@ function ComptesView({
 
 function GroupeDetail({
   groupe, allGroupes, allUsers, dossierTree, dossierList, accessIds,
+  groupeAccessById,
   isPending, onEditGroupe, onDeleteGroupe, onEditUser, onRemoveUser, onAddUser, onSaveAccess, showToast,
 }: {
   groupe: Groupe;
@@ -2026,6 +2028,7 @@ function GroupeDetail({
   dossierTree: DossierNode[];
   dossierList: Dossier[];
   accessIds: string[];
+  groupeAccessById: Map<string, string[]>;
   isPending: boolean;
   onEditGroupe: (g: Groupe) => void;
   onDeleteGroupe: (id: string) => void;
@@ -2109,6 +2112,8 @@ function GroupeDetail({
       {tab === "acces" && (
         <AccesTab
           groupe={groupe}
+          allGroupes={allGroupes}
+          groupeAccessById={groupeAccessById}
           dossierTree={dossierTree}
           dossierList={dossierList}
           initialAccessIds={accessIds}
@@ -2594,6 +2599,8 @@ function AccessBadges({
 
 function AccesTab({
   groupe,
+  allGroupes,
+  groupeAccessById,
   dossierTree,
   dossierList,
   initialAccessIds,
@@ -2601,6 +2608,8 @@ function AccesTab({
   onSave,
 }: {
   groupe: Groupe;
+  allGroupes: Groupe[];
+  groupeAccessById: Map<string, string[]>;
   dossierTree: DossierNode[];
   dossierList: Dossier[];
   initialAccessIds: string[];
@@ -2609,6 +2618,8 @@ function AccesTab({
   showToast: (msg: string, kind: "success" | "error") => void;
 }) {
   const [accessIds, setAccessIds] = useState<string[]>(initialAccessIds);
+  const [showDuplicateDropdown, setShowDuplicateDropdown] = useState(false);
+  const [duplicateConfirm, setDuplicateConfirm] = useState<Groupe | null>(null);
 
   useEffect(() => {
     setAccessIds(initialAccessIds);
@@ -2617,6 +2628,20 @@ function AccesTab({
   const normalizedInitial = [...initialAccessIds].sort().join("|");
   const normalizedCurrent = [...accessIds].sort().join("|");
   const hasChanges = normalizedInitial !== normalizedCurrent;
+
+  // Other groups that have at least one access set (exclude current)
+  const groupesWithAccess = useMemo(
+    () => allGroupes.filter(g => g.id !== groupe.id && (groupeAccessById.get(g.id) ?? []).length > 0),
+    [allGroupes, groupe.id, groupeAccessById]
+  );
+
+  function handleDuplicate(source: Groupe) {
+    const sourceIds = groupeAccessById.get(source.id) ?? [];
+    setAccessIds(sourceIds);
+    setShowDuplicateDropdown(false);
+    setDuplicateConfirm(source);
+    setTimeout(() => setDuplicateConfirm(null), 3000);
+  }
 
   return (
     <div className="space-y-4">
@@ -2628,6 +2653,69 @@ function AccesTab({
           Tu peux donc définir le niveau d&apos;accès une seule fois ici, puis simplement rattacher les élèves ou les professeurs à la bonne classe.
         </p>
       </div>
+
+      {/* Duplicate from another class */}
+      {groupesWithAccess.length > 0 && (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowDuplicateDropdown(p => !p)}
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all w-full"
+            style={{
+              backgroundColor: showDuplicateDropdown ? "rgba(201,168,76,0.15)" : "rgba(201,168,76,0.08)",
+              border: "1px solid rgba(201,168,76,0.25)",
+              color: "#E3C286",
+            }}
+          >
+            <Copy size={13} />
+            Dupliquer les accès d&apos;une autre classe
+            <ChevronDown size={12} className="ml-auto" style={{ transform: showDuplicateDropdown ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+          </button>
+
+          {showDuplicateDropdown && (
+            <div
+              className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden"
+              style={{ backgroundColor: "#1a1f2e", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}
+            >
+              <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                Choisir la classe source
+              </p>
+              <div className="max-h-48 overflow-y-auto">
+                {groupesWithAccess.map(g => {
+                  const count = (groupeAccessById.get(g.id) ?? []).length;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => handleDuplicate(g)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors"
+                      style={{ color: "rgba(255,255,255,0.8)" }}
+                      onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)")}
+                      onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                    >
+                      <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ backgroundColor: g.color }}>
+                        {g.name[0].toUpperCase()}
+                      </span>
+                      <span className="flex-1 text-xs font-medium truncate">{g.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "#34D399" }}>
+                        {count} accès
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirmation banner after duplicate */}
+      {duplicateConfirm && (
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)", color: "#E3C286" }}>
+          <Check size={13} />
+          Accès de <strong className="mx-1">{duplicateConfirm.name}</strong> appliqués — modifie ou enregistre ci-dessous.
+        </div>
+      )}
 
       <AccessBadges
         title="Accès de la classe"
