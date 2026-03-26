@@ -304,9 +304,17 @@ export function UtilisateursShell({
   const handleSaveUser = useCallback(async (userId: string, changes: AdminUserChanges) => {
     setSavingUser(true);
     try {
-      const res = await updateUserAdminProfile({ userId, ...changes });
+      // Add timeout to prevent infinite spinner
+      const timeoutPromise = new Promise<{ error: string }>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout — la sauvegarde a pris trop de temps")), 15000)
+      );
+      const res = await Promise.race([
+        updateUserAdminProfile({ userId, ...changes }),
+        timeoutPromise,
+      ]);
       if ("error" in res) { showToast(res.error!, "error"); setSavingUser(false); return; }
-      await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]);
+      // Refresh data (but don't block on it)
+      Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]).catch(() => {});
       setModal(null);
       showToast("Modifié", "success");
     } catch (err: any) {
