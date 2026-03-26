@@ -87,9 +87,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            "X-Nexus-Token": token,
-            nexustoken: token,
+            "x-token": token,
           },
           body: JSON.stringify({ query: GET_SERIE, variables: { id: String(id) } }),
         });

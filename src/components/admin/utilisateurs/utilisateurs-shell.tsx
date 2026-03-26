@@ -511,7 +511,7 @@ export function UtilisateursShell({
               const newName = prompt("Renommer :", dossier.name);
               if (!newName?.trim() || newName.trim() === dossier.name) return;
               startTransition(async () => {
-                const res = await updateDossierAction(dossier.id, { name: newName.trim() });
+                const res = await updateDossierAction(dossier.id, { name: newName.trim(), color: dossier.color, visible: dossier.visible });
                 if ("error" in res) { showToast(res.error!, "error"); return; }
                 showToast("Renommé", "success");
                 window.location.reload();
