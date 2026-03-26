@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, Groupe, Profile } from "@/types/database";
 import { FormulairesSidebar, type SidebarFilter } from "./formulaires-sidebar";
-import { ConfigurationShell } from "@/components/admin/configuration/configuration-shell";
+import { FormulaireEditor } from "./formulaire-editor";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -204,17 +204,16 @@ export function FormulairesShell({
           )}
 
           {activeView === "editor" && (
-            <div className="rounded-2xl overflow-hidden">
-              <ConfigurationShell
-                currentProfile={currentProfile}
-                initialTemplates={initialTemplates}
-                initialFields={initialFields}
-                initialDossiers={initialDossiers}
-                initialGroupes={initialGroupes}
-                initialStudents={initialStudents}
-                initialResponses={initialResponses}
-              />
-            </div>
+            <FormulaireEditor
+              initialTemplates={initialTemplates}
+              initialFields={initialFields}
+              initialDossiers={initialDossiers}
+              initialGroupes={initialGroupes}
+              initialStudents={initialStudents}
+              initialResponses={initialResponses}
+              selectedTemplateId={selectedTemplateId}
+              showToast={showToast}
+            />
           )}
 
           {activeView === "responses" && selectedTemplate && (
