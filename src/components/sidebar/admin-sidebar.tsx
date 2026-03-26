@@ -24,7 +24,7 @@ const adminNavItems = [
   // { href: "/admin/flashcards", label: "Flashcards", icon: Layers }, // Intégré dans Pédagogie & Exercices
   { href: "/admin/questions-reponses", label: "Questions / Réponses", icon: MessageCircleQuestion },
   { href: "/admin/annonces", label: "Annonces", icon: Megaphone },
-  { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
+  { href: "/admin/utilisateurs", label: "Administration", icon: Users },
   // { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard }, // Désactivé temporairement
   { href: "/admin/planning", label: "Planning", icon: Calendar },
   { href: "/admin/configuration", label: "Configuration", icon: Settings },

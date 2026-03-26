@@ -53,19 +53,19 @@ const FAQ_SECTIONS = [
   {
     id: "utilisateurs",
     icon: Users,
-    title: "Utilisateurs & Groupes",
+    title: "Administration",
     questions: [
       {
         q: "Comment changer le rôle d'un utilisateur ?",
-        a: "Dans Utilisateurs > trouvez l'utilisateur > cliquez sur l'icône crayon > modifiez le rôle (élève, prof, admin). Les profs peuvent créer des événements mais n'ont pas accès à la gestion des abonnements.",
+        a: "Dans Administration > trouvez l'utilisateur > cliquez sur l'icône crayon > modifiez le rôle (élève, coach, prof, admin). Les profs et coaches disposent d'un accès staff limité.",
       },
       {
         q: "Comment créer un groupe de promotion ?",
-        a: "Dans Utilisateurs > onglet « Groupes » > « Nouveau groupe ». Donnez un nom, une couleur et une année. Ensuite, éditez chaque étudiant pour lui assigner ce groupe.",
+        a: "Dans Administration > colonne « Offres & classes » > utilisez le bouton + de l'offre concernée. Donnez un nom, une couleur, une année et rattachez le groupe à la bonne formation si besoin.",
       },
       {
         q: "Comment inviter un nouvel étudiant ?",
-        a: "L'étudiant peut s'inscrire directement sur la page /register avec son email. Vous pouvez ensuite lui assigner un groupe et un rôle depuis l'interface Utilisateurs.",
+        a: "L'étudiant peut s'inscrire directement sur la page /register avec son email. Vous pouvez ensuite lui assigner un groupe et un rôle depuis l'interface Administration.",
       },
     ],
   },
