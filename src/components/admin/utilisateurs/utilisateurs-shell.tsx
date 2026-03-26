@@ -2236,16 +2236,101 @@ function GroupeFormModal({
   const [description, setDescription] = useState(groupe?.description ?? "");
   const [selectedParentId, setSelectedParentId] = useState<string | null>(groupe?.parent_id ?? parentId);
   const [formationDossierId, setFormationDossierId] = useState<string | null>(groupe?.formation_dossier_id ?? initialFormationDossierId ?? null);
+  const dossierMap = useMemo(() => new Map(dossiers.map((dossier) => [dossier.id, dossier])), [dossiers]);
+  const offerRoots = useMemo(
+    () =>
+      dossiers
+        .filter((dossier) => dossier.dossier_type === "offer")
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)),
+    [dossiers]
+  );
 
-  const availableParents = allGroupes.filter(g => g.id !== groupe?.id);
+  const getOfferRootId = useCallback((dossierId: string | null | undefined) => {
+    let currentId = dossierId ?? null;
+    while (currentId) {
+      const current = dossierMap.get(currentId);
+      if (!current) break;
+      if (current.dossier_type === "offer") return current.id;
+      currentId = current.parent_id;
+    }
+    return null;
+  }, [dossierMap]);
+
+  const initialOfferRootId = useMemo(
+    () => getOfferRootId(groupe?.formation_dossier_id ?? initialFormationDossierId ?? null),
+    [getOfferRootId, groupe?.formation_dossier_id, initialFormationDossierId]
+  );
+  const [offerRootId, setOfferRootId] = useState<string | null>(initialOfferRootId ?? offerRoots[0]?.id ?? null);
+
+  useEffect(() => {
+    setOfferRootId(initialOfferRootId ?? offerRoots[0]?.id ?? null);
+  }, [initialOfferRootId, offerRoots]);
+
+  const selectedOfferRoot = useMemo(
+    () => offerRoots.find((offer) => offer.id === offerRootId) ?? null,
+    [offerRootId, offerRoots]
+  );
+  const isUniversityScopedOffer = ["prepa_pass", "prepa_las", "prepa_lsps"].includes(selectedOfferRoot?.formation_offer ?? "");
+
+  const offerAnchorOptions = useMemo(() => {
+    if (!selectedOfferRoot) return [];
+
+    const directChildren = dossiers
+      .filter((dossier) => dossier.parent_id === selectedOfferRoot.id)
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
+    const options = isUniversityScopedOffer
+      ? directChildren.filter((dossier) => dossier.dossier_type === "university")
+      : [
+          selectedOfferRoot,
+          ...directChildren.filter((dossier) => dossier.dossier_type !== "subject"),
+        ];
+
+    if (formationDossierId && !options.some((option) => option.id === formationDossierId)) {
+      const current = dossierMap.get(formationDossierId);
+      if (current && getOfferRootId(current.id) === selectedOfferRoot.id) {
+        return [current, ...options];
+      }
+    }
+
+    return options;
+  }, [dossiers, dossierMap, formationDossierId, getOfferRootId, isUniversityScopedOffer, selectedOfferRoot]);
+
+  useEffect(() => {
+    if (!selectedOfferRoot) {
+      setFormationDossierId(null);
+      return;
+    }
+
+    if (offerAnchorOptions.some((option) => option.id === formationDossierId)) {
+      return;
+    }
+
+    const defaultOption = offerAnchorOptions[0] ?? null;
+    setFormationDossierId(defaultOption?.id ?? selectedOfferRoot.id);
+  }, [formationDossierId, offerAnchorOptions, selectedOfferRoot]);
+
+  const availableParents = useMemo(
+    () =>
+      allGroupes.filter((currentGroup) => {
+        if (currentGroup.id === groupe?.id) return false;
+        if (!offerRootId) return true;
+        return getOfferRootId(currentGroup.formation_dossier_id) === offerRootId;
+      }),
+    [allGroupes, getOfferRootId, groupe?.id, offerRootId]
+  );
+  const selectedParent = useMemo(
+    () => allGroupes.find((currentGroup) => currentGroup.id === selectedParentId) ?? null,
+    [allGroupes, selectedParentId]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
-      <div className="w-full max-w-sm rounded-2xl shadow-2xl" style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}>
+      <div className="w-full max-w-2xl rounded-2xl shadow-2xl" style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <h3 className="text-sm font-bold text-white">
-            {groupe ? "Modifier le groupe" : "Nouveau groupe"}
+            {groupe ? "Modifier la classe / promo" : "Nouvelle classe / promo"}
           </h3>
           <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: "rgba(255,255,255,0.4)" }}
             onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color = "white"; (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(255,255,255,0.05)"; }}
@@ -2269,35 +2354,116 @@ function GroupeFormModal({
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Groupe parent</label>
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Offre de formation</label>
+            <div className="grid grid-cols-2 gap-2">
+              {offerRoots.map((offer) => {
+                const selected = offer.id === offerRootId;
+                return (
+                  <button
+                    key={offer.id}
+                    type="button"
+                    onClick={() => {
+                      setOfferRootId(offer.id);
+                      setSelectedParentId(null);
+                    }}
+                    className="rounded-xl p-3 text-left transition-colors"
+                    style={{
+                      backgroundColor: selected ? "rgba(201,168,76,0.16)" : "rgba(255,255,255,0.04)",
+                      border: `1px solid ${selected ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)"}`,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: offer.color }} />
+                      <p className="text-sm font-semibold text-white">{offer.name}</p>
+                    </div>
+                    <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      {DOSSIER_TYPE_META[offer.dossier_type]?.shortLabel ?? "Offre"}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+              {isUniversityScopedOffer ? "Université de rattachement" : "Niveau de rattachement"}
+            </label>
+            <div className="space-y-2">
+              {offerAnchorOptions.map((option) => {
+                const selected = formationDossierId === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setFormationDossierId(option.id)}
+                    className="w-full rounded-xl px-3 py-3 text-left transition-colors"
+                    style={{
+                      backgroundColor: selected ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
+                      border: `1px solid ${selected ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.08)"}`,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {option.dossier_type === "university" ? (
+                        <Building2 size={14} style={{ color: "#86EFAC" }} />
+                      ) : (
+                        <FolderOpen size={14} style={{ color: "#93C5FD" }} />
+                      )}
+                      <p className="text-sm font-medium text-white">{option.name}</p>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                        style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}
+                      >
+                        {DOSSIER_TYPE_META[option.dossier_type]?.shortLabel ?? "Dossier"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      {getDossierPathLabel(option.id, dossiers)}
+                    </p>
+                  </button>
+                );
+              })}
+              {offerAnchorOptions.length === 0 && (
+                <div
+                  className="rounded-xl px-3 py-3 text-xs"
+                  style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)" }}
+                >
+                  {isUniversityScopedOffer
+                    ? "Ajoute d’abord une université dans l’arborescence de cette offre pour pouvoir y rattacher une classe."
+                    : "Ajoute d’abord un niveau pédagogique dans cette offre pour pouvoir y rattacher une classe."}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+              Promo / classe parente
+            </label>
+            {selectedParent ? (
+              <div className="mb-2 rounded-xl px-3 py-2 text-sm" style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <p className="font-medium text-white">{selectedParent.name}</p>
+                <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  Sous-groupe de cette promo / classe
+                </p>
+              </div>
+            ) : null}
             <select
               value={selectedParentId ?? ""}
               onChange={e => setSelectedParentId(e.target.value || null)}
               className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
               style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
             >
-              <option value="">Aucun (groupe racine)</option>
-              {availableParents.map(g => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Formation liée</label>
-            <select
-              value={formationDossierId ?? ""}
-              onChange={e => setFormationDossierId(e.target.value || null)}
-              className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
-              style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
-            >
-              <option value="">Aucune formation liée</option>
-              {dossiers.map((dossier) => (
-                <option key={dossier.id} value={dossier.id}>
-                  {getDossierPathLabel(dossier.id, dossiers)}
+              <option value="">Aucune, créer une classe racine</option>
+              {availableParents.map((currentGroup) => (
+                <option key={currentGroup.id} value={currentGroup.id}>
+                  {currentGroup.name}
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Utilise ça seulement si tu crées une sous-classe dans une promo existante.
+            </p>
           </div>
 
           <div>
@@ -2352,7 +2518,7 @@ function GroupeFormModal({
           </button>
           <button
             onClick={() => onSave({ id: groupe?.id, name, color, annee: annee || undefined, description: description || undefined, parent_id: selectedParentId, formation_dossier_id: formationDossierId })}
-            disabled={!name.trim() || isPending}
+            disabled={!name.trim() || !formationDossierId || isPending}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 transition-opacity"
             style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
           >
