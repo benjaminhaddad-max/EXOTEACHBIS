@@ -5,20 +5,22 @@ import { BookOpen, MessageCircleQuestion, Pencil, GraduationCap, Plus, X, Chevro
 import type { Profile, Dossier } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 
+import type { Groupe } from "@/types/database";
+
 type ProfMatiere = {
   id: string;
   prof_id: string;
   matiere_id: string;
   role_type: "cours" | "qa" | "contenu" | "all";
   dossier_id: string | null;
+  groupe_id: string | null;
 };
-
-type Matiere = { id: string; name: string; dossier_id: string };
 
 interface PedagogicalTeamSectionProps {
   universityId: string;
   dossiers: Dossier[];
   users: Profile[];
+  groupes: Groupe[];
   profMatieres: ProfMatiere[];
   onUpdate: () => void;
 }
@@ -30,7 +32,7 @@ const ROLE_CONFIG = {
 };
 
 export function PedagogicalTeamSection({
-  universityId, dossiers, users, profMatieres, onUpdate,
+  universityId, dossiers, users, groupes, profMatieres, onUpdate,
 }: PedagogicalTeamSectionProps) {
   const supabase = createClient();
 
@@ -44,7 +46,10 @@ export function PedagogicalTeamSection({
   }, [dossiers, universityId]);
 
   // Get all profs
-  const profs = useMemo(() => users.filter(u => u.role === "prof" || u.role === "admin" || u.role === "superadmin"), [users]);
+  const profs = useMemo(() => users.filter(u => u.role === "prof" || u.role === "admin" || u.role === "superadmin" || u.role === "coach"), [users]);
+
+  // Get classes linked to this university
+  const uniClasses = useMemo(() => groupes.filter(g => g.formation_dossier_id === universityId), [groupes, universityId]);
 
   // Index prof_matieres by matière
   const pmByMatiere = useMemo(() => {
@@ -57,15 +62,20 @@ export function PedagogicalTeamSection({
   }, [profMatieres]);
 
   const [addingFor, setAddingFor] = useState<{ matiereId: string; roleType: string } | null>(null);
+  const [addProfId, setAddProfId] = useState("");
+  const [addGroupeId, setAddGroupeId] = useState("");
 
-  const handleAssign = async (profId: string, matiereId: string, roleType: string) => {
+  const handleAssign = async (profId: string, matiereId: string, roleType: string, groupeId?: string) => {
     await supabase.from("prof_matieres").insert({
       prof_id: profId,
       matiere_id: matiereId,
       role_type: roleType,
       dossier_id: universityId,
+      groupe_id: groupeId || null,
     });
     setAddingFor(null);
+    setAddProfId("");
+    setAddGroupeId("");
     onUpdate();
   };
 
@@ -121,12 +131,16 @@ export function PedagogicalTeamSection({
                         )}
                         {assigned.map(a => {
                           const prof = users.find(u => u.id === a.prof_id);
+                          const classe = a.groupe_id ? groupes.find(g => g.id === a.groupe_id) : null;
                           return (
                             <div key={a.id} className="flex items-center gap-2 group/prof">
                               <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500">
                                 {(prof?.first_name?.[0] || "").toUpperCase()}{(prof?.last_name?.[0] || "").toUpperCase()}
                               </div>
-                              <span className="text-xs text-gray-700">{prof?.first_name} {prof?.last_name}</span>
+                              <span className="text-xs text-gray-700">
+                                {prof?.first_name} {prof?.last_name}
+                                {classe && <span className="text-gray-400"> · {classe.name}</span>}
+                              </span>
                               <button
                                 onClick={() => handleRemove(a.id)}
                                 className="ml-auto opacity-0 group-hover/prof:opacity-100 p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
@@ -138,26 +152,53 @@ export function PedagogicalTeamSection({
                         })}
 
                         {isAdding ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="space-y-1.5 bg-gray-50 rounded-lg p-2">
                             <select
                               autoFocus
-                              onChange={(e) => {
-                                if (e.target.value) handleAssign(e.target.value, mat.id, roleType);
-                              }}
-                              onBlur={() => setAddingFor(null)}
-                              className="text-xs border border-gray-200 rounded-lg px-2 py-1 flex-1 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                              value={addProfId}
+                              onChange={(e) => setAddProfId(e.target.value)}
+                              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gold/50 bg-white"
                             >
                               <option value="">Choisir un professeur...</option>
                               {profs.map(p => (
                                 <option key={p.id} value={p.id}>
-                                  {p.first_name} {p.last_name} ({p.email})
+                                  {p.first_name} {p.last_name}
                                 </option>
                               ))}
                             </select>
+                            {roleType === "cours" && (
+                              <select
+                                value={addGroupeId}
+                                onChange={(e) => setAddGroupeId(e.target.value)}
+                                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gold/50 bg-white"
+                              >
+                                <option value="">Classe (optionnel)...</option>
+                                {uniClasses.map(c => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                            )}
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => { setAddingFor(null); setAddProfId(""); setAddGroupeId(""); }}
+                                className="text-[10px] px-2 py-1 rounded text-gray-500 hover:bg-gray-200"
+                              >
+                                Annuler
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (addProfId) handleAssign(addProfId, mat.id, roleType, addGroupeId || undefined);
+                                }}
+                                disabled={!addProfId}
+                                className="text-[10px] px-3 py-1 rounded bg-navy text-white font-medium disabled:opacity-40"
+                              >
+                                Valider
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <button
-                            onClick={() => setAddingFor({ matiereId: mat.id, roleType })}
+                            onClick={() => { setAddingFor({ matiereId: mat.id, roleType }); setAddProfId(""); setAddGroupeId(""); }}
                             className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 mt-0.5"
                           >
                             <Plus size={10} /> Assigner

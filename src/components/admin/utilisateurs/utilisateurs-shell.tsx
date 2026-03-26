@@ -842,6 +842,7 @@ export function UtilisateursShell({
                 universityId={dossier.id}
                 dossiers={initialDossiers}
                 users={users}
+                groupes={groupes}
                 profMatieres={profMatieres as any[]}
                 onUpdate={() => window.location.reload()}
               />
