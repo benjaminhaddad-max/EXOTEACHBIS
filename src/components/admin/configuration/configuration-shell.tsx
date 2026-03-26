@@ -532,51 +532,7 @@ function SortableQuestionCard({
         </button>
 
         <div className="min-w-0 flex-1">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={onSelect}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelect();
-              }
-            }}
-            className="w-full cursor-pointer text-left"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
-                    {getFieldIcon(field.field_type)}
-                    {field.label}
-                  </span>
-                  {field.required && (
-                    <span className="rounded-full bg-[#f3efff] px-2 py-1 text-[10px] font-semibold text-[#6f48d9]">
-                      Obligatoire
-                    </span>
-                  )}
-                </div>
-                {field.helper_text && <p className="mt-2 text-sm leading-6 text-[#7c7664]">{field.helper_text}</p>}
-              </div>
-
-              <button
-                type="button"
-                className="rounded-xl p-2 text-[#9f95bf] transition hover:bg-[#f5f1ff]"
-                {...attributes}
-                {...listeners}
-                title="Glisser pour réordonner"
-              >
-                <GripVertical className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <FieldPreview field={field} />
-            </div>
-          </div>
-
-          {isSelected && (
+          {isSelected ? (
             <QuestionEditorCard
               field={field}
               isPending={isPending}
@@ -584,7 +540,62 @@ function SortableQuestionCard({
               onSave={onSave}
               onDuplicate={onDuplicate}
               onDelete={onDelete}
+              dragHandle={
+                <button
+                  type="button"
+                  className="rounded-xl p-2 text-[#9f95bf] transition hover:bg-[#f5f1ff]"
+                  {...attributes}
+                  {...listeners}
+                  title="Glisser pour réordonner"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </button>
+              }
             />
+          ) : (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={onSelect}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect();
+                }
+              }}
+              className="w-full cursor-pointer text-left"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
+                      {getFieldIcon(field.field_type)}
+                      {field.label}
+                    </span>
+                    {field.required && (
+                      <span className="rounded-full bg-[#f3efff] px-2 py-1 text-[10px] font-semibold text-[#6f48d9]">
+                        Obligatoire
+                      </span>
+                    )}
+                  </div>
+                  {field.helper_text && <p className="mt-2 text-sm leading-6 text-[#7c7664]">{field.helper_text}</p>}
+                </div>
+
+                <button
+                  type="button"
+                  className="rounded-xl p-2 text-[#9f95bf] transition hover:bg-[#f5f1ff]"
+                  {...attributes}
+                  {...listeners}
+                  title="Glisser pour réordonner"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4">
+                <FieldPreview field={field} />
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -599,6 +610,7 @@ function QuestionEditorCard({
   onSave,
   onDuplicate,
   onDelete,
+  dragHandle,
 }: {
   field: FormField;
   isPending: boolean;
@@ -606,6 +618,7 @@ function QuestionEditorCard({
   onSave: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  dragHandle: React.ReactNode;
 }) {
   const optionFields = getFieldOptions(field);
 
@@ -628,6 +641,21 @@ function QuestionEditorCard({
   return (
     <div className="mt-5 rounded-[20px] border border-[#e7e1f5] bg-[#fcfbff] p-5">
       <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
+              {getFieldIcon(field.field_type)}
+              Question en cours d'edition
+            </span>
+            {field.required && (
+              <span className="rounded-full bg-[#f3efff] px-2 py-1 text-[10px] font-semibold text-[#6f48d9]">
+                Obligatoire
+              </span>
+            )}
+          </div>
+          {dragHandle}
+        </div>
+
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),220px]">
           <input
             value={field.label}
