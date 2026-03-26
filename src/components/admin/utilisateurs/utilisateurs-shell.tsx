@@ -1684,14 +1684,49 @@ function ComptesView({
 }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
+  const [filterGroupeId, setFilterGroupeId] = useState("");
+
+  // Build group → formation/university mapping
+  const dossierMap = useMemo(() => new Map(dossiers.map(d => [d.id, d])), [dossiers]);
+
+  const getUniversityForGroup = (g: Groupe) => {
+    if (!g.formation_dossier_id) return null;
+    const d = dossierMap.get(g.formation_dossier_id);
+    return d?.dossier_type === "university" ? d : null;
+  };
+
+  const getFormationForGroup = (g: Groupe) => {
+    if (!g.formation_dossier_id) return null;
+    let d = dossierMap.get(g.formation_dossier_id);
+    while (d) {
+      if (d.dossier_type === "offer") return d;
+      d = d.parent_id ? dossierMap.get(d.parent_id) : undefined;
+    }
+    return null;
+  };
+
+  // Unique universities and formations from groups
+  const universities = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; count: number }>();
+    for (const g of groupes) {
+      const uni = getUniversityForGroup(g);
+      if (uni) {
+        const members = users.filter(u => u.groupe_id === g.id).length;
+        if (seen.has(uni.id)) seen.get(uni.id)!.count += members;
+        else seen.set(uni.id, { id: uni.id, name: uni.name, count: members });
+      }
+    }
+    return Array.from(seen.values());
+  }, [groupes, users]);
 
   const filtered = useMemo(() => users.filter(u => {
     const q = search.toLowerCase();
     if (q && !`${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q)) return false;
     if (filterRole === "admin" && !["admin", "superadmin"].includes(u.role)) return false;
     if (filterRole && filterRole !== "admin" && u.role !== filterRole) return false;
+    if (filterGroupeId && u.groupe_id !== filterGroupeId) return false;
     return true;
-  }), [users, search, filterRole]);
+  }), [users, search, filterRole, filterGroupeId]);
 
   const groupMap = useMemo(() => {
     const m = new Map<string, Groupe>();
@@ -1703,40 +1738,85 @@ function ComptesView({
 
   return (
     <div className="p-5">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher..."
-            className="w-full rounded-lg pl-8 pr-3 py-1.5 text-sm text-white focus:outline-none"
-            style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-          />
-        </div>
-        <div className="flex gap-1.5">
+      {/* Search */}
+      <div className="relative max-w-sm mb-4">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher un utilisateur..."
+          className="w-full rounded-lg pl-8 pr-3 py-2 text-sm text-white focus:outline-none"
+          style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+        />
+      </div>
+
+      {/* Pill filters */}
+      <div className="rounded-xl p-3 mb-4 space-y-2" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Rôle */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[9px] font-bold uppercase tracking-widest w-16 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Rôle</span>
           {[
-            { val: "", label: "Tous" },
-            { val: "eleve", label: "Élèves" },
-            { val: "coach", label: "Coachs" },
-            { val: "prof", label: "Profs" },
-            { val: "admin", label: "Admins" },
+            { val: "", label: "Tout", count: users.length },
+            { val: "eleve", label: "Élèves", count: users.filter(u => u.role === "eleve").length },
+            { val: "coach", label: "Coachs", count: users.filter(u => u.role === "coach").length },
+            { val: "prof", label: "Profs", count: users.filter(u => u.role === "prof").length },
+            { val: "admin", label: "Admins", count: users.filter(u => ["admin", "superadmin"].includes(u.role)).length },
           ].map(f => (
             <button
               key={f.val}
               onClick={() => setFilterRole(f.val)}
-              className="px-2.5 py-1 rounded-lg text-xs transition-colors"
+              className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
               style={{
-                backgroundColor: filterRole === f.val ? "rgba(255,255,255,0.15)" : "transparent",
-                color: filterRole === f.val ? "white" : "rgba(255,255,255,0.4)",
+                backgroundColor: filterRole === f.val ? "#0e1e35" : "rgba(255,255,255,0.06)",
+                color: filterRole === f.val ? "white" : "rgba(255,255,255,0.5)",
                 fontWeight: filterRole === f.val ? 600 : 400,
+                border: filterRole === f.val ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
               }}
             >
               {f.label}
+              <span className="text-[9px] opacity-60">{f.count}</span>
             </button>
           ))}
         </div>
+
+        {/* Classe */}
+        {groupes.filter(g => g.formation_dossier_id).length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-widest w-16 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
+            <button
+              onClick={() => setFilterGroupeId("")}
+              className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
+              style={{
+                backgroundColor: !filterGroupeId ? "#0e1e35" : "rgba(255,255,255,0.06)",
+                color: !filterGroupeId ? "white" : "rgba(255,255,255,0.5)",
+                fontWeight: !filterGroupeId ? 600 : 400,
+                border: !filterGroupeId ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
+              }}
+            >
+              Toutes <span className="text-[9px] opacity-60">{users.length}</span>
+            </button>
+            {groupes.filter(g => g.formation_dossier_id).map(g => {
+              const count = users.filter(u => u.groupe_id === g.id).length;
+              const uni = getUniversityForGroup(g);
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => setFilterGroupeId(g.id)}
+                  className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
+                  style={{
+                    backgroundColor: filterGroupeId === g.id ? "#0e1e35" : "rgba(255,255,255,0.06)",
+                    color: filterGroupeId === g.id ? "white" : "rgba(255,255,255,0.5)",
+                    fontWeight: filterGroupeId === g.id ? 600 : 400,
+                    border: filterGroupeId === g.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  {g.name}{uni ? ` · ${uni.name.replace("Université ", "").substring(0, 12)}` : ""}
+                  <span className="text-[9px] opacity-60">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Table */}
