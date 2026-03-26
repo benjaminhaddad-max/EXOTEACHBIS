@@ -4,13 +4,20 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   AlertCircle,
   Check,
+  ChevronDown,
+  ChevronUp,
   FileText,
-  GripVertical,
+  Grip,
+  LayoutTemplate,
+  ListChecks,
   Loader2,
+  PencilRuler,
   Plus,
   Save,
-  Settings,
+  Settings2,
+  Sparkles,
   Trash2,
+  Type,
 } from "lucide-react";
 import { deleteFormField, saveFormField, saveFormTemplate } from "@/app/(admin)/admin/configuration/actions";
 import { FORM_FIELD_TYPE_LABELS, getFieldOptions } from "@/lib/form-builder";
@@ -30,19 +37,33 @@ type TemplateDraft = {
   is_active: boolean;
 };
 
-type FieldDraft = {
-  id?: string;
-  form_template_id: string;
-  key: string;
-  label: string;
-  helper_text: string;
-  placeholder: string;
-  field_type: FormFieldType;
-  required: boolean;
-  optionsText: string;
-  width: FormFieldWidth;
-  order_index: number;
+type FieldLibraryItem = {
+  type: FormFieldType;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
 };
+
+const FIELD_LIBRARY: FieldLibraryItem[] = [
+  {
+    type: "short_text",
+    title: "Réponse courte",
+    description: "Une ligne simple pour capter une info rapide.",
+    icon: <Type className="h-4 w-4" />,
+  },
+  {
+    type: "long_text",
+    title: "Paragraphe",
+    description: "Une grande zone de texte pour une réponse développée.",
+    icon: <PencilRuler className="h-4 w-4" />,
+  },
+  {
+    type: "select",
+    title: "Choix simple",
+    description: "Un ensemble d'options où l'élève choisit une seule réponse.",
+    icon: <ListChecks className="h-4 w-4" />,
+  },
+];
 
 function templateToDraft(template?: FormTemplate | null): TemplateDraft {
   return {
@@ -55,20 +76,38 @@ function templateToDraft(template?: FormTemplate | null): TemplateDraft {
   };
 }
 
-function fieldToDraft(field: FormField, templateId: string): FieldDraft {
+function buildNewField(formTemplateId: string, type: FormFieldType, orderIndex: number): FormField {
+  const timestamp = new Date().toISOString();
+  const baseLabel =
+    type === "short_text" ? "Nouvelle question courte" :
+    type === "long_text" ? "Nouvelle question paragraphe" :
+    "Nouveau choix";
+
   return {
-    id: field.id,
-    form_template_id: templateId,
-    key: field.key,
-    label: field.label,
-    helper_text: field.helper_text ?? "",
-    placeholder: field.placeholder ?? "",
-    field_type: field.field_type,
-    required: field.required,
-    optionsText: getFieldOptions(field).join("\n"),
-    width: field.width,
-    order_index: field.order_index,
+    id: `draft-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    form_template_id: formTemplateId,
+    key: "",
+    label: baseLabel,
+    helper_text: "",
+    placeholder: "",
+    field_type: type,
+    required: false,
+    options: type === "select" ? ["Option 1", "Option 2"] : [],
+    width: "full",
+    order_index: orderIndex,
+    created_at: timestamp,
+    updated_at: timestamp,
   };
+}
+
+function sortFields(fields: FormField[]) {
+  return [...fields].sort((a, b) => a.order_index - b.order_index);
+}
+
+function getFieldIcon(type: FormFieldType) {
+  if (type === "long_text") return <PencilRuler className="h-4 w-4" />;
+  if (type === "select") return <ListChecks className="h-4 w-4" />;
+  return <Type className="h-4 w-4" />;
 }
 
 export function ConfigurationShell({
@@ -85,18 +124,26 @@ export function ConfigurationShell({
   const [templates, setTemplates] = useState(initialTemplates);
   const [fields, setFields] = useState(initialFields);
   const [selectedTemplateId, setSelectedTemplateId] = useState(initialTemplates[0]?.id ?? "");
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(templateToDraft(initialTemplates[0] ?? null));
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(null), 3000);
+    const timeout = window.setTimeout(() => setToast(null), 2800);
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
   const canAccess = ["admin", "superadmin"].includes(currentProfile.role);
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
+
+  const selectedFields = useMemo(
+    () => sortFields(fields.filter((field) => field.form_template_id === selectedTemplateId)),
+    [fields, selectedTemplateId]
+  );
+
+  const selectedField = selectedFields.find((field) => field.id === selectedFieldId) ?? null;
 
   useEffect(() => {
     if (!templates.some((template) => template.id === selectedTemplateId)) {
@@ -108,13 +155,27 @@ export function ConfigurationShell({
     setTemplateDraft(templateToDraft(selectedTemplate));
   }, [selectedTemplate?.id]);
 
-  const selectedFields = useMemo(
-    () =>
-      fields
-        .filter((field) => field.form_template_id === selectedTemplateId)
-        .sort((a, b) => a.order_index - b.order_index),
-    [fields, selectedTemplateId]
-  );
+  useEffect(() => {
+    if (!selectedFieldId || !selectedFields.some((field) => field.id === selectedFieldId)) {
+      setSelectedFieldId(selectedFields[0]?.id ?? null);
+    }
+  }, [selectedFieldId, selectedFields]);
+
+  const templateStats = useMemo(() => {
+    return {
+      total: selectedFields.length,
+      required: selectedFields.filter((field) => field.required).length,
+      halfWidth: selectedFields.filter((field) => field.width === "half").length,
+    };
+  }, [selectedFields]);
+
+  const upsertFieldLocally = (field: FormField) => {
+    setFields((current) => {
+      const withoutCurrent = current.filter((item) => item.id !== field.id);
+      return sortFields([...withoutCurrent, field]);
+    });
+    setSelectedFieldId(field.id);
+  };
 
   const handleSaveTemplate = () => {
     startTransition(async () => {
@@ -141,12 +202,109 @@ export function ConfigurationShell({
 
   const handleAddTemplate = () => {
     setSelectedTemplateId("");
+    setSelectedFieldId(null);
     setTemplateDraft({
       slug: "",
-      title: "",
+      title: "Nouveau formulaire",
       description: "",
       context: "generic",
       is_active: true,
+    });
+  };
+
+  const handleAddField = (type: FormFieldType) => {
+    if (!selectedTemplateId) {
+      setToast({ kind: "error", message: "Enregistre d'abord le formulaire avant d'ajouter des champs." });
+      return;
+    }
+    const nextOrder = (selectedFields.at(-1)?.order_index ?? 0) + 10;
+    const newField = buildNewField(selectedTemplateId, type, nextOrder);
+    upsertFieldLocally(newField);
+  };
+
+  const handleUpdateSelectedField = (patch: Partial<FormField>) => {
+    if (!selectedField) return;
+    upsertFieldLocally({
+      ...selectedField,
+      ...patch,
+      updated_at: new Date().toISOString(),
+    });
+  };
+
+  const handleMoveSelectedField = (direction: "up" | "down") => {
+    if (!selectedField) return;
+    const index = selectedFields.findIndex((field) => field.id === selectedField.id);
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    const otherField = selectedFields[swapIndex];
+    if (!otherField) return;
+
+    const reordered = selectedFields.map((field) => {
+      if (field.id === selectedField.id) return { ...field, order_index: otherField.order_index };
+      if (field.id === otherField.id) return { ...field, order_index: selectedField.order_index };
+      return field;
+    });
+
+    setFields((current) => {
+      const unaffected = current.filter((field) => field.form_template_id !== selectedTemplateId);
+      return sortFields([...unaffected, ...reordered]);
+    });
+  };
+
+  const handleSaveSelectedField = () => {
+    if (!selectedField || !selectedTemplateId) return;
+    startTransition(async () => {
+      const response = await saveFormField({
+        id: selectedField.id.startsWith("draft-") ? undefined : selectedField.id,
+        form_template_id: selectedTemplateId,
+        key: selectedField.key,
+        label: selectedField.label,
+        helper_text: selectedField.helper_text ?? "",
+        placeholder: selectedField.placeholder ?? "",
+        field_type: selectedField.field_type,
+        required: selectedField.required,
+        options: selectedField.options,
+        width: selectedField.width,
+        order_index: selectedField.order_index,
+      });
+
+      if (!("success" in response)) {
+        setToast({ kind: "error", message: response.error ?? "Impossible d'enregistrer le champ." });
+        return;
+      }
+
+      const savedField = response.field;
+      if (!savedField) {
+        setToast({ kind: "error", message: "Champ non retourné par le serveur." });
+        return;
+      }
+
+      setFields((current) => {
+        const withoutDraft = current.filter((field) => field.id !== selectedField.id && field.id !== savedField.id);
+        return sortFields([...withoutDraft, savedField]);
+      });
+      setSelectedFieldId(savedField.id);
+      setToast({ kind: "success", message: "Champ enregistré." });
+    });
+  };
+
+  const handleDeleteSelectedField = () => {
+    if (!selectedField) return;
+    if (selectedField.id.startsWith("draft-")) {
+      setFields((current) => current.filter((field) => field.id !== selectedField.id));
+      setSelectedFieldId(null);
+      return;
+    }
+
+    startTransition(async () => {
+      const response = await deleteFormField(selectedField.id);
+      if (!("success" in response)) {
+        setToast({ kind: "error", message: response.error ?? "Impossible de supprimer le champ." });
+        return;
+      }
+
+      setFields((current) => current.filter((field) => field.id !== selectedField.id));
+      setSelectedFieldId(null);
+      setToast({ kind: "success", message: "Champ supprimé." });
     });
   };
 
@@ -161,7 +319,7 @@ export function ConfigurationShell({
   if (setupError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        La configuration des formulaires n'est pas prête: {setupError}. Applique aussi la migration
+        La configuration des formulaires n'est pas prête: {setupError}. Applique la migration
         <span className="mx-1 font-semibold">`024_form_builder_for_coaching.sql`</span>
         puis recharge la page.
       </div>
@@ -181,399 +339,424 @@ export function ConfigurationShell({
         </div>
       )}
 
-      <section className="grid gap-6 xl:grid-cols-[320px,1fr]">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
+      <section className="overflow-hidden rounded-[28px] border border-[#ddd8c9] bg-[#f7f3ea] shadow-sm">
+        <div className="border-b border-[#e5decb] bg-[#fbf8f1] px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Formulaires</h2>
-              <p className="text-sm text-gray-500">Gère les formulaires dynamiques de la plateforme.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8d845f]">Form Builder</p>
+              <h2 className="mt-1 text-2xl font-semibold text-[#1e2a3a]">Construis tes formulaires comme un vrai canvas</h2>
             </div>
-            <button
-              type="button"
-              onClick={handleAddTemplate}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              <Plus className="h-4 w-4" />
-              Nouveau
-            </button>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {templates.map((template) => (
+            <div className="flex items-center gap-2">
               <button
-                key={template.id}
                 type="button"
-                onClick={() => setSelectedTemplateId(template.id)}
-                className={`w-full rounded-2xl border p-4 text-left transition ${
-                  template.id === selectedTemplateId ? "border-navy bg-navy/5" : "border-gray-200 bg-white hover:border-gray-300"
-                }`}
+                onClick={handleAddTemplate}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#d7cfb8] bg-white px-4 py-2 text-sm font-medium text-[#514a35] transition hover:bg-[#f6f1e6]"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{template.title}</p>
-                    <p className="mt-1 text-xs text-gray-500">{template.slug}</p>
-                  </div>
-                  <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${template.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                    {template.is_active ? "Actif" : "Inactif"}
-                  </span>
-                </div>
-                <p className="mt-3 text-xs text-gray-500">{fields.filter((field) => field.form_template_id === template.id).length} champ(s)</p>
+                <Plus className="h-4 w-4" />
+                Nouveau formulaire
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                disabled={isPending || !templateDraft.title.trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#7a6d2e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#6a5f27] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Enregistrer le formulaire
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-navy" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Paramètres du formulaire</h2>
-                <p className="text-sm text-gray-500">Titre, description, slug et activation.</p>
+        <div className="grid min-h-[760px] gap-0 xl:grid-cols-[280px,minmax(0,1fr),340px]">
+          <aside className="border-r border-[#e5decb] bg-[#fbf8f1] p-5">
+            <div className="rounded-2xl border border-[#e5decb] bg-white p-4">
+              <div className="flex items-center gap-2 text-[#1e2a3a]">
+                <LayoutTemplate className="h-4 w-4" />
+                <h3 className="text-sm font-semibold">Formulaires</h3>
+              </div>
+              <div className="mt-4 space-y-2">
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => setSelectedTemplateId(template.id)}
+                    className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                      template.id === selectedTemplateId
+                        ? "border-[#7a6d2e] bg-[#f7f0d9]"
+                        : "border-[#ece7d9] bg-white hover:border-[#d6cfbb]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1e2a3a]">{template.title}</p>
+                        <p className="mt-1 text-xs text-[#7c7664]">{template.slug}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${template.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                        {template.is_active ? "Actif" : "Off"}
+                      </span>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <FieldLabel label="Titre">
-                <input
-                  value={templateDraft.title}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, title: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
-                />
-              </FieldLabel>
-              <FieldLabel label="Slug">
-                <input
-                  value={templateDraft.slug}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, slug: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
-                />
-              </FieldLabel>
-              <FieldLabel label="Contexte">
-                <input
-                  value={templateDraft.context}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, context: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
-                />
-              </FieldLabel>
-              <FieldLabel label="Statut">
-                <button
-                  type="button"
-                  onClick={() => setTemplateDraft((current) => ({ ...current, is_active: !current.is_active }))}
-                  className={`inline-flex h-11 w-full items-center rounded-xl px-3 text-sm font-medium transition ${
-                    templateDraft.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {templateDraft.is_active ? "Actif" : "Inactif"}
-                </button>
-              </FieldLabel>
-              <FieldLabel label="Description" className="md:col-span-2">
-                <textarea
-                  rows={3}
-                  value={templateDraft.description}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, description: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
-                />
-              </FieldLabel>
+            <div className="mt-5 rounded-2xl border border-[#e5decb] bg-white p-4">
+              <div className="flex items-center gap-2 text-[#1e2a3a]">
+                <Sparkles className="h-4 w-4" />
+                <h3 className="text-sm font-semibold">Blocs de question</h3>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#7c7664]">
+                Clique sur un bloc pour l’ajouter au formulaire actif.
+              </p>
+              <div className="mt-4 space-y-3">
+                {FIELD_LIBRARY.map((item) => (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => handleAddField(item.type)}
+                    className="w-full rounded-2xl border border-[#ece7d9] bg-[#fcfbf7] p-4 text-left transition hover:border-[#d3c8ad] hover:bg-white"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-[#f3eddc] p-2 text-[#7a6d2e]">{item.icon}</div>
+                      <div>
+                        <p className="text-sm font-semibold text-[#1e2a3a]">{item.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-[#7c7664]">{item.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
+          </aside>
 
-            <button
-              type="button"
-              onClick={handleSaveTemplate}
-              disabled={isPending || !templateDraft.title.trim()}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Enregistrer le formulaire
-            </button>
-          </div>
+          <main className="bg-[#f5f1e8] p-6">
+            <div className="mx-auto max-w-3xl">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8d845f]">Canvas</p>
+                  <h3 className="mt-1 text-xl font-semibold text-[#1e2a3a]">
+                    {templateDraft.title || "Nouveau formulaire"}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 rounded-full border border-[#e0d7c0] bg-white px-3 py-2 text-xs text-[#7c7664]">
+                  <span>{templateStats.total} champ(s)</span>
+                  <span className="h-1 w-1 rounded-full bg-[#c8b889]" />
+                  <span>{templateStats.required} obligatoire(s)</span>
+                </div>
+              </div>
 
-          {selectedTemplateId && (
-            <FormFieldsEditor
-              formTemplateId={selectedTemplateId}
-              fields={selectedFields}
-              onFieldsChange={setFields}
-            />
-          )}
+              <div className="rounded-[32px] border border-[#e2dac5] bg-white p-8 shadow-[0_20px_60px_rgba(60,50,30,0.08)]">
+                <div className="border-b border-[#f0eadb] pb-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8d845f]">
+                    {templateDraft.context || "generic"}
+                  </p>
+                  <h4 className="mt-3 text-3xl font-semibold text-[#1e2a3a]">
+                    {templateDraft.title || "Titre du formulaire"}
+                  </h4>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[#7c7664]">
+                    {templateDraft.description || "Ajoute une description claire pour guider l'élève avant qu'il commence à répondre."}
+                  </p>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  {selectedFields.length === 0 ? (
+                    <div className="rounded-[28px] border-2 border-dashed border-[#e3dcc8] bg-[#fbf8f1] p-10 text-center text-sm text-[#7c7664]">
+                      Ajoute un premier bloc depuis la colonne de gauche pour commencer ton formulaire.
+                    </div>
+                  ) : (
+                    selectedFields.map((field, index) => (
+                      <button
+                        key={field.id}
+                        type="button"
+                        onClick={() => setSelectedFieldId(field.id)}
+                        className={`w-full rounded-[26px] border p-5 text-left transition ${
+                          field.id === selectedFieldId
+                            ? "border-[#7a6d2e] bg-[#fffaf0] shadow-[0_10px_24px_rgba(122,109,46,0.12)]"
+                            : "border-[#eee7d7] bg-[#fcfbf7] hover:border-[#ddd1b4]"
+                        } ${field.width === "half" ? "max-w-[calc(50%-8px)]" : ""}`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#f3eddc] text-sm font-semibold text-[#7a6d2e]">
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
+                                {getFieldIcon(field.field_type)}
+                                {field.label}
+                              </div>
+                              {field.required && (
+                                <span className="rounded-full bg-[#f7e9b4] px-2 py-1 text-[10px] font-semibold text-[#7a6d2e]">
+                                  Obligatoire
+                                </span>
+                              )}
+                            </div>
+                            {field.helper_text && (
+                              <p className="mt-2 text-sm leading-6 text-[#7c7664]">{field.helper_text}</p>
+                            )}
+                            <div className="mt-4">
+                              <FieldPreview field={field} />
+                            </div>
+                          </div>
+                          <div className="rounded-xl bg-white p-2 text-[#c0b48f]">
+                            <Grip className="h-4 w-4" />
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="mt-8">
+                  <button
+                    type="button"
+                    className="rounded-2xl bg-[#547df0] px-5 py-3 text-sm font-semibold text-white"
+                  >
+                    Soumettre
+                  </button>
+                </div>
+              </div>
+            </div>
+          </main>
+
+          <aside className="border-l border-[#e5decb] bg-[#fbf8f1] p-5">
+            {!selectedField ? (
+              <div className="rounded-2xl border border-[#e5decb] bg-white p-5">
+                <div className="flex items-center gap-2 text-[#1e2a3a]">
+                  <Settings2 className="h-4 w-4" />
+                  <h3 className="text-sm font-semibold">Réglages du formulaire</h3>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[#7c7664]">
+                  Sélectionne un formulaire ou un champ pour modifier ses propriétés.
+                </p>
+
+                <div className="mt-5 space-y-4">
+                  <FieldLabel label="Titre">
+                    <input
+                      value={templateDraft.title}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, title: event.target.value }))}
+                      className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Slug">
+                    <input
+                      value={templateDraft.slug}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, slug: event.target.value }))}
+                      className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Description">
+                    <textarea
+                      rows={5}
+                      value={templateDraft.description}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, description: event.target.value }))}
+                      className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                    />
+                  </FieldLabel>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-[#e5decb] bg-white p-5">
+                  <div className="flex items-center gap-2 text-[#1e2a3a]">
+                    <Settings2 className="h-4 w-4" />
+                    <h3 className="text-sm font-semibold">Propriétés du champ</h3>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[#7c7664]">
+                    Tu édites ici uniquement le bloc sélectionné au centre.
+                  </p>
+
+                  <div className="mt-5 space-y-4">
+                    <FieldLabel label="Question">
+                      <input
+                        value={selectedField.label}
+                        onChange={(event) => handleUpdateSelectedField({ label: event.target.value })}
+                        className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                      />
+                    </FieldLabel>
+
+                    <FieldLabel label="Clé technique">
+                      <input
+                        value={selectedField.key}
+                        onChange={(event) => handleUpdateSelectedField({ key: event.target.value })}
+                        className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                      />
+                    </FieldLabel>
+
+                    <FieldLabel label="Texte d'aide">
+                      <textarea
+                        rows={3}
+                        value={selectedField.helper_text ?? ""}
+                        onChange={(event) => handleUpdateSelectedField({ helper_text: event.target.value })}
+                        className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                      />
+                    </FieldLabel>
+
+                    <FieldLabel label="Placeholder">
+                      <input
+                        value={selectedField.placeholder ?? ""}
+                        onChange={(event) => handleUpdateSelectedField({ placeholder: event.target.value })}
+                        className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                      />
+                    </FieldLabel>
+
+                    <div className="grid gap-4 grid-cols-2">
+                      <FieldLabel label="Type">
+                        <select
+                          value={selectedField.field_type}
+                          onChange={(event) =>
+                            handleUpdateSelectedField({
+                              field_type: event.target.value as FormFieldType,
+                              options: event.target.value === "select" ? (selectedField.options.length > 0 ? selectedField.options : ["Option 1", "Option 2"]) : [],
+                            })
+                          }
+                          className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                        >
+                          {Object.entries(FORM_FIELD_TYPE_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </FieldLabel>
+
+                      <FieldLabel label="Largeur">
+                        <select
+                          value={selectedField.width}
+                          onChange={(event) => handleUpdateSelectedField({ width: event.target.value as FormFieldWidth })}
+                          className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                        >
+                          <option value="full">Pleine largeur</option>
+                          <option value="half">Demi largeur</option>
+                        </select>
+                      </FieldLabel>
+                    </div>
+
+                    <div className="grid gap-4 grid-cols-2">
+                      <FieldLabel label="Ordre">
+                        <input
+                          type="number"
+                          value={selectedField.order_index}
+                          onChange={(event) => handleUpdateSelectedField({ order_index: Number(event.target.value) })}
+                          className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                        />
+                      </FieldLabel>
+
+                      <label className="space-y-2 text-sm">
+                        <span className="font-medium text-[#514a35]">Statut</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateSelectedField({ required: !selectedField.required })}
+                          className={`inline-flex h-[50px] w-full items-center rounded-2xl px-4 text-sm font-medium ${
+                            selectedField.required ? "bg-[#f7e9b4] text-[#7a6d2e]" : "bg-white border border-[#e3dcc8] text-[#6d6756]"
+                          }`}
+                        >
+                          {selectedField.required ? "Obligatoire" : "Optionnel"}
+                        </button>
+                      </label>
+                    </div>
+
+                    {selectedField.field_type === "select" && (
+                      <FieldLabel label="Options">
+                        <textarea
+                          rows={5}
+                          value={selectedField.options.join("\n")}
+                          onChange={(event) =>
+                            handleUpdateSelectedField({
+                              options: event.target.value
+                                .split("\n")
+                                .map((option) => option.trim())
+                                .filter(Boolean),
+                            })
+                          }
+                          className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
+                        />
+                      </FieldLabel>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#e5decb] bg-white p-5">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveSelectedField("up")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#e3dcc8] px-3 py-2 text-sm font-medium text-[#514a35] transition hover:bg-[#f8f4ea]"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                      Monter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveSelectedField("down")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-[#e3dcc8] px-3 py-2 text-sm font-medium text-[#514a35] transition hover:bg-[#f8f4ea]"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                      Descendre
+                    </button>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveSelectedField}
+                      disabled={isPending || !selectedField.label.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#7a6d2e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6a5f27] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Enregistrer le champ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelectedField}
+                      className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-100"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </aside>
         </div>
       </section>
     </div>
   );
 }
 
-function FormFieldsEditor({
-  formTemplateId,
-  fields,
-  onFieldsChange,
-}: {
-  formTemplateId: string;
-  fields: FormField[];
-  onFieldsChange: React.Dispatch<React.SetStateAction<FormField[]>>;
-}) {
-  const [toast, setToast] = useState<Toast>(null);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
-
-  const handleAddField = () => {
-    const nextOrder = (fields.at(-1)?.order_index ?? 0) + 10;
-    const tempId = `draft-${Date.now()}`;
-    onFieldsChange((current) => [
-      ...current,
-      {
-        id: tempId,
-        form_template_id: formTemplateId,
-        key: "",
-        label: "",
-        helper_text: null,
-        placeholder: null,
-        field_type: "short_text",
-        required: false,
-        options: [],
-        width: "full",
-        order_index: nextOrder,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ]);
-  };
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      {toast && (
-        <div className={`mb-4 rounded-xl px-4 py-3 text-sm font-medium ${toast.kind === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-          {toast.message}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Champs du formulaire</h2>
-          <p className="text-sm text-gray-500">Tu peux modifier les questions et en ajouter quand tu veux.</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleAddField}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter un champ
-        </button>
-      </div>
-
-      <div className="mt-5 space-y-4">
-        {fields.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
-            Aucun champ pour le moment.
+function FieldPreview({ field }: { field: FormField }) {
+  if (field.field_type === "select") {
+    const options = getFieldOptions(field);
+    return (
+      <div className="space-y-2">
+        {options.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#ddd1b4] px-4 py-3 text-sm text-[#9a937e]">
+            Ajoute des options dans le panneau de droite.
           </div>
         ) : (
-          fields.map((field) => (
-            <EditableFieldCard
-              key={field.id}
-              initialDraft={fieldToDraft(field, formTemplateId)}
-              onSaved={(savedField) =>
-                onFieldsChange((current) => {
-                  const withoutCurrent = current.filter((item) => item.id !== field.id && item.id !== savedField.id);
-                  return [...withoutCurrent, savedField].sort((a, b) => a.order_index - b.order_index);
-                })
-              }
-              onDeleted={(fieldId) => onFieldsChange((current) => current.filter((item) => item.id !== fieldId))}
-              onToast={setToast}
-              isPending={isPending}
-              startTransition={startTransition}
-            />
+          options.map((option) => (
+            <div key={option} className="rounded-2xl border border-[#ebe3d0] bg-white px-4 py-3 text-sm text-[#514a35]">
+              {option}
+            </div>
           ))
         )}
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-function EditableFieldCard({
-  initialDraft,
-  onSaved,
-  onDeleted,
-  onToast,
-  isPending,
-  startTransition,
-}: {
-  initialDraft: FieldDraft;
-  onSaved: (field: FormField) => void;
-  onDeleted: (fieldId: string) => void;
-  onToast: (toast: Toast) => void;
-  isPending: boolean;
-  startTransition: React.TransitionStartFunction;
-}) {
-  const [draft, setDraft] = useState(initialDraft);
-
-  const options = Object.entries(FORM_FIELD_TYPE_LABELS).map(([value, label]) => ({ value, label }));
-
-  const handleSave = () => {
-    startTransition(async () => {
-      const response = await saveFormField({
-        id: draft.id?.startsWith("draft-") ? undefined : draft.id,
-        form_template_id: draft.form_template_id,
-        key: draft.key,
-        label: draft.label,
-        helper_text: draft.helper_text,
-        placeholder: draft.placeholder,
-        field_type: draft.field_type,
-        required: draft.required,
-        options: draft.optionsText.split("\n"),
-        width: draft.width,
-        order_index: Number(draft.order_index),
-      });
-
-      if (!("success" in response)) {
-        onToast({ kind: "error", message: response.error ?? "Impossible d'enregistrer le champ." });
-        return;
-      }
-
-      const savedField = response.field;
-      if (!savedField) {
-        onToast({ kind: "error", message: "Champ non retourné par le serveur." });
-        return;
-      }
-
-      onSaved(savedField);
-      setDraft(fieldToDraft(savedField, savedField.form_template_id));
-      onToast({ kind: "success", message: "Champ enregistré." });
-    });
-  };
-
-  const handleDelete = () => {
-    if (draft.id?.startsWith("draft-")) {
-      onDeleted(draft.id);
-      return;
-    }
-
-    startTransition(async () => {
-      const response = await deleteFormField(draft.id!);
-      if (!("success" in response)) {
-        onToast({ kind: "error", message: response.error ?? "Impossible de supprimer le champ." });
-        return;
-      }
-      onDeleted(draft.id!);
-      onToast({ kind: "success", message: "Champ supprimé." });
-    });
-  };
+  if (field.field_type === "long_text") {
+    return (
+      <div className="rounded-[24px] border border-[#ebe3d0] bg-white px-4 py-4 text-sm text-[#9a937e]">
+        {field.placeholder || "Réponse longue de l'élève..."}
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-white p-2 text-gray-400">
-            <GripVertical className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900">{draft.label || "Nouveau champ"}</p>
-            <p className="text-xs text-gray-500">{FORM_FIELD_TYPE_LABELS[draft.field_type]}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="rounded-xl p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <FieldLabel label="Label">
-          <input
-            value={draft.label}
-            onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          />
-        </FieldLabel>
-        <FieldLabel label="Clé technique">
-          <input
-            value={draft.key}
-            onChange={(event) => setDraft((current) => ({ ...current, key: event.target.value }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          />
-        </FieldLabel>
-        <FieldLabel label="Type">
-          <select
-            value={draft.field_type}
-            onChange={(event) => setDraft((current) => ({ ...current, field_type: event.target.value as FormFieldType }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          >
-            {options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </FieldLabel>
-        <FieldLabel label="Largeur">
-          <select
-            value={draft.width}
-            onChange={(event) => setDraft((current) => ({ ...current, width: event.target.value as FormFieldWidth }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          >
-            <option value="full">Pleine largeur</option>
-            <option value="half">Demi largeur</option>
-          </select>
-        </FieldLabel>
-        <FieldLabel label="Placeholder">
-          <input
-            value={draft.placeholder}
-            onChange={(event) => setDraft((current) => ({ ...current, placeholder: event.target.value }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          />
-        </FieldLabel>
-        <FieldLabel label="Ordre">
-          <input
-            type="number"
-            value={draft.order_index}
-            onChange={(event) => setDraft((current) => ({ ...current, order_index: Number(event.target.value) }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          />
-        </FieldLabel>
-        <FieldLabel label="Texte d'aide" className="md:col-span-2">
-          <textarea
-            rows={2}
-            value={draft.helper_text}
-            onChange={(event) => setDraft((current) => ({ ...current, helper_text: event.target.value }))}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-          />
-        </FieldLabel>
-        {draft.field_type === "select" && (
-          <FieldLabel label="Options (une par ligne)" className="md:col-span-2">
-            <textarea
-              rows={4}
-              value={draft.optionsText}
-              onChange={(event) => setDraft((current) => ({ ...current, optionsText: event.target.value }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-navy"
-            />
-          </FieldLabel>
-        )}
-      </div>
-
-      <label className="mt-4 flex items-center gap-3 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={draft.required}
-          onChange={(event) => setDraft((current) => ({ ...current, required: event.target.checked }))}
-          className="h-4 w-4 rounded border-gray-300 text-navy focus:ring-navy"
-        />
-        Champ obligatoire
-      </label>
-
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={isPending || !draft.label.trim()}
-        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-        Enregistrer ce champ
-      </button>
+    <div className="rounded-[20px] border border-[#ebe3d0] bg-white px-4 py-3 text-sm text-[#9a937e]">
+      {field.placeholder || "Réponse courte de l'élève..."}
     </div>
   );
 }
@@ -581,15 +764,13 @@ function EditableFieldCard({
 function FieldLabel({
   label,
   children,
-  className = "",
 }: {
   label: string;
   children: React.ReactNode;
-  className?: string;
 }) {
   return (
-    <label className={`space-y-2 text-sm ${className}`}>
-      <span className="font-medium text-gray-700">{label}</span>
+    <label className="space-y-2 text-sm">
+      <span className="font-medium text-[#514a35]">{label}</span>
       {children}
     </label>
   );
