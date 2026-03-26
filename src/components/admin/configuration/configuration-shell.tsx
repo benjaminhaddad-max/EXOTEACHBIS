@@ -6,6 +6,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import {
   AlertCircle,
+  Building2,
   Check,
   CheckSquare,
   Copy,
@@ -13,13 +14,17 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  History,
   ListChecks,
   Loader2,
   PencilRuler,
   Plus,
   Save,
+  Search,
   Trash2,
   Type,
+  User,
+  Users,
 } from "lucide-react";
 import {
   deleteFormField,
@@ -28,7 +33,16 @@ import {
   saveFormTemplate,
 } from "@/app/(admin)/admin/configuration/actions";
 import { getFieldOptions } from "@/lib/form-builder";
-import type { FormField, FormFieldType, FormTemplate, Profile } from "@/types/database";
+import type {
+  CoachingIntakeForm,
+  Dossier,
+  FormField,
+  FormFieldType,
+  FormTargetType,
+  FormTemplate,
+  Groupe,
+  Profile,
+} from "@/types/database";
 
 type Toast = {
   kind: "success" | "error";
@@ -41,6 +55,12 @@ type TemplateDraft = {
   title: string;
   description: string;
   context: string;
+  target_type: FormTargetType;
+  target_offer_code: string | null;
+  target_university_dossier_id: string | null;
+  target_groupe_id: string | null;
+  target_student_id: string | null;
+  target_student_ids: string[];
   is_active: boolean;
 };
 
@@ -59,13 +79,22 @@ const FIELD_LIBRARY: FieldLibraryItem[] = [
 ];
 
 const FORM_CONTEXT_OPTIONS = [
-  { value: "generic", label: "Tous les parcours" },
+  { value: "generic", label: "Formulaire libre" },
   { value: "coaching", label: "Coaching" },
   { value: "pass", label: "PASS" },
   { value: "las", label: "LAS" },
   { value: "lsps", label: "LSPS" },
-  { value: "autre", label: "Autre formation" },
+  { value: "autre", label: "Autre usage" },
 ] as const;
+
+const FORM_TARGET_OPTIONS: Array<{ value: FormTargetType; label: string; hint: string }> = [
+  { value: "global", label: "Tous les élèves", hint: "Visible par tous les élèves concernés par la plateforme." },
+  { value: "offer", label: "Formation entière", hint: "Ex: tout PASS, tout LAS, tout LSPS." },
+  { value: "university", label: "Fac entière", hint: "Cible tous les élèves d'une université précise." },
+  { value: "groupe", label: "Classe entière", hint: "Envoie le formulaire à une classe déterminée." },
+  { value: "student", label: "Un élève", hint: "Pour un suivi individuel ponctuel." },
+  { value: "selection", label: "Groupe d'élèves", hint: "Tu sélectionnes exactement les élèves concernés." },
+];
 
 const DS = {
   navy: "#12314d",
@@ -95,6 +124,12 @@ function templateToDraft(template?: FormTemplate | null): TemplateDraft {
     title: template?.title ?? "",
     description: template?.description ?? "",
     context: template?.context ?? "generic",
+    target_type: template?.target_type ?? "global",
+    target_offer_code: template?.target_offer_code ?? null,
+    target_university_dossier_id: template?.target_university_dossier_id ?? null,
+    target_groupe_id: template?.target_groupe_id ?? null,
+    target_student_id: template?.target_student_id ?? null,
+    target_student_ids: template?.target_student_ids ?? [],
     is_active: template?.is_active ?? true,
   };
 }
@@ -129,6 +164,12 @@ function sortFields(fields: FormField[]) {
   return [...fields].sort((a, b) => a.order_index - b.order_index);
 }
 
+function sortTemplates(templates: FormTemplate[]) {
+  return [...templates].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+}
+
 function getFieldIcon(type: FormFieldType) {
   if (type === "long_text") return <PencilRuler className="h-4 w-4" />;
   if (type === "radio") return <CircleDot className="h-4 w-4" />;
@@ -144,18 +185,79 @@ function getFieldTypeSymbol(type: FormFieldType) {
   return null;
 }
 
+function profileName(profile: Profile | null | undefined) {
+  if (!profile) return "Élève inconnu";
+  const full = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+  return full || profile.email;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "Pas encore";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function getTemplateTargetSummary(
+  template: Pick<FormTemplate, "target_type" | "target_offer_code" | "target_university_dossier_id" | "target_groupe_id" | "target_student_id" | "target_student_ids">,
+  options: {
+    offerDossiers: Dossier[];
+    dossierById: Map<string, Dossier>;
+    groupeById: Map<string, Groupe>;
+    studentById: Map<string, Profile>;
+  }
+) {
+  if (template.target_type === "offer") {
+    const offer = options.offerDossiers.find((item) => item.formation_offer === template.target_offer_code || item.id === template.target_offer_code);
+    return offer ? `Formation · ${offer.name}` : "Formation ciblée";
+  }
+
+  if (template.target_type === "university") {
+    const university = template.target_university_dossier_id ? options.dossierById.get(template.target_university_dossier_id) : null;
+    return university ? `Fac · ${university.name}` : "Fac ciblée";
+  }
+
+  if (template.target_type === "groupe") {
+    const groupe = template.target_groupe_id ? options.groupeById.get(template.target_groupe_id) : null;
+    return groupe ? `Classe · ${groupe.name}` : "Classe ciblée";
+  }
+
+  if (template.target_type === "student") {
+    const student = template.target_student_id ? options.studentById.get(template.target_student_id) : null;
+    return student ? `Élève · ${profileName(student)}` : "Élève ciblé";
+  }
+
+  if (template.target_type === "selection") {
+    const count = template.target_student_ids?.length ?? 0;
+    return count > 0 ? `Groupe d'élèves · ${count} sélectionné(s)` : "Groupe d'élèves";
+  }
+
+  return "Tous les élèves";
+}
+
 export function ConfigurationShell({
   currentProfile,
   initialTemplates,
   initialFields,
+  initialDossiers,
+  initialGroupes,
+  initialStudents,
+  initialResponses,
   setupError,
 }: {
   currentProfile: Profile;
   initialTemplates: FormTemplate[];
   initialFields: FormField[];
+  initialDossiers: Dossier[];
+  initialGroupes: Groupe[];
+  initialStudents: Profile[];
+  initialResponses: CoachingIntakeForm[];
   setupError?: string | null;
 }) {
-  const [templates, setTemplates] = useState(initialTemplates);
+  const [templates, setTemplates] = useState(sortTemplates(initialTemplates));
   const [fields, setFields] = useState(initialFields);
   const [selectedTemplateId, setSelectedTemplateId] = useState(initialTemplates[0]?.id ?? "");
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
@@ -163,6 +265,7 @@ export function ConfigurationShell({
   const [toast, setToast] = useState<Toast>(null);
   const [showStudentPreview, setShowStudentPreview] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -175,6 +278,17 @@ export function ConfigurationShell({
 
   const canAccess = ["admin", "superadmin"].includes(currentProfile.role);
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
+  const offerDossiers = useMemo(
+    () => initialDossiers.filter((dossier) => dossier.dossier_type === "offer"),
+    [initialDossiers]
+  );
+  const universityDossiers = useMemo(
+    () => initialDossiers.filter((dossier) => dossier.dossier_type === "university"),
+    [initialDossiers]
+  );
+  const groupeById = useMemo(() => new Map(initialGroupes.map((groupe) => [groupe.id, groupe])), [initialGroupes]);
+  const dossierById = useMemo(() => new Map(initialDossiers.map((dossier) => [dossier.id, dossier])), [initialDossiers]);
+  const studentById = useMemo(() => new Map(initialStudents.map((student) => [student.id, student])), [initialStudents]);
   const selectedFields = useMemo(
     () => sortFields(fields.filter((field) => field.form_template_id === selectedTemplateId)),
     [fields, selectedTemplateId]
@@ -205,8 +319,34 @@ export function ConfigurationShell({
       required: selectedFields.filter((field) => field.required).length,
     };
   }, [selectedFields]);
+  const templateResponses = useMemo(
+    () => initialResponses.filter((response) => response.form_template_id === selectedTemplateId),
+    [initialResponses, selectedTemplateId]
+  );
+  const responseStats = useMemo(() => {
+    const latest = templateResponses[0] ?? null;
+    return {
+      total: templateResponses.length,
+      latestSubmittedAt: latest?.submitted_at ?? null,
+    };
+  }, [templateResponses]);
   const selectedContextValue = getContextSelectValue(templateDraft.context);
   const isCustomContext = selectedContextValue === "autre";
+  const filteredStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+    if (!query) return initialStudents.slice(0, 16);
+    return initialStudents.filter((student) => profileName(student).toLowerCase().includes(query)).slice(0, 16);
+  }, [initialStudents, studentSearch]);
+  const draftTargetSummary = useMemo(
+    () =>
+      getTemplateTargetSummary(templateDraft, {
+        offerDossiers,
+        dossierById,
+        groupeById,
+        studentById,
+      }),
+    [templateDraft, offerDossiers, dossierById, groupeById, studentById]
+  );
 
   const replaceTemplateFields = (nextFields: FormField[]) => {
     setFields((current) => {
@@ -240,7 +380,7 @@ export function ConfigurationShell({
       const savedTemplate = response.template;
       setTemplates((current) => {
         const withoutCurrent = current.filter((template) => template.id !== savedTemplate.id);
-        return [...withoutCurrent, savedTemplate].sort((a, b) => a.title.localeCompare(b.title));
+        return sortTemplates([...withoutCurrent, savedTemplate]);
       });
       setSelectedTemplateId(savedTemplate.id);
       setToast({ kind: "success", message: "Formulaire enregistré." });
@@ -255,6 +395,12 @@ export function ConfigurationShell({
       title: "Nouveau formulaire",
       description: "",
       context: "generic",
+      target_type: "global",
+      target_offer_code: null,
+      target_university_dossier_id: null,
+      target_groupe_id: null,
+      target_student_id: null,
+      target_student_ids: [],
       is_active: true,
     });
   };
@@ -382,7 +528,7 @@ export function ConfigurationShell({
   if (setupError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        La configuration des formulaires n'est pas prête: {setupError}. Recharge après avoir appliqué les migrations.
+        La section Formulaires n'est pas prête: {setupError}. Recharge après avoir appliqué les migrations.
       </div>
     );
   }
@@ -400,106 +546,286 @@ export function ConfigurationShell({
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[320px,minmax(0,1fr)]">
-        <aside className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
-          <div className="flex items-center gap-3 rounded-2xl px-3 py-2" style={{ backgroundColor: "#f8fbfd" }}>
-            <img src="/logo-ds.svg" alt="Diploma Santé" className="h-8 w-auto object-contain" />
-            <div className="leading-tight">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: DS.gold }}>Diploma Santé</p>
-              <p className="text-sm font-medium" style={{ color: DS.navy }}>Mes formulaires</p>
+      <div className="grid gap-6 xl:grid-cols-[360px,minmax(0,1fr)]">
+        <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+          <section className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
+            <div className="flex items-center gap-3 rounded-2xl px-3 py-2" style={{ backgroundColor: "#f8fbfd" }}>
+              <img src="/logo-ds.svg" alt="Diploma Santé" className="h-8 w-auto object-contain" />
+              <div className="leading-tight">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: DS.gold }}>Diploma Santé</p>
+                <p className="text-sm font-medium" style={{ color: DS.navy }}>Formulaires</p>
+              </div>
             </div>
-          </div>
 
-          <button
-            type="button"
-            onClick={handleAddTemplate}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ backgroundColor: DS.navy }}
-          >
-            <Plus className="h-4 w-4" />
-            Nouveau formulaire
-          </button>
+            <button
+              type="button"
+              onClick={handleAddTemplate}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ backgroundColor: DS.navy }}
+            >
+              <Plus className="h-4 w-4" />
+              Créer un formulaire
+            </button>
 
-          <div className="mt-5 space-y-3">
-            {!selectedTemplateId && (
-              <div
-                className="rounded-[24px] border p-4"
-                style={{
-                  borderColor: DS.blue,
-                  backgroundColor: "#f7fbfe",
-                  boxShadow: "0 0 0 2px rgba(79,171,219,0.16)",
-                }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold" style={{ color: DS.navy }}>
-                      {templateDraft.title || "Nouveau formulaire"}
-                    </p>
-                    <p className="mt-1 text-xs" style={{ color: "#61778a" }}>
-                      {getContextLabel(templateDraft.context || "generic")}
-                    </p>
-                  </div>
-                  <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>
-                    Brouillon
-                  </span>
+            <div className="mt-4 rounded-[24px] border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: DS.navy }}>Portée du formulaire</p>
+                  <p className="mt-1 text-xs leading-5" style={{ color: "#61778a" }}>
+                    Tu peux viser une formation entière, une fac, une classe, un élève ou un groupe d'élèves précis.
+                  </p>
                 </div>
               </div>
-            )}
 
-            {templates.length === 0 ? (
-              <div className="rounded-2xl border border-dashed p-4 text-sm text-[#61778a]" style={{ borderColor: DS.line }}>
-                Aucun formulaire pour le moment.
+              <div className="mt-4 space-y-2">
+                {FORM_TARGET_OPTIONS.map((option) => {
+                  const active = option.value === templateDraft.target_type;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setTemplateDraft((current) => ({ ...current, target_type: option.value }))}
+                      className="w-full rounded-2xl border px-3 py-3 text-left transition"
+                      style={{
+                        borderColor: active ? DS.blue : DS.line,
+                        backgroundColor: active ? "#f7fbfe" : "#ffffff",
+                      }}
+                    >
+                      <p className="text-sm font-semibold" style={{ color: DS.navy }}>{option.label}</p>
+                      <p className="mt-1 text-xs leading-5" style={{ color: "#61778a" }}>{option.hint}</p>
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              templates.map((template) => {
-                const active = template.id === selectedTemplateId;
-                return (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => setSelectedTemplateId(template.id)}
-                    className="w-full rounded-[24px] border p-4 text-left transition"
-                    style={{
-                      borderColor: active ? DS.blue : DS.line,
-                      backgroundColor: active ? "#f7fbfe" : "#ffffff",
-                      boxShadow: active ? "0 0 0 2px rgba(79,171,219,0.16)" : "none",
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold" style={{ color: DS.navy }}>
-                          {template.title}
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: "#61778a" }}>
-                          {getContextLabel(template.context ?? "generic")}
-                        </p>
+
+              <div className="mt-4 space-y-3">
+                {templateDraft.target_type === "offer" && (
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium" style={{ color: DS.navy }}>Formation</span>
+                    <select
+                      value={templateDraft.target_offer_code ?? ""}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, target_offer_code: event.target.value || null }))}
+                      className="h-12 w-full rounded-2xl border bg-white px-4 text-sm outline-none"
+                      style={{ borderColor: DS.line, color: DS.navy }}
+                    >
+                      <option value="">Sélectionner une formation</option>
+                      {offerDossiers.map((offer) => (
+                        <option key={offer.id} value={offer.formation_offer ?? offer.id}>
+                          {offer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {templateDraft.target_type === "university" && (
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium" style={{ color: DS.navy }}>Fac</span>
+                    <select
+                      value={templateDraft.target_university_dossier_id ?? ""}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, target_university_dossier_id: event.target.value || null }))}
+                      className="h-12 w-full rounded-2xl border bg-white px-4 text-sm outline-none"
+                      style={{ borderColor: DS.line, color: DS.navy }}
+                    >
+                      <option value="">Sélectionner une fac</option>
+                      {universityDossiers.map((university) => (
+                        <option key={university.id} value={university.id}>
+                          {university.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {templateDraft.target_type === "groupe" && (
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium" style={{ color: DS.navy }}>Classe</span>
+                    <select
+                      value={templateDraft.target_groupe_id ?? ""}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, target_groupe_id: event.target.value || null }))}
+                      className="h-12 w-full rounded-2xl border bg-white px-4 text-sm outline-none"
+                      style={{ borderColor: DS.line, color: DS.navy }}
+                    >
+                      <option value="">Sélectionner une classe</option>
+                      {initialGroupes.map((groupe) => (
+                        <option key={groupe.id} value={groupe.id}>
+                          {groupe.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {templateDraft.target_type === "student" && (
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium" style={{ color: DS.navy }}>Élève</span>
+                    <select
+                      value={templateDraft.target_student_id ?? ""}
+                      onChange={(event) => setTemplateDraft((current) => ({ ...current, target_student_id: event.target.value || null }))}
+                      className="h-12 w-full rounded-2xl border bg-white px-4 text-sm outline-none"
+                      style={{ borderColor: DS.line, color: DS.navy }}
+                    >
+                      <option value="">Sélectionner un élève</option>
+                      {initialStudents.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {profileName(student)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {templateDraft.target_type === "selection" && (
+                  <div className="space-y-3">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium" style={{ color: DS.navy }}>Rechercher des élèves</span>
+                      <div className="flex h-12 items-center gap-3 rounded-2xl border bg-white px-4" style={{ borderColor: DS.line }}>
+                        <Search className="h-4 w-4" style={{ color: "#8aa3b6" }} />
+                        <input
+                          value={studentSearch}
+                          onChange={(event) => setStudentSearch(event.target.value)}
+                          placeholder="Tape un nom ou un email"
+                          className="w-full bg-transparent text-sm outline-none"
+                          style={{ color: DS.navy }}
+                        />
                       </div>
-                      {template.is_active ? (
-                        <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
-                          Actif
-                        </span>
-                      ) : (
-                        <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: "#f3f4f6", color: "#667085" }}>
-                          Inactif
-                        </span>
-                      )}
+                    </label>
+
+                    <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                      {filteredStudents.map((student) => {
+                        const checked = templateDraft.target_student_ids.includes(student.id);
+                        return (
+                          <label
+                            key={student.id}
+                            className="flex items-center gap-3 rounded-2xl border px-3 py-3 text-sm"
+                            style={{ borderColor: checked ? DS.blue : DS.line, backgroundColor: checked ? "#f7fbfe" : "#ffffff" }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) => {
+                                setTemplateDraft((current) => ({
+                                  ...current,
+                                  target_student_ids: event.target.checked
+                                    ? [...current.target_student_ids, student.id]
+                                    : current.target_student_ids.filter((id) => id !== student.id),
+                                }));
+                              }}
+                              className="h-4 w-4 rounded border-gray-300"
+                              style={{ accentColor: DS.blue }}
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate font-medium" style={{ color: DS.navy }}>{profileName(student)}</p>
+                              <p className="truncate text-xs" style={{ color: "#61778a" }}>{student.email}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[24px] border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>Portée actuelle</p>
+              <p className="mt-2 text-sm font-semibold" style={{ color: DS.navy }}>{draftTargetSummary}</p>
+              <p className="mt-1 text-xs" style={{ color: "#61778a" }}>
+                {templateDraft.is_active ? "Le formulaire est actif et prêt à être utilisé." : "Le formulaire est archivé pour le moment."}
+              </p>
+            </div>
+          </section>
+
+          <section className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold" style={{ color: DS.navy }}>Bibliothèque</p>
+                <p className="mt-1 text-xs" style={{ color: "#61778a" }}>Historique des formulaires créés et déjà en place.</p>
+              </div>
+              <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
+                {templates.length}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {!selectedTemplateId && (
+                <div
+                  className="rounded-[24px] border p-4"
+                  style={{
+                    borderColor: DS.blue,
+                    backgroundColor: "#f7fbfe",
+                    boxShadow: "0 0 0 2px rgba(79,171,219,0.16)",
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold" style={{ color: DS.navy }}>
+                        {templateDraft.title || "Nouveau formulaire"}
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "#61778a" }}>{draftTargetSummary}</p>
+                    </div>
+                    <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>
+                      Brouillon
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {templates.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-4 text-sm text-[#61778a]" style={{ borderColor: DS.line }}>
+                  Aucun formulaire pour le moment.
+                </div>
+              ) : (
+                templates.map((template) => {
+                  const active = template.id === selectedTemplateId;
+                  const templateCount = initialResponses.filter((response) => response.form_template_id === template.id).length;
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => setSelectedTemplateId(template.id)}
+                      className="w-full rounded-[24px] border p-4 text-left transition"
+                      style={{
+                        borderColor: active ? DS.blue : DS.line,
+                        backgroundColor: active ? "#f7fbfe" : "#ffffff",
+                        boxShadow: active ? "0 0 0 2px rgba(79,171,219,0.16)" : "none",
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold" style={{ color: DS.navy }}>{template.title}</p>
+                          <p className="mt-1 text-xs" style={{ color: "#61778a" }}>
+                            {getTemplateTargetSummary(template, { offerDossiers, dossierById, groupeById, studentById })}
+                          </p>
+                          <p className="mt-2 text-[11px]" style={{ color: "#90a2b4" }}>
+                            Mis à jour le {formatDateTime(template.updated_at)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: template.is_active ? "#eef6fb" : "#f3f4f6", color: template.is_active ? DS.navy : "#667085" }}>
+                            {template.is_active ? "Actif" : "Archivé"}
+                          </span>
+                          <p className="mt-2 text-[11px] font-semibold" style={{ color: DS.navy }}>{templateCount} réponse(s)</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </section>
         </aside>
 
         <section className="overflow-hidden rounded-[30px] border shadow-sm" style={{ borderColor: DS.line, backgroundColor: DS.bg }}>
           <div className="border-b bg-white px-5 py-4" style={{ borderColor: DS.line }}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: DS.gold }}>
-                  Builder simple
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: DS.gold }}>Section Formulaires</p>
                 <p className="mt-1 text-sm" style={{ color: "#61778a" }}>
-                  Choisis un formulaire, attribue-le a une formation, puis ajoute tes questions.
+                  Crée, cible, archive et analyse tous tes formulaires depuis un seul espace.
                 </p>
               </div>
 
@@ -522,16 +848,16 @@ export function ConfigurationShell({
                   style={{ backgroundColor: DS.navy }}
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Enregistrer le formulaire
+                  Enregistrer
                 </button>
               </div>
             </div>
           </div>
 
           <div className="px-4 py-6 lg:px-8 xl:px-10">
-            <div className="mx-auto max-w-[1600px] space-y-5">
+            <div className="mx-auto max-w-[1700px] space-y-6">
               <div className="rounded-[28px] border border-t-[10px] bg-white p-6 shadow-[0_18px_40px_rgba(18,49,77,0.08)]" style={{ borderColor: DS.line, borderTopColor: DS.navy }}>
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr),minmax(320px,0.8fr)]">
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr),minmax(320px,0.7fr)]">
                   <div>
                     <input
                       value={templateDraft.title}
@@ -551,24 +877,21 @@ export function ConfigurationShell({
                     <div className="mt-4 flex flex-wrap items-center gap-2 text-xs" style={{ color: DS.navy }}>
                       <span className="rounded-full px-3 py-1 font-semibold" style={{ backgroundColor: "#eef6fb" }}>{stats.total} question(s)</span>
                       <span className="rounded-full px-3 py-1 font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>{stats.required} obligatoire(s)</span>
+                      <span className="rounded-full px-3 py-1 font-semibold" style={{ backgroundColor: "#eef6fb" }}>{responseStats.total} réponse(s)</span>
                     </div>
                   </div>
 
                   <div className="rounded-[24px] border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
                     <div className="space-y-4">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
-                          Affectation
-                        </p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>Pilotage</p>
                         <p className="mt-1 text-sm" style={{ color: "#61778a" }}>
-                          Choisis a quelle formation ce formulaire sera rattache.
+                          Le formulaire est rattaché à un usage et à une audience bien définie.
                         </p>
                       </div>
 
                       <label className="block space-y-2">
-                        <span className="text-sm font-medium" style={{ color: DS.navy }}>
-                          Formation cible
-                        </span>
+                        <span className="text-sm font-medium" style={{ color: DS.navy }}>Usage</span>
                         <select
                           value={selectedContextValue}
                           onChange={(event) =>
@@ -590,18 +913,21 @@ export function ConfigurationShell({
 
                       {isCustomContext && (
                         <label className="block space-y-2">
-                          <span className="text-sm font-medium" style={{ color: DS.navy }}>
-                            Nom de la formation
-                          </span>
+                          <span className="text-sm font-medium" style={{ color: DS.navy }}>Autre usage</span>
                           <input
                             value={templateDraft.context}
                             onChange={(event) => setTemplateDraft((current) => ({ ...current, context: event.target.value }))}
-                            placeholder="Ex: Prepa dentaire"
+                            placeholder="Ex: Pré-rentrée médecine"
                             className="h-12 w-full rounded-2xl border bg-white px-4 text-sm outline-none"
                             style={{ borderColor: DS.line, color: DS.navy }}
                           />
                         </label>
                       )}
+
+                      <div className="rounded-2xl border px-4 py-3" style={{ borderColor: DS.line, backgroundColor: "#ffffff" }}>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>Audience visée</p>
+                        <p className="mt-2 text-sm font-semibold" style={{ color: DS.navy }}>{draftTargetSummary}</p>
+                      </div>
 
                       <label className="inline-flex items-center gap-3 text-sm font-medium" style={{ color: DS.navy }}>
                         <input
@@ -626,128 +952,230 @@ export function ConfigurationShell({
                 />
               )}
 
-              <div className="relative">
-                {selectedFields.length === 0 ? (
-                  <div className="rounded-[28px] border-2 border-dashed bg-white/70 p-12 text-center" style={{ borderColor: "#ddd2b8" }}>
-                    <p className="text-sm text-[#7c7664]">
-                      Commence par enregistrer ce formulaire, puis ajoute ta premiere question.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddMenu((current) => !current)}
-                      disabled={!selectedTemplateId}
-                      className="mx-auto mt-6 inline-flex h-14 w-14 items-center justify-center rounded-full text-white transition disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ backgroundColor: DS.navy }}
-                    >
-                      <Plus className="h-6 w-6" />
-                    </button>
-
-                    {showAddMenu && selectedTemplateId && (
-                      <div className="mx-auto mt-4 max-w-sm rounded-[24px] border bg-white p-3 text-left shadow-sm" style={{ borderColor: DS.line }}>
-                        <div className="space-y-2">
-                          {FIELD_LIBRARY.map((item) => (
-                            <button
-                              key={item.type}
-                              type="button"
-                              onClick={() => {
-                                handleAddField(item.type);
-                                setShowAddMenu(false);
-                              }}
-                              className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition hover:bg-[#f7fbfe]"
-                              style={{ color: DS.navy }}
-                            >
-                              <span className="flex h-9 w-9 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb" }}>
-                                {item.icon}
-                              </span>
-                              {item.title}
-                            </button>
-                          ))}
-                        </div>
+              <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr),360px]">
+                <div className="space-y-5">
+                  <div className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: DS.navy }}>Questions</p>
+                        <p className="mt-1 text-xs" style={{ color: "#61778a" }}>
+                          Construis le formulaire comme un vrai parcours élève, question par question.
+                        </p>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                      <SortableContext items={selectedFields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-4">
-                          {selectedFields.map((field, index) => (
-                            <SortableQuestionCard
-                              key={field.id}
-                              field={field}
-                              index={index + 1}
-                              isSelected={field.id === selectedFieldId}
-                              isPending={isPending}
-                              onSelect={() => setSelectedFieldId(field.id)}
-                              onChange={(patch) => updateFieldById(field.id, patch)}
-                              onSave={() => handleSaveField(field)}
-                              onDuplicate={() => handleDuplicateField(field)}
-                              onDelete={() => handleDeleteField(field)}
-                            />
-                          ))}
+                      <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
+                        {stats.total} bloc(s)
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      {selectedFields.length === 0 ? (
+                        <div className="rounded-[28px] border-2 border-dashed bg-white/70 p-12 text-center" style={{ borderColor: "#ddd2b8" }}>
+                          <p className="text-sm text-[#7c7664]">
+                            Commence par enregistrer ce formulaire, puis ajoute ta première question.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddMenu((current) => !current)}
+                            disabled={!selectedTemplateId}
+                            className="mx-auto mt-6 inline-flex h-14 w-14 items-center justify-center rounded-full text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{ backgroundColor: DS.navy }}
+                          >
+                            <Plus className="h-6 w-6" />
+                          </button>
+
+                          {showAddMenu && selectedTemplateId && (
+                            <div className="mx-auto mt-4 max-w-sm rounded-[24px] border bg-white p-3 text-left shadow-sm" style={{ borderColor: DS.line }}>
+                              <div className="space-y-2">
+                                {FIELD_LIBRARY.map((item) => (
+                                  <button
+                                    key={item.type}
+                                    type="button"
+                                    onClick={() => {
+                                      handleAddField(item.type);
+                                      setShowAddMenu(false);
+                                    }}
+                                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition hover:bg-[#f7fbfe]"
+                                    style={{ color: DS.navy }}
+                                  >
+                                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb" }}>
+                                      {item.icon}
+                                    </span>
+                                    {item.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </SortableContext>
-                    </DndContext>
+                      ) : (
+                        <div className="space-y-5">
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={selectedFields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
+                              <div className="space-y-4">
+                                {selectedFields.map((field, index) => (
+                                  <SortableQuestionCard
+                                    key={field.id}
+                                    field={field}
+                                    index={index + 1}
+                                    isSelected={field.id === selectedFieldId}
+                                    isPending={isPending}
+                                    onSelect={() => setSelectedFieldId(field.id)}
+                                    onChange={(patch) => updateFieldById(field.id, patch)}
+                                    onSave={() => handleSaveField(field)}
+                                    onDuplicate={() => handleDuplicateField(field)}
+                                    onDelete={() => handleDeleteField(field)}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
 
-                    <div className="flex justify-center pt-2">
-                      <div className="relative flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setShowAddMenu((current) => !current)}
-                          disabled={!selectedTemplateId}
-                          className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_14px_34px_rgba(18,49,77,0.24)] transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
-                          style={{ backgroundColor: DS.navy }}
-                          title="Ajouter une question"
-                        >
-                          <Plus className="h-6 w-6" />
-                        </button>
+                          <div className="flex justify-center pt-2">
+                            <div className="relative flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setShowAddMenu((current) => !current)}
+                                disabled={!selectedTemplateId}
+                                className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_14px_34px_rgba(18,49,77,0.24)] transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ backgroundColor: DS.navy }}
+                                title="Ajouter une question"
+                              >
+                                <Plus className="h-6 w-6" />
+                              </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const lastField = selectedFields.at(-1);
-                            if (lastField) {
-                              handleDuplicateField(lastField);
-                            }
-                          }}
-                          disabled={selectedFields.length === 0}
-                          className="flex h-14 w-14 items-center justify-center rounded-full border bg-white shadow-sm transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
-                          style={{ borderColor: DS.line, color: DS.navy }}
-                          title="Dupliquer la dernière question"
-                        >
-                          <Copy className="h-5 w-5" />
-                        </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const lastField = selectedFields.at(-1);
+                                  if (lastField) {
+                                    handleDuplicateField(lastField);
+                                  }
+                                }}
+                                disabled={selectedFields.length === 0}
+                                className="flex h-14 w-14 items-center justify-center rounded-full border bg-white shadow-sm transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ borderColor: DS.line, color: DS.navy }}
+                                title="Dupliquer la dernière question"
+                              >
+                                <Copy className="h-5 w-5" />
+                              </button>
 
-                        {showAddMenu && selectedTemplateId && (
-                          <div className="absolute bottom-16 left-1/2 z-20 w-64 -translate-x-1/2 rounded-[24px] border bg-white p-3 shadow-[0_24px_50px_rgba(18,49,77,0.18)]" style={{ borderColor: DS.line }}>
-                            <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
-                              Nouvelle question
-                            </p>
-                            <div className="space-y-2">
-                              {FIELD_LIBRARY.map((item) => (
-                                <button
-                                  key={item.type}
-                                  type="button"
-                                  onClick={() => {
-                                    handleAddField(item.type);
-                                    setShowAddMenu(false);
-                                  }}
-                                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition hover:bg-[#f7fbfe]"
-                                  style={{ color: DS.navy }}
-                                >
-                                  <span className="flex h-9 w-9 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb" }}>
-                                    {item.icon}
-                                  </span>
-                                  {item.title}
-                                </button>
-                              ))}
+                              {showAddMenu && selectedTemplateId && (
+                                <div className="absolute bottom-16 left-1/2 z-20 w-64 -translate-x-1/2 rounded-[24px] border bg-white p-3 shadow-[0_24px_50px_rgba(18,49,77,0.18)]" style={{ borderColor: DS.line }}>
+                                  <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
+                                    Nouvelle question
+                                  </p>
+                                  <div className="space-y-2">
+                                    {FIELD_LIBRARY.map((item) => (
+                                      <button
+                                        key={item.type}
+                                        type="button"
+                                        onClick={() => {
+                                          handleAddField(item.type);
+                                          setShowAddMenu(false);
+                                        }}
+                                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition hover:bg-[#f7fbfe]"
+                                        style={{ color: DS.navy }}
+                                      >
+                                        <span className="flex h-9 w-9 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb" }}>
+                                          {item.icon}
+                                        </span>
+                                        {item.title}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <aside className="space-y-5">
+                  <div className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
+                        <History className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: DS.navy }}>Historique</p>
+                        <p className="mt-1 text-xs" style={{ color: "#61778a" }}>Vision rapide de la vie du formulaire.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      <div className="rounded-2xl border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
+                        <p className="text-xs uppercase tracking-[0.14em]" style={{ color: DS.gold }}>Réponses reçues</p>
+                        <p className="mt-2 text-2xl font-semibold" style={{ color: DS.navy }}>{responseStats.total}</p>
+                      </div>
+                      <div className="rounded-2xl border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
+                        <p className="text-xs uppercase tracking-[0.14em]" style={{ color: DS.gold }}>Dernière réponse</p>
+                        <p className="mt-2 text-sm font-semibold" style={{ color: DS.navy }}>{formatDateTime(responseStats.latestSubmittedAt)}</p>
+                      </div>
+                      <div className="rounded-2xl border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
+                        <p className="text-xs uppercase tracking-[0.14em]" style={{ color: DS.gold }}>Audience</p>
+                        <p className="mt-2 text-sm font-semibold" style={{ color: DS.navy }}>{draftTargetSummary}</p>
                       </div>
                     </div>
                   </div>
-                )}
+
+                  <div className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
+                        <Users className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: DS.navy }}>Réponses récentes</p>
+                        <p className="mt-1 text-xs" style={{ color: "#61778a" }}>Pour l'instant, l'historique reprend les formulaires déjà remplis côté coaching.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {templateResponses.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed p-4 text-sm" style={{ borderColor: DS.line, color: "#61778a" }}>
+                          Aucune réponse enregistrée pour ce formulaire.
+                        </div>
+                      ) : (
+                        templateResponses.slice(0, 6).map((response) => (
+                          <div key={response.id} className="rounded-2xl border p-4" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold" style={{ color: DS.navy }}>
+                                  {profileName(response.student)}
+                                </p>
+                                <p className="mt-1 truncate text-xs" style={{ color: "#61778a" }}>
+                                  {response.groupe?.name ?? "Sans classe renseignée"}
+                                </p>
+                              </div>
+                              <span className="text-[11px] font-medium" style={{ color: "#90a2b4" }}>
+                                {formatDateTime(response.submitted_at)}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[30px] border bg-white p-5 shadow-sm" style={{ borderColor: DS.line }}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb", color: DS.navy }}>
+                        <User className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: DS.navy }}>Résumé opérationnel</p>
+                        <p className="mt-1 text-xs" style={{ color: "#61778a" }}>
+                          Le formulaire est actuellement rangé dans l'usage {getContextLabel(templateDraft.context)}.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 rounded-2xl border p-4 text-sm leading-6" style={{ borderColor: DS.line, backgroundColor: "#fbfdff", color: "#61778a" }}>
+                      Utilise cette colonne pour savoir à qui le formulaire s'adresse, combien de réponses sont déjà arrivées, et quand il a été utilisé pour la dernière fois.
+                    </div>
+                  </div>
+                </aside>
               </div>
             </div>
           </div>

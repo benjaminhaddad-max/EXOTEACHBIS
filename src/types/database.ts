@@ -409,6 +409,7 @@ export interface CalendarEvent {
 export type FormFieldType = "short_text" | "long_text" | "select" | "radio" | "checkboxes";
 export type FormFieldWidth = "half" | "full";
 export type FormAnswerValue = string | string[];
+export type FormTargetType = "global" | "offer" | "university" | "groupe" | "student" | "selection";
 
 export interface FormTemplate {
   id: string;
@@ -416,6 +417,12 @@ export interface FormTemplate {
   title: string;
   description: string | null;
   context: string;
+  target_type: FormTargetType;
+  target_offer_code: string | null;
+  target_university_dossier_id: string | null;
+  target_groupe_id: string | null;
+  target_student_id: string | null;
+  target_student_ids: string[];
   is_active: boolean;
   created_at: string;
   updated_at: string;

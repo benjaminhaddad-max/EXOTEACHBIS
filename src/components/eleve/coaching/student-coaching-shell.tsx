@@ -132,7 +132,7 @@ export function StudentCoachingShell({
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
         Aucun formulaire coaching actif n'est configuré pour le moment. L'équipe admin doit d'abord le paramétrer dans
-        l'espace Configuration.
+        l'espace Formulaires.
       </div>
     );
   }

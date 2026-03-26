@@ -7,8 +7,13 @@ import { slugifyFieldKey } from "@/lib/form-builder";
 import type { FormField, FormFieldType, FormFieldWidth, FormTemplate } from "@/types/database";
 
 const CONFIGURATION_PATH = "/admin/configuration";
+const FORMULAIRES_PATH = "/admin/formulaires";
 const COACHING_PATH = "/admin/coaching";
 const STUDENT_COACHING_PATH = "/coaching";
+
+function normalizeStudentIds(studentIds?: string[]) {
+  return [...new Set((studentIds ?? []).map((studentId) => studentId.trim()).filter(Boolean))];
+}
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -43,6 +48,12 @@ export async function saveFormTemplate(data: {
   title: string;
   description?: string;
   context?: string;
+  target_type?: "global" | "offer" | "university" | "groupe" | "student" | "selection";
+  target_offer_code?: string | null;
+  target_university_dossier_id?: string | null;
+  target_groupe_id?: string | null;
+  target_student_id?: string | null;
+  target_student_ids?: string[];
   is_active: boolean;
 }) {
   const auth = await requireAdmin();
@@ -63,6 +74,12 @@ export async function saveFormTemplate(data: {
         title: data.title.trim(),
         description: data.description?.trim() || null,
         context: data.context?.trim() || "generic",
+        target_type: data.target_type ?? "global",
+        target_offer_code: data.target_offer_code?.trim() || null,
+        target_university_dossier_id: data.target_university_dossier_id || null,
+        target_groupe_id: data.target_groupe_id || null,
+        target_student_id: data.target_student_id || null,
+        target_student_ids: normalizeStudentIds(data.target_student_ids),
         is_active: data.is_active,
         updated_at: new Date().toISOString(),
       },
@@ -74,6 +91,7 @@ export async function saveFormTemplate(data: {
   if (error) return { error: error.message };
 
   revalidatePath(CONFIGURATION_PATH);
+  revalidatePath(FORMULAIRES_PATH);
   revalidatePath(COACHING_PATH);
   revalidatePath(STUDENT_COACHING_PATH);
   return { success: true, template: template as FormTemplate };
@@ -127,6 +145,7 @@ export async function saveFormField(data: {
   if (error) return { error: error.message };
 
   revalidatePath(CONFIGURATION_PATH);
+  revalidatePath(FORMULAIRES_PATH);
   revalidatePath(COACHING_PATH);
   revalidatePath(STUDENT_COACHING_PATH);
   return { success: true, field: field as FormField };
@@ -145,6 +164,7 @@ export async function deleteFormField(fieldId: string) {
   if (error) return { error: error.message };
 
   revalidatePath(CONFIGURATION_PATH);
+  revalidatePath(FORMULAIRES_PATH);
   revalidatePath(COACHING_PATH);
   revalidatePath(STUDENT_COACHING_PATH);
   return { success: true };
@@ -176,6 +196,7 @@ export async function saveFormFieldOrder(data: {
   }
 
   revalidatePath(CONFIGURATION_PATH);
+  revalidatePath(FORMULAIRES_PATH);
   revalidatePath(COACHING_PATH);
   revalidatePath(STUDENT_COACHING_PATH);
   return { success: true };

@@ -29,7 +29,7 @@ const adminNavItems = [
   { href: "/admin/utilisateurs", label: "Administration", icon: Users },
   // { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard }, // Désactivé temporairement
   { href: "/admin/planning", label: "Planning", icon: Calendar },
-  { href: "/admin/configuration", label: "Configuration", icon: Settings },
+  { href: "/admin/formulaires", label: "Formulaires", icon: Settings },
   { href: "/admin/aide", label: "Aide", icon: HelpCircle },
 ];
 
