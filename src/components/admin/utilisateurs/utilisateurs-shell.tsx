@@ -1684,49 +1684,86 @@ function ComptesView({
 }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
+  const [filterFormationId, setFilterFormationId] = useState("");
+  const [filterUniversityId, setFilterUniversityId] = useState("");
   const [filterGroupeId, setFilterGroupeId] = useState("");
 
   // Build group → formation/university mapping
-  const dossierMap = useMemo(() => new Map(dossiers.map(d => [d.id, d])), [dossiers]);
+  const dMap = useMemo(() => new Map(dossiers.map(d => [d.id, d])), [dossiers]);
 
   const getUniversityForGroup = (g: Groupe) => {
     if (!g.formation_dossier_id) return null;
-    const d = dossierMap.get(g.formation_dossier_id);
+    const d = dMap.get(g.formation_dossier_id);
     return d?.dossier_type === "university" ? d : null;
   };
 
   const getFormationForGroup = (g: Groupe) => {
     if (!g.formation_dossier_id) return null;
-    let d = dossierMap.get(g.formation_dossier_id);
+    let d: Dossier | undefined = dMap.get(g.formation_dossier_id);
     while (d) {
       if (d.dossier_type === "offer") return d;
-      d = d.parent_id ? dossierMap.get(d.parent_id) : undefined;
+      d = d.parent_id ? dMap.get(d.parent_id) : undefined;
     }
     return null;
   };
 
-  // Unique universities and formations from groups
-  const universities = useMemo(() => {
-    const seen = new Map<string, { id: string; name: string; count: number }>();
-    for (const g of groupes) {
-      const uni = getUniversityForGroup(g);
-      if (uni) {
-        const members = users.filter(u => u.groupe_id === g.id).length;
-        if (seen.has(uni.id)) seen.get(uni.id)!.count += members;
-        else seen.set(uni.id, { id: uni.id, name: uni.name, count: members });
-      }
-    }
-    return Array.from(seen.values());
-  }, [groupes, users]);
+  // Build group membership map for fast lookup
+  const userGroupeIds = useMemo(() => {
+    const m = new Map<string, string>(); // userId → groupeId
+    for (const u of users) if (u.groupe_id) m.set(u.id, u.groupe_id);
+    return m;
+  }, [users]);
 
+  // Formations (offers)
+  const formations = useMemo(() => {
+    return dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index).map(d => {
+      // Count users in groups linked to this formation
+      const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === d.id);
+      const count = users.filter(u => u.groupe_id && formGroupes.some(g => g.id === u.groupe_id)).length;
+      return { id: d.id, name: d.name, count };
+    });
+  }, [dossiers, groupes, users]);
+
+  // Universities (filtered by selected formation)
+  const filteredUniversities = useMemo(() => {
+    let unis = dossiers.filter(d => d.dossier_type === "university");
+    if (filterFormationId) unis = unis.filter(d => d.parent_id === filterFormationId);
+    return unis.sort((a, b) => a.order_index - b.order_index).map(d => {
+      const uniGroupes = groupes.filter(g => g.formation_dossier_id === d.id);
+      const count = users.filter(u => u.groupe_id && uniGroupes.some(g => g.id === u.groupe_id)).length;
+      return { id: d.id, name: d.name, count };
+    });
+  }, [dossiers, groupes, users, filterFormationId]);
+
+  // Classes (filtered by selected university)
+  const filteredClasses = useMemo(() => {
+    let cls = groupes.filter(g => g.formation_dossier_id);
+    if (filterUniversityId) cls = cls.filter(g => g.formation_dossier_id === filterUniversityId);
+    else if (filterFormationId) cls = cls.filter(g => getFormationForGroup(g)?.id === filterFormationId);
+    return cls.map(g => {
+      const count = users.filter(u => u.groupe_id === g.id).length;
+      const uni = getUniversityForGroup(g);
+      return { id: g.id, name: g.name, uniName: uni?.name ?? "", count, color: g.color };
+    });
+  }, [groupes, users, filterUniversityId, filterFormationId]);
+
+  // Filtered users
   const filtered = useMemo(() => users.filter(u => {
     const q = search.toLowerCase();
     if (q && !`${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q)) return false;
     if (filterRole === "admin" && !["admin", "superadmin"].includes(u.role)) return false;
     if (filterRole && filterRole !== "admin" && u.role !== filterRole) return false;
     if (filterGroupeId && u.groupe_id !== filterGroupeId) return false;
+    if (filterUniversityId && !filterGroupeId) {
+      const uniGroupes = groupes.filter(g => g.formation_dossier_id === filterUniversityId);
+      if (!uniGroupes.some(g => g.id === u.groupe_id)) return false;
+    }
+    if (filterFormationId && !filterUniversityId && !filterGroupeId) {
+      const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === filterFormationId);
+      if (!formGroupes.some(g => g.id === u.groupe_id)) return false;
+    }
     return true;
-  }), [users, search, filterRole, filterGroupeId]);
+  }), [users, search, filterRole, filterGroupeId, filterUniversityId, filterFormationId, groupes]);
 
   const groupMap = useMemo(() => {
     const m = new Map<string, Groupe>();
@@ -1750,11 +1787,52 @@ function ComptesView({
         />
       </div>
 
-      {/* Pill filters */}
+      {/* Pill filters — cascading: Formation → Université → Classe → Rôle */}
       <div className="rounded-xl p-3 mb-4 space-y-2" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Formation */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
+          {[{ id: "", name: "Tout", count: users.length }, ...formations].map(f => (
+            <button key={f.id} onClick={() => { setFilterFormationId(f.id); setFilterUniversityId(""); setFilterGroupeId(""); }}
+              className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
+              style={{ backgroundColor: filterFormationId === f.id ? "#0e1e35" : "rgba(255,255,255,0.06)", color: filterFormationId === f.id ? "white" : "rgba(255,255,255,0.5)", fontWeight: filterFormationId === f.id ? 600 : 400, border: filterFormationId === f.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+              {f.name} <span className="text-[9px] opacity-60">{f.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Université */}
+        {filteredUniversities.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
+            {[{ id: "", name: "Toutes", count: filtered.length }, ...filteredUniversities].map(f => (
+              <button key={f.id} onClick={() => { setFilterUniversityId(f.id); setFilterGroupeId(""); }}
+                className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
+                style={{ backgroundColor: filterUniversityId === f.id ? "#0e1e35" : "rgba(255,255,255,0.06)", color: filterUniversityId === f.id ? "white" : "rgba(255,255,255,0.5)", fontWeight: filterUniversityId === f.id ? 600 : 400, border: filterUniversityId === f.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                {f.name.replace("Université ", "")} <span className="text-[9px] opacity-60">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Classe */}
+        {filteredClasses.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
+            {[{ id: "", name: "Toutes", uniName: "", count: filtered.length, color: "" }, ...filteredClasses].map(f => (
+              <button key={f.id} onClick={() => setFilterGroupeId(f.id)}
+                className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
+                style={{ backgroundColor: filterGroupeId === f.id ? "#0e1e35" : "rgba(255,255,255,0.06)", color: filterGroupeId === f.id ? "white" : "rgba(255,255,255,0.5)", fontWeight: filterGroupeId === f.id ? 600 : 400, border: filterGroupeId === f.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                {f.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: f.color }} />}
+                {f.name} <span className="text-[9px] opacity-60">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Rôle */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[9px] font-bold uppercase tracking-widest w-16 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Rôle</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Rôle</span>
           {[
             { val: "", label: "Tout", count: users.length },
             { val: "eleve", label: "Élèves", count: users.filter(u => u.role === "eleve").length },
@@ -1762,61 +1840,13 @@ function ComptesView({
             { val: "prof", label: "Profs", count: users.filter(u => u.role === "prof").length },
             { val: "admin", label: "Admins", count: users.filter(u => ["admin", "superadmin"].includes(u.role)).length },
           ].map(f => (
-            <button
-              key={f.val}
-              onClick={() => setFilterRole(f.val)}
+            <button key={f.val} onClick={() => setFilterRole(f.val)}
               className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
-              style={{
-                backgroundColor: filterRole === f.val ? "#0e1e35" : "rgba(255,255,255,0.06)",
-                color: filterRole === f.val ? "white" : "rgba(255,255,255,0.5)",
-                fontWeight: filterRole === f.val ? 600 : 400,
-                border: filterRole === f.val ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
-              }}
-            >
-              {f.label}
-              <span className="text-[9px] opacity-60">{f.count}</span>
+              style={{ backgroundColor: filterRole === f.val ? "#0e1e35" : "rgba(255,255,255,0.06)", color: filterRole === f.val ? "white" : "rgba(255,255,255,0.5)", fontWeight: filterRole === f.val ? 600 : 400, border: filterRole === f.val ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+              {f.label} <span className="text-[9px] opacity-60">{f.count}</span>
             </button>
           ))}
         </div>
-
-        {/* Classe */}
-        {groupes.filter(g => g.formation_dossier_id).length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[9px] font-bold uppercase tracking-widest w-16 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
-            <button
-              onClick={() => setFilterGroupeId("")}
-              className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
-              style={{
-                backgroundColor: !filterGroupeId ? "#0e1e35" : "rgba(255,255,255,0.06)",
-                color: !filterGroupeId ? "white" : "rgba(255,255,255,0.5)",
-                fontWeight: !filterGroupeId ? 600 : 400,
-                border: !filterGroupeId ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
-              }}
-            >
-              Toutes <span className="text-[9px] opacity-60">{users.length}</span>
-            </button>
-            {groupes.filter(g => g.formation_dossier_id).map(g => {
-              const count = users.filter(u => u.groupe_id === g.id).length;
-              const uni = getUniversityForGroup(g);
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => setFilterGroupeId(g.id)}
-                  className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
-                  style={{
-                    backgroundColor: filterGroupeId === g.id ? "#0e1e35" : "rgba(255,255,255,0.06)",
-                    color: filterGroupeId === g.id ? "white" : "rgba(255,255,255,0.5)",
-                    fontWeight: filterGroupeId === g.id ? 600 : 400,
-                    border: filterGroupeId === g.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
-                  }}
-                >
-                  {g.name}{uni ? ` · ${uni.name.replace("Université ", "").substring(0, 12)}` : ""}
-                  <span className="text-[9px] opacity-60">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Table */}
