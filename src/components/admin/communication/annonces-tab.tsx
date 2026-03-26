@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import {
   Megaphone, Plus, Pencil, Trash2, Pin, X, Check, AlertCircle, Loader2, Users, FolderTree, BookOpen,
 } from "lucide-react";
@@ -25,7 +25,7 @@ type Toast = { message: string; kind: "success" | "error" } | null;
 const F = "w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25";
 
 export function AnnoncesTab({
-  initialAnnonces, groupes, dossiers, matieres, currentProfile, sidebarFilter, selectedGroupeIds,
+  initialAnnonces, groupes, dossiers, matieres, currentProfile, sidebarFilter, selectedGroupeIds, triggerCreate, onCreateHandled,
 }: {
   initialAnnonces: Annonce[];
   groupes: Groupe[];
@@ -34,6 +34,8 @@ export function AnnoncesTab({
   currentProfile: Profile | null;
   sidebarFilter: SidebarFilter;
   selectedGroupeIds?: Set<string>;
+  triggerCreate?: boolean;
+  onCreateHandled?: () => void;
 }) {
   const [annonces, setAnnonces] = useState<Annonce[]>(initialAnnonces);
   const [modal, setModal] = useState<Modal>(null);
@@ -41,6 +43,11 @@ export function AnnoncesTab({
   const [isPending, startTransition] = useTransition();
 
   const showToast = (msg: string, kind: "success" | "error") => { setToast({ message: msg, kind }); setTimeout(() => setToast(null), 3500); };
+
+  // Open create modal when triggered from header button
+  useEffect(() => {
+    if (triggerCreate) { setModal({ type: "create" }); onCreateHandled?.(); }
+  }, [triggerCreate]);
 
   const refresh = async () => {
     const { createClient } = await import("@/lib/supabase/client");
@@ -101,9 +108,6 @@ export function AnnoncesTab({
         <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
           {filteredAnnonces.length} annonce{filteredAnnonces.length !== 1 ? "s" : ""}
         </p>
-        <button onClick={() => setModal({ type: "create" })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
-          <Plus size={13} /> Nouvelle annonce
-        </button>
       </div>
 
       {/* List */}

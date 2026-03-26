@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import {
   Megaphone, FileText, ChevronDown, GraduationCap, Building2,
-  Layers, Check, Plus,
+  Layers, Check, Plus, Users,
 } from "lucide-react";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, Groupe, Matiere, Profile } from "@/types/database";
 import type { SidebarFilter } from "@/components/admin/formulaires/formulaires-sidebar";
@@ -31,6 +31,8 @@ export function CommunicationShell({
 }) {
   const [tab, setTab] = useState<ActiveTab>("annonces");
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+  const [createAnnonce, setCreateAnnonce] = useState(false);
+  const [createForm, setCreateForm] = useState(false);
   const isAdmin = ["admin", "superadmin"].includes(currentProfile.role);
 
   const dossiers = initialFormDossiers.length > 0 ? initialFormDossiers : annoncesDossiers.filter(d => ["offer", "university"].includes(d.dossier_type));
@@ -58,34 +60,49 @@ export function CommunicationShell({
         selectedGroupeIds={selectedGroupeIds}
         onToggle={toggleGroupe}
         onSelectAll={selectAll}
-        tab={tab}
-        onCreateAnnonce={() => setTab("annonces")}
-        onCreateForm={() => setTab("formulaires")}
       />
 
       {/* Right content */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 px-5 py-3 border-b border-white/10 shrink-0">
-          <button onClick={() => setTab("annonces")}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors rounded-lg"
-            style={{ backgroundColor: tab === "annonces" ? "rgba(201,168,76,0.15)" : "transparent", color: tab === "annonces" ? "#E3C286" : "rgba(255,255,255,0.4)", border: tab === "annonces" ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent" }}>
-            <Megaphone size={13} /> Annonces
-            <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>{initialAnnonces.length}</span>
-          </button>
-          {isAdmin && (
-            <button onClick={() => setTab("formulaires")}
+        {/* Tab bar + action button */}
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-1">
+            <button onClick={() => { setTab("annonces"); setCreateAnnonce(false); }}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors rounded-lg"
-              style={{ backgroundColor: tab === "formulaires" ? "rgba(201,168,76,0.15)" : "transparent", color: tab === "formulaires" ? "#E3C286" : "rgba(255,255,255,0.4)", border: tab === "formulaires" ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent" }}>
-              <FileText size={13} /> Formulaires
-              <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>{initialTemplates.length}</span>
+              style={{ backgroundColor: tab === "annonces" ? "rgba(201,168,76,0.15)" : "transparent", color: tab === "annonces" ? "#E3C286" : "rgba(255,255,255,0.4)", border: tab === "annonces" ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent" }}>
+              <Megaphone size={13} /> Annonces
+              <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>{initialAnnonces.length}</span>
             </button>
-          )}
+            {isAdmin && (
+              <button onClick={() => { setTab("formulaires"); setCreateForm(false); }}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors rounded-lg"
+                style={{ backgroundColor: tab === "formulaires" ? "rgba(201,168,76,0.15)" : "transparent", color: tab === "formulaires" ? "#E3C286" : "rgba(255,255,255,0.4)", border: tab === "formulaires" ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent" }}>
+                <FileText size={13} /> Formulaires
+                <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>{initialTemplates.length}</span>
+              </button>
+            )}
+          </div>
+
           {selectedGroupeIds.size > 0 && (
-            <span className="ml-auto text-[10px] px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>
-              {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""} filtrée{selectedGroupeIds.size > 1 ? "s" : ""}
+            <span className="text-[10px] px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>
+              {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""}
             </span>
           )}
+
+          <div className="ml-auto">
+            {tab === "annonces" && (
+              <button onClick={() => setCreateAnnonce(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
+                <Plus size={13} /> Nouvelle annonce
+              </button>
+            )}
+            {tab === "formulaires" && isAdmin && (
+              <button onClick={() => setCreateForm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
+                <Plus size={13} /> Nouveau formulaire
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto">
@@ -98,6 +115,8 @@ export function CommunicationShell({
               currentProfile={currentProfile}
               sidebarFilter={sidebarFilter}
               selectedGroupeIds={selectedGroupeIds}
+              triggerCreate={createAnnonce}
+              onCreateHandled={() => setCreateAnnonce(false)}
             />
           )}
           {tab === "formulaires" && isAdmin && (
@@ -110,6 +129,8 @@ export function CommunicationShell({
               initialStudents={initialStudents}
               initialResponses={initialResponses}
               sidebarFilter={sidebarFilter}
+              triggerCreate={createForm}
+              onCreateHandled={() => setCreateForm(false)}
             />
           )}
         </div>
@@ -120,10 +141,9 @@ export function CommunicationShell({
 
 // ─── Communication Sidebar with Checkboxes ────────────────────────────────────
 
-function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll, tab, onCreateAnnonce, onCreateForm }: {
+function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll }: {
   dossiers: Dossier[]; groupes: Groupe[];
   selectedGroupeIds: Set<string>; onToggle: (id: string) => void; onSelectAll: () => void;
-  tab: ActiveTab; onCreateAnnonce: () => void; onCreateForm: () => void;
 }) {
   const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
   const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
@@ -248,15 +268,8 @@ function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectA
         })}
       </div>
 
-      {/* Create buttons */}
-      <div className="px-3 py-3 space-y-2 border-t border-white/5">
-        <button onClick={onCreateAnnonce} className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold transition-colors" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
-          <Megaphone size={12} /> Nouvelle annonce
-        </button>
-        <button onClick={onCreateForm} className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold transition-colors" style={{ border: "1px solid rgba(201,168,76,0.3)", color: "#C9A84C", backgroundColor: "rgba(201,168,76,0.08)" }}>
-          <FileText size={12} /> Nouveau formulaire
-        </button>
-      </div>
+      {/* Spacer */}
+      <div className="h-4" />
     </div>
   );
 }

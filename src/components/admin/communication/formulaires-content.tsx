@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import {
   FileText, Clock, Users, Check, AlertCircle, Search, Eye,
   ChevronRight, Pencil, BarChart3, Copy, X, GraduationCap, Building2,
@@ -38,7 +38,7 @@ const TARGET_COLORS: Record<string, string> = {
 };
 
 export function FormulairesShellContent({
-  currentProfile, initialTemplates, initialFields, initialDossiers, initialGroupes, initialStudents, initialResponses, sidebarFilter,
+  currentProfile, initialTemplates, initialFields, initialDossiers, initialGroupes, initialStudents, initialResponses, sidebarFilter, triggerCreate, onCreateHandled,
 }: {
   currentProfile: Profile;
   initialTemplates: FormTemplate[];
@@ -48,6 +48,8 @@ export function FormulairesShellContent({
   initialStudents: Profile[];
   initialResponses: CoachingIntakeForm[];
   sidebarFilter: SidebarFilter;
+  triggerCreate?: boolean;
+  onCreateHandled?: () => void;
 }) {
   const [activeView, setActiveView] = useState<ActiveView>("list");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -74,6 +76,11 @@ export function FormulairesShellContent({
   const selectedFields = useMemo(() => selectedTemplate ? initialFields.filter(f => f.form_template_id === selectedTemplate.id).sort((a, b) => a.order_index - b.order_index) : [], [initialFields, selectedTemplate]);
 
   const showToast = (msg: string, kind: "success" | "error") => { setToast({ message: msg, kind }); setTimeout(() => setToast(null), 3000); };
+
+  // Open editor for new template when triggered from header
+  useEffect(() => {
+    if (triggerCreate) { setSelectedTemplateId(null); setActiveView("editor"); onCreateHandled?.(); }
+  }, [triggerCreate]);
 
   return (
     <div className="p-5 space-y-4">
