@@ -429,51 +429,42 @@ export function UtilisateursShell({
     <div className="flex" style={{ minHeight: "calc(100vh - 8rem)" }}>
 
       {/* ── Left Panel ────────────────────────────────────────────────────── */}
-      <div className="w-72 flex-shrink-0 flex flex-col" style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="w-[380px] flex-shrink-0 flex flex-col" style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}>
 
         {/* Header */}
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <h1 className="text-sm font-bold text-white">Administration</h1>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-            {stats.total} utilisateurs · {groupes.length} groupes
-          </p>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div>
+            <h1 className="text-base font-bold text-white">Administration</h1>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-orange-300" style={{ backgroundColor: "rgba(249,115,22,0.1)" }}>
+                {stats.admins} admin{stats.admins !== 1 ? "s" : ""}
+              </span>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-blue-300" style={{ backgroundColor: "rgba(59,130,246,0.1)" }}>
+                {stats.profs} prof{stats.profs !== 1 ? "s" : ""}
+              </span>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-green-300" style={{ backgroundColor: "rgba(16,185,129,0.1)" }}>
+                {stats.eleves} élève{stats.eleves !== 1 ? "s" : ""}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setView("comptes"); setSelectedGroupeId(null); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+            style={{
+              backgroundColor: view === "comptes" ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)",
+              color: view === "comptes" ? "#C9A84C" : "rgba(255,255,255,0.5)",
+              border: view === "comptes" ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <Users size={12} />
+            {users.length} comptes
+          </button>
         </div>
-
-        {/* Stats pills */}
-        <div className="px-3 py-2.5 flex flex-wrap gap-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-orange-300" style={{ backgroundColor: "rgba(249,115,22,0.1)" }}>
-            {stats.admins} admin{stats.admins !== 1 ? "s" : ""}
-          </span>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-cyan-300" style={{ backgroundColor: "rgba(6,182,212,0.1)" }}>
-            {stats.coachs} coach{stats.coachs !== 1 ? "s" : ""}
-          </span>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-blue-300" style={{ backgroundColor: "rgba(59,130,246,0.1)" }}>
-            {stats.profs} prof{stats.profs !== 1 ? "s" : ""}
-          </span>
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-green-300" style={{ backgroundColor: "rgba(16,185,129,0.1)" }}>
-            {stats.eleves} élève{stats.eleves !== 1 ? "s" : ""}
-          </span>
-        </div>
-
-        {/* Comptes nav */}
-        <button
-          onClick={() => { setView("comptes"); setSelectedGroupeId(null); }}
-          className="flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors"
-          style={{
-            backgroundColor: view === "comptes" ? "rgba(255,255,255,0.1)" : "transparent",
-            color: view === "comptes" ? "white" : "rgba(255,255,255,0.55)",
-            fontWeight: view === "comptes" ? 600 : 400,
-          }}
-        >
-          <Users size={14} />
-          Comptes
-          <span className="ml-auto text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>{users.length}</span>
-        </button>
 
         {/* Arborescence header */}
-        <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
+        <div className="px-5 pt-4 pb-2 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-            Arborescence
+            Formations & Classes
           </span>
           <button
             onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: null })}
