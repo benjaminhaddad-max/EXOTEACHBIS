@@ -1901,50 +1901,22 @@ function ComptesView({
                       <div>
                         <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.9)" }}>{fullName(u)}</p>
                         <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {u.phone && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.55)" }}>
-                              <Phone size={9} />
-                              {u.phone}
-                            </span>
-                          )}
-                          {filiere && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#93C5FD" }}>
-                              <GraduationCap size={9} />
-                              {filiere.name}
-                            </span>
-                          )}
-                          {formationLabel && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(6,182,212,0.12)", color: "#A5F3FC" }}>
-                              <Building2 size={9} />
-                              <span className="truncate">{formationLabel}</span>
-                            </span>
-                          )}
-                          {u.access_dossier_id && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#E3C286" }}>
-                              <Building2 size={9} />
-                              <span className="truncate">{accessLabel}</span>
-                            </span>
-                          )}
-                          {directAccessIds.length > 1 && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#F5D78E" }}>
-                              <Check size={9} />
-                              {directAccessIds.length} accès perso
-                            </span>
-                          )}
-                          {groupe && groupAccessIds.length > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(16,185,129,0.14)", color: "#86EFAC" }}>
-                              <Users size={9} />
-                              Classe: {groupAccessIds.length} accès
-                            </span>
-                          )}
-                          {u.role === "prof" && assignedMatieres.length > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#BFDBFE" }}>
-                              <BookOpen size={9} />
-                              <span className="truncate">{assignedMatieres.join(", ")}</span>
-                            </span>
-                          )}
-                        </div>
+                        {u.phone && (
+                          <p className="text-[11px] flex items-center gap-1 mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
+                            <Phone size={9} />
+                            {u.phone.replace(/(\d{2})(?=\d)/g, "$1 ").trim()}
+                          </p>
+                        )}
+                        {u.role === "prof" && assignedMatieres.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {assignedMatieres.map(m => (
+                              <span key={m} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#BFDBFE" }}>
+                                <BookOpen size={9} />
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
