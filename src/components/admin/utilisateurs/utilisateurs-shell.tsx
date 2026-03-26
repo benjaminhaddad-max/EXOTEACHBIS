@@ -649,6 +649,37 @@ export function UtilisateursShell({
                             <span className="text-sm font-semibold text-gray-800">{g.name}</span>
                             <span className="text-[10px] text-gray-400 ml-2">{members.length} membre{members.length !== 1 ? "s" : ""}</span>
                           </div>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault(); e.stopPropagation();
+                              const newName = prompt("Renommer la classe :", g.name);
+                              if (newName?.trim() && newName.trim() !== g.name) {
+                                startTransition(async () => {
+                                  await updateGroupe(g.id, { name: newName.trim(), color: g.color });
+                                  window.location.reload();
+                                });
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                            title="Renommer"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault(); e.stopPropagation();
+                              if (confirm(`Supprimer "${g.name}" ?`)) {
+                                startTransition(async () => {
+                                  await deleteGroupe(g.id);
+                                  window.location.reload();
+                                });
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">
                             {groupAccessIds.length} accès
                           </span>
