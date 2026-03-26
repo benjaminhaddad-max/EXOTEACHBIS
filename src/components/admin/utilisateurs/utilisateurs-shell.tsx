@@ -873,45 +873,24 @@ export function UtilisateursShell({
                 </div>
               )}
 
-              {/* Add class — inline input */}
-              <div className="mt-3 flex items-center gap-2">
-                <input
-                  id={`new-class-${dossier.id}`}
-                  type="text"
-                  placeholder="Nom de la nouvelle classe..."
-                  className="flex-1 px-3 py-2.5 text-sm border-2 border-dashed border-gray-200 rounded-xl focus:border-gold/40 focus:outline-none bg-transparent placeholder:text-gray-400"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      const input = e.currentTarget;
-                      const name = input.value.trim();
-                      if (!name) return;
-                      input.value = "";
-                      startTransition(async () => {
-                        const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
-                        if ("error" in res) { showToast(res.error!, "error"); return; }
-                        showToast("Classe créée !", "success");
-                        window.location.reload();
-                      });
-                    }
-                  }}
-                />
+              {/* Add class — simple button with prompt */}
+              <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => {
-                    const input = document.getElementById(`new-class-${dossier.id}`) as HTMLInputElement;
-                    const name = input?.value?.trim();
-                    if (!name) { input?.focus(); return; }
-                    input.value = "";
+                    const name = window.prompt("Nom de la nouvelle classe :");
+                    if (!name?.trim()) return;
                     startTransition(async () => {
-                      const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
+                      const res = await createGroupe({ name: name.trim(), formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
                       if ("error" in res) { showToast(res.error!, "error"); return; }
                       showToast("Classe créée !", "success");
                       window.location.reload();
                     });
                   }}
-                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors shrink-0"
-                  style={{ backgroundColor: "#0e1e35" }}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed border-gray-300 hover:border-[#C9A84C] hover:text-[#C9A84C]"
+                  style={{ color: "rgba(255,255,255,0.5)" }}
                 >
-                  + Classe
+                  <Plus size={14} />
+                  Ajouter une classe
                 </button>
               </div>
 
