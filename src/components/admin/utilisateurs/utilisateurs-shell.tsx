@@ -610,32 +610,40 @@ export function UtilisateursShell({
 
           return (
             <div className="p-6 overflow-auto max-h-[calc(100vh-12rem)]">
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.1)" }}>
-                  <BookOpen size={18} style={{ color: "#C9A84C" }} />
+              {/* Header — clean full path */}
+              <div className="mb-6 rounded-2xl p-5" style={{ background: "linear-gradient(135deg, #0e1e35, #1a2d4a)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(201,168,76,0.15)" }}>
+                    <Building2 size={20} style={{ color: "#C9A84C" }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl font-bold text-white truncate">{pathParts.join("  ·  ")}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#C9A84C" }}>
+                        {meta?.shortLabel ?? dossier.dossier_type}
+                      </span>
+                      <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                        {directGroups.length} classe{directGroups.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const n = prompt("Renommer :", dossier.name);
+                      if (n?.trim() && n.trim() !== dossier.name) {
+                        startTransition(async () => {
+                          await updateDossierAction(dossier.id, { name: n.trim(), color: dossier.color, visible: dossier.visible });
+                          window.location.reload();
+                        });
+                      }
+                    }}
+                    className="p-2 rounded-lg text-white/30 hover:text-white/70 hover:bg-white/10 transition-colors shrink-0"
+                    title="Renommer"
+                  >
+                    <Pencil size={14} />
+                  </button>
                 </div>
-                <div className="flex-1">
-                  <h2 className="text-lg font-bold text-gray-900">{dossier.name}</h2>
-                  <p className="text-xs text-gray-500">{meta?.shortLabel ?? dossier.dossier_type}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const n = prompt("Renommer :", dossier.name);
-                    if (n?.trim() && n.trim() !== dossier.name) {
-                      startTransition(async () => {
-                        await updateDossierAction(dossier.id, { name: n.trim(), color: dossier.color, visible: dossier.visible });
-                        window.location.reload();
-                      });
-                    }
-                  }}
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                  title="Renommer"
-                >
-                  <Pencil size={14} />
-                </button>
               </div>
-              <p className="text-[10px] text-gray-400 mb-5 ml-[52px]">{pathParts.join(" › ")}</p>
 
               {/* Classes with expandable access trees */}
               {(directGroups.length > 0 || true) && (
