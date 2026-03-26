@@ -300,18 +300,20 @@ export function UtilisateursShell({
     });
   }, [showToast, refreshGroupes]);
 
-  const handleSaveUser = useCallback((userId: string, changes: AdminUserChanges) => {
-    startTransition(async () => {
-      try {
-        const res = await updateUserAdminProfile({ userId, ...changes });
-        if ("error" in res) { showToast(res.error!, "error"); return; }
-        await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]);
-        setModal(null);
-        showToast("Modifié", "success");
-      } catch (err: any) {
-        showToast("Erreur: " + (err?.message ?? "inconnue"), "error");
-      }
-    });
+  const [savingUser, setSavingUser] = useState(false);
+  const handleSaveUser = useCallback(async (userId: string, changes: AdminUserChanges) => {
+    setSavingUser(true);
+    try {
+      const res = await updateUserAdminProfile({ userId, ...changes });
+      if ("error" in res) { showToast(res.error!, "error"); setSavingUser(false); return; }
+      await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]);
+      setModal(null);
+      showToast("Modifié", "success");
+    } catch (err: any) {
+      showToast("Erreur: " + (err?.message ?? "inconnue"), "error");
+    } finally {
+      setSavingUser(false);
+    }
   }, [showToast, refreshUsers, refreshProfMatieres, refreshProfileDossierAcces, refreshProfileDossierAccessExclusions]);
 
   const handleSaveGroupeAccess = useCallback((groupeId: string, dossierIds: string[]) => {
@@ -977,7 +979,7 @@ export function UtilisateursShell({
           directAccessIds={profileAccessById.get(modal.user.id) ?? (modal.user.access_dossier_id ? [modal.user.access_dossier_id] : [])}
           excludedAccessIds={profileAccessExclusionsById.get(modal.user.id) ?? []}
           groupeAccessById={groupeAccessById}
-          isPending={isPending}
+          isPending={savingUser || isPending}
           onSave={handleSaveUser}
           onClose={() => setModal(null)}
         />
