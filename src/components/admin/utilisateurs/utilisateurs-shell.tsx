@@ -227,6 +227,7 @@ export function UtilisateursShell({
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
+  const [createClassModal, setCreateClassModal] = useState<{ dossierId: string; groupCount: number } | null>(null);
 
   const showToast = useCallback((message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -873,19 +874,10 @@ export function UtilisateursShell({
                 </div>
               )}
 
-              {/* Add class — simple button with prompt */}
+              {/* Add class — button + custom modal */}
               <div className="mt-4 flex justify-center">
                 <button
-                  onClick={() => {
-                    const name = window.prompt("Nom de la nouvelle classe :");
-                    if (!name?.trim()) return;
-                    startTransition(async () => {
-                      const res = await createGroupe({ name: name.trim(), formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
-                      if ("error" in res) { showToast(res.error!, "error"); return; }
-                      showToast("Classe créée !", "success");
-                      window.location.reload();
-                    });
-                  }}
+                  onClick={() => setCreateClassModal({ dossierId: dossier.id, groupCount: directGroups.length })}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors border-2 border-dashed border-gray-300 hover:border-[#C9A84C] hover:text-[#C9A84C]"
                   style={{ color: "rgba(255,255,255,0.5)" }}
                 >
@@ -977,6 +969,67 @@ export function UtilisateursShell({
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg ${toast.kind === "success" ? "bg-green-600" : "bg-red-600"}`}>
           {toast.kind === "success" ? <Check size={14} /> : <AlertCircle size={14} />}
           {toast.message}
+        </div>
+      )}
+
+      {/* Create class modal */}
+      {createClassModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCreateClassModal(null)} />
+          <div className="relative w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden" style={{ backgroundColor: "#162233" }}>
+            <div className="px-6 pt-6 pb-4">
+              <h3 className="text-lg font-bold text-white">Nouvelle classe</h3>
+              <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>La classe sera créée dans cette université</p>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const name = (formData.get("className") as string)?.trim();
+                if (!name) return;
+                const { dossierId, groupCount } = createClassModal;
+                setCreateClassModal(null);
+                startTransition(async () => {
+                  const res = await createGroupe({
+                    name,
+                    formation_dossier_id: dossierId,
+                    color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][groupCount % 6],
+                    annee: "2026-2027",
+                  });
+                  if ("error" in res) { showToast(res.error!, "error"); return; }
+                  showToast("Classe créée !", "success");
+                  window.location.reload();
+                });
+              }}
+              className="px-6 pb-6 space-y-4"
+            >
+              <input
+                name="className"
+                type="text"
+                autoFocus
+                placeholder="Ex: Classe 5, TD Groupe A..."
+                className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50"
+                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setCreateClassModal(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                  style={{ color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-sm font-bold transition-colors"
+                  style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+                >
+                  Créer
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
