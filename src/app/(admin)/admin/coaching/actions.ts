@@ -14,6 +14,7 @@ import type {
   CoachingSchoolLevel,
   CoachingStudentProfile,
   CoachingWorkCapacity,
+  FormAnswerValue,
 } from "@/types/database";
 
 const STUDENT_PATH = "/coaching";
@@ -66,7 +67,7 @@ function canCoachAccessStudent(coachGroupId: string | null, studentGroupId: stri
 
 export async function submitStudentCoachingForm(data: {
   form_template_id: string;
-  answers: Record<string, string>;
+  answers: Record<string, FormAnswerValue>;
 }) {
   const auth = await requireStudent();
   if ("error" in auth) return auth;
@@ -86,25 +87,35 @@ export async function submitStudentCoachingForm(data: {
   }
 
   const sanitizedAnswers = Object.fromEntries(
-    Object.entries(data.answers ?? {}).map(([key, value]) => [key, typeof value === "string" ? value.trim() : ""])
+    Object.entries(data.answers ?? {}).map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return [key, value.map((item) => String(item ?? "").trim()).filter(Boolean)];
+      }
+      return [key, typeof value === "string" ? value.trim() : ""];
+    })
   );
+
+  const toLegacyString = (value: FormAnswerValue | undefined) => {
+    if (Array.isArray(value)) return value.join(", ") || null;
+    return value?.trim() ? value.trim() : null;
+  };
 
   const payload = {
     student_id: auth.user.id,
     groupe_id: auth.profile.groupe_id,
     form_template_id: template.id,
     answers: sanitizedAnswers,
-    phone: sanitizedAnswers.phone || null,
-    city: sanitizedAnswers.city || null,
-    bac_specialties: sanitizedAnswers.bac_specialties || null,
-    parcours_label: sanitizedAnswers.parcours_label || null,
-    why_medicine: sanitizedAnswers.why_medicine || null,
-    expectations: sanitizedAnswers.expectations || null,
-    main_worry: sanitizedAnswers.main_worry || null,
-    current_method_description: sanitizedAnswers.current_method_description || null,
-    strengths: sanitizedAnswers.strengths || null,
-    weaknesses: sanitizedAnswers.weaknesses || null,
-    availability_notes: sanitizedAnswers.availability_notes || null,
+    phone: toLegacyString(sanitizedAnswers.phone),
+    city: toLegacyString(sanitizedAnswers.city),
+    bac_specialties: toLegacyString(sanitizedAnswers.bac_specialties),
+    parcours_label: toLegacyString(sanitizedAnswers.parcours_label),
+    why_medicine: toLegacyString(sanitizedAnswers.why_medicine),
+    expectations: toLegacyString(sanitizedAnswers.expectations),
+    main_worry: toLegacyString(sanitizedAnswers.main_worry),
+    current_method_description: toLegacyString(sanitizedAnswers.current_method_description),
+    strengths: toLegacyString(sanitizedAnswers.strengths),
+    weaknesses: toLegacyString(sanitizedAnswers.weaknesses),
+    availability_notes: toLegacyString(sanitizedAnswers.availability_notes),
     updated_at: new Date().toISOString(),
   };
 

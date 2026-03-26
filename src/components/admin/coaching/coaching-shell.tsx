@@ -19,7 +19,7 @@ import {
   COACHING_WORK_CAPACITY_OPTIONS,
   calculateConfidenceScore,
 } from "@/lib/coaching-score";
-import { getCoachingFormAnswers } from "@/lib/form-builder";
+import { formatAnswerValue, getCoachingFormAnswers } from "@/lib/form-builder";
 import {
   createCoachCallSlot,
   saveStudentPointAProfile,
@@ -914,13 +914,13 @@ function AnswerField({
   className = "",
 }: {
   label: string;
-  value?: string | null;
+  value?: string | string[] | null;
   className?: string;
 }) {
   return (
     <div className={`rounded-2xl bg-gray-50 p-4 ${className}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
-      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">{value?.trim() || "—"}</p>
+      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">{formatAnswerValue(value ?? "").trim() || "—"}</p>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   AlertCircle,
   Check,
+  CircleDot,
+  CheckSquare,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -58,9 +60,21 @@ const FIELD_LIBRARY: FieldLibraryItem[] = [
     icon: <PencilRuler className="h-4 w-4" />,
   },
   {
+    type: "radio",
+    title: "Choix unique",
+    description: "Des boutons comme Google Forms pour choisir une seule réponse.",
+    icon: <CircleDot className="h-4 w-4" />,
+  },
+  {
+    type: "checkboxes",
+    title: "Cases à cocher",
+    description: "L'élève peut cocher plusieurs réponses si besoin.",
+    icon: <CheckSquare className="h-4 w-4" />,
+  },
+  {
     type: "select",
-    title: "Choix simple",
-    description: "Un ensemble d'options où l'élève choisit une seule réponse.",
+    title: "Liste déroulante",
+    description: "Une liste compacte pour choisir une seule réponse.",
     icon: <ListChecks className="h-4 w-4" />,
   },
 ];
@@ -81,7 +95,9 @@ function buildNewField(formTemplateId: string, type: FormFieldType, orderIndex: 
   const baseLabel =
     type === "short_text" ? "Nouvelle question courte" :
     type === "long_text" ? "Nouvelle question paragraphe" :
-    "Nouveau choix";
+    type === "radio" ? "Nouvelle question à choix unique" :
+    type === "checkboxes" ? "Nouvelle question à cases à cocher" :
+    "Nouvelle liste déroulante";
 
   return {
     id: `draft-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
@@ -92,7 +108,7 @@ function buildNewField(formTemplateId: string, type: FormFieldType, orderIndex: 
     placeholder: "",
     field_type: type,
     required: false,
-    options: type === "select" ? ["Option 1", "Option 2"] : [],
+    options: ["select", "radio", "checkboxes"].includes(type) ? ["Option 1", "Option 2"] : [],
     width: "full",
     order_index: orderIndex,
     created_at: timestamp,
@@ -107,6 +123,8 @@ function sortFields(fields: FormField[]) {
 function getFieldIcon(type: FormFieldType) {
   if (type === "long_text") return <PencilRuler className="h-4 w-4" />;
   if (type === "select") return <ListChecks className="h-4 w-4" />;
+  if (type === "radio") return <CircleDot className="h-4 w-4" />;
+  if (type === "checkboxes") return <CheckSquare className="h-4 w-4" />;
   return <Type className="h-4 w-4" />;
 }
 
@@ -486,6 +504,11 @@ export function ConfigurationShell({
                                 {getFieldIcon(field.field_type)}
                                 {field.label}
                               </div>
+                              {field.id === selectedFieldId && (
+                                <span className="rounded-full bg-[#1e2a3a] px-2 py-1 text-[10px] font-semibold text-white">
+                                  En cours d'edition
+                                </span>
+                              )}
                               {field.required && (
                                 <span className="rounded-full bg-[#f7e9b4] px-2 py-1 text-[10px] font-semibold text-[#7a6d2e]">
                                   Obligatoire
@@ -559,13 +582,13 @@ export function ConfigurationShell({
             ) : (
               <div className="space-y-4">
                 <div className="rounded-2xl border border-[#e5decb] bg-white p-5">
-                  <div className="flex items-center gap-2 text-[#1e2a3a]">
-                    <Settings2 className="h-4 w-4" />
-                    <h3 className="text-sm font-semibold">Propriétés du champ</h3>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-[#7c7664]">
-                    Tu édites ici uniquement le bloc sélectionné au centre.
-                  </p>
+                <div className="flex items-center gap-2 text-[#1e2a3a]">
+                  <Settings2 className="h-4 w-4" />
+                  <h3 className="text-sm font-semibold">Propriétés du champ</h3>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[#7c7664]">
+                    Clique une question au centre, puis modifie ici son type, son texte et ses options comme dans un Google Form.
+                </p>
 
                   <div className="mt-5 space-y-4">
                     <FieldLabel label="Question">
@@ -608,7 +631,9 @@ export function ConfigurationShell({
                           onChange={(event) =>
                             handleUpdateSelectedField({
                               field_type: event.target.value as FormFieldType,
-                              options: event.target.value === "select" ? (selectedField.options.length > 0 ? selectedField.options : ["Option 1", "Option 2"]) : [],
+                              options: ["select", "radio", "checkboxes"].includes(event.target.value)
+                                ? (selectedField.options.length > 0 ? selectedField.options : ["Option 1", "Option 2"])
+                                : [],
                             })
                           }
                           className="w-full rounded-2xl border border-[#e3dcc8] bg-white px-4 py-3 text-sm outline-none focus:border-[#7a6d2e]"
@@ -657,7 +682,7 @@ export function ConfigurationShell({
                       </label>
                     </div>
 
-                    {selectedField.field_type === "select" && (
+                    {["select", "radio", "checkboxes"].includes(selectedField.field_type) && (
                       <FieldLabel label="Options">
                         <textarea
                           rows={5}
@@ -727,7 +752,7 @@ export function ConfigurationShell({
 }
 
 function FieldPreview({ field }: { field: FormField }) {
-  if (field.field_type === "select") {
+  if (["select", "radio", "checkboxes"].includes(field.field_type)) {
     const options = getFieldOptions(field);
     return (
       <div className="space-y-2">
@@ -736,11 +761,31 @@ function FieldPreview({ field }: { field: FormField }) {
             Ajoute des options dans le panneau de droite.
           </div>
         ) : (
-          options.map((option) => (
-            <div key={option} className="rounded-2xl border border-[#ebe3d0] bg-white px-4 py-3 text-sm text-[#514a35]">
-              {option}
-            </div>
-          ))
+          options.map((option) => {
+            if (field.field_type === "checkboxes") {
+              return (
+                <label key={option} className="flex items-center gap-3 rounded-2xl border border-[#ebe3d0] bg-white px-4 py-3 text-sm text-[#514a35]">
+                  <span className="h-4 w-4 rounded border border-[#cfc2a3] bg-[#fffdf7]" />
+                  <span>{option}</span>
+                </label>
+              );
+            }
+
+            if (field.field_type === "radio") {
+              return (
+                <label key={option} className="flex items-center gap-3 rounded-2xl border border-[#ebe3d0] bg-white px-4 py-3 text-sm text-[#514a35]">
+                  <span className="h-4 w-4 rounded-full border border-[#cfc2a3] bg-[#fffdf7]" />
+                  <span>{option}</span>
+                </label>
+              );
+            }
+
+            return (
+              <div key={option} className="rounded-2xl border border-[#ebe3d0] bg-white px-4 py-3 text-sm text-[#514a35]">
+                {option}
+              </div>
+            );
+          })
         )}
       </div>
     );

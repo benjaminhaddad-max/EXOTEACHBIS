@@ -15,11 +15,12 @@ import {
   bookStudentCoachingCall,
   submitStudentCoachingForm,
 } from "@/app/(admin)/admin/coaching/actions";
-import { getCoachingFormAnswers, getFieldOptions } from "@/lib/form-builder";
+import { getCoachingFormAnswers, getFieldOptions, isFilledAnswer } from "@/lib/form-builder";
 import type {
   CoachingCallBooking,
   CoachingCallSlot,
   CoachingIntakeForm,
+  FormAnswerValue,
   FormField,
   FormTemplate,
   Groupe,
@@ -63,7 +64,12 @@ function formatDateTime(value?: string | null) {
 
 function buildInitialDraft(form: CoachingIntakeForm | null, fields: FormField[]) {
   const answers = getCoachingFormAnswers(form);
-  return Object.fromEntries(fields.map((field) => [field.key, answers[field.key] ?? ""]));
+  return Object.fromEntries(
+    fields.map((field) => [
+      field.key,
+      answers[field.key] ?? (field.field_type === "checkboxes" ? [] : ""),
+    ])
+  ) as Record<string, FormAnswerValue>;
 }
 
 export function StudentCoachingShell({
@@ -82,7 +88,7 @@ export function StudentCoachingShell({
   const [booking, setBooking] = useState(initialBooking);
   const [bookingSlot, setBookingSlot] = useState(initialBookingSlot);
   const [availableSlots, setAvailableSlots] = useState(initialAvailableSlots);
-  const [draft, setDraft] = useState<Record<string, string>>(() => buildInitialDraft(initialForm, formFields));
+  const [draft, setDraft] = useState<Record<string, FormAnswerValue>>(() => buildInitialDraft(initialForm, formFields));
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -98,7 +104,7 @@ export function StudentCoachingShell({
 
   const coachesById = useMemo(() => new Map(coaches.map((coach) => [coach.id, coach])), [coaches]);
   const requiredFields = useMemo(() => formFields.filter((field) => field.required), [formFields]);
-  const answeredRequiredCount = requiredFields.filter((field) => draft[field.key]?.trim()).length;
+  const answeredRequiredCount = requiredFields.filter((field) => isFilledAnswer(draft[field.key])).length;
   const completionRatio = requiredFields.length === 0 ? 100 : Math.round((answeredRequiredCount / requiredFields.length) * 100);
 
   if (setupError) {
@@ -175,7 +181,7 @@ export function StudentCoachingShell({
     });
   };
 
-  const canSubmit = requiredFields.every((field) => draft[field.key]?.trim());
+  const canSubmit = requiredFields.every((field) => isFilledAnswer(draft[field.key]));
 
   return (
     <div className="space-y-8">
@@ -247,7 +253,7 @@ export function StudentCoachingShell({
                 key={field.id}
                 index={index + 1}
                 field={field}
-                value={draft[field.key] ?? ""}
+                value={draft[field.key] ?? (field.field_type === "checkboxes" ? [] : "")}
                 onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
               />
             ))}
@@ -367,10 +373,12 @@ function QuestionBlock({
 }: {
   index: number;
   field: FormField;
-  value: string;
-  onChange: (value: string) => void;
+  value: FormAnswerValue;
+  onChange: (value: FormAnswerValue) => void;
 }) {
   const options = getFieldOptions(field);
+  const selectedValues = Array.isArray(value) ? value : [];
+  const currentValue = Array.isArray(value) ? "" : value;
 
   return (
     <div className="rounded-[28px] border border-gray-200 bg-[#fcfcfb] p-6 shadow-[0_1px_0_rgba(15,30,54,0.04)]">
@@ -391,9 +399,22 @@ function QuestionBlock({
 
           <div className="mt-5">
             {field.field_type === "select" ? (
+              <select
+                value={currentValue}
+                onChange={(event) => onChange(event.target.value)}
+                className="h-14 w-full rounded-3xl border border-gray-200 bg-white px-5 text-sm text-gray-700 outline-none transition focus:border-navy"
+              >
+                <option value="">Selectionner une reponse</option>
+                {options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : field.field_type === "radio" ? (
               <div className="flex flex-wrap gap-3">
                 {options.map((option) => {
-                  const selected = value === option;
+                  const selected = currentValue === option;
                   return (
                     <button
                       key={option}
@@ -410,17 +431,47 @@ function QuestionBlock({
                   );
                 })}
               </div>
+            ) : field.field_type === "checkboxes" ? (
+              <div className="space-y-3">
+                {options.map((option) => {
+                  const selected = selectedValues.includes(option);
+                  return (
+                    <label
+                      key={option}
+                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                        selected
+                          ? "border-navy bg-navy/5 text-navy"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(event) => {
+                          if (event.target.checked) {
+                            onChange([...selectedValues, option]);
+                            return;
+                          }
+                          onChange(selectedValues.filter((item) => item !== option));
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-navy focus:ring-navy"
+                      />
+                      <span>{option}</span>
+                    </label>
+                  );
+                })}
+              </div>
             ) : field.field_type === "long_text" ? (
               <textarea
                 rows={5}
-                value={value}
+                value={currentValue}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={field.placeholder ?? ""}
                 className="w-full rounded-3xl border border-gray-200 bg-white px-5 py-4 text-sm leading-6 text-gray-700 outline-none transition focus:border-navy"
               />
             ) : (
               <input
-                value={value}
+                value={currentValue}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={field.placeholder ?? ""}
                 className="h-14 w-full rounded-3xl border border-gray-200 bg-white px-5 text-sm text-gray-700 outline-none transition focus:border-navy"

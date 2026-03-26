@@ -406,8 +406,9 @@ export interface CalendarEvent {
 // Formulaires dynamiques
 // =============================================
 
-export type FormFieldType = "short_text" | "long_text" | "select";
+export type FormFieldType = "short_text" | "long_text" | "select" | "radio" | "checkboxes";
 export type FormFieldWidth = "half" | "full";
+export type FormAnswerValue = string | string[];
 
 export interface FormTemplate {
   id: string;
@@ -451,7 +452,7 @@ export interface CoachingIntakeForm {
   student_id: string;
   groupe_id: string | null;
   form_template_id: string | null;
-  answers: Record<string, string>;
+  answers: Record<string, FormAnswerValue>;
   phone: string | null;
   city: string | null;
   bac_specialties: string | null;
