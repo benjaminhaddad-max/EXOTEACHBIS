@@ -91,30 +91,26 @@ export function CommunicationShell({
 
           <div className="ml-auto flex items-center gap-2">
             {tab === "annonces" && selectedGroupeIds.size === 0 && (
-              <span className="text-[10px] italic" style={{ color: "rgba(255,255,255,0.3)" }}>← Sélectionne d&apos;abord les destinataires</span>
+              <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg" style={{ color: "#C9A84C", backgroundColor: "rgba(201,168,76,0.08)", border: "1px dashed rgba(201,168,76,0.3)" }}>
+                ← Coche des classes à gauche pour créer une annonce
+              </span>
             )}
-            {tab === "annonces" && (
-              <button onClick={() => { if (selectedGroupeIds.size > 0) setCreateAnnonce(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(255,255,255,0.06)",
-                  color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(255,255,255,0.25)",
-                  cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
-                }}>
+            {tab === "annonces" && selectedGroupeIds.size > 0 && (
+              <button onClick={() => setCreateAnnonce(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
                 <Plus size={13} /> Nouvelle annonce
               </button>
             )}
             {tab === "formulaires" && isAdmin && selectedGroupeIds.size === 0 && (
-              <span className="text-[10px] italic" style={{ color: "rgba(255,255,255,0.3)" }}>← Sélectionne d&apos;abord les destinataires</span>
+              <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg" style={{ color: "#C9A84C", backgroundColor: "rgba(201,168,76,0.08)", border: "1px dashed rgba(201,168,76,0.3)" }}>
+                ← Coche des classes à gauche pour créer un formulaire
+              </span>
             )}
-            {tab === "formulaires" && isAdmin && (
-              <button onClick={() => { if (selectedGroupeIds.size > 0) setCreateForm(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(255,255,255,0.06)",
-                  color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(255,255,255,0.25)",
-                  cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
-                }}>
+            {tab === "formulaires" && isAdmin && selectedGroupeIds.size > 0 && (
+              <button onClick={() => setCreateForm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
                 <Plus size={13} /> Nouveau formulaire
               </button>
             )}
