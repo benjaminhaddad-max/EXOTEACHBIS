@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, Groupe, Profile } from "@/types/database";
 import { FormulairesSidebar, type SidebarFilter } from "./formulaires-sidebar";
+import { ConfigurationShell } from "@/components/admin/configuration/configuration-shell";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ const TARGET_COLORS: Record<string, string> = {
 // ─── Main Shell ───────────────────────────────────────────────────────────────
 
 export function FormulairesShell({
+  currentProfile,
   initialTemplates,
   initialFields,
   initialDossiers,
@@ -202,10 +204,16 @@ export function FormulairesShell({
           )}
 
           {activeView === "editor" && (
-            <div className="flex items-center justify-center h-64 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-              {selectedTemplate
-                ? `Éditeur de "${selectedTemplate.title}" — à venir dans l'étape suivante`
-                : "Création de formulaire — à venir dans l'étape suivante"}
+            <div className="rounded-2xl overflow-hidden">
+              <ConfigurationShell
+                currentProfile={currentProfile}
+                initialTemplates={initialTemplates}
+                initialFields={initialFields}
+                initialDossiers={initialDossiers}
+                initialGroupes={initialGroupes}
+                initialStudents={initialStudents}
+                initialResponses={initialResponses}
+              />
             </div>
           )}
 
