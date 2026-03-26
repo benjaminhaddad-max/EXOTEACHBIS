@@ -968,6 +968,7 @@ export function UtilisateursShell({
           dossierTree={dossierTree}
           matieres={initialMatieres}
           filieres={initialFilieres}
+          cours={initialCours}
           selectedMatiereIds={profMatieresByUser.get(modal.user.id) ?? []}
           directAccessIds={profileAccessById.get(modal.user.id) ?? (modal.user.access_dossier_id ? [modal.user.access_dossier_id] : [])}
           excludedAccessIds={profileAccessExclusionsById.get(modal.user.id) ?? []}
@@ -3024,13 +3025,14 @@ function GroupeFormModal({
 // ─── EditUserModal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
-  user, groupes, dossiers, dossierTree, matieres, filieres, selectedMatiereIds, directAccessIds, excludedAccessIds, groupeAccessById, isPending, onSave, onClose,
+  user, groupes, dossiers, dossierTree, matieres, filieres, cours, selectedMatiereIds, directAccessIds, excludedAccessIds, groupeAccessById, isPending, onSave, onClose,
 }: {
   user: Profile;
   groupes: Groupe[];
   dossiers: Dossier[];
   dossierTree: DossierNode[];
   matieres: Matiere[];
+  cours: { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[];
   filieres: Filiere[];
   selectedMatiereIds: string[];
   directAccessIds: string[];
@@ -3362,22 +3364,39 @@ function EditUserModal({
                               const subIsPersonal = personalAccessSet.has(sub.id);
                               const subIsExcluded = excludedSet.has(sub.id);
                               const subHasAccess = (subIsClass && !subIsExcluded) || subIsPersonal;
+                              const subCours = cours.filter(c => c.dossier_id === sub.id);
                               return (
-                                <label key={sub.id} className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer" style={{ backgroundColor: subHasAccess ? "rgba(52,211,153,0.03)" : "transparent" }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={subHasAccess}
-                                    onChange={() => {
-                                      if (subIsClass && !subIsExcluded) setExcludedInheritedAccessIds(prev => [...prev, sub.id]);
-                                      else if (subIsExcluded) setExcludedInheritedAccessIds(prev => prev.filter(id => id !== sub.id));
-                                      else if (subIsPersonal) setPersonalAccessIds(prev => prev.filter(id => id !== sub.id));
-                                      else setPersonalAccessIds(prev => [...prev, sub.id]);
-                                    }}
-                                    className="w-3.5 h-3.5 rounded border-gray-500 text-emerald-600 focus:ring-emerald-500"
-                                  />
-                                  <span className="text-xs flex-1" style={{ color: subHasAccess ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)" }}>{sub.name}</span>
-                                  <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.2)" }}>{subMeta2?.shortLabel ?? ""}</span>
-                                </label>
+                                <details key={sub.id} className="group/mat2">
+                                  <summary className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: subHasAccess ? "rgba(52,211,153,0.03)" : "transparent" }}>
+                                    {subCours.length > 0 && <ChevronRight size={10} className="text-white/25 transition-transform group-open/mat2:rotate-90 shrink-0" />}
+                                    {subCours.length === 0 && <span className="w-2.5" />}
+                                    <input
+                                      type="checkbox"
+                                      checked={subHasAccess}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (subIsClass && !subIsExcluded) setExcludedInheritedAccessIds(prev => [...prev, sub.id]);
+                                        else if (subIsExcluded) setExcludedInheritedAccessIds(prev => prev.filter(id => id !== sub.id));
+                                        else if (subIsPersonal) setPersonalAccessIds(prev => prev.filter(id => id !== sub.id));
+                                        else setPersonalAccessIds(prev => [...prev, sub.id]);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="w-3.5 h-3.5 rounded border-gray-500 text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-xs flex-1" style={{ color: subHasAccess ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)" }}>{sub.name}</span>
+                                    <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.2)" }}>{subMeta2?.shortLabel ?? ""}</span>
+                                  </summary>
+                                  {subCours.length > 0 && (
+                                    <div className="ml-8 space-y-0 pb-1">
+                                      {subCours.map(c => (
+                                        <div key={c.id} className="flex items-center gap-2 py-0.5 px-2 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                                          <span className="w-1 h-1 rounded-full bg-white/15 shrink-0" />
+                                          {c.name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </details>
                               );
                             })}
                           </div>
