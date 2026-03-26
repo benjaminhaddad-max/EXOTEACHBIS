@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { FORMATION_OFFERS } from "@/lib/pedagogie-structure";
+import type { FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 import type { DossierType, FormationOffer } from "@/types/database";
 
 const PATH = "/admin/pedagogie";
@@ -154,7 +155,7 @@ export async function updateDossier(
   return { success: true };
 }
 
-export async function installCanonicalOffers() {
+export async function installCanonicalOffers(customOffers?: FormationOfferSetting[]) {
   const supabase = await createClient();
 
   const { data: existing } = await supabase
@@ -169,7 +170,13 @@ export async function installCanonicalOffers() {
       .filter(Boolean)
   );
 
-  const missingOffers = FORMATION_OFFERS.filter(
+  const configuredOffers = (customOffers?.length ? customOffers : FORMATION_OFFERS.map((offer, index) => ({
+    ...offer,
+    enabled: true,
+    orderIndex: index,
+  }))).filter((offer) => offer.enabled !== false);
+
+  const missingOffers = configuredOffers.filter(
     (offer) => !existingOffers.has(offer.code)
   );
 

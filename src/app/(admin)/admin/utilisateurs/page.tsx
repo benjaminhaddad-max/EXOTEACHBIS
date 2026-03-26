@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { UtilisateursShell } from "@/components/admin/utilisateurs/utilisateurs-shell";
+import { parsePedagogieAdminSettings } from "@/lib/pedagogie-admin-settings";
 import type {
   Profile,
   Groupe,
@@ -24,6 +25,7 @@ export default async function UtilisateursPage() {
     profMatieresRes,
     groupeDossierAccesRes,
     profileDossierAccesRes,
+    adminSettingsRes,
   ] = await Promise.all([
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     supabase.from("groupes").select("*").order("name"),
@@ -33,7 +35,10 @@ export default async function UtilisateursPage() {
     supabase.from("prof_matieres").select("prof_id, matiere_id"),
     supabase.from("groupe_dossier_acces").select("groupe_id, dossier_id"),
     supabase.from("profile_dossier_acces").select("profile_id, dossier_id"),
+    supabase.from("admin_settings").select("key, value"),
   ]);
+
+  const adminSettings = parsePedagogieAdminSettings((adminSettingsRes.data ?? []) as { key: string; value: unknown }[]);
 
   return (
     <div className="bg-[#0e1e35] rounded-2xl min-h-[calc(100vh-8rem)] overflow-hidden">
@@ -46,6 +51,8 @@ export default async function UtilisateursPage() {
         initialProfMatieres={(profMatieresRes.data ?? []) as { prof_id: string; matiere_id: string }[]}
         initialGroupeDossierAcces={(groupeDossierAccesRes.data ?? []) as GroupeDossierAcces[]}
         initialProfileDossierAcces={(profileDossierAccesRes.data ?? []) as ProfileDossierAcces[]}
+        initialFormationOffers={adminSettings.formationOffers}
+        initialDossierNamePresets={adminSettings.dossierNamePresets}
       />
     </div>
   );

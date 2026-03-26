@@ -21,8 +21,10 @@ import {
   updateUserAdminProfile,
   createGroupe, updateGroupe, deleteGroupe,
   setGroupeDossierAcces as saveGroupeDossierAcces,
+  savePedagogieAdminSettings,
 } from "@/app/(admin)/admin/utilisateurs/actions";
 import { DOSSIER_TYPE_META, getDossierPathLabel } from "@/lib/pedagogie-structure";
+import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +134,8 @@ export function UtilisateursShell({
   initialProfMatieres,
   initialGroupeDossierAcces,
   initialProfileDossierAcces,
+  initialFormationOffers,
+  initialDossierNamePresets,
 }: {
   initialUsers: Profile[];
   initialGroupes: Groupe[];
@@ -141,14 +145,18 @@ export function UtilisateursShell({
   initialProfMatieres: ProfMatiereAssignment[];
   initialGroupeDossierAcces: GroupeDossierAcces[];
   initialProfileDossierAcces: ProfileDossierAcces[];
+  initialFormationOffers: FormationOfferSetting[];
+  initialDossierNamePresets: DossierNamePreset[];
 }) {
-  const [view, setView] = useState<"comptes" | "groupe">("comptes");
+  const [view, setView] = useState<"comptes" | "groupe" | "administration">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
   const [users, setUsers] = useState<Profile[]>(initialUsers);
   const [groupes, setGroupes] = useState<Groupe[]>(initialGroupes);
   const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
   const [groupeDossierAcces, setGroupeDossierAcces] = useState<GroupeDossierAcces[]>(initialGroupeDossierAcces);
   const [profileDossierAcces, setProfileDossierAcces] = useState<ProfileDossierAcces[]>(initialProfileDossierAcces);
+  const [formationOffers, setFormationOffers] = useState<FormationOfferSetting[]>(initialFormationOffers);
+  const [dossierNamePresets, setDossierNamePresets] = useState<DossierNamePreset[]>(initialDossierNamePresets);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
@@ -237,6 +245,19 @@ export function UtilisateursShell({
     });
   }, [refreshGroupeDossierAcces, refreshUsers, showToast]);
 
+  const handleSaveAdministration = useCallback((nextFormationOffers: FormationOfferSetting[], nextDossierNamePresets: DossierNamePreset[]) => {
+    startTransition(async () => {
+      const res = await savePedagogieAdminSettings({
+        formationOffers: nextFormationOffers,
+        dossierNamePresets: nextDossierNamePresets,
+      });
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      setFormationOffers(nextFormationOffers);
+      setDossierNamePresets(nextDossierNamePresets);
+      showToast("Administration pédagogique mise à jour", "success");
+    });
+  }, [showToast]);
+
   const groupTree = useMemo(() => buildGroupTree(groupes), [groupes]);
   const dossierTree = useMemo(() => buildDossierTree(initialDossiers), [initialDossiers]);
   const selectedGroupe = useMemo(() => groupes.find(g => g.id === selectedGroupeId) ?? null, [groupes, selectedGroupeId]);
@@ -305,6 +326,19 @@ export function UtilisateursShell({
           <Users size={14} />
           Comptes
           <span className="ml-auto text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>{users.length}</span>
+        </button>
+
+        <button
+          onClick={() => { setView("administration"); setSelectedGroupeId(null); }}
+          className="flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors"
+          style={{
+            backgroundColor: view === "administration" ? "rgba(255,255,255,0.1)" : "transparent",
+            color: view === "administration" ? "white" : "rgba(255,255,255,0.55)",
+            fontWeight: view === "administration" ? 600 : 400,
+          }}
+        >
+          <Settings size={14} />
+          Administration
         </button>
 
         {/* Groupes header */}
@@ -386,6 +420,14 @@ export function UtilisateursShell({
             Sélectionner un groupe dans l&apos;arborescence
           </div>
         )}
+        {view === "administration" && (
+          <AdministrationView
+            formationOffers={formationOffers}
+            dossierNamePresets={dossierNamePresets}
+            isPending={isPending}
+            onSave={handleSaveAdministration}
+          />
+        )}
       </div>
 
       {/* ── Modals ────────────────────────────────────────────────────────── */}
@@ -432,6 +474,240 @@ export function UtilisateursShell({
           {toast.message}
         </div>
       )}
+    </div>
+  );
+}
+
+function AdministrationView({
+  formationOffers,
+  dossierNamePresets,
+  isPending,
+  onSave,
+}: {
+  formationOffers: FormationOfferSetting[];
+  dossierNamePresets: DossierNamePreset[];
+  isPending: boolean;
+  onSave: (formationOffers: FormationOfferSetting[], dossierNamePresets: DossierNamePreset[]) => void;
+}) {
+  const [offers, setOffers] = useState<FormationOfferSetting[]>(formationOffers);
+  const [presets, setPresets] = useState<DossierNamePreset[]>(dossierNamePresets);
+
+  useEffect(() => setOffers(formationOffers), [formationOffers]);
+  useEffect(() => setPresets(dossierNamePresets), [dossierNamePresets]);
+
+  const normalizedInitialOffers = JSON.stringify(formationOffers);
+  const normalizedInitialPresets = JSON.stringify(dossierNamePresets);
+  const normalizedOffers = JSON.stringify(offers);
+  const normalizedPresets = JSON.stringify(presets);
+  const hasChanges = normalizedInitialOffers !== normalizedOffers || normalizedInitialPresets !== normalizedPresets;
+
+  return (
+    <div className="p-5 space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-white">Administration pédagogique</h2>
+        <p className="mt-1 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
+          Ici tu pilotes les offres de formation visibles et les suggestions de noms proposées dans l&apos;arborescence pédagogie.
+        </p>
+      </div>
+
+      <section className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Offres de formation</h3>
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+              Ces réglages servent à l&apos;installation des offres racines et au formulaire de création des dossiers.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {offers.map((offer, index) => (
+            <div key={offer.code} className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: offer.defaultColor }} />
+                  <p className="text-sm font-semibold text-white">{offer.code}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, enabled: !item.enabled } : item))}
+                  className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                  style={{
+                    backgroundColor: offer.enabled ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.06)",
+                    color: offer.enabled ? "#86EFAC" : "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  {offer.enabled ? "Active" : "Masquée"}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Nom affiché</label>
+                  <input
+                    value={offer.label}
+                    onChange={(e) => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, label: e.target.value } : item))}
+                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Couleur</label>
+                  <input
+                    value={offer.defaultColor}
+                    onChange={(e) => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, defaultColor: e.target.value } : item))}
+                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Description</label>
+                <textarea
+                  value={offer.description}
+                  onChange={(e) => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, description: e.target.value } : item))}
+                  rows={2}
+                  className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={index === 0}
+                  onClick={() => setOffers((prev) => {
+                    const next = [...prev];
+                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                    return next.map((item, itemIndex) => ({ ...item, orderIndex: itemIndex }));
+                  })}
+                  className="rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
+                  style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
+                >
+                  Monter
+                </button>
+                <button
+                  type="button"
+                  disabled={index === offers.length - 1}
+                  onClick={() => setOffers((prev) => {
+                    const next = [...prev];
+                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                    return next.map((item, itemIndex) => ({ ...item, orderIndex: itemIndex }));
+                  })}
+                  className="rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
+                  style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.72)" }}
+                >
+                  Descendre
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Suggestions de noms d&apos;arborescence</h3>
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+              Ces suggestions apparaissent ensuite dans le formulaire de création des dossiers dans `Pédagogie`.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPresets((prev) => [
+              ...prev,
+              {
+                id: `custom_${Date.now()}`,
+                formationOffer: offers[0]?.code ?? "prepa_pass",
+                dossierType: "period",
+                title: "Nouveau preset",
+                suggestions: [],
+              },
+            ])}
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
+            style={{ backgroundColor: "rgba(201,168,76,0.16)", color: "#F5D78E" }}
+          >
+            <Plus size={12} className="inline-block mr-1" />
+            Ajouter un preset
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {presets.map((preset) => (
+            <div key={preset.id} className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <input
+                  value={preset.title}
+                  onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? { ...item, title: e.target.value } : item))}
+                  className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPresets((prev) => prev.filter((item) => item.id !== preset.id))}
+                  className="rounded-lg p-2 text-red-300"
+                  style={{ backgroundColor: "rgba(239,68,68,0.1)" }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Offre</label>
+                  <select
+                    value={preset.formationOffer}
+                    onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? { ...item, formationOffer: e.target.value as any } : item))}
+                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                    style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
+                  >
+                    {offers.map((offer) => (
+                      <option key={offer.code} value={offer.code}>{offer.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Type de dossier</label>
+                  <select
+                    value={preset.dossierType}
+                    onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? { ...item, dossierType: e.target.value as any } : item))}
+                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                    style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
+                  >
+                    {Object.entries(DOSSIER_TYPE_META).map(([type, meta]) => (
+                      <option key={type} value={type}>{meta.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Suggestions</label>
+                <textarea
+                  value={preset.suggestions.join(", ")}
+                  onChange={(e) => setPresets((prev) => prev.map((item) => item.id === preset.id ? {
+                    ...item,
+                    suggestions: e.target.value.split(",").map((value) => value.trim()).filter(Boolean),
+                  } : item))}
+                  rows={3}
+                  placeholder="Ex: Université Paris-Cité, Sorbonne Université, Université Paris-Saclay"
+                  className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => onSave(offers, presets)}
+          disabled={!hasChanges || isPending}
+          className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+        >
+          {isPending && <Loader2 size={14} className="animate-spin" />}
+          Enregistrer l&apos;administration
+        </button>
+      </div>
     </div>
   );
 }

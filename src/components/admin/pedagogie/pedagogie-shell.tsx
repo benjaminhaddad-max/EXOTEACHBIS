@@ -26,7 +26,6 @@ import { CoursDetailPanel } from "./cours-detail-panel";
 import { DossierExercicesView } from "./dossier-exercices-view";
 import {
   DOSSIER_TYPE_META,
-  FORMATION_OFFERS,
   canCreateCourseInDossier,
   getAllowedChildTypes,
   getContentCreationLabel,
@@ -35,6 +34,8 @@ import {
   getOfferLabel,
   inferOfferFromAncestors,
 } from "@/lib/pedagogie-structure";
+import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
+import { getDossierSuggestions } from "@/lib/pedagogie-admin-settings";
 import {
   getAllDossiers,
   createDossier, updateDossier, deleteDossier,
@@ -87,7 +88,15 @@ const TREE_WIDTH_STORAGE_KEY = "pedagogie_tree_width_v1";
 const TREE_MIN_WIDTH = 320;
 const TREE_MAX_WIDTH = 720;
 
-export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[] }) {
+export function PedagogieShell({
+  initialDossiers,
+  formationOffers,
+  dossierNamePresets,
+}: {
+  initialDossiers: Dossier[];
+  formationOffers: FormationOfferSetting[];
+  dossierNamePresets: DossierNamePreset[];
+}) {
   const searchParams = useSearchParams();
   const [allDossiers, setAllDossiers] = useState<Dossier[]>(initialDossiers);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -339,7 +348,7 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
           <div className="flex items-center gap-2">
             {!hasOfferRoots && (
               <button
-                onClick={() => handleAction(() => installCanonicalOffers())}
+                onClick={() => handleAction(() => installCanonicalOffers(formationOffers))}
                 className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/10"
               >
                 Installer les offres
@@ -646,6 +655,8 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
               onSubmit={(data) => handleAction(() => createDossier({ ...data, parent_id: modal.parentId }))}
               onClose={() => setModal(null)}
               isPending={isPending}
+              formationOffers={formationOffers}
+              dossierNamePresets={dossierNamePresets}
             />
           )}
 
@@ -658,6 +669,8 @@ export function PedagogieShell({ initialDossiers }: { initialDossiers: Dossier[]
               onSubmit={(data) => handleAction(() => updateDossier(modal.dossier.id, data))}
               onClose={() => setModal(null)}
               isPending={isPending}
+              formationOffers={formationOffers}
+              dossierNamePresets={dossierNamePresets}
             />
           )}
 
@@ -1183,7 +1196,7 @@ function EmptyDossier({ onAdd }: { onAdd: () => void }) {
 // DOSSIER FORM
 // =============================================
 
-function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit, onClose, isPending }: {
+function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit, onClose, isPending, formationOffers, dossierNamePresets }: {
   title: string;
   allDossiers: Dossier[];
   parentDossier?: Dossier | null;
@@ -1191,6 +1204,8 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
   onSubmit: (data: any) => void;
   onClose: () => void;
   isPending: boolean;
+  formationOffers: FormationOfferSetting[];
+  dossierNamePresets: DossierNamePreset[];
 }) {
   const initialParentId = initialData?.parent_id ?? parentDossier?.id ?? null;
   const [parentId, setParentId] = useState<string | null>(initialParentId);
@@ -1211,10 +1226,15 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
   const [color, setColor] = useState(initialData?.color ?? "#0e1e35");
   const [iconUrl, setIconUrl] = useState(initialData?.icon_url ?? "");
   const [visible, setVisible] = useState(initialData?.visible ?? true);
+  const activeFormationOffers = formationOffers.filter((offer) => offer.enabled);
+  const nameSuggestions = useMemo(
+    () => getDossierSuggestions(dossierNamePresets, formationOffer, dossierType),
+    [dossierNamePresets, formationOffer, dossierType]
+  );
 
   useEffect(() => {
     if (!selectedParent && dossierType === "offer" && formationOffer) {
-      const offer = FORMATION_OFFERS.find((item) => item.code === formationOffer);
+      const offer = formationOffers.find((item) => item.code === formationOffer);
       if (offer && (!initialData?.name || initialData.name === name)) {
         setName(offer.label);
       }
@@ -1335,7 +1355,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
                 className={inputCls}
               >
                 <option value="">Choisir une offre...</option>
-                {FORMATION_OFFERS.map((offer) => (
+                {activeFormationOffers.map((offer) => (
                   <option key={offer.code} value={offer.code}>
                     {offer.label}
                   </option>
@@ -1363,6 +1383,25 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
       <FormField label="Nom *">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Université Paris-Cité, S1, Oraux, UE1 Chimie..." required className={inputCls} />
       </FormField>
+      {nameSuggestions.length > 0 && (
+        <div className="rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gold-dark/80">
+            Suggestions de noms
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {nameSuggestions.flatMap((preset) => preset.suggestions).map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => setName(suggestion)}
+                className="rounded-full border border-gold/20 bg-white px-3 py-1 text-xs font-medium text-navy transition hover:border-gold/40 hover:bg-gold/10"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <FormField label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte..." className={inputCls} />
       </FormField>

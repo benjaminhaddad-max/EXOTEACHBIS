@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import type { UserRole } from "@/types/database";
+import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 
 const PATH = "/admin/utilisateurs";
 
@@ -280,5 +281,37 @@ export async function setGroupeDossierAcces(groupeId: string, dossierIds: string
   }
 
   revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function savePedagogieAdminSettings(data: {
+  formationOffers: FormationOfferSetting[];
+  dossierNamePresets: DossierNamePreset[];
+}) {
+  const adminCheck = await ensureAdminAccess();
+  if ("error" in adminCheck) return adminCheck;
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("admin_settings")
+    .upsert([
+      {
+        key: "pedagogie_formation_offers",
+        value: data.formationOffers,
+        updated_at: now,
+      },
+      {
+        key: "pedagogie_name_presets",
+        value: data.dossierNamePresets,
+        updated_at: now,
+      },
+    ]);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(PATH);
+  revalidatePath("/admin/pedagogie");
   return { success: true };
 }
