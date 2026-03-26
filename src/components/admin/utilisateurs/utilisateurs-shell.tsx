@@ -33,6 +33,7 @@ import { DOSSIER_TYPE_META, getDossierPathLabel, inferOfferFromAncestors } from 
 import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 import { expandDossierTree } from "@/lib/access-scope";
 import { DossierGroupTree } from "./dossier-group-tree";
+import { PedagogicalTeamSection } from "./pedagogical-team-section";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -630,47 +631,6 @@ export function UtilisateursShell({
                     </h3>
                   </div>
 
-                  {/* Inline create class form */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nom de la nouvelle classe..."
-                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/50"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          const input = e.currentTarget;
-                          const name = input.value.trim();
-                          if (!name) return;
-                          input.value = "";
-                          startTransition(async () => {
-                            const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
-                            if ("error" in res) { showToast(res.error!, "error"); return; }
-                            showToast("Classe créée !", "success");
-                            window.location.reload();
-                          });
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={(e) => {
-                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-                        const name = input?.value?.trim();
-                        if (!name) { input?.focus(); return; }
-                        input.value = "";
-                        startTransition(async () => {
-                          const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
-                          if ("error" in res) { showToast(res.error!, "error"); return; }
-                          showToast("Classe créée !", "success");
-                          window.location.reload();
-                        });
-                      }}
-                      className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
-                      style={{ backgroundColor: "#0e1e35" }}
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-
                   {directGroups.map(g => {
                     const members = users.filter(u => u.groupe_id === g.id);
                     const groupAccessIds = groupeDossierAcces
@@ -868,7 +828,23 @@ export function UtilisateursShell({
                 </div>
               )}
 
-              {/* Empty state handled by the inline form above */}
+              {/* Add class button */}
+              <button
+                onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
+                className="w-full mt-3 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-gold/40 hover:bg-gold/5 text-gray-400 hover:text-gold transition-colors"
+              >
+                <Plus size={16} />
+                <span className="text-sm font-medium">Ajouter une classe</span>
+              </button>
+
+              {/* Pedagogical team */}
+              <PedagogicalTeamSection
+                universityId={dossier.id}
+                dossiers={initialDossiers}
+                users={users}
+                profMatieres={profMatieres as any[]}
+                onUpdate={() => window.location.reload()}
+              />
             </div>
           );
         })()}

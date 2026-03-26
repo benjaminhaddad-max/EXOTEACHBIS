@@ -1,0 +1,177 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { BookOpen, MessageCircleQuestion, Pencil, GraduationCap, Plus, X, ChevronDown } from "lucide-react";
+import type { Profile, Dossier } from "@/types/database";
+import { createClient } from "@/lib/supabase/client";
+
+type ProfMatiere = {
+  id: string;
+  prof_id: string;
+  matiere_id: string;
+  role_type: "cours" | "qa" | "contenu" | "all";
+  dossier_id: string | null;
+};
+
+type Matiere = { id: string; name: string; dossier_id: string };
+
+interface PedagogicalTeamSectionProps {
+  universityId: string;
+  dossiers: Dossier[];
+  users: Profile[];
+  profMatieres: ProfMatiere[];
+  onUpdate: () => void;
+}
+
+const ROLE_CONFIG = {
+  cours: { label: "Cours en classe", icon: GraduationCap, color: "text-blue-600", bg: "bg-blue-50" },
+  qa: { label: "Q&A (réponses)", icon: MessageCircleQuestion, color: "text-amber-600", bg: "bg-amber-50" },
+  contenu: { label: "Contenu péda.", icon: Pencil, color: "text-emerald-600", bg: "bg-emerald-50" },
+};
+
+export function PedagogicalTeamSection({
+  universityId, dossiers, users, profMatieres, onUpdate,
+}: PedagogicalTeamSectionProps) {
+  const supabase = createClient();
+
+  // Find all "subject" dossiers under the university's semesters
+  const matieres = useMemo(() => {
+    const semesters = dossiers.filter(d => d.parent_id === universityId);
+    const semesterIds = new Set(semesters.map(s => s.id));
+    return dossiers
+      .filter(d => d.parent_id && semesterIds.has(d.parent_id) && d.dossier_type === "subject")
+      .sort((a, b) => a.name.localeCompare(b.name)) as (Dossier & { id: string; name: string; dossier_id: string })[];
+  }, [dossiers, universityId]);
+
+  // Get all profs
+  const profs = useMemo(() => users.filter(u => u.role === "prof" || u.role === "admin" || u.role === "superadmin"), [users]);
+
+  // Index prof_matieres by matière
+  const pmByMatiere = useMemo(() => {
+    const map = new Map<string, ProfMatiere[]>();
+    for (const pm of profMatieres) {
+      if (!map.has(pm.matiere_id)) map.set(pm.matiere_id, []);
+      map.get(pm.matiere_id)!.push(pm);
+    }
+    return map;
+  }, [profMatieres]);
+
+  const [addingFor, setAddingFor] = useState<{ matiereId: string; roleType: string } | null>(null);
+
+  const handleAssign = async (profId: string, matiereId: string, roleType: string) => {
+    await supabase.from("prof_matieres").insert({
+      prof_id: profId,
+      matiere_id: matiereId,
+      role_type: roleType,
+      dossier_id: universityId,
+    });
+    setAddingFor(null);
+    onUpdate();
+  };
+
+  const handleRemove = async (pmId: string) => {
+    await supabase.from("prof_matieres").delete().eq("id", pmId);
+    onUpdate();
+  };
+
+  if (matieres.length === 0) {
+    return (
+      <div className="mt-6 pt-4 border-t border-gray-200">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Équipe pédagogique</h3>
+        <p className="text-xs text-gray-400">Ajoutez des matières dans Pédagogie & Exercices pour gérer l&apos;équipe.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 pt-4 border-t border-gray-200">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Équipe pédagogique</h3>
+
+      <div className="space-y-3">
+        {matieres.map(mat => {
+          const assignments = pmByMatiere.get(mat.id) || [];
+          return (
+            <details key={mat.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden group/mat">
+              <summary className="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                <ChevronDown size={12} className="text-gray-400 transition-transform group-open/mat:-rotate-180 shrink-0" />
+                <BookOpen size={14} className="text-emerald-500 shrink-0" />
+                <span className="text-sm font-medium text-gray-800 flex-1">{mat.name}</span>
+                <span className="text-[10px] text-gray-400">{assignments.length} prof{assignments.length !== 1 ? "s" : ""}</span>
+              </summary>
+
+              <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+                {(["cours", "qa", "contenu"] as const).map(roleType => {
+                  const config = ROLE_CONFIG[roleType];
+                  const Icon = config.icon;
+                  const assigned = assignments.filter(a => a.role_type === roleType || a.role_type === "all");
+                  const isAdding = addingFor?.matiereId === mat.id && addingFor.roleType === roleType;
+
+                  return (
+                    <div key={roleType}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`p-1 rounded ${config.bg}`}>
+                          <Icon size={12} className={config.color} />
+                        </span>
+                        <span className="text-xs font-medium text-gray-600">{config.label}</span>
+                      </div>
+
+                      <div className="ml-7 space-y-1">
+                        {assigned.length === 0 && !isAdding && (
+                          <span className="text-[11px] text-gray-400">— Non assigné</span>
+                        )}
+                        {assigned.map(a => {
+                          const prof = users.find(u => u.id === a.prof_id);
+                          return (
+                            <div key={a.id} className="flex items-center gap-2 group/prof">
+                              <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500">
+                                {(prof?.first_name?.[0] || "").toUpperCase()}{(prof?.last_name?.[0] || "").toUpperCase()}
+                              </div>
+                              <span className="text-xs text-gray-700">{prof?.first_name} {prof?.last_name}</span>
+                              <button
+                                onClick={() => handleRemove(a.id)}
+                                className="ml-auto opacity-0 group-hover/prof:opacity-100 p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        {isAdding ? (
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              autoFocus
+                              onChange={(e) => {
+                                if (e.target.value) handleAssign(e.target.value, mat.id, roleType);
+                              }}
+                              onBlur={() => setAddingFor(null)}
+                              className="text-xs border border-gray-200 rounded-lg px-2 py-1 flex-1 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                            >
+                              <option value="">Choisir un professeur...</option>
+                              {profs.map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.first_name} {p.last_name} ({p.email})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setAddingFor({ matiereId: mat.id, roleType })}
+                            className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 mt-0.5"
+                          >
+                            <Plus size={10} /> Assigner
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
