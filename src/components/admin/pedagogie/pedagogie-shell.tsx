@@ -9,6 +9,7 @@ import {
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
   FolderPlus, Home, GripVertical, BookOpen, Layers, Sparkles,
+  Building2, Calendar, Clock, GraduationCap,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -992,32 +993,46 @@ function SortableTreeNode({
 // SORTABLE SUB-DOSSIER CARD (grille drag & drop)
 // =============================================
 
+// Type-based visual styles for sub-dossier cards
+const CARD_STYLES: Record<string, { icon: typeof Folder; gradient: string; iconBg: string; iconColor: string; badgeBg: string; badgeText: string; border: string }> = {
+  offer: { icon: GraduationCap, gradient: "linear-gradient(135deg, #0e1e35 0%, #1a3050 100%)", iconBg: "rgba(201,168,76,0.15)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.15)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.2)" },
+  university: { icon: Building2, gradient: "linear-gradient(135deg, #1a1145 0%, #2d1b69 100%)", iconBg: "rgba(139,92,246,0.15)", iconColor: "#A78BFA", badgeBg: "rgba(139,92,246,0.15)", badgeText: "#A78BFA", border: "rgba(139,92,246,0.2)" },
+  semester: { icon: Calendar, gradient: "linear-gradient(135deg, #0f2027 0%, #203a43 100%)", iconBg: "rgba(56,189,248,0.15)", iconColor: "#38BDF8", badgeBg: "rgba(56,189,248,0.15)", badgeText: "#38BDF8", border: "rgba(56,189,248,0.2)" },
+  subject: { icon: BookOpen, gradient: "linear-gradient(135deg, #1a2332 0%, #1e3a2f 100%)", iconBg: "rgba(52,211,153,0.15)", iconColor: "#34D399", badgeBg: "rgba(52,211,153,0.15)", badgeText: "#34D399", border: "rgba(52,211,153,0.2)" },
+  module: { icon: Layers, gradient: "linear-gradient(135deg, #1a1e2e 0%, #2a2040 100%)", iconBg: "rgba(244,114,182,0.15)", iconColor: "#F472B6", badgeBg: "rgba(244,114,182,0.15)", badgeText: "#F472B6", border: "rgba(244,114,182,0.2)" },
+  option: { icon: Sparkles, gradient: "linear-gradient(135deg, #2a1f0e 0%, #3d2b10 100%)", iconBg: "rgba(251,191,36,0.15)", iconColor: "#FBBF24", badgeBg: "rgba(251,191,36,0.15)", badgeText: "#FBBF24", border: "rgba(251,191,36,0.2)" },
+  period: { icon: Clock, gradient: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)", iconBg: "rgba(129,140,248,0.15)", iconColor: "#818CF8", badgeBg: "rgba(129,140,248,0.15)", badgeText: "#818CF8", border: "rgba(129,140,248,0.2)" },
+  generic: { icon: Folder, gradient: "linear-gradient(135deg, #1f2937 0%, #374151 100%)", iconBg: "rgba(156,163,175,0.15)", iconColor: "#9CA3AF", badgeBg: "rgba(156,163,175,0.15)", badgeText: "#9CA3AF", border: "rgba(156,163,175,0.2)" },
+};
+
 function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossier: Dossier; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dossier.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 10 : undefined };
+  const cs = CARD_STYLES[dossier.dossier_type] ?? CARD_STYLES.generic;
+  const CardIcon = cs.icon;
 
   return (
-    <div ref={setNodeRef} style={style} className="group relative flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:border-gray-200 hover:shadow">
+    <div ref={setNodeRef} style={style} className="group relative cursor-pointer rounded-xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg" >
       {/* Grip */}
-      <span {...attributes} {...listeners} className="absolute left-1.5 top-1.5 cursor-grab touch-none text-gray-200 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+      <span {...attributes} {...listeners} className="absolute left-2 top-2 cursor-grab touch-none text-white/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-10">
         <GripVertical className="h-4 w-4" />
       </span>
 
-      <button onClick={onClick} className="flex flex-col items-center gap-2 w-full">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden" style={{ backgroundColor: dossier.color + "20" }}>
+      <button onClick={onClick} className="flex flex-col items-center gap-3 w-full p-5 pb-4 text-center" style={{ background: cs.gradient, border: `1px solid ${cs.border}` }}>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden" style={{ backgroundColor: cs.iconBg }}>
           {dossier.icon_url
-            ? <img src={dossier.icon_url} alt="" className="h-7 w-7 object-contain" />
-            : <Folder className="h-6 w-6" style={{ color: dossier.color }} />}
+            ? <img src={dossier.icon_url} alt="" className="h-8 w-8 object-contain" />
+            : <CardIcon className="h-7 w-7" style={{ color: cs.iconColor }} />}
         </div>
-        <p className="text-center text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">{dossier.name}</p>
-        <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+        <p className="text-sm font-bold text-white line-clamp-2 leading-snug min-h-[2.5rem]">{dossier.name}</p>
+        <span className="rounded-full px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
       </button>
 
-      <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
-        <button onClick={onEdit} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500"><Pencil className="h-3 w-3" /></button>
-        <button onClick={onDelete} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
+      <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition group-hover:opacity-100 z-10">
+        <button onClick={onEdit} className="rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-white/80 transition"><Pencil className="h-3 w-3" /></button>
+        <button onClick={onDelete} className="rounded-lg p-1.5 text-white/40 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>
       </div>
     </div>
   );
