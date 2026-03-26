@@ -8,6 +8,16 @@ import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-a
 
 const PATH = "/admin/utilisateurs";
 
+function sanitizeOfferCode(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 async function ensureAdminAccess() {
   const supabase = await createClient();
   const {
@@ -294,17 +304,65 @@ export async function savePedagogieAdminSettings(data: {
   const supabase = await createClient();
   const now = new Date().toISOString();
 
+  const normalizedOffers = data.formationOffers
+    .map((offer, index) => ({
+      ...offer,
+      code: sanitizeOfferCode(offer.code),
+      label: offer.label.trim(),
+      description: offer.description.trim(),
+      defaultColor: offer.defaultColor.trim() || "#0e1e35",
+      orderIndex: index,
+    }))
+    .filter((offer) => offer.code && offer.label);
+
+  if (normalizedOffers.length === 0) {
+    return { error: "Ajoute au moins une offre de formation." };
+  }
+
+  const duplicateCodes = normalizedOffers.filter(
+    (offer, index) => normalizedOffers.findIndex((candidate) => candidate.code === offer.code) !== index
+  );
+  if (duplicateCodes.length > 0) {
+    return { error: "Chaque offre doit avoir un code unique." };
+  }
+
+  const offerCodes = new Set(normalizedOffers.map((offer) => offer.code));
+  const normalizedPresets = data.dossierNamePresets
+    .filter((preset) => offerCodes.has(sanitizeOfferCode(preset.formationOffer)))
+    .map((preset, index) => ({
+      ...preset,
+      id: preset.id.trim() || `preset_${index}`,
+      formationOffer: sanitizeOfferCode(preset.formationOffer),
+      title: preset.title.trim() || "Preset",
+      suggestions: preset.suggestions.map((value) => value.trim()).filter(Boolean),
+    }));
+
+  const { data: usedOfferRows, error: usedOffersError } = await supabase
+    .from("dossiers")
+    .select("formation_offer")
+    .not("formation_offer", "is", null);
+
+  if (usedOffersError) return { error: usedOffersError.message };
+
+  const usedOfferCodes = [...new Set((usedOfferRows ?? []).map((row: any) => row.formation_offer).filter(Boolean))];
+  const removedUsedOffers = usedOfferCodes.filter((code) => !offerCodes.has(code));
+  if (removedUsedOffers.length > 0) {
+    return {
+      error: `Impossible de supprimer une offre déjà utilisée dans l'arborescence: ${removedUsedOffers.join(", ")}`,
+    };
+  }
+
   const { error } = await supabase
     .from("admin_settings")
     .upsert([
       {
         key: "pedagogie_formation_offers",
-        value: data.formationOffers,
+        value: normalizedOffers,
         updated_at: now,
       },
       {
         key: "pedagogie_name_presets",
-        value: data.dossierNamePresets,
+        value: normalizedPresets,
         updated_at: now,
       },
     ]);

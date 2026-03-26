@@ -492,6 +492,15 @@ function AdministrationView({
   const [offers, setOffers] = useState<FormationOfferSetting[]>(formationOffers);
   const [presets, setPresets] = useState<DossierNamePreset[]>(dossierNamePresets);
 
+  const slugifyOfferCode = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
   useEffect(() => setOffers(formationOffers), [formationOffers]);
   useEffect(() => setPresets(dossierNamePresets), [dossierNamePresets]);
 
@@ -500,6 +509,55 @@ function AdministrationView({
   const normalizedOffers = JSON.stringify(offers);
   const normalizedPresets = JSON.stringify(presets);
   const hasChanges = normalizedInitialOffers !== normalizedOffers || normalizedInitialPresets !== normalizedPresets;
+
+  const upsertOfferCode = (offerCode: string, nextCodeRaw: string) => {
+    const nextCode = slugifyOfferCode(nextCodeRaw);
+    if (!nextCode || nextCode === offerCode) return;
+
+    setOffers((prev) =>
+      prev.map((item) => (item.code === offerCode ? { ...item, code: nextCode } : item))
+    );
+    setPresets((prev) =>
+      prev.map((item) =>
+        item.formationOffer === offerCode ? { ...item, formationOffer: nextCode } : item
+      )
+    );
+  };
+
+  const handleAddOffer = () => {
+    const baseCode = "nouvelle_offre";
+    let candidate = baseCode;
+    let suffix = 2;
+    const existingCodes = new Set(offers.map((offer) => offer.code));
+
+    while (existingCodes.has(candidate)) {
+      candidate = `${baseCode}_${suffix}`;
+      suffix += 1;
+    }
+
+    setOffers((prev) => [
+      ...prev,
+      {
+        code: candidate,
+        label: "Nouvelle offre",
+        description: "Nouvelle offre à configurer.",
+        defaultColor: "#0e1e35",
+        enabled: true,
+        orderIndex: prev.length,
+      },
+    ]);
+  };
+
+  const handleDeleteOffer = (offerCode: string) => {
+    if (!confirm("Supprimer cette offre de formation ? Les presets liés seront aussi retirés.")) return;
+
+    setOffers((prev) =>
+      prev
+        .filter((offer) => offer.code !== offerCode)
+        .map((offer, index) => ({ ...offer, orderIndex: index }))
+    );
+    setPresets((prev) => prev.filter((preset) => preset.formationOffer !== offerCode));
+  };
 
   return (
     <div className="p-5 space-y-6">
@@ -518,6 +576,15 @@ function AdministrationView({
               Ces réglages servent à l&apos;installation des offres racines et au formulaire de création des dossiers.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={handleAddOffer}
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
+            style={{ backgroundColor: "rgba(201,168,76,0.16)", color: "#F5D78E" }}
+          >
+            <Plus size={12} className="mr-1 inline-block" />
+            Ajouter une offre
+          </button>
         </div>
         <div className="space-y-3">
           {offers.map((offer, index) => (
@@ -527,19 +594,39 @@ function AdministrationView({
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: offer.defaultColor }} />
                   <p className="text-sm font-semibold text-white">{offer.code}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, enabled: !item.enabled } : item))}
-                  className="rounded-full px-3 py-1 text-[11px] font-semibold"
-                  style={{
-                    backgroundColor: offer.enabled ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.06)",
-                    color: offer.enabled ? "#86EFAC" : "rgba(255,255,255,0.5)",
-                  }}
-                >
-                  {offer.enabled ? "Active" : "Masquée"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOffers((prev) => prev.map((item) => item.code === offer.code ? { ...item, enabled: !item.enabled } : item))}
+                    className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: offer.enabled ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.06)",
+                      color: offer.enabled ? "#86EFAC" : "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {offer.enabled ? "Active" : "Masquée"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteOffer(offer.code)}
+                    className="rounded-lg p-2 text-red-300"
+                    style={{ backgroundColor: "rgba(239,68,68,0.1)" }}
+                    title="Supprimer l'offre"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Code</label>
+                  <input
+                    value={offer.code}
+                    onChange={(e) => upsertOfferCode(offer.code, e.target.value)}
+                    className="w-full rounded-xl px-3 py-2 text-sm text-white"
+                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  />
+                </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Nom affiché</label>
                   <input
@@ -612,6 +699,7 @@ function AdministrationView({
           </div>
           <button
             type="button"
+            disabled={offers.length === 0}
             onClick={() => setPresets((prev) => [
               ...prev,
               {

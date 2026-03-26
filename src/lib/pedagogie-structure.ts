@@ -44,6 +44,14 @@ export const FORMATION_OFFERS: Array<{
   },
 ];
 
+function humanizeOfferCode(code: string) {
+  return code
+    .split("_")
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
+}
+
 export const DOSSIER_TYPE_META: Record<
   DossierType,
   {
@@ -95,7 +103,13 @@ export const DOSSIER_TYPE_META: Record<
 };
 
 export function getOfferMeta(code?: FormationOffer | null) {
-  return FORMATION_OFFERS.find((offer) => offer.code === code) ?? null;
+  if (!code) return null;
+  return FORMATION_OFFERS.find((offer) => offer.code === code) ?? {
+    code,
+    label: humanizeOfferCode(code),
+    description: "",
+    defaultColor: "#0e1e35",
+  };
 }
 
 export function getOfferLabel(code?: FormationOffer | null) {

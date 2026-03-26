@@ -106,36 +106,35 @@ export const DEFAULT_DOSSIER_NAME_PRESETS: DossierNamePreset[] = [
 ];
 
 export function normalizeFormationOfferSettings(input: unknown) {
-  const defaultsByCode = new Map(
-    DEFAULT_FORMATION_OFFER_SETTINGS.map((offer) => [offer.code, offer])
-  );
-
   if (!Array.isArray(input)) {
     return DEFAULT_FORMATION_OFFER_SETTINGS;
   }
 
-  const merged = input
+  const seenCodes = new Set<string>();
+
+  const normalized = input
     .map((raw, index) => {
       if (!raw || typeof raw !== "object") return null;
       const candidate = raw as Partial<FormationOfferSetting>;
-      if (!candidate.code || !defaultsByCode.has(candidate.code)) return null;
-      const fallback = defaultsByCode.get(candidate.code)!;
+      const code = String(candidate.code ?? "").trim();
+      if (!code || seenCodes.has(code)) return null;
+      seenCodes.add(code);
+      const fallback = DEFAULT_FORMATION_OFFER_SETTINGS.find((offer) => offer.code === code);
+
       return {
-        code: fallback.code,
-        label: candidate.label?.trim() || fallback.label,
-        description: candidate.description?.trim() || fallback.description,
-        defaultColor: candidate.defaultColor?.trim() || fallback.defaultColor,
+        code,
+        label: candidate.label?.trim() || fallback?.label || code,
+        description: candidate.description?.trim() || fallback?.description || "",
+        defaultColor: candidate.defaultColor?.trim() || fallback?.defaultColor || "#0e1e35",
         enabled: candidate.enabled ?? true,
         orderIndex: Number.isFinite(candidate.orderIndex) ? Number(candidate.orderIndex) : index,
       } satisfies FormationOfferSetting;
     })
     .filter(Boolean) as FormationOfferSetting[];
 
-  const missing = DEFAULT_FORMATION_OFFER_SETTINGS.filter(
-    (offer) => !merged.some((candidate) => candidate.code === offer.code)
-  );
-
-  return [...merged, ...missing].sort((a, b) => a.orderIndex - b.orderIndex);
+  return normalized.length > 0
+    ? normalized.sort((a, b) => a.orderIndex - b.orderIndex)
+    : DEFAULT_FORMATION_OFFER_SETTINGS;
 }
 
 export function normalizeDossierNamePresets(input: unknown) {
@@ -148,7 +147,6 @@ export function normalizeDossierNamePresets(input: unknown) {
       if (!raw || typeof raw !== "object") return null;
       const candidate = raw as Partial<DossierNamePreset>;
       if (!candidate.formationOffer || !candidate.dossierType) return null;
-      if (!FORMATION_OFFERS.some((offer) => offer.code === candidate.formationOffer)) return null;
       const suggestions = Array.isArray(candidate.suggestions)
         ? candidate.suggestions.map((item) => String(item).trim()).filter(Boolean)
         : [];

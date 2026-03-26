@@ -3,13 +3,7 @@
 // =============================================
 
 export type UserRole = "superadmin" | "admin" | "prof" | "eleve";
-export type FormationOffer =
-  | "prepa_pass"
-  | "prepa_las"
-  | "prepa_lsps"
-  | "terminale_sante"
-  | "paes_fr_eu"
-  | "premiere_elite";
+export type FormationOffer = string;
 export type DossierType =
   | "generic"
   | "offer"
