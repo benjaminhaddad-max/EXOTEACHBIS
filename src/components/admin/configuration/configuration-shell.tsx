@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Check,
   CheckSquare,
+  Copy,
   CircleDot,
   GripVertical,
   ListChecks,
@@ -277,6 +278,23 @@ export function ConfigurationShell({
     });
   };
 
+  const handleDuplicateField = (field: FormField) => {
+    if (!selectedTemplateId) return;
+
+    const duplicate: FormField = {
+      ...field,
+      id: `draft-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      key: "",
+      label: `${field.label} copie`,
+      order_index: (selectedFields.at(-1)?.order_index ?? 0) + 10,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    replaceTemplateFields([...selectedFields, duplicate]);
+    setSelectedFieldId(duplicate.id);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -337,8 +355,8 @@ export function ConfigurationShell({
         </div>
       )}
 
-      <section className="overflow-hidden rounded-[30px] border border-[#e2dbc8] bg-[#f5f1e8] shadow-sm">
-        <div className="border-b border-[#e6dec9] bg-[#fbf8f1] px-5 py-4">
+      <section className="overflow-hidden rounded-[30px] border border-[#ddd7f0] bg-[#f4f1fb] shadow-sm">
+        <div className="border-b border-[#e1dbf3] bg-white px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <select
@@ -375,11 +393,25 @@ export function ConfigurationShell({
           </div>
         </div>
 
+        <div className="border-b border-[#e1dbf3] bg-white px-5 py-3">
+          <div className="mx-auto flex max-w-[1500px] items-center justify-center gap-8 text-sm font-medium text-[#71688c]">
+            <button type="button" className="border-b-2 border-[#6f48d9] pb-2 text-[#3b2b68]">
+              Questions
+            </button>
+            <button type="button" className="pb-2 opacity-70">
+              Reponses
+            </button>
+            <button type="button" className="pb-2 opacity-70">
+              Parametres
+            </button>
+          </div>
+        </div>
+
         <div className="px-4 py-6 lg:px-8 xl:px-10">
           <div className="mx-auto max-w-[1500px]">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr),88px]">
               <div className="space-y-4">
-                <div className="rounded-[28px] border border-[#e5dcc7] border-t-[10px] border-t-[#7a6d2e] bg-white p-6 shadow-[0_18px_40px_rgba(80,62,24,0.07)]">
+                <div className="rounded-[28px] border border-[#dcd5ef] border-t-[10px] border-t-[#6f48d9] bg-white p-6 shadow-[0_18px_40px_rgba(80,62,24,0.07)]">
                   <input
                     value={templateDraft.title}
                     onChange={(event) => setTemplateDraft((current) => ({ ...current, title: event.target.value }))}
@@ -393,9 +425,9 @@ export function ConfigurationShell({
                     placeholder="Description du formulaire"
                     className="mt-3 w-full resize-none border-none bg-transparent text-sm leading-6 text-[#6f6753] outline-none placeholder:text-[#9b927d]"
                   />
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#8d845f]">
-                    <span className="rounded-full bg-[#f6efdd] px-3 py-1 font-semibold">{stats.total} question(s)</span>
-                    <span className="rounded-full bg-[#f6efdd] px-3 py-1 font-semibold">{stats.required} obligatoire(s)</span>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#7d72a0]">
+                    <span className="rounded-full bg-[#f3efff] px-3 py-1 font-semibold">{stats.total} question(s)</span>
+                    <span className="rounded-full bg-[#f3efff] px-3 py-1 font-semibold">{stats.required} obligatoire(s)</span>
                   </div>
                 </div>
 
@@ -417,6 +449,7 @@ export function ConfigurationShell({
                             onSelect={() => setSelectedFieldId(field.id)}
                             onChange={(patch) => updateFieldById(field.id, patch)}
                             onSave={() => handleSaveField(field)}
+                            onDuplicate={() => handleDuplicateField(field)}
                             onDelete={() => handleDeleteField(field)}
                           />
                         ))}
@@ -426,8 +459,8 @@ export function ConfigurationShell({
                 )}
               </div>
 
-              <div className="lg:sticky lg:top-6 lg:h-fit">
-                <div className="rounded-[24px] border border-[#e1d7c0] bg-white p-3 shadow-sm">
+                <div className="lg:sticky lg:top-6 lg:h-fit">
+                <div className="rounded-[24px] border border-[#dcd5ef] bg-white p-3 shadow-sm">
                   <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8d845f]">
                     Ajouter
                   </p>
@@ -462,6 +495,7 @@ function SortableQuestionCard({
   onSelect,
   onChange,
   onSave,
+  onDuplicate,
   onDelete,
 }: {
   field: FormField;
@@ -471,6 +505,7 @@ function SortableQuestionCard({
   onSelect: () => void;
   onChange: (patch: Partial<FormField>) => void;
   onSave: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.id });
@@ -483,14 +518,14 @@ function SortableQuestionCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-[28px] border bg-white shadow-[0_12px_30px_rgba(80,62,24,0.06)] ${
-        isSelected ? "border-[#cdb981]" : "border-[#e5dcc7]"
+      className={`rounded-[24px] border bg-white shadow-[0_12px_30px_rgba(80,62,24,0.06)] ${
+        isSelected ? "border-[#71a1ff] ring-2 ring-[#71a1ff]" : "border-[#dcd5ef]"
       } ${isDragging ? "opacity-70" : ""}`}
     >
       <div className="flex items-start gap-4 p-5">
         <button
           type="button"
-          className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#f6efdd] text-sm font-semibold text-[#7a6d2e]"
+          className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#f3efff] text-sm font-semibold text-[#6f48d9]"
           onClick={onSelect}
         >
           {index}
@@ -517,7 +552,7 @@ function SortableQuestionCard({
                     {field.label}
                   </span>
                   {field.required && (
-                    <span className="rounded-full bg-[#f7e9b4] px-2 py-1 text-[10px] font-semibold text-[#7a6d2e]">
+                    <span className="rounded-full bg-[#f3efff] px-2 py-1 text-[10px] font-semibold text-[#6f48d9]">
                       Obligatoire
                     </span>
                   )}
@@ -527,7 +562,7 @@ function SortableQuestionCard({
 
               <button
                 type="button"
-                className="rounded-xl p-2 text-[#b3a88a] transition hover:bg-[#f8f4ea]"
+                className="rounded-xl p-2 text-[#9f95bf] transition hover:bg-[#f5f1ff]"
                 {...attributes}
                 {...listeners}
                 title="Glisser pour réordonner"
@@ -547,6 +582,7 @@ function SortableQuestionCard({
               isPending={isPending}
               onChange={onChange}
               onSave={onSave}
+              onDuplicate={onDuplicate}
               onDelete={onDelete}
             />
           )}
@@ -561,12 +597,14 @@ function QuestionEditorCard({
   isPending,
   onChange,
   onSave,
+  onDuplicate,
   onDelete,
 }: {
   field: FormField;
   isPending: boolean;
   onChange: (patch: Partial<FormField>) => void;
   onSave: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const optionFields = getFieldOptions(field);
@@ -588,21 +626,14 @@ function QuestionEditorCard({
   const isChoiceField = ["radio", "checkboxes", "select"].includes(field.field_type);
 
   return (
-    <div className="mt-5 rounded-[24px] border border-[#ebe2cb] bg-[#fcfbf7] p-5">
+    <div className="mt-5 rounded-[20px] border border-[#e7e1f5] bg-[#fcfbff] p-5">
       <div className="space-y-4">
-        <input
-          value={field.label}
-          onChange={(event) => onChange({ label: event.target.value })}
-          placeholder="Question"
-          className="w-full rounded-2xl border border-[#e0d6bf] bg-white px-4 py-3 text-sm font-medium text-[#243041] outline-none focus:border-[#7a6d2e]"
-        />
-
-        <div className="grid gap-3 md:grid-cols-[1fr,180px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),220px]">
           <input
-            value={field.helper_text ?? ""}
-            onChange={(event) => onChange({ helper_text: event.target.value })}
-            placeholder="Description ou aide (optionnel)"
-            className="w-full rounded-2xl border border-[#e0d6bf] bg-white px-4 py-3 text-sm text-[#243041] outline-none focus:border-[#7a6d2e]"
+            value={field.label}
+            onChange={(event) => onChange({ label: event.target.value })}
+            placeholder="Question sans titre"
+            className="w-full border-0 border-b-2 border-[#d9d1ef] bg-transparent px-1 py-3 text-lg font-medium text-[#243041] outline-none focus:border-[#6f48d9]"
           />
 
           <select
@@ -615,7 +646,7 @@ function QuestionEditorCard({
                   : [],
               })
             }
-            className="w-full rounded-2xl border border-[#e0d6bf] bg-white px-4 py-3 text-sm text-[#243041] outline-none focus:border-[#7a6d2e]"
+            className="w-full rounded-xl border border-[#ded6f2] bg-white px-4 py-3 text-sm text-[#243041] outline-none focus:border-[#6f48d9]"
           >
             {Object.entries(FORM_FIELD_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
@@ -625,18 +656,27 @@ function QuestionEditorCard({
           </select>
         </div>
 
+        <div className="grid gap-3">
+          <input
+            value={field.helper_text ?? ""}
+            onChange={(event) => onChange({ helper_text: event.target.value })}
+            placeholder="Description ou aide (optionnel)"
+            className="w-full border-0 border-b border-[#e5dff3] bg-transparent px-1 py-2 text-sm text-[#5f5870] outline-none focus:border-[#6f48d9]"
+          />
+        </div>
+
         {isChoiceField ? (
           <div className="space-y-2">
             {optionFields.map((option, index) => (
-              <div key={`${field.id}-option-${index}`} className="flex items-center gap-2">
-                <span className="w-7 text-center text-[#9f957d]">
+              <div key={`${field.id}-option-${index}`} className="flex items-center gap-3">
+                <span className="w-7 text-center text-[#8e86a8]">
                   {field.field_type === "checkboxes" ? "□" : field.field_type === "radio" ? "○" : "▾"}
                 </span>
                 <input
                   value={option}
                   onChange={(event) => updateOption(index, event.target.value)}
                   placeholder={`Option ${index + 1}`}
-                  className="flex-1 rounded-2xl border border-[#e0d6bf] bg-white px-4 py-3 text-sm text-[#243041] outline-none focus:border-[#7a6d2e]"
+                  className="flex-1 border-0 border-b border-[#e5dff3] bg-transparent px-1 py-3 text-sm text-[#243041] outline-none focus:border-[#6f48d9]"
                 />
                 <button
                   type="button"
@@ -652,7 +692,7 @@ function QuestionEditorCard({
             <button
               type="button"
               onClick={addOption}
-              className="inline-flex items-center gap-2 rounded-2xl px-2 py-2 text-sm font-medium text-[#7a6d2e] transition hover:bg-[#f6efdd]"
+              className="inline-flex items-center gap-2 rounded-2xl px-2 py-2 text-sm font-medium text-[#6f48d9] transition hover:bg-[#f3efff]"
             >
               <Plus className="h-4 w-4" />
               Ajouter une option
@@ -662,18 +702,18 @@ function QuestionEditorCard({
           <input
             value={field.placeholder ?? ""}
             onChange={(event) => onChange({ placeholder: event.target.value })}
-            placeholder="Placeholder"
-            className="w-full rounded-2xl border border-[#e0d6bf] bg-white px-4 py-3 text-sm text-[#243041] outline-none focus:border-[#7a6d2e]"
+            placeholder="Texte de reponse"
+            className="w-full border-0 border-b border-[#e5dff3] bg-transparent px-1 py-3 text-sm text-[#243041] outline-none focus:border-[#6f48d9]"
           />
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ede4d0] pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ebe5f7] pt-4">
           <label className="inline-flex items-center gap-3 text-sm font-medium text-[#514a35]">
             <input
               type="checkbox"
               checked={field.required}
               onChange={(event) => onChange({ required: event.target.checked })}
-              className="h-4 w-4 rounded border-gray-300 text-[#7a6d2e] focus:ring-[#7a6d2e]"
+              className="h-4 w-4 rounded border-gray-300 text-[#6f48d9] focus:ring-[#6f48d9]"
             />
             Question obligatoire
           </label>
@@ -681,8 +721,16 @@ function QuestionEditorCard({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={onDuplicate}
+              className="inline-flex items-center gap-2 rounded-2xl border border-[#ddd6f2] bg-white px-3 py-2.5 text-sm font-medium text-[#5d4e88] transition hover:bg-[#f6f2ff]"
+            >
+              <Copy className="h-4 w-4" />
+              Dupliquer
+            </button>
+            <button
+              type="button"
               onClick={onDelete}
-              className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-100"
+              className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-100"
             >
               <Trash2 className="h-4 w-4" />
               Supprimer
@@ -691,7 +739,7 @@ function QuestionEditorCard({
               type="button"
               onClick={onSave}
               disabled={isPending || !field.label.trim()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#7a6d2e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6a5f27] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#6f48d9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#603bc5] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Enregistrer
@@ -714,8 +762,11 @@ function FieldPreview({ field }: { field: FormField }) {
           </div>
         ) : (
           options.map((option) => (
-            <div key={option} className="rounded-2xl border border-[#ebe2cb] bg-white px-4 py-3 text-sm text-[#514a35]">
-              {option}
+            <div key={option} className="flex items-center gap-3 rounded-2xl border border-[#ebe5f7] bg-white px-4 py-3 text-sm text-[#514a35]">
+              <span className="w-5 text-center text-[#8e86a8]">
+                {field.field_type === "checkboxes" ? "□" : field.field_type === "radio" ? "○" : "▾"}
+              </span>
+              <span>{option}</span>
             </div>
           ))
         )}
