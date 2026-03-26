@@ -25,6 +25,8 @@ import {
   COACHING_WEEKLY_FORM,
   calculateCoachingStatus,
 } from "@/lib/coaching";
+import type { CoachingCohort, CoachingStudent, Profile } from "@/types/database";
+import { CoachingWorkspace } from "./coaching-workspace";
 
 type CoachingStat = {
   label: string;
@@ -34,6 +36,12 @@ type CoachingStat = {
 
 type CoachingShellProps = {
   stats: CoachingStat[];
+  setupComplete: boolean;
+  setupError?: string | null;
+  cohorts: CoachingCohort[];
+  assignments: (CoachingStudent & { student?: Profile; coach?: Profile | null })[];
+  students: Profile[];
+  coaches: Profile[];
 };
 
 const scenarioEvaluations = [
@@ -105,7 +113,15 @@ const sprintCards = [
   },
 ] as const;
 
-export function CoachingShell({ stats }: CoachingShellProps) {
+export function CoachingShell({
+  stats,
+  setupComplete,
+  setupError,
+  cohorts,
+  assignments,
+  students,
+  coaches,
+}: CoachingShellProps) {
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-[#d8dce8] bg-gradient-to-br from-[#0f1e36] via-[#142948] to-[#1b3761] p-6 text-white shadow-sm">
@@ -160,6 +176,15 @@ export function CoachingShell({ stats }: CoachingShellProps) {
           </div>
         ))}
       </section>
+
+      <CoachingWorkspace
+        setupComplete={setupComplete}
+        setupError={setupError}
+        initialCohorts={cohorts}
+        initialAssignments={assignments}
+        students={students}
+        coaches={coaches}
+      />
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

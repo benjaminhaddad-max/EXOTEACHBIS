@@ -403,6 +403,116 @@ export interface CalendarEvent {
 }
 
 // =============================================
+// Coaching
+// =============================================
+
+export type CoachingCohortStatus = "draft" | "active" | "archived";
+export type CoachingProfileType =
+  | "good_confident"
+  | "good_fragile"
+  | "good_arrogant"
+  | "average_motivated"
+  | "average_unaware";
+export type CoachingStudentStatus = "green" | "orange" | "red";
+export type CoachingHoursBucket = "lt5" | "5_10" | "10_20" | "20_plus";
+export type CoachingUnderstandingLevel = "not_at_all" | "a_little" | "mostly_yes" | "fully";
+export type CoachingMentalState = "lost" | "doubtful" | "okay" | "confident";
+export type CoachingMainBlocker = "subject" | "organization" | "motivation" | "none";
+export type CoachingMomentum = "backward" | "same" | "improving" | "much_better";
+export type CoachingNoteType =
+  | "onboarding_call"
+  | "guardian_call"
+  | "weekly_followup"
+  | "meeting"
+  | "alert"
+  | "internal";
+export type CoachingInterventionChannel =
+  | "call"
+  | "visio"
+  | "physical"
+  | "email"
+  | "sms"
+  | "whatsapp"
+  | "crisp";
+export type CoachingInterventionStatus = "todo" | "scheduled" | "done" | "cancelled";
+
+export interface CoachingCohort {
+  id: string;
+  name: string;
+  season: string;
+  status: CoachingCohortStatus;
+  onboarding_starts_on: string | null;
+  intensive_starts_on: string | null;
+  cadence_starts_on: string | null;
+  ends_on: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CoachingStudent {
+  id: string;
+  cohort_id: string;
+  student_id: string;
+  coach_id: string | null;
+  profile_type: CoachingProfileType;
+  current_status: CoachingStudentStatus;
+  onboarding_completed: boolean;
+  onboarding_called_at: string | null;
+  guardian_called_at: string | null;
+  goals: unknown;
+  risk_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  student?: Profile;
+  coach?: Profile | null;
+}
+
+export interface CoachingWeeklyCheckin {
+  id: string;
+  cohort_id: string;
+  coaching_student_id: string;
+  student_id: string;
+  week_start: string;
+  hours_bucket: CoachingHoursBucket;
+  understanding_level: CoachingUnderstandingLevel;
+  mental_state: CoachingMentalState;
+  main_blocker: CoachingMainBlocker;
+  momentum: CoachingMomentum;
+  free_text: string | null;
+  computed_status: CoachingStudentStatus;
+  signal_reasons: string[];
+  submitted_at: string;
+}
+
+export interface CoachingNote {
+  id: string;
+  cohort_id: string;
+  coaching_student_id: string;
+  student_id: string;
+  author_id: string;
+  note_type: CoachingNoteType;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CoachingIntervention {
+  id: string;
+  cohort_id: string;
+  coaching_student_id: string;
+  student_id: string;
+  owner_id: string | null;
+  requested_by_id: string | null;
+  channel: CoachingInterventionChannel;
+  status: CoachingInterventionStatus;
+  reason: string;
+  scheduled_at: string | null;
+  completed_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+// =============================================
 // Abonnements
 // =============================================
 
