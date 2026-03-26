@@ -26,7 +26,7 @@ type CalEvent = {
 type ViewMode = "week" | "month";
 
 type Modal =
-  | { type: "create"; prefill?: { date: Date; hour: number } }
+  | { type: "create"; prefill?: { date: Date; hour: number }; defaultGroupeId?: string | null }
   | { type: "edit"; event: CalEvent }
   | { type: "view"; event: CalEvent }
   | null;
@@ -121,7 +121,17 @@ export function PlanningShell({
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
-  const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
+  const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+
+  const toggleGroupe = (id: string) => {
+    setSelectedGroupeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => setSelectedGroupeIds(new Set());
 
   const weekStart = getWeekStart(currentDate);
   const weekDays = getWeekDays(weekStart);
@@ -139,11 +149,11 @@ export function PlanningShell({
     if (data) setEvents(data as CalEvent[]);
   };
 
-  // Filter events by selected groupe (null = all events)
+  // Filter events: empty set = show all, otherwise only events matching selected groupes
   const filteredEvents = useMemo(() => {
-    if (!selectedGroupeId) return events;
-    return events.filter(e => e.groupe_id === null || e.groupe_id === selectedGroupeId);
-  }, [events, selectedGroupeId]);
+    if (selectedGroupeIds.size === 0) return events;
+    return events.filter(e => e.groupe_id !== null && selectedGroupeIds.has(e.groupe_id));
+  }, [events, selectedGroupeIds]);
 
   const handleDelete = (id: string) => {
     if (!confirm("Supprimer cet événement ?")) return;
@@ -186,8 +196,9 @@ export function PlanningShell({
       <PlanningSidebar
         dossiers={dossiers}
         groupes={groupes}
-        selectedGroupeId={selectedGroupeId}
-        onSelect={setSelectedGroupeId}
+        selectedGroupeIds={selectedGroupeIds}
+        onToggle={toggleGroupe}
+        onSelectAll={selectAll}
       />
 
       {/* ── Right: header + calendar ── */}
@@ -226,7 +237,7 @@ export function PlanningShell({
             </div>
 
             <button
-              onClick={() => setModal({ type: "create" })}
+              onClick={() => setModal({ type: "create", defaultGroupeId: selectedGroupeIds.size === 1 ? [...selectedGroupeIds][0] : null })}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] transition-colors"
             >
               <Plus size={13} /> Nouvel événement
@@ -241,7 +252,7 @@ export function PlanningShell({
               days={weekDays}
               events={filteredEvents}
               groupes={groupes}
-              onCellClick={(date, hour) => setModal({ type: "create", prefill: { date, hour } })}
+              onCellClick={(date, hour) => setModal({ type: "create", prefill: { date, hour }, defaultGroupeId: selectedGroupeIds.size === 1 ? [...selectedGroupeIds][0] : null })}
               onEventClick={(e) => setModal({ type: "view", event: e })}
             />
           ) : (
@@ -250,7 +261,7 @@ export function PlanningShell({
               month={currentDate.getMonth()}
               cells={monthDays}
               events={filteredEvents}
-              onCellClick={(date) => setModal({ type: "create", prefill: { date, hour: 9 } })}
+              onCellClick={(date) => setModal({ type: "create", prefill: { date, hour: 9 }, defaultGroupeId: selectedGroupeIds.size === 1 ? [...selectedGroupeIds][0] : null })}
               onEventClick={(e) => setModal({ type: "view", event: e })}
             />
           )}
@@ -280,7 +291,9 @@ export function PlanningShell({
               <EventForm
                 event={modal.type === "edit" ? modal.event : undefined}
                 prefill={modal.type === "create" ? modal.prefill : undefined}
+                defaultGroupeId={modal.type === "create" ? modal.defaultGroupeId : undefined}
                 groupes={groupes}
+                dossiers={dossiers}
                 onSubmit={(data) => {
                   startTransition(async () => {
                     const res = modal.type === "edit"
@@ -306,12 +319,13 @@ export function PlanningShell({
 // ─── Planning Sidebar ─────────────────────────────────────────────────────────
 
 function PlanningSidebar({
-  dossiers, groupes, selectedGroupeId, onSelect,
+  dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll,
 }: {
   dossiers: Dossier[];
   groupes: Groupe[];
-  selectedGroupeId: string | null;
-  onSelect: (id: string | null) => void;
+  selectedGroupeIds: Set<string>;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
 }) {
   // Hierarchy: Offer → University → Classes (groupes)
   // Groups are linked to universities via formation_dossier_id
@@ -373,25 +387,34 @@ function PlanningSidebar({
     });
   };
 
-  // Render a group button
+  // Render a group button with checkbox
   const GroupeButton = ({ g, indent }: { g: Groupe; indent: number }) => {
-    const isSelected = selectedGroupeId === g.id;
+    const isChecked = selectedGroupeIds.has(g.id);
     return (
       <button
-        onClick={() => onSelect(isSelected ? null : g.id)}
+        onClick={() => onToggle(g.id)}
         className="w-full flex items-center gap-2 pr-2 py-1.5 rounded-lg transition-all text-left"
         style={{
           paddingLeft: indent,
-          backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : "transparent",
-          borderLeft: isSelected ? "2px solid #C9A84C" : "2px solid transparent",
+          backgroundColor: isChecked ? "rgba(201,168,76,0.08)" : "transparent",
         }}
-        onMouseOver={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-        onMouseOut={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+        onMouseOver={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)")}
+        onMouseOut={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.08)" : "transparent")}
       >
+        {/* Checkbox */}
+        <div
+          className="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0"
+          style={{
+            borderColor: isChecked ? "#C9A84C" : "rgba(255,255,255,0.2)",
+            backgroundColor: isChecked ? "#C9A84C" : "transparent",
+          }}
+        >
+          {isChecked && <Check size={9} style={{ color: "#0e1e35" }} strokeWidth={3} />}
+        </div>
         <span className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>
           {g.name[0]?.toUpperCase()}
         </span>
-        <span className="flex-1 text-[11px] truncate font-medium" style={{ color: isSelected ? "#E3C286" : "rgba(255,255,255,0.65)" }}>
+        <span className="flex-1 text-[11px] truncate font-medium" style={{ color: isChecked ? "#E3C286" : "rgba(255,255,255,0.65)" }}>
           {g.name}
         </span>
       </button>
@@ -413,15 +436,15 @@ function PlanningSidebar({
       {/* "Tout afficher" */}
       <div className="px-3 pb-1">
         <button
-          onClick={() => onSelect(null)}
+          onClick={onSelectAll}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all"
           style={{
-            backgroundColor: selectedGroupeId === null ? "rgba(201,168,76,0.15)" : "transparent",
-            color: selectedGroupeId === null ? "#E3C286" : "rgba(255,255,255,0.5)",
-            border: selectedGroupeId === null ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent",
+            backgroundColor: selectedGroupeIds.size === 0 ? "rgba(201,168,76,0.15)" : "transparent",
+            color: selectedGroupeIds.size === 0 ? "#E3C286" : "rgba(255,255,255,0.5)",
+            border: selectedGroupeIds.size === 0 ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent",
           }}
-          onMouseOver={e => { if (selectedGroupeId !== null) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.05)"; }}
-          onMouseOut={e => { if (selectedGroupeId !== null) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+          onMouseOver={e => { if (selectedGroupeIds.size > 0) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.05)"; }}
+          onMouseOut={e => { if (selectedGroupeIds.size > 0) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
         >
           <Layers size={12} />
           Toutes les classes
@@ -756,11 +779,13 @@ function EventDetail({
 // ─── Event Form ───────────────────────────────────────────────────────────────
 
 function EventForm({
-  event, prefill, groupes, onSubmit, onClose, isPending,
+  event, prefill, defaultGroupeId, groupes, dossiers = [], onSubmit, onClose, isPending,
 }: {
   event?: CalEvent;
   prefill?: { date: Date; hour: number };
+  defaultGroupeId?: string | null;
   groupes: Groupe[];
+  dossiers?: Dossier[];
   onSubmit: (data: any) => void;
   onClose: () => void;
   isPending: boolean;
@@ -773,7 +798,7 @@ function EventForm({
   const [startAt, setStartAt] = useState(defaultStart);
   const [endAt, setEndAt] = useState(defaultEnd);
   const [type, setType] = useState(event?.type ?? "cours");
-  const [groupeId, setGroupeId] = useState(event?.groupe_id ?? "");
+  const [groupeId, setGroupeId] = useState(event?.groupe_id ?? defaultGroupeId ?? "");
   const [zoomLink, setZoomLink] = useState(event?.zoom_link ?? "");
   const [location, setLocation] = useState(event?.location ?? "");
 
@@ -804,10 +829,49 @@ function EventForm({
           </select>
         </div>
         <div>
-          <label className="text-xs text-white/50 mb-1.5 block">Groupe</label>
+          <label className="text-xs text-white/50 mb-1.5 block">Classe</label>
           <select value={groupeId} onChange={(e) => setGroupeId(e.target.value)} className={field}>
-            <option value="">— Tous —</option>
-            {groupes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            <option value="">— Global (toutes les classes) —</option>
+            {(() => {
+              // Build offer → university → groups tree for the select
+              const dossierMap = new Map(dossiers.map(d => [d.id, d]));
+              const offers = dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
+              const unis = dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index);
+              const unisByOffer = new Map<string, Dossier[]>();
+              for (const u of unis) {
+                if (u.parent_id) {
+                  if (!unisByOffer.has(u.parent_id)) unisByOffer.set(u.parent_id, []);
+                  unisByOffer.get(u.parent_id)!.push(u);
+                }
+              }
+              const groupsByUni = new Map<string, Groupe[]>();
+              for (const g of groupes) {
+                if (g.formation_dossier_id) {
+                  if (!groupsByUni.has(g.formation_dossier_id)) groupsByUni.set(g.formation_dossier_id, []);
+                  groupsByUni.get(g.formation_dossier_id)!.push(g);
+                }
+              }
+              return offers.map(offer => {
+                const offerUnis = unisByOffer.get(offer.id) ?? [];
+                const options: React.ReactNode[] = [];
+                for (const uni of offerUnis) {
+                  const uniGroups = groupsByUni.get(uni.id) ?? [];
+                  for (const g of uniGroups) {
+                    options.push(
+                      <option key={g.id} value={g.id}>
+                        {g.name} — {uni.name} ({offer.name})
+                      </option>
+                    );
+                  }
+                }
+                if (options.length === 0) return null;
+                return (
+                  <optgroup key={offer.id} label={offer.name}>
+                    {options}
+                  </optgroup>
+                );
+              });
+            })()}
           </select>
         </div>
       </div>
