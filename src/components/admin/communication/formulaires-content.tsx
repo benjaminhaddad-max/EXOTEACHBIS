@@ -38,7 +38,7 @@ const TARGET_COLORS: Record<string, string> = {
 };
 
 export function FormulairesShellContent({
-  currentProfile, initialTemplates, initialFields, initialDossiers, initialGroupes, initialStudents, initialResponses, sidebarFilter, triggerCreate, onCreateHandled,
+  currentProfile, initialTemplates, initialFields, initialDossiers, initialGroupes, initialStudents, initialResponses, sidebarFilter, selectedGroupeIds, triggerCreate, onCreateHandled,
 }: {
   currentProfile: Profile;
   initialTemplates: FormTemplate[];
@@ -48,6 +48,7 @@ export function FormulairesShellContent({
   initialStudents: Profile[];
   initialResponses: CoachingIntakeForm[];
   sidebarFilter: SidebarFilter;
+  selectedGroupeIds?: Set<string>;
   triggerCreate?: boolean;
   onCreateHandled?: () => void;
 }) {
@@ -164,6 +165,7 @@ export function FormulairesShellContent({
           initialResponses={initialResponses}
           selectedTemplateId={selectedTemplateId}
           showToast={showToast}
+          sidebarGroupeIds={selectedGroupeIds}
         />
       )}
 

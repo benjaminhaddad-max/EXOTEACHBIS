@@ -104,9 +104,17 @@ export function CommunicationShell({
                 <Plus size={13} /> Nouvelle annonce
               </button>
             )}
+            {tab === "formulaires" && isAdmin && selectedGroupeIds.size === 0 && (
+              <span className="text-[10px] italic" style={{ color: "rgba(255,255,255,0.3)" }}>← Sélectionne d&apos;abord les destinataires</span>
+            )}
             {tab === "formulaires" && isAdmin && (
-              <button onClick={() => setCreateForm(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
+              <button onClick={() => { if (selectedGroupeIds.size > 0) setCreateForm(true); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{
+                  backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(255,255,255,0.06)",
+                  color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(255,255,255,0.25)",
+                  cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
+                }}>
                 <Plus size={13} /> Nouveau formulaire
               </button>
             )}
@@ -137,6 +145,7 @@ export function CommunicationShell({
               initialStudents={initialStudents}
               initialResponses={initialResponses}
               sidebarFilter={sidebarFilter}
+              selectedGroupeIds={selectedGroupeIds}
               triggerCreate={createForm}
               onCreateHandled={() => setCreateForm(false)}
             />

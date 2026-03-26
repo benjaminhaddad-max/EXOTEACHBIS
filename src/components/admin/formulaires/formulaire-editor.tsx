@@ -84,6 +84,7 @@ export function FormulaireEditor({
   initialTemplates, initialFields, initialDossiers, initialGroupes, initialStudents, initialResponses,
   selectedTemplateId: externalSelectedId,
   showToast,
+  sidebarGroupeIds,
 }: {
   initialTemplates: FormTemplate[];
   initialFields: FormField[];
@@ -93,6 +94,7 @@ export function FormulaireEditor({
   initialResponses: CoachingIntakeForm[];
   selectedTemplateId: string | null;
   showToast: (msg: string, kind: "success" | "error") => void;
+  sidebarGroupeIds?: Set<string>;
 }) {
   const [templates, setTemplates] = useState(sortTemplates(initialTemplates));
   const [fields, setFields] = useState(initialFields);
@@ -139,9 +141,21 @@ export function FormulaireEditor({
     setSelectedFieldId(fid);
   };
 
+  // Apply sidebar targeting to draft before save
+  const getDraftWithSidebarTarget = (): TemplateDraft => {
+    if (!sidebarGroupeIds || sidebarGroupeIds.size === 0) return { ...templateDraft, target_type: "global", target_offer_code: null, target_university_dossier_id: null, target_groupe_id: null, target_student_id: null, target_student_ids: [] };
+    if (sidebarGroupeIds.size === 1) {
+      const gid = [...sidebarGroupeIds][0];
+      return { ...templateDraft, target_type: "groupe", target_groupe_id: gid, target_offer_code: null, target_university_dossier_id: null, target_student_id: null, target_student_ids: [] };
+    }
+    // Multi-class: use selection with student_ids empty (or first group)
+    return { ...templateDraft, target_type: "groupe", target_groupe_id: [...sidebarGroupeIds][0], target_offer_code: null, target_university_dossier_id: null, target_student_id: null, target_student_ids: [] };
+  };
+
   // Handlers
   const handleSaveTemplate = () => startTransition(async () => {
-    const res = await saveFormTemplate(templateDraft);
+    const draftToSave = getDraftWithSidebarTarget();
+    const res = await saveFormTemplate(draftToSave);
     if (!("success" in res) || !res.template) { showToast(res.error ?? "Erreur", "error"); return; }
     setTemplates(cur => sortTemplates([...cur.filter(t => t.id !== res.template!.id), res.template!]));
     setSelectedTemplateId(res.template!.id);
@@ -239,14 +253,51 @@ export function FormulaireEditor({
           </div>
         </div>
 
-        {/* Right: Targeting — tree with checkboxes like planning */}
-        <TargetingPanel
-          templateDraft={templateDraft}
-          setTemplateDraft={setTemplateDraft}
-          dossiers={initialDossiers}
-          groupes={initialGroupes}
-          students={initialStudents}
-        />
+        {/* Right: Target summary from sidebar */}
+        <div className="p-4 rounded-2xl space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#C9A84C" }}>Destinataires</p>
+          {sidebarGroupeIds && sidebarGroupeIds.size > 0 ? (
+            <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)" }}>
+              <p className="text-xs font-semibold" style={{ color: "#34D399" }}>
+                {sidebarGroupeIds.size} classe{sidebarGroupeIds.size > 1 ? "s" : ""} ciblée{sidebarGroupeIds.size > 1 ? "s" : ""}
+              </p>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {[...sidebarGroupeIds].map(gid => {
+                  const g = initialGroupes.find(g => g.id === gid);
+                  return g ? (
+                    <span key={gid} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: g.color + "20", color: g.color }}>
+                      {g.name}
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <p className="text-[9px] mt-2" style={{ color: "rgba(52,211,153,0.5)" }}>Définis depuis la sidebar à gauche</p>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)" }}>
+              <p className="text-xs font-semibold" style={{ color: "#C9A84C" }}>Global (tous les élèves)</p>
+              <p className="text-[9px] mt-1" style={{ color: "rgba(201,168,76,0.5)" }}>Coche des classes dans la sidebar pour cibler</p>
+            </div>
+          )}
+
+          <div className="space-y-2 pt-2">
+            <label className="block space-y-1">
+              <span className="text-[10px] font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Usage</span>
+              <select value={templateDraft.context === "generic" || ["coaching", "pass", "las", "lsps", "autre"].includes(templateDraft.context) ? templateDraft.context : "autre"} onChange={e => setTemplateDraft(d => ({ ...d, context: e.target.value }))} className={F + " text-xs"}>
+                <option value="generic">Formulaire libre</option>
+                <option value="coaching">Coaching</option>
+                <option value="pass">PASS</option>
+                <option value="las">LAS</option>
+                <option value="lsps">LSPS</option>
+                <option value="autre">Autre</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-[11px]" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <input type="checkbox" checked={templateDraft.is_active} onChange={e => setTemplateDraft(d => ({ ...d, is_active: e.target.checked }))} className="rounded" style={{ accentColor: "#34D399" }} />
+              Formulaire actif
+            </label>
+          </div>
+        </div>
       </div>
 
       {/* ── Student Preview ── */}
