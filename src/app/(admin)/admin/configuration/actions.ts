@@ -201,3 +201,81 @@ export async function saveFormFieldOrder(data: {
   revalidatePath(STUDENT_COACHING_PATH);
   return { success: true };
 }
+
+// ─── Duplicate a form template (with all fields) to a new target ─────────────
+
+export async function duplicateFormTemplate(data: {
+  sourceTemplateId: string;
+  newTitle: string;
+  target_type: "global" | "offer" | "university" | "groupe" | "student" | "selection";
+  target_offer_code?: string | null;
+  target_university_dossier_id?: string | null;
+  target_groupe_id?: string | null;
+  target_student_id?: string | null;
+  target_student_ids?: string[];
+}) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return { error: auth.error };
+
+  const admin = createAdminClient();
+
+  // 1. Get source template
+  const { data: source, error: srcErr } = await admin
+    .from("form_templates")
+    .select("*")
+    .eq("id", data.sourceTemplateId)
+    .single();
+
+  if (srcErr || !source) return { error: "Formulaire source introuvable" };
+
+  // 2. Get source fields
+  const { data: sourceFields } = await admin
+    .from("form_fields")
+    .select("*")
+    .eq("form_template_id", data.sourceTemplateId)
+    .order("order_index");
+
+  // 3. Create new template
+  const slug = slugifyFieldKey(data.newTitle) + "-" + Date.now().toString(36);
+  const { data: newTemplate, error: insErr } = await admin
+    .from("form_templates")
+    .insert({
+      slug,
+      title: data.newTitle,
+      description: source.description,
+      context: source.context,
+      target_type: data.target_type,
+      target_offer_code: data.target_offer_code ?? null,
+      target_university_dossier_id: data.target_university_dossier_id ?? null,
+      target_groupe_id: data.target_groupe_id ?? null,
+      target_student_id: data.target_student_id ?? null,
+      target_student_ids: normalizeStudentIds(data.target_student_ids),
+      is_active: true,
+    })
+    .select()
+    .single();
+
+  if (insErr || !newTemplate) return { error: insErr?.message ?? "Erreur lors de la duplication" };
+
+  // 4. Duplicate all fields
+  if (sourceFields && sourceFields.length > 0) {
+    const newFields = sourceFields.map((f: any) => ({
+      form_template_id: newTemplate.id,
+      key: f.key,
+      label: f.label,
+      helper_text: f.helper_text,
+      placeholder: f.placeholder,
+      field_type: f.field_type,
+      required: f.required,
+      options: f.options,
+      width: f.width,
+      order_index: f.order_index,
+    }));
+    await admin.from("form_fields").insert(newFields);
+  }
+
+  revalidatePath(CONFIGURATION_PATH);
+  revalidatePath(FORMULAIRES_PATH);
+  revalidatePath(COACHING_PATH);
+  return { success: true, template: newTemplate as FormTemplate };
+}
