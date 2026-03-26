@@ -3289,28 +3289,106 @@ function EditUserModal({
             </div>
           </div>
 
-          {/* Accès — simple summary */}
-          {groupeId && inheritedAccessIds.length > 0 && (
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Accès (via la classe)</label>
-              <div className="rounded-xl p-3" style={{ backgroundColor: "rgba(52,211,153,0.05)", border: "1px solid rgba(52,211,153,0.15)" }}>
-                <div className="flex flex-wrap gap-1.5">
-                  {inheritedAccessIds.map(id => {
-                    const d = dossiers.find(dd => dd.id === id);
-                    if (!d) return null;
+          {/* Accès individuels — checkbox tree like classes */}
+          {groupeId && (() => {
+            // Find the university dossier for this group
+            const grp = groupes.find(g => g.id === groupeId);
+            const uniDossier = grp?.formation_dossier_id ? dossiers.find(d => d.id === grp.formation_dossier_id) : null;
+            if (!uniDossier) return null;
+
+            // Get children of the university (semesters, modules)
+            const children = dossiers.filter(d => d.parent_id === uniDossier.id).sort((a, b) => a.order_index - b.order_index);
+
+            // Merged access: inherited from class + personal
+            const classAccessSet = new Set(inheritedAccessIds);
+            const personalAccessSet = new Set(personalAccessIds);
+            const excludedSet = new Set(excludedInheritedAccessIds);
+
+            return (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  Accès au contenu
+                </label>
+                <p className="text-[9px] mb-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  🟢 = accès via la classe · 🟡 = accès perso · Décochez pour retirer un accès hérité
+                </p>
+                <div className="rounded-xl p-3 space-y-0.5" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {children.map(child => {
+                    const subChildren = dossiers.filter(d => d.parent_id === child.id).sort((a, b) => a.order_index - b.order_index);
+                    const childMeta = DOSSIER_TYPE_META[child.dossier_type] as { shortLabel?: string } | undefined;
+                    const isClassAccess = classAccessSet.has(child.id);
+                    const isPersonalAccess = personalAccessSet.has(child.id);
+                    const isExcluded = excludedSet.has(child.id);
+                    const hasAccess = (isClassAccess && !isExcluded) || isPersonalAccess;
+
                     return (
-                      <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: "rgba(52,211,153,0.1)", color: "#6EE7B7" }}>
-                        {d.name}
-                      </span>
+                      <details key={child.id} className="group/sem">
+                        <summary className="flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: hasAccess ? "rgba(52,211,153,0.04)" : "transparent" }}>
+                          {subChildren.length > 0 && <ChevronRight size={12} className="text-white/30 transition-transform group-open/sem:rotate-90 shrink-0" />}
+                          {subChildren.length === 0 && <span className="w-3" />}
+                          <input
+                            type="checkbox"
+                            checked={hasAccess}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              if (isClassAccess && !isExcluded) {
+                                // Has access via class → exclude it
+                                setExcludedInheritedAccessIds(prev => [...prev, child.id]);
+                              } else if (isExcluded) {
+                                // Was excluded → remove exclusion
+                                setExcludedInheritedAccessIds(prev => prev.filter(id => id !== child.id));
+                              } else if (isPersonalAccess) {
+                                // Has personal access → remove it
+                                setPersonalAccessIds(prev => prev.filter(id => id !== child.id));
+                              } else {
+                                // No access → add personal
+                                setPersonalAccessIds(prev => [...prev, child.id]);
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4 rounded border-gray-500 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm font-medium flex-1" style={{ color: hasAccess ? "white" : "rgba(255,255,255,0.5)" }}>{child.name}</span>
+                          {isClassAccess && !isExcluded && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(52,211,153,0.15)", color: "#6EE7B7" }}>classe</span>}
+                          {isPersonalAccess && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#E3C286" }}>perso</span>}
+                          {isExcluded && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#FCA5A5" }}>retiré</span>}
+                          <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>{childMeta?.shortLabel ?? ""}</span>
+                        </summary>
+                        {subChildren.length > 0 && (
+                          <div className="ml-9 space-y-0.5 pb-1">
+                            {subChildren.map(sub => {
+                              const subMeta2 = DOSSIER_TYPE_META[sub.dossier_type] as { shortLabel?: string } | undefined;
+                              const subIsClass = classAccessSet.has(sub.id);
+                              const subIsPersonal = personalAccessSet.has(sub.id);
+                              const subIsExcluded = excludedSet.has(sub.id);
+                              const subHasAccess = (subIsClass && !subIsExcluded) || subIsPersonal;
+                              return (
+                                <label key={sub.id} className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer" style={{ backgroundColor: subHasAccess ? "rgba(52,211,153,0.03)" : "transparent" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={subHasAccess}
+                                    onChange={() => {
+                                      if (subIsClass && !subIsExcluded) setExcludedInheritedAccessIds(prev => [...prev, sub.id]);
+                                      else if (subIsExcluded) setExcludedInheritedAccessIds(prev => prev.filter(id => id !== sub.id));
+                                      else if (subIsPersonal) setPersonalAccessIds(prev => prev.filter(id => id !== sub.id));
+                                      else setPersonalAccessIds(prev => [...prev, sub.id]);
+                                    }}
+                                    className="w-3.5 h-3.5 rounded border-gray-500 text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <span className="text-xs flex-1" style={{ color: subHasAccess ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)" }}>{sub.name}</span>
+                                  <span className="text-[8px]" style={{ color: "rgba(255,255,255,0.2)" }}>{subMeta2?.shortLabel ?? ""}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </details>
                     );
                   })}
                 </div>
-                <p className="text-[9px] mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
-                  Les accès sont gérés via la classe. Pour modifier, va dans l&apos;onglet Administration → clique sur l&apos;université.
-                </p>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {role === "prof" && (
             <div>
