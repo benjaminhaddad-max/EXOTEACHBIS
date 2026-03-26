@@ -313,34 +313,57 @@ function PlanningSidebar({
   selectedGroupeId: string | null;
   onSelect: (id: string | null) => void;
 }) {
-  // Build offer → groups mapping via formation_dossier_id
-  // Offers are dossiers with dossier_type = "offer"
+  // Hierarchy: Offer → University → Classes (groupes)
+  // Groups are linked to universities via formation_dossier_id
+  // Universities have parent_id pointing to offers
+
   const offers = useMemo(
     () => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index),
     [dossiers]
   );
 
-  // Groups by formation_dossier_id
-  const groupsByOffer = useMemo(() => {
+  const universities = useMemo(
+    () => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index),
+    [dossiers]
+  );
+
+  // Universities grouped by their parent offer
+  const unisByOffer = useMemo(() => {
+    const map = new Map<string, Dossier[]>();
+    for (const u of universities) {
+      if (u.parent_id) {
+        if (!map.has(u.parent_id)) map.set(u.parent_id, []);
+        map.get(u.parent_id)!.push(u);
+      }
+    }
+    return map;
+  }, [universities]);
+
+  // Groups by their formation_dossier_id (which is a university id)
+  const groupsByUni = useMemo(() => {
     const map = new Map<string, Groupe[]>();
     for (const g of groupes) {
-      const key = g.formation_dossier_id;
-      if (key) {
-        if (!map.has(key)) map.set(key, []);
-        map.get(key)!.push(g);
+      if (g.formation_dossier_id) {
+        if (!map.has(g.formation_dossier_id)) map.set(g.formation_dossier_id, []);
+        map.get(g.formation_dossier_id)!.push(g);
       }
     }
     return map;
   }, [groupes]);
 
-  // Groups with no formation_dossier_id (orphan)
   const orphanGroupes = useMemo(
     () => groupes.filter(g => !g.formation_dossier_id),
     [groupes]
   );
 
-  // Auto-expand all offers
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(offers.map(o => o.id)));
+  // Auto-expand all offers + universities that have groups
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const ids = new Set(offers.map(o => o.id));
+    for (const u of universities) {
+      if ((groupsByUni.get(u.id) ?? []).length > 0) ids.add(u.id);
+    }
+    return ids;
+  });
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -350,12 +373,35 @@ function PlanningSidebar({
     });
   };
 
-  const totalEvents = (groupeId: string | null) => groupeId; // just for UI meaning
+  // Render a group button
+  const GroupeButton = ({ g, indent }: { g: Groupe; indent: number }) => {
+    const isSelected = selectedGroupeId === g.id;
+    return (
+      <button
+        onClick={() => onSelect(isSelected ? null : g.id)}
+        className="w-full flex items-center gap-2 pr-2 py-1.5 rounded-lg transition-all text-left"
+        style={{
+          paddingLeft: indent,
+          backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : "transparent",
+          borderLeft: isSelected ? "2px solid #C9A84C" : "2px solid transparent",
+        }}
+        onMouseOver={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+        onMouseOut={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+      >
+        <span className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>
+          {g.name[0]?.toUpperCase()}
+        </span>
+        <span className="flex-1 text-[11px] truncate font-medium" style={{ color: isSelected ? "#E3C286" : "rgba(255,255,255,0.65)" }}>
+          {g.name}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div
       className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full"
-      style={{ width: 220, backgroundColor: "rgba(0,0,0,0.15)" }}
+      style={{ width: 240, backgroundColor: "rgba(0,0,0,0.15)" }}
     >
       {/* Header */}
       <div className="px-4 pt-4 pb-2 shrink-0">
@@ -382,18 +428,17 @@ function PlanningSidebar({
         </button>
       </div>
 
-      {/* Offers + their groups */}
+      {/* Offer → University → Groups */}
       <div className="px-3 pb-4 space-y-0.5 flex-1">
         {offers.map(offer => {
-          const offerGroups = groupsByOffer.get(offer.id) ?? [];
-          const isOpen = expanded.has(offer.id);
+          const offerUnis = unisByOffer.get(offer.id) ?? [];
+          const isOfferOpen = expanded.has(offer.id);
           return (
             <div key={offer.id}>
               {/* Offer row */}
               <button
                 onClick={() => toggleExpand(offer.id)}
                 className="w-full flex items-center gap-2 px-2 py-2 rounded-lg transition-all"
-                style={{ color: "rgba(255,255,255,0.7)" }}
                 onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
                 onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
               >
@@ -403,96 +448,53 @@ function PlanningSidebar({
                 <span className="flex-1 text-left text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>
                   {offer.name}
                 </span>
-                <ChevronDown
-                  size={11}
-                  style={{
-                    color: "rgba(255,255,255,0.3)",
-                    transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)",
-                    transition: "transform 0.2s",
-                    flexShrink: 0,
-                  }}
-                />
+                <ChevronDown size={11} style={{ color: "rgba(255,255,255,0.3)", transform: isOfferOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s", flexShrink: 0 }} />
               </button>
 
-              {/* Groups under this offer */}
-              {isOpen && offerGroups.length > 0 && (
-                <div className="ml-2 space-y-0.5 mt-0.5">
-                  {offerGroups.map(g => {
-                    const isSelected = selectedGroupeId === g.id;
-                    return (
-                      <button
-                        key={g.id}
-                        onClick={() => onSelect(isSelected ? null : g.id)}
-                        className="w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-lg transition-all text-left"
-                        style={{
-                          backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : "transparent",
-                          borderLeft: isSelected ? "2px solid #C9A84C" : "2px solid transparent",
-                        }}
-                        onMouseOver={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                        onMouseOut={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
-                      >
-                        <span
-                          className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                          style={{ backgroundColor: g.color }}
-                        >
-                          {g.name[0]?.toUpperCase()}
-                        </span>
-                        <span
-                          className="flex-1 text-[11px] truncate font-medium"
-                          style={{ color: isSelected ? "#E3C286" : "rgba(255,255,255,0.65)" }}
-                        >
-                          {g.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Universities under this offer */}
+              {isOfferOpen && offerUnis.map(uni => {
+                const uniGroups = groupsByUni.get(uni.id) ?? [];
+                const isUniOpen = expanded.has(uni.id);
+                return (
+                  <div key={uni.id} className="ml-1">
+                    {/* University row */}
+                    <button
+                      onClick={() => toggleExpand(uni.id)}
+                      className="w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-lg transition-all"
+                      onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+                      onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                    >
+                      <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(167,139,250,0.18)" }}>
+                        <Building2 size={9} style={{ color: "#A78BFA" }} />
+                      </div>
+                      <span className="flex-1 text-left text-[10px] font-semibold truncate" style={{ color: "#A78BFA" }}>
+                        {uni.name}
+                      </span>
+                      {uniGroups.length > 0 && (
+                        <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isUniOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s", flexShrink: 0 }} />
+                      )}
+                    </button>
 
-              {isOpen && offerGroups.length === 0 && (
-                <p className="pl-9 pb-1 text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>
-                  Aucune classe
-                </p>
-              )}
+                    {/* Groups under this university */}
+                    {isUniOpen && uniGroups.map(g => (
+                      <GroupeButton key={g.id} g={g} indent={28} />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
 
-        {/* Orphan groups (no formation) */}
+        {/* Orphan groups */}
         {orphanGroupes.length > 0 && (
           <div>
             <p className="px-2 pt-3 pb-1 text-[9px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>
               Sans formation
             </p>
-            {orphanGroupes.map(g => {
-              const isSelected = selectedGroupeId === g.id;
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => onSelect(isSelected ? null : g.id)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
-                  style={{
-                    backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : "transparent",
-                    borderLeft: isSelected ? "2px solid #C9A84C" : "2px solid transparent",
-                  }}
-                  onMouseOver={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                  onMouseOut={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
-                >
-                  <span
-                    className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                    style={{ backgroundColor: g.color }}
-                  >
-                    {g.name[0]?.toUpperCase()}
-                  </span>
-                  <span
-                    className="flex-1 text-[11px] truncate font-medium"
-                    style={{ color: isSelected ? "#E3C286" : "rgba(255,255,255,0.65)" }}
-                  >
-                    {g.name}
-                  </span>
-                </button>
-              );
-            })}
+            {orphanGroupes.map(g => (
+              <GroupeButton key={g.id} g={g} indent={8} />
+            ))}
           </div>
         )}
       </div>
