@@ -12,6 +12,7 @@ import { MathText } from "@/components/ui/math-text";
 import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie } from "@/app/(admin)/admin/pedagogie/actions";
 import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
+import { FlashcardsSection } from "./flashcards-section";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -679,7 +680,7 @@ export function DossierExercicesView({
   allDossiers: Dossier[];
   onNewSerie?: (type: SerieType) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<SerieType>("annales");
+  const [activeTab, setActiveTab] = useState<SerieType | "flashcards">("annales");
   const [series, setSeries] = useState<SerieSummary[]>([]);
   const [cours, setCours] = useState<CoursBasic[]>([]);
   const [matiereId, setMatiereId] = useState<string | null>(null);
@@ -765,7 +766,7 @@ export function DossierExercicesView({
         </button>
       </div>
 
-      {/* 4 Type Tabs */}
+      {/* 5 Type Tabs (4 series + flashcards) */}
       <div className="shrink-0 flex border-b border-white/8">
         {TYPES.map((t) => {
           const cfg = TYPE_CONFIG[t];
@@ -779,11 +780,19 @@ export function DossierExercicesView({
             </button>
           );
         })}
+        {/* Flashcards tab */}
+        <button onClick={() => setActiveTab("flashcards")}
+          className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === "flashcards" ? "border-current text-indigo-300" : "border-transparent text-white/30 hover:text-white/50"}`}>
+          <Layers size={14} />
+          <span className="text-[9px] font-bold mt-1 leading-tight">Flashcards</span>
+        </button>
       </div>
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {loading ? (
+        {activeTab === "flashcards" ? (
+          <FlashcardsSection matiereId={dossierId} cours={cours.map(c => ({ id: c.id, name: c.name }))} />
+        ) : loading ? (
           <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-white/30" /></div>
         ) : activeTab === "annales" ? (
           /* ─── Annales with year bubbles ─── */
