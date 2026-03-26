@@ -5,7 +5,7 @@ import {
   Users, Search, Pencil, Trash2, X, Check,
   AlertCircle, Loader2, Plus, ShieldCheck, GraduationCap,
   BookOpen, Crown, ChevronDown, ChevronRight, Folder,
-  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2,
+  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2, FileText,
 } from "lucide-react";
 import type {
   Profile,
@@ -561,7 +561,7 @@ export function UtilisateursShell({
         {view === "dossier_summary" && selectedDossierId && (() => {
           const dossier = initialDossiers.find(d => d.id === selectedDossierId);
           if (!dossier) return null;
-          const meta = DOSSIER_TYPE_META[dossier.dossier_type];
+          const meta = DOSSIER_TYPE_META[dossier.dossier_type] as { shortLabel?: string } | undefined;
 
           // Get groups directly linked to this dossier
           const directGroups = groupes.filter(g => g.formation_dossier_id === dossier.id);
@@ -652,26 +652,100 @@ export function UtilisateursShell({
                           </span>
                         </summary>
 
-                        <div className="border-t border-gray-100 px-2 py-2">
-                          <p className="text-[10px] text-gray-400 px-2 mb-2">
-                            Cochez les dossiers auxquels cette classe aura accès :
+                        <div className="border-t border-gray-100 px-3 py-3">
+                          <p className="text-[10px] text-gray-400 mb-2">
+                            Cochez les contenus auxquels cette classe aura accès :
                           </p>
-                          <AccessScopeTree
-                            dossierTree={subTree.length > 0 ? subTree : dossierTree}
-                            dossierList={initialDossiers}
-                            selectedIds={groupAccessIds}
-                            onChange={(nextIds) => {
+                          {/* Simple checkbox tree — children of the selected dossier */}
+                          {(() => {
+                            const children = initialDossiers.filter(d => d.parent_id === dossier.id).sort((a, b) => a.order_index - b.order_index);
+                            const accessSet = new Set(groupAccessIds);
+
+                            const toggleAccess = (dossierId: string) => {
+                              const next = accessSet.has(dossierId)
+                                ? groupAccessIds.filter(id => id !== dossierId)
+                                : [...groupAccessIds, dossierId];
                               startTransition(async () => {
-                                await saveGroupeDossierAcces(g.id, nextIds);
+                                await saveGroupeDossierAcces(g.id, next);
                                 setGroupeDossierAcces(prev => [
                                   ...prev.filter(a => a.groupe_id !== g.id),
-                                  ...nextIds.map(did => ({ groupe_id: g.id, dossier_id: did, created_at: "" }))
+                                  ...next.map(did => ({ groupe_id: g.id, dossier_id: did, created_at: "" }))
                                 ]);
-                                showToast("Accès mis à jour", "success");
                               });
-                            }}
-                            accent="green"
-                          />
+                            };
+
+                            return (
+                              <div className="space-y-1">
+                                {children.map(child => {
+                                  const subChildren = initialDossiers.filter(d => d.parent_id === child.id).sort((a, b) => a.order_index - b.order_index);
+                                  const childMeta = DOSSIER_TYPE_META[child.dossier_type] as { shortLabel?: string } | undefined;
+                                  const childCours = (initialCours ?? []).filter(c => c.dossier_id === child.id);
+                                  return (
+                                    <div key={child.id}>
+                                      <label className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={accessSet.has(child.id)}
+                                          onChange={() => toggleAccess(child.id)}
+                                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                        <span className="text-sm font-medium text-gray-800">{child.name}</span>
+                                        <span className="text-[9px] text-gray-400 uppercase">{childMeta?.shortLabel ?? ""}</span>
+                                      </label>
+                                      {/* Sub-level: matières under semester */}
+                                      {subChildren.length > 0 && (
+                                        <div className="ml-8 space-y-0.5">
+                                          {subChildren.map(sub => {
+                                            const subMeta = DOSSIER_TYPE_META[sub.dossier_type] as { shortLabel?: string } | undefined;
+                                            const subCours2 = (initialCours ?? []).filter(c => c.dossier_id === sub.id);
+                                            return (
+                                              <div key={sub.id}>
+                                                <label className="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-50 cursor-pointer">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={accessSet.has(sub.id)}
+                                                    onChange={() => toggleAccess(sub.id)}
+                                                    className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                                  />
+                                                  <span className="text-xs text-gray-700">{sub.name}</span>
+                                                  <span className="text-[8px] text-gray-400 uppercase">{subMeta?.shortLabel ?? ""}</span>
+                                                </label>
+                                                {/* Cours/chapters under matière */}
+                                                {subCours2.length > 0 && (
+                                                  <div className="ml-7 space-y-0">
+                                                    {subCours2.map(c => (
+                                                      <div key={c.id} className="flex items-center gap-2 py-0.5 px-2 text-[11px] text-gray-500">
+                                                        <FileText size={10} className="text-gray-300 shrink-0" />
+                                                        {c.name}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                      {/* Cours directly under this child (e.g. chapters under a matière) */}
+                                      {childCours.length > 0 && subChildren.length === 0 && (
+                                        <div className="ml-8 space-y-0">
+                                          {childCours.map(c => (
+                                            <div key={c.id} className="flex items-center gap-2 py-0.5 px-2 text-[11px] text-gray-500">
+                                              <FileText size={10} className="text-gray-300 shrink-0" />
+                                              {c.name}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {children.length === 0 && (
+                                  <p className="text-xs text-gray-400 py-2">Aucun contenu sous ce dossier</p>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Members */}
                           {members.length > 0 && (
