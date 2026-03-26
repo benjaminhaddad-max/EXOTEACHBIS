@@ -13,11 +13,12 @@ type Deck = {
 };
 
 interface FlashcardsSectionProps {
-  matiereId: string;
+  /** The dossier (UE/matière) ID — used to find matieres inside */
+  dossierId: string;
   cours: { id: string; name: string }[];
 }
 
-export function FlashcardsSection({ matiereId, cours }: FlashcardsSectionProps) {
+export function FlashcardsSection({ dossierId, cours }: FlashcardsSectionProps) {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedDeck, setExpandedDeck] = useState<string | null>(null);
@@ -36,28 +37,42 @@ export function FlashcardsSection({ matiereId, cours }: FlashcardsSectionProps) 
 
   const supabase = createClient();
 
+  const [matiereIds, setMatiereIds] = useState<string[]>([]);
+
   const loadDecks = async () => {
     setLoading(true);
-    // Get decks for this matière OR any cours in this matière
-    const coursIds = cours.map(c => c.id);
-    let query = supabase
-      .from("flashcard_decks")
-      .select("*")
-      .order("created_at", { ascending: false });
 
-    // OR filter: matiere_id matches OR cours_id is in the list
-    if (coursIds.length > 0) {
-      query = query.or(`matiere_id.eq.${matiereId},cours_id.in.(${coursIds.join(",")})`);
-    } else {
-      query = query.eq("matiere_id", matiereId);
+    // 1. Resolve matière IDs inside this dossier
+    const { data: matieres } = await supabase
+      .from("matieres")
+      .select("id")
+      .eq("dossier_id", dossierId);
+    const matIds = (matieres || []).map(m => m.id);
+    setMatiereIds(matIds);
+
+    // 2. Build OR filter: matiere_id in resolved matières OR cours_id in cours list
+    const coursIds = cours.map(c => c.id);
+    const conditions: string[] = [];
+    if (matIds.length > 0) conditions.push(`matiere_id.in.(${matIds.join(",")})`);
+    if (coursIds.length > 0) conditions.push(`cours_id.in.(${coursIds.join(",")})`);
+
+    if (conditions.length === 0) {
+      setDecks([]);
+      setLoading(false);
+      return;
     }
 
-    const { data } = await query;
+    const { data } = await supabase
+      .from("flashcard_decks")
+      .select("*")
+      .or(conditions.join(","))
+      .order("created_at", { ascending: false });
+
     setDecks((data as Deck[]) || []);
     setLoading(false);
   };
 
-  useEffect(() => { loadDecks(); }, [matiereId]);
+  useEffect(() => { loadDecks(); }, [dossierId]);
 
   const loadCards = async (deckId: string) => {
     const { data } = await supabase
@@ -83,7 +98,7 @@ export function FlashcardsSection({ matiereId, cours }: FlashcardsSectionProps) 
     await createDeck({
       name: newName.trim(),
       description: newDesc.trim() || undefined,
-      matiere_id: matiereId,
+      matiere_id: matiereIds[0] || null,
       cours_id: newCoursId || null,
     });
     setNewName(""); setNewDesc(""); setNewCoursId(""); setShowCreate(false);

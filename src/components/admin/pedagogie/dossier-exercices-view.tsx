@@ -791,7 +791,7 @@ export function DossierExercicesView({
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === "flashcards" ? (
-          <FlashcardsSection matiereId={dossierId} cours={cours.map(c => ({ id: c.id, name: c.name }))} />
+          <FlashcardsSection dossierId={dossierId} cours={cours.map(c => ({ id: c.id, name: c.name }))} />
         ) : loading ? (
           <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-white/30" /></div>
         ) : activeTab === "annales" ? (
