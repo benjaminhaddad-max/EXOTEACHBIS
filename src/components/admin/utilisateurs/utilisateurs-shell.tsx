@@ -537,8 +537,22 @@ export function UtilisateursShell({
           <AdministrationView
             formationOffers={formationOffers}
             dossierNamePresets={dossierNamePresets}
+            offerBuckets={offerBuckets}
+            allUsers={users}
+            allGroupes={groupes}
+            dossierTree={dossierTree}
+            dossierList={initialDossiers}
+            groupeAccessById={groupeAccessById}
             isPending={isPending}
             onSave={handleSaveAdministration}
+            onCreateGroupe={(formationDossierId) => setModal({ type: "create_groupe", parentId: null, formationDossierId })}
+            onEditGroupe={(groupe) => setModal({ type: "edit_groupe", groupe })}
+            onDeleteGroupe={handleDeleteGroupe}
+            onEditUser={(user) => setModal({ type: "edit_user", user })}
+            onRemoveUser={(user) => handleSaveUser(user.id, { groupe_id: null })}
+            onAddUser={(userId, groupeId) => handleSaveUser(userId, { groupe_id: groupeId })}
+            onSaveAccess={handleSaveGroupeAccess}
+            showToast={showToast}
           />
         )}
       </div>
@@ -598,16 +612,46 @@ export function UtilisateursShell({
 function AdministrationView({
   formationOffers,
   dossierNamePresets,
+  offerBuckets,
+  allUsers,
+  allGroupes,
+  dossierTree,
+  dossierList,
+  groupeAccessById,
   isPending,
   onSave,
+  onCreateGroupe,
+  onEditGroupe,
+  onDeleteGroupe,
+  onEditUser,
+  onRemoveUser,
+  onAddUser,
+  onSaveAccess,
+  showToast,
 }: {
   formationOffers: FormationOfferSetting[];
   dossierNamePresets: DossierNamePreset[];
+  offerBuckets: OfferGroupBucket[];
+  allUsers: Profile[];
+  allGroupes: Groupe[];
+  dossierTree: DossierNode[];
+  dossierList: Dossier[];
+  groupeAccessById: Map<string, string[]>;
   isPending: boolean;
   onSave: (formationOffers: FormationOfferSetting[], dossierNamePresets: DossierNamePreset[]) => void;
+  onCreateGroupe: (formationDossierId: string | null) => void;
+  onEditGroupe: (groupe: Groupe) => void;
+  onDeleteGroupe: (id: string) => void;
+  onEditUser: (user: Profile) => void;
+  onRemoveUser: (user: Profile) => void;
+  onAddUser: (userId: string, groupeId: string) => void;
+  onSaveAccess: (groupeId: string, dossierIds: string[]) => void;
+  showToast: (msg: string, kind: "success" | "error") => void;
 }) {
   const [offers, setOffers] = useState<FormationOfferSetting[]>(formationOffers);
   const [presets, setPresets] = useState<DossierNamePreset[]>(dossierNamePresets);
+  const [selectedOfferCode, setSelectedOfferCode] = useState<string>(offerBuckets[0]?.code ?? "");
+  const [selectedAdminGroupeId, setSelectedAdminGroupeId] = useState<string | null>(offerBuckets[0]?.groups[0]?.id ?? null);
 
   const slugifyOfferCode = (value: string) =>
     value
@@ -620,6 +664,33 @@ function AdministrationView({
 
   useEffect(() => setOffers(formationOffers), [formationOffers]);
   useEffect(() => setPresets(dossierNamePresets), [dossierNamePresets]);
+  useEffect(() => {
+    if (!offerBuckets.some((bucket) => bucket.code === selectedOfferCode)) {
+      setSelectedOfferCode(offerBuckets[0]?.code ?? "");
+    }
+  }, [offerBuckets, selectedOfferCode]);
+
+  const selectedOfferBucket = useMemo(
+    () => offerBuckets.find((bucket) => bucket.code === selectedOfferCode) ?? offerBuckets[0] ?? null,
+    [offerBuckets, selectedOfferCode]
+  );
+
+  useEffect(() => {
+    if (!selectedOfferBucket) {
+      setSelectedAdminGroupeId(null);
+      return;
+    }
+
+    const selectedStillExists = selectedOfferBucket.groups.some((group) => group.id === selectedAdminGroupeId);
+    if (!selectedStillExists) {
+      setSelectedAdminGroupeId(selectedOfferBucket.groups[0]?.id ?? null);
+    }
+  }, [selectedAdminGroupeId, selectedOfferBucket]);
+
+  const selectedAdminGroupe = useMemo(
+    () => allGroupes.find((groupe) => groupe.id === selectedAdminGroupeId) ?? null,
+    [allGroupes, selectedAdminGroupeId]
+  );
 
   const normalizedInitialOffers = JSON.stringify(formationOffers);
   const normalizedInitialPresets = JSON.stringify(dossierNamePresets);
@@ -803,6 +874,136 @@ function AdministrationView({
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-white">Offres, classes et accès</h3>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+            Ici tu pilotes les classes rattachées à chaque offre, leurs membres et leurs accès à l&apos;arborescence e-learning.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="space-y-3">
+            {offerBuckets.map((bucket) => {
+              const isSelected = selectedOfferBucket?.code === bucket.code;
+              return (
+                <div
+                  key={bucket.code}
+                  className="rounded-2xl p-3 transition-colors"
+                  style={{
+                    backgroundColor: isSelected ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)",
+                    border: `1px solid ${isSelected ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
+                  }}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOfferCode(bucket.code)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: bucket.color }} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{bucket.label}</p>
+                        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          {bucket.groups.length} classe{bucket.groups.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onCreateGroupe(bucket.rootDossierId)}
+                      className="rounded-lg p-2 text-xs font-semibold"
+                      style={{ backgroundColor: "rgba(201,168,76,0.14)", color: "#F5D78E" }}
+                      title={`Créer une classe dans ${bucket.label}`}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+
+                  {bucket.groups.length === 0 ? (
+                    <p className="rounded-xl px-3 py-2 text-[11px]" style={{ backgroundColor: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.3)" }}>
+                      Aucune classe dans cette offre pour l&apos;instant.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {bucket.groups.map((group) => {
+                        const memberCount = allUsers.filter((user) => user.groupe_id === group.id).length;
+                        const accessCount = (groupeAccessById.get(group.id) ?? []).length;
+                        const selected = selectedAdminGroupeId === group.id;
+                        return (
+                          <button
+                            key={group.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedOfferCode(bucket.code);
+                              setSelectedAdminGroupeId(group.id);
+                            }}
+                            className="w-full rounded-xl px-3 py-2 text-left transition-colors"
+                            style={{
+                              backgroundColor: selected ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                              border: `1px solid ${selected ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                              <span className="truncate text-sm font-medium text-white">{group.name}</span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+                              <span>{memberCount} membre{memberCount !== 1 ? "s" : ""}</span>
+                              <span>{accessCount} accès</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-2xl" style={{ backgroundColor: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            {selectedAdminGroupe ? (
+              <GroupeDetail
+                groupe={selectedAdminGroupe}
+                allGroupes={allGroupes}
+                allUsers={allUsers}
+                dossierTree={dossierTree}
+                dossierList={dossierList}
+                accessIds={groupeAccessById.get(selectedAdminGroupe.id) ?? []}
+                isPending={isPending}
+                onEditGroupe={onEditGroupe}
+                onDeleteGroupe={onDeleteGroupe}
+                onEditUser={onEditUser}
+                onRemoveUser={onRemoveUser}
+                onAddUser={(userId) => onAddUser(userId, selectedAdminGroupe.id)}
+                onSaveAccess={onSaveAccess}
+                showToast={showToast}
+              />
+            ) : (
+              <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
+                <p className="text-sm font-semibold text-white">
+                  {selectedOfferBucket ? `Aucune classe dans ${selectedOfferBucket.label}` : "Aucune offre disponible"}
+                </p>
+                <p className="mt-2 max-w-md text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  Crée une première classe pour cette offre, puis tu pourras y gérer les utilisateurs et les accès aux dossiers de l&apos;arborescence.
+                </p>
+                {selectedOfferBucket && (
+                  <button
+                    type="button"
+                    onClick={() => onCreateGroupe(selectedOfferBucket.rootDossierId)}
+                    className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold"
+                    style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+                  >
+                    Créer une classe
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
