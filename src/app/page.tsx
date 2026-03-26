@@ -25,7 +25,7 @@ export default async function Home() {
   }
 
   if (role === "prof" || role === "coach") {
-    redirect("/admin/annonces");
+    redirect(role === "coach" ? "/admin/coaching" : "/admin/annonces");
   }
 
   redirect("/dashboard");

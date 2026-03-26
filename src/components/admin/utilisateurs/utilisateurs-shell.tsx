@@ -3046,6 +3046,22 @@ function EditUserModal({
   const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState(user.role);
   const [groupeId, setGroupeId] = useState<string | null>(user.groupe_id);
+  // Cascade state for class selector
+  const [selOfferForUser, setSelOfferForUser] = useState(() => {
+    if (!user.groupe_id) return "";
+    const g = groupes.find(gr => gr.id === user.groupe_id);
+    if (!g?.formation_dossier_id) return "";
+    let d = dossiers.find(dd => dd.id === g.formation_dossier_id);
+    while (d) { if (d.dossier_type === "offer") return d.id; d = d.parent_id ? dossiers.find(dd => dd.id === d!.parent_id) : undefined; }
+    return "";
+  });
+  const [selUniForUser, setSelUniForUser] = useState(() => {
+    if (!user.groupe_id) return "";
+    const g = groupes.find(gr => gr.id === user.groupe_id);
+    if (!g?.formation_dossier_id) return "";
+    const d = dossiers.find(dd => dd.id === g.formation_dossier_id);
+    return d?.dossier_type === "university" ? d.id : "";
+  });
   const [filiereId, setFiliereId] = useState<string | null>(user.filiere_id);
   const [personalAccessIds, setPersonalAccessIds] = useState<string[]>(directAccessIds);
   const [excludedInheritedAccessIds, setExcludedInheritedAccessIds] = useState<string[]>(excludedAccessIds);
@@ -3189,25 +3205,72 @@ function EditUserModal({
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Classe / groupe</label>
-              <select
-                value={groupeId ?? ""}
-                onChange={e => setGroupeId(e.target.value || null)}
-                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
-                style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
-              >
-                <option value="">Aucun groupe</option>
-                {groupes.map((g) => {
-                  const formationDossierId = getGroupeInheritedFormationDossierId(g.id, groupeMap);
-                  const groupLabel = formationDossierId
-                    ? `${g.name} · ${getDossierPathLabel(formationDossierId, dossiers)}`
-                    : g.name;
-                  return (
-                    <option key={g.id} value={g.id}>{groupLabel}</option>
-                  );
-                })}
-              </select>
+            <div className="md:col-span-2">
+              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Classe</label>
+              {(() => {
+                const offers = dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
+                const unis = selOfferForUser ? dossiers.filter(d => d.dossier_type === "university" && d.parent_id === selOfferForUser) : [];
+                const classes = selUniForUser ? groupes.filter(g => g.formation_dossier_id === selUniForUser) : [];
+                const currentGroup = groupeId ? groupes.find(g => g.id === groupeId) : null;
+                const currentUni = currentGroup?.formation_dossier_id ? dossiers.find(d => d.id === currentGroup.formation_dossier_id) : null;
+
+                return (
+                  <div className="space-y-2">
+                    {/* Step 1: Formation */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
+                      <button onClick={() => { setSelOfferForUser(""); setSelUniForUser(""); setGroupeId(null); }}
+                        className="px-2.5 py-1 rounded-full text-[11px]"
+                        style={{ backgroundColor: !selOfferForUser ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: !selOfferForUser ? "#E3C286" : "rgba(255,255,255,0.5)", border: !selOfferForUser ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                        Aucune
+                      </button>
+                      {offers.map(o => (
+                        <button key={o.id} onClick={() => { setSelOfferForUser(o.id); setSelUniForUser(""); setGroupeId(null); }}
+                          className="px-2.5 py-1 rounded-full text-[11px]"
+                          style={{ backgroundColor: selOfferForUser === o.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: selOfferForUser === o.id ? "#E3C286" : "rgba(255,255,255,0.5)", border: selOfferForUser === o.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                          {o.name}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Step 2: University */}
+                    {selOfferForUser && unis.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
+                        {unis.map(u => (
+                          <button key={u.id} onClick={() => { setSelUniForUser(u.id); setGroupeId(null); }}
+                            className="px-2.5 py-1 rounded-full text-[11px]"
+                            style={{ backgroundColor: selUniForUser === u.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: selUniForUser === u.id ? "#E3C286" : "rgba(255,255,255,0.5)", border: selUniForUser === u.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                            {u.name.replace("Université ", "")}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Step 3: Class */}
+                    {selUniForUser && classes.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
+                        {classes.map(c => (
+                          <button key={c.id} onClick={() => setGroupeId(c.id)}
+                            className="px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1.5"
+                            style={{ backgroundColor: groupeId === c.id ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.06)", color: groupeId === c.id ? "#6EE7B7" : "rgba(255,255,255,0.5)", border: groupeId === c.id ? "1px solid rgba(52,211,153,0.3)" : "1px solid transparent" }}>
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Current selection summary */}
+                    {groupeId && currentGroup && (
+                      <p className="text-[10px] mt-1" style={{ color: "rgba(52,211,153,0.7)" }}>
+                        ✓ {currentGroup.name}{currentUni ? ` · ${currentUni.name}` : ""}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div>

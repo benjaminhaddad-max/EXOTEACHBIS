@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = pathname === "/login" || pathname === "/register";
   const isApiRoute = pathname.startsWith("/api/");
   const isAdminRoute = pathname.startsWith("/admin");
-  const isScopedStaffAllowedAdminRoute = pathname === "/admin/annonces";
+  const isScopedStaffAllowedAdminRoute = pathname === "/admin/annonces" || pathname === "/admin/coaching";
 
   // Routes API publiques (seed, migrate)
   if (isApiRoute) return supabaseResponse;
@@ -57,7 +57,7 @@ export async function updateSession(request: NextRequest) {
     // Connecté sur page auth → rediriger
     if (isAuthRoute) {
       const url = request.nextUrl.clone();
-      url.pathname = isAdmin ? "/admin/dashboard" : ["prof", "coach"].includes(role) ? "/admin/annonces" : "/dashboard";
+      url.pathname = isAdmin ? "/admin/dashboard" : role === "coach" ? "/admin/coaching" : role === "prof" ? "/admin/annonces" : "/dashboard";
       return NextResponse.redirect(url);
     }
 

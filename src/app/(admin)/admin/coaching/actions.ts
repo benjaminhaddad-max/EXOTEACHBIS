@@ -3,28 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { calculateCoachingStatus } from "@/lib/coaching";
+import { calculateConfidenceScore } from "@/lib/coaching-score";
 import type {
-  CoachingCohort,
-  CoachingIntervention,
-  CoachingInterventionChannel,
-  CoachingInterventionStatus,
-  CoachingMainBlocker,
-  CoachingMentalState,
-  CoachingMomentum,
-  CoachingNote,
-  CoachingNoteType,
-  CoachingProfileType,
-  CoachingStudent,
-  CoachingStudentStatus,
-  CoachingUnderstandingLevel,
-  CoachingWeeklyCheckin,
-  CoachingHoursBucket,
+  CoachingCallBooking,
+  CoachingCallBookingStatus,
+  CoachingCallSlot,
+  CoachingIntakeForm,
+  CoachingMentality,
+  CoachingMethodLevel,
+  CoachingSchoolLevel,
+  CoachingStudentProfile,
+  CoachingWorkCapacity,
 } from "@/types/database";
 
-const PATH = "/admin/coaching";
+const STUDENT_PATH = "/coaching";
+const ADMIN_PATH = "/admin/coaching";
 
-async function ensureAdminAccess() {
+async function getAuthenticatedProfile() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -36,304 +31,335 @@ async function ensureAdminAccess() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("*")
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["admin", "superadmin"].includes(profile.role)) {
+  if (!profile) {
+    return { error: "Profil introuvable" as const };
+  }
+
+  return { user, profile };
+}
+
+async function requireStudent() {
+  const auth = await getAuthenticatedProfile();
+  if ("error" in auth) return auth;
+  if (auth.profile.role !== "eleve") {
+    return { error: "Accès réservé aux élèves" as const };
+  }
+  return auth;
+}
+
+async function requireCoachOrAdmin() {
+  const auth = await getAuthenticatedProfile();
+  if ("error" in auth) return auth;
+  if (!["admin", "superadmin", "coach"].includes(auth.profile.role)) {
     return { error: "Accès refusé" as const };
   }
-
-  return { userId: user.id };
+  return auth;
 }
 
-export async function createCoachingCohort(data: {
-  name: string;
-  season: string;
-  status?: "draft" | "active" | "archived";
-}) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
-
-  const admin = createAdminClient();
-  const { data: cohort, error } = await admin
-    .from("coaching_cohorts")
-    .insert({
-      name: data.name.trim(),
-      season: data.season.trim(),
-      status: data.status ?? "draft",
-    })
-    .select("*")
-    .single();
-
-  if (error) return { error: error.message };
-
-  revalidatePath(PATH);
-  return { success: true, cohort: cohort as CoachingCohort };
+function canCoachAccessStudent(coachGroupId: string | null, studentGroupId: string | null) {
+  return Boolean(coachGroupId && studentGroupId && coachGroupId === studentGroupId);
 }
 
-export async function addStudentsToCoachingCohort(data: {
-  cohortId: string;
-  studentIds: string[];
+export async function submitStudentCoachingForm(data: {
+  phone: string;
+  city: string;
+  bac_specialties: string;
+  parcours_label: string;
+  why_medicine: string;
+  expectations: string;
+  main_worry: string;
+  current_method_description: string;
+  strengths: string;
+  weaknesses: string;
+  availability_notes: string;
 }) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
-
-  const uniqueStudentIds = [...new Set(data.studentIds.filter(Boolean))];
-  if (uniqueStudentIds.length === 0) {
-    return { error: "Aucun élève sélectionné" };
+  const auth = await requireStudent();
+  if ("error" in auth) return auth;
+  if (!auth.profile.groupe_id) {
+    return { error: "Tu dois être attribué à une classe avant de remplir ce formulaire." };
   }
 
   const admin = createAdminClient();
-  const rows = uniqueStudentIds.map((studentId) => ({
-    cohort_id: data.cohortId,
-    student_id: studentId,
-    coach_id: null,
-    profile_type: "average_motivated" as CoachingProfileType,
-    current_status: "orange" as CoachingStudentStatus,
-    onboarding_completed: false,
-    risk_notes: null,
-  }));
+  const payload = {
+    student_id: auth.user.id,
+    groupe_id: auth.profile.groupe_id,
+    phone: data.phone.trim() || null,
+    city: data.city.trim() || null,
+    bac_specialties: data.bac_specialties.trim() || null,
+    parcours_label: data.parcours_label.trim() || null,
+    why_medicine: data.why_medicine.trim() || null,
+    expectations: data.expectations.trim() || null,
+    main_worry: data.main_worry.trim() || null,
+    current_method_description: data.current_method_description.trim() || null,
+    strengths: data.strengths.trim() || null,
+    weaknesses: data.weaknesses.trim() || null,
+    availability_notes: data.availability_notes.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
 
-  const { data: insertedRows, error } = await admin
-    .from("coaching_students")
-    .upsert(rows, { onConflict: "cohort_id,student_id" })
-    .select("*");
-
-  if (error) return { error: error.message };
-
-  revalidatePath(PATH);
-  return { success: true, rows: (insertedRows ?? []) as CoachingStudent[] };
-}
-
-export async function updateCoachingStudent(data: {
-  id: string;
-  coach_id: string | null;
-  profile_type: CoachingProfileType;
-  current_status: CoachingStudentStatus;
-  onboarding_completed: boolean;
-  risk_notes: string | null;
-}) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
-
-  const admin = createAdminClient();
-  const { data: updatedRow, error } = await admin
-    .from("coaching_students")
-    .update({
-      coach_id: data.coach_id,
-      profile_type: data.profile_type,
-      current_status: data.current_status,
-      onboarding_completed: data.onboarding_completed,
-      risk_notes: data.risk_notes?.trim() || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", data.id)
+  const { data: form, error } = await admin
+    .from("coaching_intake_forms")
+    .upsert(payload, { onConflict: "student_id" })
     .select("*")
     .single();
 
   if (error) return { error: error.message };
 
-  revalidatePath(PATH);
-  return { success: true, row: updatedRow as CoachingStudent };
+  revalidatePath(STUDENT_PATH);
+  revalidatePath(ADMIN_PATH);
+  return { success: true, form: form as CoachingIntakeForm };
 }
 
-export async function createCoachingWeeklyCheckin(data: {
-  cohortId: string;
-  coachingStudentId: string;
-  studentId: string;
-  weekStart: string;
-  hours_bucket: CoachingHoursBucket;
-  understanding_level: CoachingUnderstandingLevel;
-  mental_state: CoachingMentalState;
-  main_blocker: CoachingMainBlocker;
-  momentum: CoachingMomentum;
-  free_text?: string | null;
-}) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
+export async function bookStudentCoachingCall(slotId: string) {
+  const auth = await requireStudent();
+  if ("error" in auth) return auth;
+  if (!auth.profile.groupe_id) {
+    return { error: "Tu dois être attribué à une classe avant de réserver un appel." };
+  }
 
   const admin = createAdminClient();
-  const { data: previousCheckin } = await admin
-    .from("coaching_weekly_checkins")
-    .select("momentum")
-    .eq("student_id", data.studentId)
-    .lt("week_start", data.weekStart)
-    .order("week_start", { ascending: false })
-    .limit(1)
+
+  const [{ data: form }, { data: slot, error: slotError }, { data: existingBooking }] = await Promise.all([
+    admin.from("coaching_intake_forms").select("*").eq("student_id", auth.user.id).maybeSingle(),
+    admin.from("coaching_call_slots").select("*").eq("id", slotId).maybeSingle(),
+    admin
+      .from("coaching_call_bookings")
+      .select("*")
+      .eq("student_id", auth.user.id)
+      .in("status", ["booked", "completed"])
+      .order("booked_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (!form) {
+    return { error: "Tu dois d'abord remplir le formulaire avant de réserver ton appel." };
+  }
+  if (slotError || !slot) {
+    return { error: slotError?.message ?? "Créneau introuvable." };
+  }
+  if (slot.groupe_id !== auth.profile.groupe_id) {
+    return { error: "Ce créneau n'appartient pas à ta classe." };
+  }
+  if (existingBooking && existingBooking.status !== "cancelled") {
+    return { error: "Tu as déjà un rendez-vous coaching réservé." };
+  }
+
+  const { data: alreadyTaken } = await admin
+    .from("coaching_call_bookings")
+    .select("id")
+    .eq("slot_id", slotId)
     .maybeSingle();
 
-  const evaluation = calculateCoachingStatus({
-    hoursBucket: data.hours_bucket,
-    understanding: data.understanding_level,
-    mentalState: data.mental_state,
-    mainBlocker: data.main_blocker,
-    momentum: data.momentum,
-    previousMomentum: (previousCheckin?.momentum as CoachingMomentum | null | undefined) ?? null,
+  if (alreadyTaken) {
+    return { error: "Ce créneau vient d'être réservé." };
+  }
+
+  const { data: booking, error } = await admin
+    .from("coaching_call_bookings")
+    .insert({
+      slot_id: slot.id,
+      student_id: auth.user.id,
+      coach_id: slot.coach_id,
+      groupe_id: slot.groupe_id,
+      intake_form_id: form.id,
+      status: "booked",
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(STUDENT_PATH);
+  revalidatePath(ADMIN_PATH);
+  return { success: true, booking: booking as CoachingCallBooking };
+}
+
+export async function createCoachCallSlot(data: {
+  coach_id?: string;
+  groupe_id?: string;
+  start_at: string;
+  end_at: string;
+  location?: string;
+  notes?: string;
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const isCoach = auth.profile.role === "coach";
+  const coachId = isCoach ? auth.user.id : data.coach_id;
+  const groupeId = isCoach ? auth.profile.groupe_id : data.groupe_id;
+
+  if (!coachId || !groupeId) {
+    return { error: "Coach et classe requis pour créer un créneau." };
+  }
+
+  const startAt = new Date(data.start_at);
+  const endAt = new Date(data.end_at);
+
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    return { error: "Dates de créneau invalides." };
+  }
+
+  if (endAt <= startAt) {
+    return { error: "L'heure de fin doit être après l'heure de début." };
+  }
+
+  if (isCoach && coachId !== auth.user.id) {
+    return { error: "Un coach ne peut créer des créneaux que pour lui-même." };
+  }
+
+  const { data: coachProfile } = await admin
+    .from("profiles")
+    .select("id, role, groupe_id")
+    .eq("id", coachId)
+    .maybeSingle();
+
+  if (!coachProfile || coachProfile.role !== "coach") {
+    return { error: "Coach introuvable." };
+  }
+
+  if (coachProfile.groupe_id && coachProfile.groupe_id !== groupeId) {
+    return { error: "Ce coach n'est pas rattaché à cette classe." };
+  }
+
+  const { data: slot, error } = await admin
+    .from("coaching_call_slots")
+    .insert({
+      coach_id: coachId,
+      groupe_id: groupeId,
+      start_at: startAt.toISOString(),
+      end_at: endAt.toISOString(),
+      location: data.location?.trim() || null,
+      notes: data.notes?.trim() || null,
+      created_by: auth.user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true, slot: slot as CoachingCallSlot };
+}
+
+export async function updateBookingStatus(data: {
+  bookingId: string;
+  status: CoachingCallBookingStatus;
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { data: booking } = await admin
+    .from("coaching_call_bookings")
+    .select("*, student:profiles!coaching_call_bookings_student_id_fkey(groupe_id)")
+    .eq("id", data.bookingId)
+    .maybeSingle();
+
+  if (!booking) {
+    return { error: "Rendez-vous introuvable." };
+  }
+
+  if (
+    auth.profile.role === "coach" &&
+    booking.coach_id !== auth.user.id &&
+    !canCoachAccessStudent(auth.profile.groupe_id, booking.student?.groupe_id ?? null)
+  ) {
+    return { error: "Accès refusé à ce rendez-vous." };
+  }
+
+  const { data: updatedBooking, error } = await admin
+    .from("coaching_call_bookings")
+    .update({
+      status: data.status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", data.bookingId)
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true, booking: updatedBooking as CoachingCallBooking };
+}
+
+export async function saveStudentPointAProfile(data: {
+  student_id: string;
+  groupe_id: string;
+  coach_id: string | null;
+  intake_form_id: string | null;
+  booking_id: string | null;
+  mentality: CoachingMentality;
+  school_level: CoachingSchoolLevel;
+  work_capacity: CoachingWorkCapacity;
+  method_level: CoachingMethodLevel;
+  coach_report: string;
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { data: student } = await admin
+    .from("profiles")
+    .select("groupe_id")
+    .eq("id", data.student_id)
+    .maybeSingle();
+
+  if (!student?.groupe_id) {
+    return { error: "Élève introuvable ou sans classe." };
+  }
+
+  if (
+    auth.profile.role === "coach" &&
+    !canCoachAccessStudent(auth.profile.groupe_id, student.groupe_id)
+  ) {
+    return { error: "Accès refusé à cet élève." };
+  }
+
+  const confidenceScore = calculateConfidenceScore({
+    mentality: data.mentality,
+    schoolLevel: data.school_level,
+    workCapacity: data.work_capacity,
+    methodLevel: data.method_level,
   });
 
-  const { data: checkin, error } = await admin
-    .from("coaching_weekly_checkins")
+  const { data: profile, error } = await admin
+    .from("coaching_student_profiles")
     .upsert(
       {
-        cohort_id: data.cohortId,
-        coaching_student_id: data.coachingStudentId,
-        student_id: data.studentId,
-        week_start: data.weekStart,
-        hours_bucket: data.hours_bucket,
-        understanding_level: data.understanding_level,
-        mental_state: data.mental_state,
-        main_blocker: data.main_blocker,
-        momentum: data.momentum,
-        free_text: data.free_text?.trim() || null,
-        computed_status: evaluation.status,
-        signal_reasons: evaluation.reasons,
+        student_id: data.student_id,
+        groupe_id: data.groupe_id,
+        coach_id: data.coach_id,
+        intake_form_id: data.intake_form_id,
+        booking_id: data.booking_id,
+        mentality: data.mentality,
+        school_level: data.school_level,
+        work_capacity: data.work_capacity,
+        method_level: data.method_level,
+        confidence_score: confidenceScore,
+        coach_report: data.coach_report.trim() || null,
+        reviewed_by: auth.user.id,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
-      { onConflict: "student_id,week_start" }
+      { onConflict: "student_id" }
     )
     .select("*")
     .single();
 
   if (error) return { error: error.message };
 
-  const { data: updatedStudent, error: studentError } = await admin
-    .from("coaching_students")
-    .update({
-      current_status: evaluation.status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", data.coachingStudentId)
-    .select("*")
-    .single();
-
-  if (studentError) return { error: studentError.message };
-
-  let autoIntervention: CoachingIntervention | null = null;
-
-  if (evaluation.status !== "green") {
-    const channel: CoachingInterventionChannel = evaluation.status === "red" ? "call" : "email";
-    const { data: intervention } = await admin
-      .from("coaching_interventions")
-      .insert({
-        cohort_id: data.cohortId,
-        coaching_student_id: data.coachingStudentId,
-        student_id: data.studentId,
-        owner_id: null,
-        requested_by_id: access.userId,
-        channel,
-        status: "todo",
-        reason: `Alerte automatique après check-in: ${evaluation.reasons.join(" ")}`,
-        metadata: {
-          source: "weekly_checkin_auto",
-          computed_status: evaluation.status,
-        },
-      })
-      .select("*")
-      .single();
-
-    autoIntervention = (intervention as CoachingIntervention | null) ?? null;
-  }
-
-  revalidatePath(PATH);
-  return {
-    success: true,
-    checkin: checkin as CoachingWeeklyCheckin,
-    updatedStudent: updatedStudent as CoachingStudent,
-    evaluation,
-    autoIntervention,
-  };
-}
-
-export async function createCoachingNote(data: {
-  cohortId: string;
-  coachingStudentId: string;
-  studentId: string;
-  noteType: CoachingNoteType;
-  title: string;
-  content: string;
-}) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
-
-  const admin = createAdminClient();
-  const { data: note, error } = await admin
-    .from("coaching_notes")
-    .insert({
-      cohort_id: data.cohortId,
-      coaching_student_id: data.coachingStudentId,
-      student_id: data.studentId,
-      author_id: access.userId,
-      note_type: data.noteType,
-      title: data.title.trim(),
-      content: data.content.trim(),
-    })
-    .select("*")
-    .single();
-
-  if (error) return { error: error.message };
-
-  revalidatePath(PATH);
-  return { success: true, note: note as CoachingNote, authorId: access.userId };
-}
-
-export async function createCoachingIntervention(data: {
-  cohortId: string;
-  coachingStudentId: string;
-  studentId: string;
-  ownerId?: string | null;
-  channel: CoachingInterventionChannel;
-  reason: string;
-  scheduledAt?: string | null;
-}) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
-
-  const admin = createAdminClient();
-  const { data: intervention, error } = await admin
-    .from("coaching_interventions")
-    .insert({
-      cohort_id: data.cohortId,
-      coaching_student_id: data.coachingStudentId,
-      student_id: data.studentId,
-      owner_id: data.ownerId ?? null,
-      requested_by_id: access.userId,
-      channel: data.channel,
-      status: data.scheduledAt ? "scheduled" : "todo",
-      reason: data.reason.trim(),
-      scheduled_at: data.scheduledAt || null,
-      metadata: {},
-    })
-    .select("*")
-    .single();
-
-  if (error) return { error: error.message };
-
-  revalidatePath(PATH);
-  return { success: true, intervention: intervention as CoachingIntervention, requesterId: access.userId };
-}
-
-export async function updateCoachingInterventionStatus(data: {
-  id: string;
-  status: CoachingInterventionStatus;
-}) {
-  const access = await ensureAdminAccess();
-  if ("error" in access) return access;
-
-  const admin = createAdminClient();
-  const completedAt = data.status === "done" ? new Date().toISOString() : null;
-
-  const { data: intervention, error } = await admin
-    .from("coaching_interventions")
-    .update({
-      status: data.status,
-      completed_at: completedAt,
-    })
-    .eq("id", data.id)
-    .select("*")
-    .single();
-
-  if (error) return { error: error.message };
-
-  revalidatePath(PATH);
-  return { success: true, intervention: intervention as CoachingIntervention };
+  revalidatePath(ADMIN_PATH);
+  return { success: true, profile: profile as CoachingStudentProfile };
 }

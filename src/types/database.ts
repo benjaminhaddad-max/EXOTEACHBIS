@@ -406,113 +406,85 @@ export interface CalendarEvent {
 // Coaching
 // =============================================
 
-export type CoachingCohortStatus = "draft" | "active" | "archived";
-export type CoachingProfileType =
-  | "good_confident"
-  | "good_fragile"
-  | "good_arrogant"
-  | "average_motivated"
-  | "average_unaware";
-export type CoachingStudentStatus = "green" | "orange" | "red";
-export type CoachingHoursBucket = "lt5" | "5_10" | "10_20" | "20_plus";
-export type CoachingUnderstandingLevel = "not_at_all" | "a_little" | "mostly_yes" | "fully";
-export type CoachingMentalState = "lost" | "doubtful" | "okay" | "confident";
-export type CoachingMainBlocker = "subject" | "organization" | "motivation" | "none";
-export type CoachingMomentum = "backward" | "same" | "improving" | "much_better";
-export type CoachingNoteType =
-  | "onboarding_call"
-  | "guardian_call"
-  | "weekly_followup"
-  | "meeting"
-  | "alert"
-  | "internal";
-export type CoachingInterventionChannel =
-  | "call"
-  | "visio"
-  | "physical"
-  | "email"
-  | "sms"
-  | "whatsapp"
-  | "crisp";
-export type CoachingInterventionStatus = "todo" | "scheduled" | "done" | "cancelled";
+export type CoachingMentality = "passif" | "pessimiste" | "optimiste";
+export type CoachingSchoolLevel = "limite" | "normal" | "bon";
+export type CoachingWorkCapacity = "faible" | "moyenne" | "forte";
+export type CoachingMethodLevel = "mauvaise" | "moyenne" | "bonne";
+export type CoachingCallBookingStatus = "booked" | "completed" | "cancelled" | "no_show";
 
-export interface CoachingCohort {
+export interface CoachingIntakeForm {
   id: string;
-  name: string;
-  season: string;
-  status: CoachingCohortStatus;
-  onboarding_starts_on: string | null;
-  intensive_starts_on: string | null;
-  cadence_starts_on: string | null;
-  ends_on: string | null;
-  created_at: string;
+  student_id: string;
+  groupe_id: string | null;
+  phone: string | null;
+  city: string | null;
+  bac_specialties: string | null;
+  parcours_label: string | null;
+  why_medicine: string | null;
+  expectations: string | null;
+  main_worry: string | null;
+  current_method_description: string | null;
+  strengths: string | null;
+  weaknesses: string | null;
+  availability_notes: string | null;
+  submitted_at: string;
   updated_at: string;
+  student?: Profile;
+  groupe?: Groupe | null;
 }
 
-export interface CoachingStudent {
+export interface CoachingCallSlot {
   id: string;
-  cohort_id: string;
+  coach_id: string;
+  groupe_id: string;
+  start_at: string;
+  end_at: string;
+  location: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  coach?: Profile;
+  groupe?: Groupe;
+}
+
+export interface CoachingCallBooking {
+  id: string;
+  slot_id: string;
   student_id: string;
+  coach_id: string;
+  groupe_id: string;
+  intake_form_id: string | null;
+  status: CoachingCallBookingStatus;
+  booked_at: string;
+  updated_at: string;
+  slot?: CoachingCallSlot;
+  student?: Profile;
+  coach?: Profile;
+  groupe?: Groupe;
+  intake_form?: CoachingIntakeForm | null;
+}
+
+export interface CoachingStudentProfile {
+  id: string;
+  student_id: string;
+  groupe_id: string;
   coach_id: string | null;
-  profile_type: CoachingProfileType;
-  current_status: CoachingStudentStatus;
-  onboarding_completed: boolean;
-  onboarding_called_at: string | null;
-  guardian_called_at: string | null;
-  goals: unknown;
-  risk_notes: string | null;
+  intake_form_id: string | null;
+  booking_id: string | null;
+  mentality: CoachingMentality;
+  school_level: CoachingSchoolLevel;
+  work_capacity: CoachingWorkCapacity;
+  method_level: CoachingMethodLevel;
+  confidence_score: number;
+  coach_report: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
   student?: Profile;
   coach?: Profile | null;
-}
-
-export interface CoachingWeeklyCheckin {
-  id: string;
-  cohort_id: string;
-  coaching_student_id: string;
-  student_id: string;
-  week_start: string;
-  hours_bucket: CoachingHoursBucket;
-  understanding_level: CoachingUnderstandingLevel;
-  mental_state: CoachingMentalState;
-  main_blocker: CoachingMainBlocker;
-  momentum: CoachingMomentum;
-  free_text: string | null;
-  computed_status: CoachingStudentStatus;
-  signal_reasons: string[];
-  submitted_at: string;
-}
-
-export interface CoachingNote {
-  id: string;
-  cohort_id: string;
-  coaching_student_id: string;
-  student_id: string;
-  author_id: string;
-  note_type: CoachingNoteType;
-  title: string;
-  content: string;
-  created_at: string;
-  author?: Profile;
-}
-
-export interface CoachingIntervention {
-  id: string;
-  cohort_id: string;
-  coaching_student_id: string;
-  student_id: string;
-  owner_id: string | null;
-  requested_by_id: string | null;
-  channel: CoachingInterventionChannel;
-  status: CoachingInterventionStatus;
-  reason: string;
-  scheduled_at: string | null;
-  completed_at: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  owner?: Profile | null;
-  requested_by?: Profile | null;
+  reviewer?: Profile | null;
 }
 
 // =============================================
