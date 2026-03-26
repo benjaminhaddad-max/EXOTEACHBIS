@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import {
   ChevronDown, ChevronRight, Plus, GraduationCap, Building2,
   Calendar, BookOpen, Layers, Sparkles, Clock, Folder, Users,
+  Pencil, Trash2, FolderPlus,
 } from "lucide-react";
 import type { Dossier, Groupe, Profile } from "@/types/database";
 import type { DossierType } from "@/types/database";
@@ -46,6 +47,9 @@ interface DossierGroupTreeProps {
   onSelectGroup: (id: string) => void;
   onSelectDossier: (id: string) => void;
   onCreateGroup: (formationDossierId: string) => void;
+  onCreateSubDossier?: (parentId: string) => void;
+  onEditDossier?: (dossier: Dossier) => void;
+  onDeleteDossier?: (id: string) => void;
 }
 
 // ─── Build tree ───────────────────────────────────────────────────────────
@@ -79,6 +83,7 @@ export function DossierGroupTree({
   dossiers, groupes, users,
   selectedGroupeId, selectedDossierId,
   onSelectGroup, onSelectDossier, onCreateGroup,
+  onCreateSubDossier, onEditDossier, onDeleteDossier,
 }: DossierGroupTreeProps) {
   const tree = useMemo(() => buildDossierTree(dossiers), [dossiers]);
 
@@ -127,6 +132,10 @@ export function DossierGroupTree({
           onSelectGroup={onSelectGroup}
           onSelectDossier={onSelectDossier}
           onCreateGroup={onCreateGroup}
+          onCreateSubDossier={onCreateSubDossier}
+          onEditDossier={onEditDossier}
+          onDeleteDossier={onDeleteDossier}
+          allDossiers={dossiers}
         />
       ))}
     </div>
@@ -139,6 +148,8 @@ function DossierTreeNode({
   node, depth, groupsByDossier, memberCountByGroup,
   selectedGroupeId, selectedDossierId,
   onSelectGroup, onSelectDossier, onCreateGroup,
+  onCreateSubDossier, onEditDossier, onDeleteDossier,
+  allDossiers,
 }: {
   node: DossierNode;
   depth: number;
@@ -149,6 +160,10 @@ function DossierTreeNode({
   onSelectGroup: (id: string) => void;
   onSelectDossier: (id: string) => void;
   onCreateGroup: (formationDossierId: string) => void;
+  onCreateSubDossier?: (parentId: string) => void;
+  onEditDossier?: (dossier: Dossier) => void;
+  onDeleteDossier?: (id: string) => void;
+  allDossiers: Dossier[];
 }) {
   const [expanded, setExpanded] = useState(depth < 1); // Auto-expand first level
   const [hovered, setHovered] = useState(false);
@@ -213,7 +228,7 @@ function DossierTreeNode({
 
         {/* Stats + actions */}
         <div className="flex items-center gap-0.5 shrink-0">
-          {totalGroups > 0 && (
+          {totalGroups > 0 && !hovered && (
             <span className="text-[9px] px-1.5 rounded-full" style={{
               backgroundColor: "rgba(201,168,76,0.1)",
               color: "rgba(201,168,76,0.6)",
@@ -222,14 +237,46 @@ function DossierTreeNode({
             </span>
           )}
           {hovered && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onCreateGroup(node.id); }}
-              className="w-4 h-4 flex items-center justify-center rounded transition-colors"
-              style={{ color: "rgba(255,255,255,0.4)" }}
-              title="Créer une classe ici"
-            >
-              <Plus size={10} />
-            </button>
+            <div className="flex items-center gap-0.5">
+              {onCreateSubDossier && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCreateSubDossier(node.id); }}
+                  className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-white/10"
+                  style={{ color: "rgba(255,255,255,0.4)" }}
+                  title="Ajouter un sous-dossier"
+                >
+                  <FolderPlus size={10} />
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onCreateGroup(node.id); }}
+                className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-white/10"
+                style={{ color: "rgba(255,255,255,0.4)" }}
+                title="Créer une classe ici"
+              >
+                <Plus size={10} />
+              </button>
+              {onEditDossier && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditDossier(node); }}
+                  className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-white/10"
+                  style={{ color: "rgba(255,255,255,0.35)" }}
+                  title="Renommer"
+                >
+                  <Pencil size={9} />
+                </button>
+              )}
+              {onDeleteDossier && node.children.length === 0 && (groupsByDossier.get(node.id) || []).length === 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteDossier(node.id); }}
+                  className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-red-500/20"
+                  style={{ color: "rgba(255,255,255,0.25)" }}
+                  title="Supprimer"
+                >
+                  <Trash2 size={9} />
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -285,6 +332,10 @@ function DossierTreeNode({
               onSelectGroup={onSelectGroup}
               onSelectDossier={onSelectDossier}
               onCreateGroup={onCreateGroup}
+              onCreateSubDossier={onCreateSubDossier}
+              onEditDossier={onEditDossier}
+              onDeleteDossier={onDeleteDossier}
+              allDossiers={allDossiers}
             />
           ))}
         </div>

@@ -24,6 +24,11 @@ import {
   setGroupeDossierAcces as saveGroupeDossierAcces,
   savePedagogieAdminSettings,
 } from "@/app/(admin)/admin/utilisateurs/actions";
+import {
+  createDossier as createDossierAction,
+  updateDossier as updateDossierAction,
+  deleteDossier as deleteDossierAction,
+} from "@/app/(admin)/admin/pedagogie/actions";
 import { DOSSIER_TYPE_META, getDossierPathLabel, inferOfferFromAncestors } from "@/lib/pedagogie-structure";
 import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 import { expandDossierTree } from "@/lib/access-scope";
@@ -484,6 +489,43 @@ export function UtilisateursShell({
             onSelectGroup={(id) => { setView("groupe"); setSelectedGroupeId(id); setSelectedDossierId(null); }}
             onSelectDossier={(id) => { setView("dossier_summary"); setSelectedDossierId(id); setSelectedGroupeId(null); }}
             onCreateGroup={(dossierId) => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossierId })}
+            onCreateSubDossier={(parentId) => {
+              const parent = initialDossiers.find(d => d.id === parentId);
+              const name = prompt("Nom du sous-dossier :");
+              if (!name?.trim()) return;
+              startTransition(async () => {
+                const res = await createDossierAction({
+                  parent_id: parentId,
+                  name: name.trim(),
+                  dossier_type: parent?.dossier_type === "offer" ? "university" : parent?.dossier_type === "university" ? "semester" : "subject",
+                  formation_offer: parent?.formation_offer ?? null,
+                  color: parent?.color ?? "#374151",
+                  visible: true,
+                });
+                if ("error" in res) { showToast(res.error!, "error"); return; }
+                showToast("Sous-dossier créé", "success");
+                window.location.reload();
+              });
+            }}
+            onEditDossier={(dossier) => {
+              const newName = prompt("Renommer :", dossier.name);
+              if (!newName?.trim() || newName.trim() === dossier.name) return;
+              startTransition(async () => {
+                const res = await updateDossierAction(dossier.id, { name: newName.trim() });
+                if ("error" in res) { showToast(res.error!, "error"); return; }
+                showToast("Renommé", "success");
+                window.location.reload();
+              });
+            }}
+            onDeleteDossier={(id) => {
+              if (!confirm("Supprimer ce dossier ?")) return;
+              startTransition(async () => {
+                const res = await deleteDossierAction(id);
+                if ("error" in res) { showToast(res.error!, "error"); return; }
+                showToast("Supprimé", "success");
+                window.location.reload();
+              });
+            }}
           />
         </div>
       </div>
