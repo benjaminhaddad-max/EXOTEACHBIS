@@ -1,0 +1,430 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import {
+  FileText, Clock, Users, Check, AlertCircle, Plus, Search, Eye,
+  ChevronRight, Pencil, BarChart3,
+} from "lucide-react";
+import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, Groupe, Profile } from "@/types/database";
+import { FormulairesSidebar, type SidebarFilter } from "./formulaires-sidebar";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ActiveView = "list" | "editor" | "responses";
+type Toast = { kind: "success" | "error"; message: string } | null;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function profileName(p: Profile | null | undefined) {
+  if (!p) return "Inconnu";
+  return `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || p.email;
+}
+
+function formatDate(v: string | null | undefined) {
+  if (!v) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(v));
+}
+
+function getTargetLabel(t: FormTemplate, dossiers: Dossier[], groupes: Groupe[]) {
+  if (t.target_type === "global") return "Tous les élèves";
+  if (t.target_type === "offer") {
+    const d = dossiers.find(d => d.formation_offer === t.target_offer_code || d.id === t.target_offer_code);
+    return d ? d.name : "Formation";
+  }
+  if (t.target_type === "university") {
+    const d = dossiers.find(d => d.id === t.target_university_dossier_id);
+    return d ? d.name : "Université";
+  }
+  if (t.target_type === "groupe") {
+    const g = groupes.find(g => g.id === t.target_groupe_id);
+    return g ? g.name : "Classe";
+  }
+  if (t.target_type === "student") return "1 élève";
+  if (t.target_type === "selection") return `${t.target_student_ids?.length ?? 0} élèves`;
+  return "—";
+}
+
+const TARGET_COLORS: Record<string, string> = {
+  global: "#C9A84C",
+  offer: "#C9A84C",
+  university: "#A78BFA",
+  groupe: "#34D399",
+  student: "#38BDF8",
+  selection: "#F472B6",
+};
+
+// ─── Main Shell ───────────────────────────────────────────────────────────────
+
+export function FormulairesShell({
+  initialTemplates,
+  initialFields,
+  initialDossiers,
+  initialGroupes,
+  initialStudents,
+  initialResponses,
+}: {
+  currentProfile: Profile;
+  initialTemplates: FormTemplate[];
+  initialFields: FormField[];
+  initialDossiers: Dossier[];
+  initialGroupes: Groupe[];
+  initialStudents: Profile[];
+  initialResponses: CoachingIntakeForm[];
+  setupError?: string | null;
+}) {
+  const [templates] = useState(initialTemplates);
+  const [activeView, setActiveView] = useState<ActiveView>("list");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [sidebarFilter, setSidebarFilter] = useState<SidebarFilter>({ type: "all" });
+  const [search, setSearch] = useState("");
+  const [toast, setToast] = useState<Toast>(null);
+
+  // Response count per template
+  const responseCountByTemplate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of initialResponses) {
+      if (r.form_template_id) m.set(r.form_template_id, (m.get(r.form_template_id) || 0) + 1);
+    }
+    return m;
+  }, [initialResponses]);
+
+  // Filter templates by sidebar + search
+  const filteredTemplates = useMemo(() => {
+    let filtered = templates;
+
+    // Sidebar filter
+    if (sidebarFilter.type === "offer") {
+      filtered = filtered.filter(t => t.target_type === "offer" && (t.target_offer_code === sidebarFilter.offerId || t.target_offer_code === sidebarFilter.offerId));
+    } else if (sidebarFilter.type === "university") {
+      filtered = filtered.filter(t => t.target_type === "university" && t.target_university_dossier_id === sidebarFilter.dossierId);
+    } else if (sidebarFilter.type === "groupe") {
+      filtered = filtered.filter(t => t.target_type === "groupe" && t.target_groupe_id === sidebarFilter.groupeId);
+    }
+
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(t => t.title.toLowerCase().includes(q));
+    }
+
+    return filtered;
+  }, [templates, sidebarFilter, search]);
+
+  const selectedTemplate = templates.find(t => t.id === selectedTemplateId) ?? null;
+  const selectedResponses = useMemo(
+    () => selectedTemplate ? initialResponses.filter(r => r.form_template_id === selectedTemplate.id) : [],
+    [initialResponses, selectedTemplate]
+  );
+  const selectedFields = useMemo(
+    () => selectedTemplate ? initialFields.filter(f => f.form_template_id === selectedTemplate.id).sort((a, b) => a.order_index - b.order_index) : [],
+    [initialFields, selectedTemplate]
+  );
+
+  const showToast = (message: string, kind: "success" | "error") => {
+    setToast({ message, kind });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  return (
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-medium ${toast.kind === "success" ? "bg-green-600/90 text-white" : "bg-red-600/90 text-white"}`}>
+          {toast.kind === "success" ? <Check size={15} /> : <AlertCircle size={15} />}
+          {toast.message}
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <FormulairesSidebar
+        dossiers={initialDossiers}
+        groupes={initialGroupes}
+        templates={templates}
+        filter={sidebarFilter}
+        selectedTemplateId={selectedTemplateId}
+        onFilterChange={f => { setSidebarFilter(f); setActiveView("list"); setSelectedTemplateId(null); }}
+        onSelectTemplate={id => { setSelectedTemplateId(id); setActiveView("editor"); }}
+        onCreateTemplate={() => { setSelectedTemplateId(null); setActiveView("editor"); }}
+      />
+
+      {/* Right content */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+        {/* Header toolbar */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setActiveView("list"); setSelectedTemplateId(null); }}
+              className="text-sm font-semibold transition-colors"
+              style={{ color: activeView === "list" ? "#E3C286" : "rgba(255,255,255,0.4)" }}
+            >
+              Formulaires
+            </button>
+            {selectedTemplate && (
+              <>
+                <ChevronRight size={12} style={{ color: "rgba(255,255,255,0.2)" }} />
+                <span className="text-sm font-semibold text-white truncate max-w-[200px]">{selectedTemplate.title}</span>
+              </>
+            )}
+          </div>
+
+          {selectedTemplate && (
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-white/15 overflow-hidden text-xs">
+                <button
+                  onClick={() => setActiveView("editor")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${activeView === "editor" ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10"}`}
+                >
+                  <Pencil size={11} className="inline mr-1" /> Éditeur
+                </button>
+                <button
+                  onClick={() => setActiveView("responses")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${activeView === "responses" ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10"}`}
+                >
+                  <BarChart3 size={11} className="inline mr-1" /> Réponses ({responseCountByTemplate.get(selectedTemplate.id) ?? 0})
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-auto p-5">
+          {activeView === "list" && (
+            <FormTemplateList
+              templates={filteredTemplates}
+              dossiers={initialDossiers}
+              groupes={initialGroupes}
+              responseCountByTemplate={responseCountByTemplate}
+              onSelect={id => { setSelectedTemplateId(id); setActiveView("editor"); }}
+              search={search}
+              onSearchChange={setSearch}
+            />
+          )}
+
+          {activeView === "editor" && (
+            <div className="flex items-center justify-center h-64 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+              {selectedTemplate
+                ? `Éditeur de "${selectedTemplate.title}" — à venir dans l'étape suivante`
+                : "Création de formulaire — à venir dans l'étape suivante"}
+            </div>
+          )}
+
+          {activeView === "responses" && selectedTemplate && (
+            <ResponsesView
+              template={selectedTemplate}
+              fields={selectedFields}
+              responses={selectedResponses}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Form Template List ───────────────────────────────────────────────────────
+
+function FormTemplateList({
+  templates, dossiers, groupes, responseCountByTemplate, onSelect, search, onSearchChange,
+}: {
+  templates: FormTemplate[];
+  dossiers: Dossier[];
+  groupes: Groupe[];
+  responseCountByTemplate: Map<string, number>;
+  onSelect: (id: string) => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Search bar */}
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
+        <input
+          value={search}
+          onChange={e => onSearchChange(e.target.value)}
+          placeholder="Rechercher un formulaire..."
+          className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25"
+        />
+      </div>
+
+      {/* Grid */}
+      {templates.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <FileText size={32} className="mb-3 opacity-30" />
+          <p className="text-sm font-medium">Aucun formulaire</p>
+          <p className="text-xs mt-1">Crée ton premier formulaire depuis la sidebar</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {templates.map(t => {
+            const count = responseCountByTemplate.get(t.id) ?? 0;
+            const targetColor = TARGET_COLORS[t.target_type] ?? "#9CA3AF";
+            return (
+              <button
+                key={t.id}
+                onClick={() => onSelect(t.id)}
+                className="text-left p-4 rounded-2xl border transition-all"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.03)",
+                  borderColor: "rgba(255,255,255,0.08)",
+                }}
+                onMouseOver={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.06)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.15)"; }}
+                onMouseOut={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.03)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)"; }}
+              >
+                {/* Title row */}
+                <div className="flex items-start gap-2 mb-2">
+                  <FileText size={14} style={{ color: targetColor, marginTop: 2 }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{t.title}</p>
+                    {t.description && (
+                      <p className="text-[11px] mt-0.5 line-clamp-2" style={{ color: "rgba(255,255,255,0.4)" }}>
+                        {t.description}
+                      </p>
+                    )}
+                  </div>
+                  <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: t.is_active ? "#34D399" : "rgba(255,255,255,0.15)" }} />
+                </div>
+
+                {/* Meta row */}
+                <div className="flex items-center gap-3 text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: targetColor + "15", color: targetColor }}>
+                    <Users size={9} />
+                    {getTargetLabel(t, dossiers, groupes)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <BarChart3 size={9} />
+                    {count} réponse{count !== 1 ? "s" : ""}
+                  </span>
+                  <span className="flex items-center gap-1 ml-auto">
+                    <Clock size={9} />
+                    {formatDate(t.updated_at)}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Responses View ───────────────────────────────────────────────────────────
+
+function ResponsesView({
+  template, fields, responses,
+}: {
+  template: FormTemplate;
+  fields: FormField[];
+  responses: CoachingIntakeForm[];
+}) {
+  const [selectedResponse, setSelectedResponse] = useState<CoachingIntakeForm | null>(null);
+
+  return (
+    <div className="space-y-4">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Total réponses</p>
+          <p className="text-2xl font-bold text-white">{responses.length}</p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Dernière réponse</p>
+          <p className="text-sm font-semibold text-white">{formatDate(responses[0]?.submitted_at)}</p>
+        </div>
+        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Questions</p>
+          <p className="text-2xl font-bold text-white">{fields.length}</p>
+        </div>
+      </div>
+
+      {/* Table */}
+      {responses.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <BarChart3 size={32} className="mb-3 opacity-30" />
+          <p className="text-sm">Aucune réponse pour ce formulaire</p>
+        </div>
+      ) : (
+        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Élève</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Date</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {responses.map((r, i) => (
+                <tr
+                  key={r.id}
+                  className="transition-colors cursor-pointer"
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.05)", backgroundColor: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)" }}
+                  onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+                  onMouseOut={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)")}
+                  onClick={() => setSelectedResponse(r)}
+                >
+                  <td className="px-4 py-3 text-white font-medium">{profileName(r.student)}</td>
+                  <td className="px-4 py-3" style={{ color: "rgba(255,255,255,0.5)" }}>{r.groupe?.name ?? "—"}</td>
+                  <td className="px-4 py-3" style={{ color: "rgba(255,255,255,0.5)" }}>{formatDate(r.submitted_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedResponse(r); }}
+                      className="text-[11px] px-2 py-1 rounded-lg transition-colors"
+                      style={{ color: "#C9A84C", backgroundColor: "rgba(201,168,76,0.1)" }}
+                    >
+                      <Eye size={11} className="inline mr-1" /> Détail
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {selectedResponse && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setSelectedResponse(null)}
+        >
+          <div
+            className="bg-[#0e1e35] border border-white/15 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">{profileName(selectedResponse.student)}</h3>
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  {selectedResponse.groupe?.name ?? "Sans classe"} · {formatDate(selectedResponse.submitted_at)}
+                </p>
+              </div>
+              <button onClick={() => setSelectedResponse(null)} className="text-white/40 hover:text-white text-lg">×</button>
+            </div>
+
+            <div className="space-y-3">
+              {fields.map(f => {
+                const answer = selectedResponse.answers?.[f.key];
+                const displayValue = Array.isArray(answer) ? answer.join(", ") : answer ?? "—";
+                return (
+                  <div key={f.id} className="p-3 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>
+                      {f.label}
+                    </p>
+                    <p className="text-sm text-white">{displayValue || <span style={{ color: "rgba(255,255,255,0.2)" }}>Non renseigné</span>}</p>
+                  </div>
+                );
+              })}
+              {fields.length === 0 && (
+                <p className="text-xs text-center py-4" style={{ color: "rgba(255,255,255,0.3)" }}>Aucun champ configuré</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

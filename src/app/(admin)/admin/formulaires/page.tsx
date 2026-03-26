@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { Header } from "@/components/header";
-import { ConfigurationShell } from "@/components/admin/configuration/configuration-shell";
+import { FormulairesShell } from "@/components/admin/formulaires/formulaires-shell";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, Groupe, Profile } from "@/types/database";
@@ -42,19 +41,9 @@ export default async function FormulairesPage() {
       ])
     : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
 
-  const setupError =
-    templatesRes.error?.message ??
-    fieldsRes.error?.message ??
-    dossiersRes.error?.message ??
-    groupesRes.error?.message ??
-    studentsRes.error?.message ??
-    responsesRes.error?.message ??
-    null;
-
   return (
-    <div>
-      <Header title="Formulaires" />
-      <ConfigurationShell
+    <div className="bg-[#0e1e35] rounded-2xl h-[calc(100vh-9rem)] overflow-hidden flex flex-col">
+      <FormulairesShell
         currentProfile={currentProfile as Profile}
         initialTemplates={(templatesRes.data ?? []) as FormTemplate[]}
         initialFields={(fieldsRes.data ?? []) as FormField[]}
@@ -62,7 +51,6 @@ export default async function FormulairesPage() {
         initialGroupes={(groupesRes.data ?? []) as Groupe[]}
         initialStudents={(studentsRes.data ?? []) as Profile[]}
         initialResponses={(responsesRes.data ?? []) as CoachingIntakeForm[]}
-        setupError={setupError}
       />
     </div>
   );
