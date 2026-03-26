@@ -9,6 +9,7 @@ import type {
   Filiere,
   GroupeDossierAcces,
   ProfileDossierAcces,
+  ProfileDossierAccesExclusion,
 } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function UtilisateursPage() {
     profMatieresRes,
     groupeDossierAccesRes,
     profileDossierAccesRes,
+    profileDossierAccessExclusionsRes,
     adminSettingsRes,
   ] = await Promise.all([
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
@@ -35,6 +37,7 @@ export default async function UtilisateursPage() {
     supabase.from("prof_matieres").select("prof_id, matiere_id"),
     supabase.from("groupe_dossier_acces").select("groupe_id, dossier_id"),
     supabase.from("profile_dossier_acces").select("profile_id, dossier_id"),
+    supabase.from("profile_dossier_access_exclusions").select("profile_id, dossier_id"),
     supabase.from("admin_settings").select("key, value"),
   ]);
 
@@ -51,6 +54,7 @@ export default async function UtilisateursPage() {
         initialProfMatieres={(profMatieresRes.data ?? []) as { prof_id: string; matiere_id: string }[]}
         initialGroupeDossierAcces={(groupeDossierAccesRes.data ?? []) as GroupeDossierAcces[]}
         initialProfileDossierAcces={(profileDossierAccesRes.data ?? []) as ProfileDossierAcces[]}
+        initialProfileDossierAccessExclusions={(profileDossierAccessExclusionsRes.data ?? []) as ProfileDossierAccesExclusion[]}
         initialFormationOffers={adminSettings.formationOffers}
         initialDossierNamePresets={adminSettings.dossierNamePresets}
       />

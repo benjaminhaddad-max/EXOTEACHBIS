@@ -32,7 +32,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = pathname === "/login" || pathname === "/register";
   const isApiRoute = pathname.startsWith("/api/");
   const isAdminRoute = pathname.startsWith("/admin");
-  const isProfAllowedAdminRoute = pathname === "/admin/annonces";
+  const isScopedStaffAllowedAdminRoute = pathname === "/admin/annonces";
 
   // Routes API publiques (seed, migrate)
   if (isApiRoute) return supabaseResponse;
@@ -57,12 +57,12 @@ export async function updateSession(request: NextRequest) {
     // Connecté sur page auth → rediriger
     if (isAuthRoute) {
       const url = request.nextUrl.clone();
-      url.pathname = isAdmin ? "/admin/dashboard" : role === "prof" ? "/admin/annonces" : "/dashboard";
+      url.pathname = isAdmin ? "/admin/dashboard" : ["prof", "coach"].includes(role) ? "/admin/annonces" : "/dashboard";
       return NextResponse.redirect(url);
     }
 
-    // Élève ou prof qui tente d'accéder à /admin → dashboard
-    if (isAdminRoute && !isAdmin && !(role === "prof" && isProfAllowedAdminRoute)) {
+    // Élève ou staff limité qui tente d'accéder à /admin → dashboard
+    if (isAdminRoute && !isAdmin && !((role === "prof" || role === "coach") && isScopedStaffAllowedAdminRoute)) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);

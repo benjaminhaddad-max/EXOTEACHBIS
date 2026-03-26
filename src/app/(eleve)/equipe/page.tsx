@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
-import { Users, GraduationCap, BookOpen, ShieldCheck } from "lucide-react";
+import { Users, GraduationCap, BookOpen, ShieldCheck, Briefcase } from "lucide-react";
 import type { Profile, Groupe } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -8,18 +8,21 @@ export const dynamic = "force-dynamic";
 const ROLE_ICONS: Record<string, React.ReactNode> = {
   superadmin: <ShieldCheck size={12} />,
   admin: <ShieldCheck size={12} />,
+  coach: <Briefcase size={12} />,
   prof: <BookOpen size={12} />,
   eleve: <GraduationCap size={12} />,
 };
 const ROLE_LABELS: Record<string, string> = {
   superadmin: "Super Admin",
   admin: "Admin",
+  coach: "Coach",
   prof: "Professeur",
   eleve: "Élève",
 };
 const ROLE_COLORS: Record<string, string> = {
   superadmin: "bg-red-100 text-red-700",
   admin: "bg-orange-100 text-orange-700",
+  coach: "bg-cyan-100 text-cyan-700",
   prof: "bg-blue-100 text-blue-700",
   eleve: "bg-green-100 text-green-700",
 };
@@ -38,7 +41,7 @@ export default async function EquipePage() {
   const { data: staff } = await supabase
     .from("profiles")
     .select("*")
-    .in("role", ["admin", "superadmin", "prof"])
+    .in("role", ["admin", "superadmin", "coach", "prof"])
     .order("role")
     .order("first_name");
 

@@ -34,7 +34,7 @@ async function getAnnonceActorContext() {
     .single();
 
   const role = (profile?.role ?? user.user_metadata?.role ?? "eleve") as UserRole;
-  if (!["admin", "superadmin", "prof"].includes(role)) {
+  if (!["admin", "superadmin", "prof", "coach"].includes(role)) {
     return { error: "Accès refusé" as const };
   }
 
@@ -83,6 +83,10 @@ async function validateAnnonceAudience(data: NormalizedAnnonceTarget, actor: Awa
     return { error: "Ce périmètre de formation n'est pas autorisé pour votre profil." };
   }
 
+  if (data.matiere_id && actor.role !== "prof") {
+    return { error: "Seuls les professeurs peuvent cibler une matière." };
+  }
+
   if (data.matiere_id && !actor.profMatiereIds.has(data.matiere_id)) {
     return { error: "Cette matière n'est pas autorisée pour votre profil." };
   }
@@ -128,7 +132,7 @@ export async function updateAnnonce(
     .single();
 
   if (existingError || !existing) return { error: existingError?.message ?? "Annonce introuvable" };
-  if (actor.role === "prof" && existing.author_id !== actor.user.id) {
+  if ((actor.role === "prof" || actor.role === "coach") && existing.author_id !== actor.user.id) {
     return { error: "Vous ne pouvez modifier que vos propres annonces." };
   }
 
@@ -160,7 +164,7 @@ export async function deleteAnnonce(id: string) {
   const actor = await getAnnonceActorContext();
   if ("error" in actor) return actor;
 
-  if (actor.role === "prof") {
+  if (actor.role === "prof" || actor.role === "coach") {
     const { data: existing, error: existingError } = await actor.supabase
       .from("posts")
       .select("author_id")
@@ -188,7 +192,7 @@ export async function togglePin(id: string, pinned: boolean) {
   const actor = await getAnnonceActorContext();
   if ("error" in actor) return actor;
 
-  if (actor.role === "prof") {
+  if (actor.role === "prof" || actor.role === "coach") {
     const { data: existing, error: existingError } = await actor.supabase
       .from("posts")
       .select("author_id")

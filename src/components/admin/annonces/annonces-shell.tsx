@@ -59,7 +59,7 @@ export function AnnoncesShell({
       .order("pinned", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (currentProfile?.role === "prof") {
+    if (currentProfile?.role === "prof" || currentProfile?.role === "coach") {
       query = query.eq("author_id", currentProfile.id);
     }
 

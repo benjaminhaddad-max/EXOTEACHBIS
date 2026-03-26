@@ -20,6 +20,7 @@ export function Header({ title, breadcrumb }: HeaderProps) {
   const roleLabel =
     profile?.role === "superadmin" ? "Super Admin"
     : profile?.role === "admin" ? "Administrateur"
+    : profile?.role === "coach" ? "Coach"
     : profile?.role === "prof" ? "Professeur"
     : "Élève";
 

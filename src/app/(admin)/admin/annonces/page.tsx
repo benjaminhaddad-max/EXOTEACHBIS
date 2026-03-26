@@ -19,7 +19,7 @@ export default async function AnnoncesAdminPage() {
   const scope = await getAccessScopeForUser(supabase as any, user!.id);
 
   const [annoncesRes, groupesRes, dossiersRes, matieresRes, profMatieresRes] = await Promise.all([
-    role === "prof"
+    role === "prof" || role === "coach"
       ? supabase
           .from("posts")
           .select("*, author:profiles(first_name, last_name), groupe:groupes(name, color), dossier:dossiers(id, name, color, parent_id), matiere:matieres(id, name, color, dossier_id)")
@@ -43,10 +43,10 @@ export default async function AnnoncesAdminPage() {
 
   const dossiers = (dossiersRes.data ?? []) as Dossier[];
   const matieres = (matieresRes.data ?? []) as Matiere[];
-  const availableGroupes = role === "prof"
+  const availableGroupes = role === "prof" || role === "coach"
     ? ((groupesRes.data ?? []) as Groupe[]).filter((groupe) => groupe.id === profile?.groupe_id)
     : ((groupesRes.data ?? []) as Groupe[]);
-  const availableDossiers = role === "prof"
+  const availableDossiers = role === "prof" || role === "coach"
     ? dossiers.filter((dossier) => scope.allowedDossierIds.has(dossier.id))
     : dossiers;
   const profMatiereIds = new Set((profMatieresRes.data ?? []).map((item: any) => item.matiere_id).filter(Boolean));

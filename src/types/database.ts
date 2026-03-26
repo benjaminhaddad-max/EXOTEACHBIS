@@ -2,7 +2,7 @@
 // Types base de données — ExoTeach Next
 // =============================================
 
-export type UserRole = "superadmin" | "admin" | "prof" | "eleve";
+export type UserRole = "superadmin" | "admin" | "coach" | "prof" | "eleve";
 export type FormationOffer = string;
 export type DossierType =
   | "generic"
@@ -303,11 +303,13 @@ export interface Groupe {
   description: string | null;
   color: string;
   parent_id: string | null;
+  formation_dossier_id: string | null;
   created_at: string;
   updated_at: string;
   // Relations
   members?: GroupeMember[];
   nb_members?: number;
+  formation_dossier?: Dossier | null;
 }
 
 export interface GroupeDossierAcces {
@@ -322,10 +324,16 @@ export interface ProfileDossierAcces {
   created_at: string;
 }
 
+export interface ProfileDossierAccesExclusion {
+  profile_id: string;
+  dossier_id: string;
+  created_at: string;
+}
+
 export interface GroupeMember {
   groupe_id: string;
   user_id: string;
-  role: "eleve" | "prof";
+  role: "eleve" | "prof" | "coach";
   joined_at: string;
   // Relations
   profile?: Profile;

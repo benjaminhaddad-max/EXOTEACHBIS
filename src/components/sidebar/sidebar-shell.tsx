@@ -52,6 +52,7 @@ export function SidebarShell({ children }: SidebarShellProps) {
             <p className="truncate text-xs text-white/50">
               {loading ? "" : profile?.role === "superadmin" ? "Super Admin"
                 : profile?.role === "admin" ? "Administrateur"
+                : profile?.role === "coach" ? "Coach"
                 : profile?.role === "prof" ? "Professeur"
                 : profile?.role === "eleve" ? "Élève"
                 : ""}

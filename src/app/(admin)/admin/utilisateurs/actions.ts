@@ -52,6 +52,7 @@ export async function updateUserAdminProfile(data: {
   filiere_id?: string | null;
   access_dossier_id?: string | null;
   access_dossier_ids?: string[];
+  excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
 }) {
   const adminCheck = await ensureAdminAccess();
@@ -151,6 +152,33 @@ export async function updateUserAdminProfile(data: {
     }
   }
 
+  if (data.excluded_access_dossier_ids !== undefined) {
+    const { error: deleteExclusionError } = await admin
+      .from("profile_dossier_access_exclusions")
+      .delete()
+      .eq("profile_id", data.userId);
+
+    if (deleteExclusionError) {
+      return { error: deleteExclusionError.message };
+    }
+
+    const uniqueExclusionIds = [...new Set(data.excluded_access_dossier_ids)];
+    if (uniqueExclusionIds.length > 0) {
+      const { error: insertExclusionError } = await admin
+        .from("profile_dossier_access_exclusions")
+        .insert(
+          uniqueExclusionIds.map((dossierId) => ({
+            profile_id: data.userId,
+            dossier_id: dossierId,
+          }))
+        );
+
+      if (insertExclusionError) {
+        return { error: insertExclusionError.message };
+      }
+    }
+  }
+
   if (data.matiere_ids !== undefined || data.role !== undefined) {
     const shouldKeepAssignments = (data.role ?? "prof") === "prof";
 
@@ -190,6 +218,7 @@ export async function createGroupe(data: {
   description?: string;
   color: string;
   parent_id?: string | null;
+  formation_dossier_id?: string | null;
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("groupes").insert({
@@ -198,6 +227,7 @@ export async function createGroupe(data: {
     description: data.description || null,
     color: data.color,
     parent_id: data.parent_id ?? null,
+    formation_dossier_id: data.formation_dossier_id ?? null,
   });
   if (error) return { error: error.message };
   revalidatePath(PATH);
@@ -206,7 +236,7 @@ export async function createGroupe(data: {
 
 export async function updateGroupe(
   id: string,
-  data: { name: string; annee?: string; description?: string; color: string; parent_id?: string | null }
+  data: { name: string; annee?: string; description?: string; color: string; parent_id?: string | null; formation_dossier_id?: string | null }
 ) {
   const supabase = await createClient();
   const { error } = await supabase
@@ -217,6 +247,7 @@ export async function updateGroupe(
       description: data.description || null,
       color: data.color,
       parent_id: data.parent_id ?? null,
+      formation_dossier_id: data.formation_dossier_id ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

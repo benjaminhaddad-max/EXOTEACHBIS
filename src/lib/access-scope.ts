@@ -19,7 +19,7 @@ export interface AccessScope {
   allowedDossierIds: Set<string>;
 }
 
-function expandDossierTree(
+export function expandDossierTree(
   dossiers: Pick<Dossier, "id" | "parent_id">[],
   rootIds: string[]
 ) {
@@ -76,7 +76,7 @@ export async function getAccessScopeForUser(
     };
   }
 
-  const [dossiersRes, groupAccessRes, profileAccessRes] = await Promise.all([
+  const [dossiersRes, groupAccessRes, profileAccessRes, profileExclusionRes] = await Promise.all([
     supabase
       .from("dossiers")
       .select("id, parent_id")
@@ -91,33 +91,54 @@ export async function getAccessScopeForUser(
       .from("profile_dossier_acces")
       .select("dossier_id")
       .eq("profile_id", userId),
+    supabase
+      .from("profile_dossier_access_exclusions")
+      .select("dossier_id")
+      .eq("profile_id", userId),
   ]);
 
-  const rootIds = new Set<string>();
+  const groupRootIds = new Set<string>();
+  const profileRootIds = new Set<string>();
 
   if (typedProfile.access_dossier_id) {
-    rootIds.add(typedProfile.access_dossier_id);
+    profileRootIds.add(typedProfile.access_dossier_id);
   }
 
   for (const access of profileAccessRes.data ?? []) {
     if (access?.dossier_id) {
-      rootIds.add(access.dossier_id);
+      profileRootIds.add(access.dossier_id);
     }
   }
 
   for (const access of groupAccessRes.data ?? []) {
     if (access?.dossier_id) {
-      rootIds.add(access.dossier_id);
+      groupRootIds.add(access.dossier_id);
     }
   }
+
+  const exclusions = (profileExclusionRes.data ?? [])
+    .map((access: any) => access?.dossier_id)
+    .filter(Boolean) as string[];
+
+  const dossiers = (dossiersRes.data ?? []) as Pick<Dossier, "id" | "parent_id">[];
+  const inheritedAllowedIds = expandDossierTree(dossiers, [...groupRootIds]);
+  const personalAllowedIds = expandDossierTree(dossiers, [...profileRootIds]);
+  const excludedIds = expandDossierTree(dossiers, exclusions);
+  const allowedDossierIds = new Set<string>();
+
+  inheritedAllowedIds.forEach((id) => {
+    if (!excludedIds.has(id)) {
+      allowedDossierIds.add(id);
+    }
+  });
+  personalAllowedIds.forEach((id) => {
+    allowedDossierIds.add(id);
+  });
 
   return {
     profile: typedProfile,
     unrestricted: false,
-    allowedDossierIds: expandDossierTree(
-      (dossiersRes.data ?? []) as Pick<Dossier, "id" | "parent_id">[],
-      [...rootIds]
-    ),
+    allowedDossierIds,
   };
 }
 

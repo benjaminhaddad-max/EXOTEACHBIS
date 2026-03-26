@@ -16,6 +16,7 @@ import type {
   UserRole,
   GroupeDossierAcces,
   ProfileDossierAcces,
+  ProfileDossierAccesExclusion,
 } from "@/types/database";
 import {
   updateUserAdminProfile,
@@ -25,6 +26,7 @@ import {
 } from "@/app/(admin)/admin/utilisateurs/actions";
 import { DOSSIER_TYPE_META, getDossierPathLabel } from "@/lib/pedagogie-structure";
 import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
+import { expandDossierTree } from "@/lib/access-scope";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ type AdminUserChanges = {
   filiere_id?: string | null;
   access_dossier_id?: string | null;
   access_dossier_ids?: string[];
+  excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
 };
 
@@ -55,6 +58,7 @@ type AdminUserChanges = {
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   superadmin: { label: "Super Admin", color: "text-red-300",    bg: "bg-red-500/15 border-red-500/30",    icon: <Crown size={11} /> },
   admin:      { label: "Admin",       color: "text-orange-300", bg: "bg-orange-500/15 border-orange-500/30", icon: <ShieldCheck size={11} /> },
+  coach:      { label: "Coach",       color: "text-cyan-300",   bg: "bg-cyan-500/15 border-cyan-500/30",   icon: <Users size={11} /> },
   prof:       { label: "Professeur",  color: "text-blue-300",   bg: "bg-blue-500/15 border-blue-500/30",   icon: <BookOpen size={11} /> },
   eleve:      { label: "Élève",       color: "text-green-300",  bg: "bg-green-500/15 border-green-500/30",  icon: <GraduationCap size={11} /> },
 };
@@ -104,6 +108,33 @@ function buildDossierTree(dossiers: Dossier[]): DossierNode[] {
   return roots;
 }
 
+function filterDossierTreeByAllowedIds(nodes: DossierNode[], allowedIds: Set<string>): DossierNode[] {
+  return nodes
+    .filter((node) => allowedIds.has(node.id))
+    .map((node) => ({
+      ...node,
+      children: filterDossierTreeByAllowedIds(node.children, allowedIds),
+    }));
+}
+
+function getGroupeInheritedFormationDossierId(
+  groupeId: string | null | undefined,
+  groupeMap: Map<string, Groupe>
+) {
+  let currentId = groupeId ?? null;
+
+  while (currentId) {
+    const groupe = groupeMap.get(currentId);
+    if (!groupe) break;
+    if (groupe.formation_dossier_id) {
+      return groupe.formation_dossier_id;
+    }
+    currentId = groupe.parent_id;
+  }
+
+  return null;
+}
+
 function collectNodeIds(node: DossierNode): string[] {
   return [node.id, ...node.children.flatMap(collectNodeIds)];
 }
@@ -134,6 +165,7 @@ export function UtilisateursShell({
   initialProfMatieres,
   initialGroupeDossierAcces,
   initialProfileDossierAcces,
+  initialProfileDossierAccessExclusions,
   initialFormationOffers,
   initialDossierNamePresets,
 }: {
@@ -145,6 +177,7 @@ export function UtilisateursShell({
   initialProfMatieres: ProfMatiereAssignment[];
   initialGroupeDossierAcces: GroupeDossierAcces[];
   initialProfileDossierAcces: ProfileDossierAcces[];
+  initialProfileDossierAccessExclusions: ProfileDossierAccesExclusion[];
   initialFormationOffers: FormationOfferSetting[];
   initialDossierNamePresets: DossierNamePreset[];
 }) {
@@ -155,6 +188,7 @@ export function UtilisateursShell({
   const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
   const [groupeDossierAcces, setGroupeDossierAcces] = useState<GroupeDossierAcces[]>(initialGroupeDossierAcces);
   const [profileDossierAcces, setProfileDossierAcces] = useState<ProfileDossierAcces[]>(initialProfileDossierAcces);
+  const [profileDossierAccessExclusions, setProfileDossierAccessExclusions] = useState<ProfileDossierAccesExclusion[]>(initialProfileDossierAccessExclusions);
   const [formationOffers, setFormationOffers] = useState<FormationOfferSetting[]>(initialFormationOffers);
   const [dossierNamePresets, setDossierNamePresets] = useState<DossierNamePreset[]>(initialDossierNamePresets);
   const [modal, setModal] = useState<Modal>(null);
@@ -201,6 +235,13 @@ export function UtilisateursShell({
     if (data) setProfileDossierAcces(data as ProfileDossierAcces[]);
   }, []);
 
+  const refreshProfileDossierAccessExclusions = useCallback(async () => {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data } = await supabase.from("profile_dossier_access_exclusions").select("profile_id, dossier_id");
+    if (data) setProfileDossierAccessExclusions(data as ProfileDossierAccesExclusion[]);
+  }, []);
+
   const handleDeleteGroupe = useCallback((id: string) => {
     if (!confirm("Supprimer ce groupe ? Les membres seront désassociés.")) return;
     startTransition(async () => {
@@ -213,12 +254,12 @@ export function UtilisateursShell({
   }, [selectedGroupeId, showToast, refreshGroupes, refreshUsers]);
 
   const handleSaveGroupe = useCallback((data: {
-    id?: string; name: string; color: string; annee?: string; description?: string; parent_id?: string | null;
+    id?: string; name: string; color: string; annee?: string; description?: string; parent_id?: string | null; formation_dossier_id?: string | null;
   }) => {
     startTransition(async () => {
       const res = data.id
-        ? await updateGroupe(data.id, { name: data.name, color: data.color, annee: data.annee, description: data.description, parent_id: data.parent_id })
-        : await createGroupe({ name: data.name, color: data.color, annee: data.annee, description: data.description, parent_id: data.parent_id });
+        ? await updateGroupe(data.id, { name: data.name, color: data.color, annee: data.annee, description: data.description, parent_id: data.parent_id, formation_dossier_id: data.formation_dossier_id })
+        : await createGroupe({ name: data.name, color: data.color, annee: data.annee, description: data.description, parent_id: data.parent_id, formation_dossier_id: data.formation_dossier_id });
       if ("error" in res) { showToast(res.error!, "error"); return; }
       await refreshGroupes();
       setModal(null);
@@ -230,11 +271,11 @@ export function UtilisateursShell({
     startTransition(async () => {
       const res = await updateUserAdminProfile({ userId, ...changes });
       if ("error" in res) { showToast(res.error!, "error"); return; }
-      await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces()]);
+      await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]);
       setModal(null);
       showToast("Modifié", "success");
     });
-  }, [showToast, refreshUsers, refreshProfMatieres, refreshProfileDossierAcces]);
+  }, [showToast, refreshUsers, refreshProfMatieres, refreshProfileDossierAcces, refreshProfileDossierAccessExclusions]);
 
   const handleSaveGroupeAccess = useCallback((groupeId: string, dossierIds: string[]) => {
     startTransition(async () => {
@@ -278,10 +319,15 @@ export function UtilisateursShell({
     () => buildAccessMap(profileDossierAcces, "profile_id"),
     [profileDossierAcces]
   );
+  const profileAccessExclusionsById = useMemo(
+    () => buildAccessMap(profileDossierAccessExclusions, "profile_id"),
+    [profileDossierAccessExclusions]
+  );
 
   const stats = useMemo(() => ({
     total: users.length,
     admins: users.filter(u => u.role === "admin" || u.role === "superadmin").length,
+    coachs: users.filter(u => u.role === "coach").length,
     profs: users.filter(u => u.role === "prof").length,
     eleves: users.filter(u => u.role === "eleve").length,
   }), [users]);
@@ -304,6 +350,9 @@ export function UtilisateursShell({
         <div className="px-3 py-2.5 flex flex-wrap gap-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-orange-300" style={{ backgroundColor: "rgba(249,115,22,0.1)" }}>
             {stats.admins} admin{stats.admins !== 1 ? "s" : ""}
+          </span>
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-cyan-300" style={{ backgroundColor: "rgba(6,182,212,0.1)" }}>
+            {stats.coachs} coach{stats.coachs !== 1 ? "s" : ""}
           </span>
           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-blue-300" style={{ backgroundColor: "rgba(59,130,246,0.1)" }}>
             {stats.profs} prof{stats.profs !== 1 ? "s" : ""}
@@ -435,6 +484,7 @@ export function UtilisateursShell({
         <GroupeFormModal
           parentId={modal.parentId}
           allGroupes={groupes}
+          dossiers={initialDossiers}
           isPending={isPending}
           onSave={handleSaveGroupe}
           onClose={() => setModal(null)}
@@ -445,6 +495,7 @@ export function UtilisateursShell({
           groupe={modal.groupe}
           parentId={modal.groupe.parent_id}
           allGroupes={groupes}
+          dossiers={initialDossiers}
           isPending={isPending}
           onSave={handleSaveGroupe}
           onClose={() => setModal(null)}
@@ -460,6 +511,7 @@ export function UtilisateursShell({
           filieres={initialFilieres}
           selectedMatiereIds={profMatieresByUser.get(modal.user.id) ?? []}
           directAccessIds={profileAccessById.get(modal.user.id) ?? (modal.user.access_dossier_id ? [modal.user.access_dossier_id] : [])}
+          excludedAccessIds={profileAccessExclusionsById.get(modal.user.id) ?? []}
           groupeAccessById={groupeAccessById}
           isPending={isPending}
           onSave={handleSaveUser}
@@ -940,7 +992,8 @@ function ComptesView({
   const filtered = useMemo(() => users.filter(u => {
     const q = search.toLowerCase();
     if (q && !`${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q)) return false;
-    if (filterRole && u.role !== filterRole) return false;
+    if (filterRole === "admin" && !["admin", "superadmin"].includes(u.role)) return false;
+    if (filterRole && filterRole !== "admin" && u.role !== filterRole) return false;
     return true;
   }), [users, search, filterRole]);
 
@@ -970,6 +1023,7 @@ function ComptesView({
           {[
             { val: "", label: "Tous" },
             { val: "eleve", label: "Élèves" },
+            { val: "coach", label: "Coachs" },
             { val: "prof", label: "Profs" },
             { val: "admin", label: "Admins" },
           ].map(f => (
@@ -1004,6 +1058,8 @@ function ComptesView({
             {filtered.map(u => {
               const rc = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.eleve;
               const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
+              const formationDossierId = getGroupeInheritedFormationDossierId(groupe?.id, groupMap);
+              const formationLabel = formationDossierId ? getDossierPathLabel(formationDossierId, dossiers) : null;
               const filiere = u.filiere_id ? filiereMap.get(u.filiere_id) : null;
               const accessLabel = getDossierPathLabel(u.access_dossier_id, dossiers);
               const directAccessIds = profileAccessById.get(u.id) ?? (u.access_dossier_id ? [u.access_dossier_id] : []);
@@ -1035,6 +1091,12 @@ function ComptesView({
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#93C5FD" }}>
                               <GraduationCap size={9} />
                               {filiere.name}
+                            </span>
+                          )}
+                          {formationLabel && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] max-w-[260px]" style={{ backgroundColor: "rgba(6,182,212,0.12)", color: "#A5F3FC" }}>
+                              <Building2 size={9} />
+                              <span className="truncate">{formationLabel}</span>
                             </span>
                           )}
                           {u.access_dossier_id && (
@@ -1072,10 +1134,17 @@ function ComptesView({
                   </td>
                   <td className="px-4 py-3">
                     {groupe ? (
-                      <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: groupe.color }} />
-                        {groupe.name}
-                      </span>
+                      <div className="space-y-1">
+                        <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: groupe.color }} />
+                          {groupe.name}
+                        </span>
+                        {formationLabel && (
+                          <p className="max-w-[240px] truncate text-[10px]" style={{ color: "rgba(255,255,255,0.38)" }}>
+                            {formationLabel}
+                          </p>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>—</span>
                     )}
@@ -1410,7 +1479,7 @@ function AccessScopeTree({
   onChange?: (nextIds: string[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
-  accent?: "gold" | "green";
+  accent?: "gold" | "green" | "red";
 }) {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const inheritedSet = useMemo(() => new Set(inheritedIds), [inheritedIds]);
@@ -1543,7 +1612,7 @@ function AccessScopeTreeNode({
   expandedIds: Set<string>;
   readOnly: boolean;
   disabled: boolean;
-  accent: "gold" | "green";
+  accent: "gold" | "green" | "red";
   onToggleExpanded: (nodeId: string) => void;
   onToggleSelection: (node: DossierNode) => void;
 }) {
@@ -1555,8 +1624,14 @@ function AccessScopeTreeNode({
   const inheritedDescendants = node.children.reduce((count, child) => count + countSelectedNodes(child, inheritedSet), 0);
   const partial = !directChecked && selectedDescendants > 0;
   const inheritedPartial = !inheritedChecked && inheritedDescendants > 0;
-  const accentColor = accent === "gold" ? "#E3C286" : "#86EFAC";
-  const accentBg = accent === "gold" ? "rgba(201,168,76,0.16)" : "rgba(16,185,129,0.16)";
+  const accentColor =
+    accent === "gold" ? "#E3C286" :
+    accent === "green" ? "#86EFAC" :
+    "#FCA5A5";
+  const accentBg =
+    accent === "gold" ? "rgba(201,168,76,0.16)" :
+    accent === "green" ? "rgba(16,185,129,0.16)" :
+    "rgba(239,68,68,0.16)";
 
   return (
     <div>
@@ -1610,7 +1685,7 @@ function AccessScopeTreeNode({
             </span>
             {directChecked && (
               <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: accentBg, color: accentColor }}>
-                Direct
+                {accent === "red" ? "Retiré" : "Direct"}
               </span>
             )}
             {inheritedChecked && (
@@ -1664,11 +1739,17 @@ function AccessBadges({
   title: string;
   dossierIds: string[];
   dossiers: Dossier[];
-  accent?: "gold" | "green";
+  accent?: "gold" | "green" | "red";
   emptyLabel: string;
 }) {
-  const bg = accent === "gold" ? "rgba(201,168,76,0.14)" : "rgba(16,185,129,0.14)";
-  const color = accent === "gold" ? "#F5D78E" : "#86EFAC";
+  const bg =
+    accent === "gold" ? "rgba(201,168,76,0.14)" :
+    accent === "green" ? "rgba(16,185,129,0.14)" :
+    "rgba(239,68,68,0.14)";
+  const color =
+    accent === "gold" ? "#F5D78E" :
+    accent === "green" ? "#86EFAC" :
+    "#FCA5A5";
 
   return (
     <div>
@@ -1822,13 +1903,14 @@ function ParamètresTab({
 // ─── GroupeFormModal ──────────────────────────────────────────────────────────
 
 function GroupeFormModal({
-  groupe, parentId, allGroupes, isPending, onSave, onClose,
+  groupe, parentId, allGroupes, dossiers, isPending, onSave, onClose,
 }: {
   groupe?: Groupe;
   parentId: string | null;
   allGroupes: Groupe[];
+  dossiers: Dossier[];
   isPending: boolean;
-  onSave: (data: { id?: string; name: string; color: string; annee?: string; description?: string; parent_id?: string | null }) => void;
+  onSave: (data: { id?: string; name: string; color: string; annee?: string; description?: string; parent_id?: string | null; formation_dossier_id?: string | null }) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(groupe?.name ?? "");
@@ -1836,6 +1918,7 @@ function GroupeFormModal({
   const [annee, setAnnee] = useState(groupe?.annee ?? "");
   const [description, setDescription] = useState(groupe?.description ?? "");
   const [selectedParentId, setSelectedParentId] = useState<string | null>(groupe?.parent_id ?? parentId);
+  const [formationDossierId, setFormationDossierId] = useState<string | null>(groupe?.formation_dossier_id ?? null);
 
   const availableParents = allGroupes.filter(g => g.id !== groupe?.id);
 
@@ -1879,6 +1962,23 @@ function GroupeFormModal({
               <option value="">Aucun (groupe racine)</option>
               {availableParents.map(g => (
                 <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Formation liée</label>
+            <select
+              value={formationDossierId ?? ""}
+              onChange={e => setFormationDossierId(e.target.value || null)}
+              className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+              style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              <option value="">Aucune formation liée</option>
+              {dossiers.map((dossier) => (
+                <option key={dossier.id} value={dossier.id}>
+                  {getDossierPathLabel(dossier.id, dossiers)}
+                </option>
               ))}
             </select>
           </div>
@@ -1934,7 +2034,7 @@ function GroupeFormModal({
             Annuler
           </button>
           <button
-            onClick={() => onSave({ id: groupe?.id, name, color, annee: annee || undefined, description: description || undefined, parent_id: selectedParentId })}
+            onClick={() => onSave({ id: groupe?.id, name, color, annee: annee || undefined, description: description || undefined, parent_id: selectedParentId, formation_dossier_id: formationDossierId })}
             disabled={!name.trim() || isPending}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 transition-opacity"
             style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
@@ -1951,7 +2051,7 @@ function GroupeFormModal({
 // ─── EditUserModal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
-  user, groupes, dossiers, dossierTree, matieres, filieres, selectedMatiereIds, directAccessIds, groupeAccessById, isPending, onSave, onClose,
+  user, groupes, dossiers, dossierTree, matieres, filieres, selectedMatiereIds, directAccessIds, excludedAccessIds, groupeAccessById, isPending, onSave, onClose,
 }: {
   user: Profile;
   groupes: Groupe[];
@@ -1961,6 +2061,7 @@ function EditUserModal({
   filieres: Filiere[];
   selectedMatiereIds: string[];
   directAccessIds: string[];
+  excludedAccessIds: string[];
   groupeAccessById: Map<string, string[]>;
   isPending: boolean;
   onSave: (userId: string, changes: AdminUserChanges) => void;
@@ -1974,11 +2075,17 @@ function EditUserModal({
   const [groupeId, setGroupeId] = useState<string | null>(user.groupe_id);
   const [filiereId, setFiliereId] = useState<string | null>(user.filiere_id);
   const [personalAccessIds, setPersonalAccessIds] = useState<string[]>(directAccessIds);
+  const [excludedInheritedAccessIds, setExcludedInheritedAccessIds] = useState<string[]>(excludedAccessIds);
   const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
+  const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
 
   useEffect(() => {
     setPersonalAccessIds(directAccessIds);
   }, [directAccessIds, user.id]);
+
+  useEffect(() => {
+    setExcludedInheritedAccessIds(excludedAccessIds);
+  }, [excludedAccessIds, user.id]);
 
   const matieresByDossier = useMemo(() => {
     const map = new Map<string, Matiere[]>();
@@ -1994,7 +2101,17 @@ function EditUserModal({
   const normalizedNextMatieres = [...matiereIds].sort().join("|");
   const normalizedCurrentDirectAccess = [...directAccessIds].sort().join("|");
   const normalizedNextDirectAccess = [...personalAccessIds].sort().join("|");
+  const normalizedCurrentExcludedAccess = [...excludedAccessIds].sort().join("|");
+  const normalizedNextExcludedAccess = [...excludedInheritedAccessIds].sort().join("|");
   const inheritedAccessIds = groupeId ? (groupeAccessById.get(groupeId) ?? []) : [];
+  const inheritedExpandedIds = useMemo(
+    () => [...expandDossierTree(dossiers, inheritedAccessIds)],
+    [dossiers, inheritedAccessIds]
+  );
+  const inheritedTree = useMemo(
+    () => filterDossierTreeByAllowedIds(dossierTree, new Set(inheritedExpandedIds)),
+    [dossierTree, inheritedExpandedIds]
+  );
   const hasChanges =
     firstName !== (user.first_name ?? "") ||
     lastName !== (user.last_name ?? "") ||
@@ -2004,6 +2121,7 @@ function EditUserModal({
     groupeId !== user.groupe_id ||
     filiereId !== user.filiere_id ||
     normalizedCurrentDirectAccess !== normalizedNextDirectAccess ||
+    normalizedCurrentExcludedAccess !== normalizedNextExcludedAccess ||
     normalizedCurrentMatieres !== normalizedNextMatieres;
 
   const toggleMatiere = (matiereId: string) => {
@@ -2107,9 +2225,15 @@ function EditUserModal({
                 style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}
               >
                 <option value="">Aucun groupe</option>
-                {groupes.map(g => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
+                {groupes.map((g) => {
+                  const formationDossierId = getGroupeInheritedFormationDossierId(g.id, groupeMap);
+                  const groupLabel = formationDossierId
+                    ? `${g.name} · ${getDossierPathLabel(formationDossierId, dossiers)}`
+                    : g.name;
+                  return (
+                    <option key={g.id} value={g.id}>{groupLabel}</option>
+                  );
+                })}
               </select>
             </div>
 
@@ -2145,13 +2269,34 @@ function EditUserModal({
 
               {groupeId && inheritedAccessIds.length > 0 && (
                 <AccessScopeTree
-                  dossierTree={dossierTree}
+                  dossierTree={inheritedTree}
                   dossierList={dossiers}
                   selectedIds={[]}
                   inheritedIds={inheritedAccessIds}
                   readOnly
                   accent="green"
                 />
+              )}
+
+              {groupeId && inheritedExpandedIds.length > 0 && (
+                <>
+                  <AccessBadges
+                    title="Accès retirés sur héritage"
+                    dossierIds={excludedInheritedAccessIds}
+                    dossiers={dossiers}
+                    accent="red"
+                    emptyLabel="Aucun retrait perso sur l'accès hérité"
+                  />
+
+                  <AccessScopeTree
+                    dossierTree={inheritedTree}
+                    dossierList={dossiers}
+                    selectedIds={excludedInheritedAccessIds}
+                    onChange={setExcludedInheritedAccessIds}
+                    disabled={isPending}
+                    accent="red"
+                  />
+                </>
               )}
 
               <AccessBadges
@@ -2223,7 +2368,7 @@ function EditUserModal({
 
         <div className="flex items-center justify-between gap-3 px-5 pb-5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Groupe = classe/promo, périmètre e-learning = sous-arbre visible, matières = affectation professeur.
+            Groupe = classe/promo, formation = rattachement pédagogique, périmètre e-learning = sous-arbre visible, matières = affectation professeur.
           </div>
           <div className="flex items-center justify-end gap-2">
             <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs transition-colors"
@@ -2243,6 +2388,7 @@ function EditUserModal({
                 filiere_id: filiereId,
                 access_dossier_id: personalAccessIds[0] ?? null,
                 access_dossier_ids: personalAccessIds,
+                excluded_access_dossier_ids: excludedInheritedAccessIds,
                 matiere_ids: matiereIds,
               })}
               disabled={!hasChanges || isPending || !email.trim()}

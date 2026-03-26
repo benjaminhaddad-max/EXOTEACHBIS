@@ -33,7 +33,7 @@ const adminNavItems = [
 
 export function AdminSidebar() {
   const { profile } = useUser();
-  const navItems = profile?.role === "prof"
+  const navItems = profile?.role === "prof" || profile?.role === "coach"
     ? adminNavItems.filter((item) => item.href === "/admin/annonces")
     : adminNavItems;
 
