@@ -4,11 +4,12 @@ import { useState, useMemo } from "react";
 import {
   ChevronDown, ChevronRight, Plus, GraduationCap, Building2,
   Calendar, BookOpen, Layers, Sparkles, Clock, Folder, Users,
-  Pencil, Trash2, FolderPlus,
+  Pencil, Trash2, FolderPlus, FileText,
 } from "lucide-react";
 import type { Dossier, Groupe, Profile } from "@/types/database";
-import type { DossierType } from "@/types/database";
 import { DOSSIER_TYPE_META } from "@/lib/pedagogie-structure";
+
+type CoursBasic = { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean };
 
 // ─── Icons & colors per dossier type ──────────────────────────────────────
 
@@ -42,6 +43,7 @@ interface DossierGroupTreeProps {
   dossiers: Dossier[];
   groupes: Groupe[];
   users: Profile[];
+  cours?: CoursBasic[];
   selectedGroupeId: string | null;
   selectedDossierId: string | null;
   onSelectGroup: (id: string) => void;
@@ -80,7 +82,7 @@ function buildDossierTree(dossiers: Dossier[]): DossierNode[] {
 // ─── Component ────────────────────────────────────────────────────────────
 
 export function DossierGroupTree({
-  dossiers, groupes, users,
+  dossiers, groupes, users, cours = [],
   selectedGroupeId, selectedDossierId,
   onSelectGroup, onSelectDossier, onCreateGroup,
   onCreateSubDossier, onEditDossier, onDeleteDossier,
@@ -110,6 +112,19 @@ export function DossierGroupTree({
     return map;
   }, [users]);
 
+  // Index cours by dossier_id (chapters under subjects)
+  const coursByDossier = useMemo(() => {
+    const map = new Map<string, CoursBasic[]>();
+    for (const c of cours) {
+      const key = c.dossier_id;
+      if (key) {
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(c);
+      }
+    }
+    return map;
+  }, [cours]);
+
   if (tree.length === 0) {
     return (
       <p className="text-[11px] text-center py-4" style={{ color: "rgba(255,255,255,0.3)" }}>
@@ -136,6 +151,7 @@ export function DossierGroupTree({
           onEditDossier={onEditDossier}
           onDeleteDossier={onDeleteDossier}
           allDossiers={dossiers}
+          coursByDossier={coursByDossier}
         />
       ))}
     </div>
@@ -149,11 +165,12 @@ function DossierTreeNode({
   selectedGroupeId, selectedDossierId,
   onSelectGroup, onSelectDossier, onCreateGroup,
   onCreateSubDossier, onEditDossier, onDeleteDossier,
-  allDossiers,
+  allDossiers, coursByDossier,
 }: {
   node: DossierNode;
   depth: number;
   groupsByDossier: Map<string, Groupe[]>;
+  coursByDossier: Map<string, CoursBasic[]>;
   memberCountByGroup: Map<string, number>;
   selectedGroupeId: string | null;
   selectedDossierId: string | null;
@@ -169,7 +186,8 @@ function DossierTreeNode({
   const [hovered, setHovered] = useState(false);
 
   const linkedGroups = groupsByDossier.get(node.id) || [];
-  const hasChildren = node.children.length > 0 || linkedGroups.length > 0;
+  const linkedCours = coursByDossier.get(node.id) || [];
+  const hasChildren = node.children.length > 0 || linkedGroups.length > 0 || linkedCours.length > 0;
   const isSelected = selectedDossierId === node.id;
 
   const Icon = DTYPE_ICON[node.dossier_type] || Folder;
@@ -284,7 +302,23 @@ function DossierTreeNode({
       {/* Children + linked groups */}
       {expanded && hasChildren && (
         <div>
-          {/* Child dossiers FIRST (content hierarchy) */}
+          {/* Cours/chapters under this dossier (leaf content) */}
+          {linkedCours.length > 0 && (
+            <div>
+              {linkedCours.map(c => (
+                <div
+                  key={c.id}
+                  style={{ paddingLeft: (depth + 1) * 14 + 4, marginBottom: 1 }}
+                  className="flex items-center gap-1.5 py-0.5 text-[10px]"
+                >
+                  <FileText size={10} style={{ color: "rgba(255,255,255,0.25)" }} className="shrink-0" />
+                  <span style={{ color: "rgba(255,255,255,0.5)" }} className="truncate">{c.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Child dossiers (content hierarchy) */}
           {node.children.map(child => (
             <DossierTreeNode
               key={child.id}
@@ -301,6 +335,7 @@ function DossierTreeNode({
               onEditDossier={onEditDossier}
               onDeleteDossier={onDeleteDossier}
               allDossiers={allDossiers}
+              coursByDossier={coursByDossier}
             />
           ))}
 

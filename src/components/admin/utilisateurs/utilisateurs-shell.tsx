@@ -193,6 +193,7 @@ export function UtilisateursShell({
   initialProfileDossierAccessExclusions,
   initialFormationOffers,
   initialDossierNamePresets,
+  initialCours = [],
 }: {
   initialUsers: Profile[];
   initialGroupes: Groupe[];
@@ -205,6 +206,7 @@ export function UtilisateursShell({
   initialProfileDossierAccessExclusions: ProfileDossierAccesExclusion[];
   initialFormationOffers: FormationOfferSetting[];
   initialDossierNamePresets: DossierNamePreset[];
+  initialCours?: { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[];
 }) {
   const [view, setView] = useState<"comptes" | "groupe" | "administration" | "dossier_summary">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
@@ -448,19 +450,6 @@ export function UtilisateursShell({
           <span className="ml-auto text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>{users.length}</span>
         </button>
 
-        <button
-          onClick={() => { setView("administration"); setSelectedGroupeId(null); }}
-          className="flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors"
-          style={{
-            backgroundColor: view === "administration" ? "rgba(255,255,255,0.1)" : "transparent",
-            color: view === "administration" ? "white" : "rgba(255,255,255,0.55)",
-            fontWeight: view === "administration" ? 600 : 400,
-          }}
-        >
-          <Settings size={14} />
-          Formations & classes
-        </button>
-
         {/* Arborescence header */}
         <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
@@ -484,6 +473,7 @@ export function UtilisateursShell({
             dossiers={initialDossiers}
             groupes={groupes}
             users={users}
+            cours={initialCours ?? []}
             selectedGroupeId={selectedGroupeId}
             selectedDossierId={selectedDossierId}
             onSelectGroup={(id) => { setView("groupe"); setSelectedGroupeId(id); setSelectedDossierId(null); }}

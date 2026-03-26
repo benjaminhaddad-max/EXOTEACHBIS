@@ -28,6 +28,7 @@ export default async function UtilisateursPage() {
     profileDossierAccesRes,
     profileDossierAccessExclusionsRes,
     adminSettingsRes,
+    coursRes,
   ] = await Promise.all([
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     supabase.from("groupes").select("*").order("name"),
@@ -39,6 +40,7 @@ export default async function UtilisateursPage() {
     supabase.from("profile_dossier_acces").select("profile_id, dossier_id"),
     supabase.from("profile_dossier_access_exclusions").select("profile_id, dossier_id"),
     supabase.from("admin_settings").select("key, value"),
+    supabase.from("cours").select("id, name, dossier_id, matiere_id, order_index, visible").order("order_index"),
   ]);
 
   const adminSettings = parsePedagogieAdminSettings((adminSettingsRes.data ?? []) as { key: string; value: unknown }[]);
@@ -57,6 +59,7 @@ export default async function UtilisateursPage() {
         initialProfileDossierAccessExclusions={(profileDossierAccessExclusionsRes.data ?? []) as ProfileDossierAccesExclusion[]}
         initialFormationOffers={adminSettings.formationOffers}
         initialDossierNamePresets={adminSettings.dossierNamePresets}
+        initialCours={(coursRes.data ?? []) as { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[]}
       />
     </div>
   );
