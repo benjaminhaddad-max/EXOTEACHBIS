@@ -31,14 +31,28 @@ export default async function ExamensElevePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Load visible examens with series + coefficients
-  const { data: examensRaw } = await supabase
-    .from("examens")
-    .select("*, examens_series(order_index, coefficient, series:series(id, name, timed, duration_minutes, type))")
-    .eq("visible", true)
-    .order("debut_at", { ascending: false });
+  // Get student's profile to know their groupe
+  const { data: profile } = await supabase.from("profiles").select("groupe_id").eq("id", user.id).single();
+  const studentGroupeId = profile?.groupe_id;
 
-  const examens = (examensRaw ?? []).map((e: any) => ({
+  // Load visible examens with series + coefficients + groupe targeting
+  const [examensRes, exGroupesRes] = await Promise.all([
+    supabase
+      .from("examens")
+      .select("*, examens_series(order_index, coefficient, series:series(id, name, timed, duration_minutes, type))")
+      .eq("visible", true)
+      .order("debut_at", { ascending: false }),
+    supabase.from("examens_groupes").select("*"),
+  ]);
+
+  // Build examen -> groupe_ids map
+  const examenGroupesMap: Record<string, string[]> = {};
+  for (const eg of (exGroupesRes.data ?? [])) {
+    if (!examenGroupesMap[eg.examen_id]) examenGroupesMap[eg.examen_id] = [];
+    examenGroupesMap[eg.examen_id].push(eg.groupe_id);
+  }
+
+  const allExamens = (examensRes.data ?? []).map((e: any) => ({
     ...e,
     examen_series: (e.examens_series ?? [])
       .sort((a: any, b: any) => a.order_index - b.order_index),
@@ -47,7 +61,13 @@ export default async function ExamensElevePage() {
       .map((es: any) => ({ ...es.series, coefficient: es.coefficient }))
       .filter(Boolean),
     examens_series: undefined,
+    groupe_ids: examenGroupesMap[e.id] ?? [],
   }));
+
+  // Filter: show exams that target the student's groupe (or exams with no targeting = available to all)
+  const examens = allExamens.filter((e: any) =>
+    e.groupe_ids.length === 0 || (studentGroupeId && e.groupe_ids.includes(studentGroupeId))
+  );
 
   // Load user's best attempts per serie
   const { data: attemptsRaw } = await supabase

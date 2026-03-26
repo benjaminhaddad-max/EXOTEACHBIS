@@ -16,7 +16,7 @@ export async function createExamen(data: {
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from("examens").insert({
+  const { data: inserted, error } = await supabase.from("examens").insert({
     name: data.name,
     description: data.description || null,
     debut_at: data.debut_at,
@@ -25,10 +25,10 @@ export async function createExamen(data: {
     results_visible: data.results_visible ?? false,
     notation_sur: data.notation_sur ?? 20,
     created_by: user?.id ?? null,
-  });
+  }).select("id").single();
   if (error) return { error: error.message };
   revalidatePath(PATH);
-  return { success: true };
+  return { success: true, id: inserted.id };
 }
 
 export async function updateExamen(
@@ -181,6 +181,27 @@ export async function upsertMatiereCoefficient(
     );
   if (error) return { error: error.message };
   revalidatePath("/admin/examens");
+  return { success: true };
+}
+
+// --- Groupes ciblés par un examen ---
+
+export async function setExamenGroupes(examen_id: string, groupe_ids: string[]) {
+  const supabase = await createClient();
+  // Remove existing
+  const { error: delErr } = await supabase
+    .from("examens_groupes")
+    .delete()
+    .eq("examen_id", examen_id);
+  if (delErr) return { error: delErr.message };
+  // Insert new
+  if (groupe_ids.length > 0) {
+    const { error: insErr } = await supabase
+      .from("examens_groupes")
+      .insert(groupe_ids.map(groupe_id => ({ examen_id, groupe_id })));
+    if (insErr) return { error: insErr.message };
+  }
+  revalidatePath(PATH);
   return { success: true };
 }
 
