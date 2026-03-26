@@ -1286,6 +1286,7 @@ function AdministrationView({
                 dossierTree={dossierTree}
                 dossierList={dossierList}
                 accessIds={groupeAccessById.get(selectedAdminGroupe.id) ?? []}
+                groupeAccessById={groupeAccessById}
                 isPending={isPending}
                 onEditGroupe={onEditGroupe}
                 onDeleteGroupe={onDeleteGroupe}

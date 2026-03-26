@@ -627,48 +627,6 @@ export function ConfigurationShell({
               )}
 
               <div className="relative">
-                <div className="absolute -right-3 top-10 z-20 hidden xl:block">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddMenu((current) => !current)}
-                      disabled={!selectedTemplateId}
-                      className="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_14px_34px_rgba(18,49,77,0.24)] transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ backgroundColor: DS.navy }}
-                      title="Ajouter une question"
-                    >
-                      <Plus className="h-6 w-6" />
-                    </button>
-
-                    {showAddMenu && selectedTemplateId && (
-                      <div className="absolute right-16 top-1/2 w-64 -translate-y-1/2 rounded-[24px] border bg-white p-3 shadow-[0_24px_50px_rgba(18,49,77,0.18)]" style={{ borderColor: DS.line }}>
-                        <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
-                          Nouvelle question
-                        </p>
-                        <div className="space-y-2">
-                          {FIELD_LIBRARY.map((item) => (
-                            <button
-                              key={item.type}
-                              type="button"
-                              onClick={() => {
-                                handleAddField(item.type);
-                                setShowAddMenu(false);
-                              }}
-                              className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium transition hover:bg-[#f7fbfe]"
-                              style={{ color: DS.navy }}
-                            >
-                              <span className="flex h-9 w-9 items-center justify-center rounded-2xl" style={{ backgroundColor: "#eef6fb" }}>
-                                {item.icon}
-                              </span>
-                              {item.title}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 {selectedFields.length === 0 ? (
                   <div className="rounded-[28px] border-2 border-dashed bg-white/70 p-12 text-center" style={{ borderColor: "#ddd2b8" }}>
                     <p className="text-sm text-[#7c7664]">
@@ -731,8 +689,8 @@ export function ConfigurationShell({
                       </SortableContext>
                     </DndContext>
 
-                    <div className="flex justify-center xl:hidden">
-                      <div className="relative">
+                    <div className="flex justify-center pt-2">
+                      <div className="relative flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => setShowAddMenu((current) => !current)}
@@ -744,8 +702,24 @@ export function ConfigurationShell({
                           <Plus className="h-6 w-6" />
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lastField = selectedFields.at(-1);
+                            if (lastField) {
+                              handleDuplicateField(lastField);
+                            }
+                          }}
+                          disabled={selectedFields.length === 0}
+                          className="flex h-14 w-14 items-center justify-center rounded-full border bg-white shadow-sm transition hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{ borderColor: DS.line, color: DS.navy }}
+                          title="Dupliquer la dernière question"
+                        >
+                          <Copy className="h-5 w-5" />
+                        </button>
+
                         {showAddMenu && selectedTemplateId && (
-                          <div className="absolute left-1/2 top-16 z-20 w-64 -translate-x-1/2 rounded-[24px] border bg-white p-3 shadow-[0_24px_50px_rgba(18,49,77,0.18)]" style={{ borderColor: DS.line }}>
+                          <div className="absolute bottom-16 left-1/2 z-20 w-64 -translate-x-1/2 rounded-[24px] border bg-white p-3 shadow-[0_24px_50px_rgba(18,49,77,0.18)]" style={{ borderColor: DS.line }}>
                             <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
                               Nouvelle question
                             </p>
