@@ -10,7 +10,7 @@ import {
   Calendar,
   HelpCircle,
   Trophy,
-  Megaphone,
+  MessageSquare,
   Layers,
   MessageCircleQuestion,
   Handshake,
@@ -25,18 +25,17 @@ const adminNavItems = [
   { href: "/admin/coaching", label: "Coaching", icon: Handshake },
   // { href: "/admin/flashcards", label: "Flashcards", icon: Layers }, // Intégré dans Pédagogie & Exercices
   { href: "/admin/questions-reponses", label: "Questions / Réponses", icon: MessageCircleQuestion },
-  { href: "/admin/annonces", label: "Annonces", icon: Megaphone },
+  { href: "/admin/communication", label: "Communication", icon: MessageSquare },
   { href: "/admin/utilisateurs", label: "Administration", icon: Users },
   // { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard }, // Désactivé temporairement
   { href: "/admin/planning", label: "Planning", icon: Calendar },
-  { href: "/admin/formulaires", label: "Formulaires", icon: Settings },
   { href: "/admin/aide", label: "Aide", icon: HelpCircle },
 ];
 
 export function AdminSidebar() {
   const { profile } = useUser();
   const navItems = profile?.role === "prof" || profile?.role === "coach"
-    ? adminNavItems.filter((item) => item.href === "/admin/annonces" || item.href === "/admin/coaching")
+    ? adminNavItems.filter((item) => item.href === "/admin/communication" || item.href === "/admin/coaching")
     : adminNavItems;
 
   return (
