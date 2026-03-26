@@ -194,7 +194,8 @@ function DossierTreeNode({
 
   const linkedGroups = groupsByDossier.get(node.id) || [];
   const linkedCours = coursByDossier.get(node.id) || [];
-  const hasChildren = node.children.length > 0 || linkedGroups.length > 0 || linkedCours.length > 0;
+  // Only dossier children count for expand/collapse — groups and cours are in the right panel
+  const hasChildren = node.children.length > 0;
   const isSelected = selectedDossierId === node.id;
 
   const Icon = DTYPE_ICON[node.dossier_type] || Folder;
@@ -218,6 +219,7 @@ function DossierTreeNode({
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onClick={() => { onSelectDossier(node.id); if (hasChildren) setExpanded(p => !p); }}
         style={{
           paddingLeft: depth * 20 + 8,
           backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : hovered ? "rgba(255,255,255,0.04)" : "transparent",
@@ -227,16 +229,15 @@ function DossierTreeNode({
         }}
         className="flex items-center gap-2 py-2.5 pr-3 cursor-pointer transition-all"
       >
-        {/* Expand toggle */}
-        <button
-          onClick={(e) => { e.stopPropagation(); if (hasChildren) setExpanded(p => !p); }}
+        {/* Expand toggle (visual only) */}
+        <div
           className="w-5 h-5 flex items-center justify-center shrink-0 rounded"
           style={{ color: hasChildren ? "rgba(255,255,255,0.45)" : "transparent" }}
         >
           {hasChildren
             ? (expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
             : null}
-        </button>
+        </div>
 
         {/* Icon */}
         <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: accentColor + "18" }}>
@@ -244,19 +245,14 @@ function DossierTreeNode({
         </div>
 
         {/* Name */}
-        <button
-          onClick={() => onSelectDossier(node.id)}
-          className="flex-1 min-w-0 text-left"
-        >
-          <span className="truncate block" style={{
-            color: isSelected ? "#E3C286" : "rgba(255,255,255,0.85)",
-            fontWeight: depth === 0 ? 700 : isSelected ? 600 : 500,
-            fontSize: depth === 0 ? 14 : 13,
-            lineHeight: "1.3",
-          }}>
-            {node.name}
-          </span>
-        </button>
+        <span className="flex-1 min-w-0 text-left truncate block" style={{
+          color: isSelected ? "#E3C286" : "rgba(255,255,255,0.85)",
+          fontWeight: depth === 0 ? 700 : isSelected ? 600 : 500,
+          fontSize: depth === 0 ? 14 : 13,
+          lineHeight: "1.3",
+        }}>
+          {node.name}
+        </span>
 
         {/* Group count badge */}
         {totalGroups > 0 && (
