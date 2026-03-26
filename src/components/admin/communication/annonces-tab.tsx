@@ -172,14 +172,27 @@ export function AnnoncesTab({
             <AnnonceFormDark
               annonce={modal.type === "edit" ? modal.annonce : undefined}
               groupes={groupes} dossiers={dossiers} matieres={matieres} isPending={isPending}
+              defaultGroupeIds={modal.type === "create" ? selectedGroupeIds : undefined}
               onClose={() => setModal(null)}
               onSubmit={data => {
                 startTransition(async () => {
-                  const res = modal.type === "edit" ? await updateAnnonce(modal.annonce.id, data) : await createAnnonce(data);
-                  if ("error" in res) { showToast(res.error!, "error"); return; }
-                  setModal(null);
-                  await refresh();
-                  showToast(modal.type === "create" ? "Annonce publiée" : "Annonce modifiée", "success");
+                  if (modal.type === "edit") {
+                    const res = await updateAnnonce(modal.annonce.id, data);
+                    if ("error" in res) { showToast(res.error!, "error"); return; }
+                    setModal(null); await refresh(); showToast("Annonce modifiée", "success");
+                  } else {
+                    // Batch: create one annonce per target group
+                    const targetIds = data.groupe_ids && data.groupe_ids.length > 0 ? data.groupe_ids : [data.groupe_id];
+                    let errored = false;
+                    for (const gid of targetIds) {
+                      const res = await createAnnonce({ title: data.title, content: data.content, groupe_id: gid, dossier_id: data.dossier_id, matiere_id: data.matiere_id, pinned: data.pinned });
+                      if ("error" in res) { showToast(res.error!, "error"); errored = true; break; }
+                    }
+                    if (!errored) {
+                      setModal(null); await refresh();
+                      showToast(targetIds.length > 1 ? `Annonce publiée dans ${targetIds.length} classes` : "Annonce publiée", "success");
+                    }
+                  }
                 });
               }}
             />
@@ -192,21 +205,49 @@ export function AnnoncesTab({
 
 // ─── Dark Annonce Form ────────────────────────────────────────────────────────
 
-function AnnonceFormDark({ annonce, groupes, dossiers, matieres, isPending, onClose, onSubmit }: {
+function AnnonceFormDark({ annonce, groupes, dossiers, matieres, isPending, defaultGroupeIds, onClose, onSubmit }: {
   annonce?: Annonce;
   groupes: Groupe[]; dossiers: Dossier[]; matieres: Matiere[];
   isPending: boolean; onClose: () => void;
-  onSubmit: (data: { title: string; content: string; groupe_id: string | null; dossier_id: string | null; matiere_id: string | null; pinned: boolean }) => void;
+  defaultGroupeIds?: Set<string>;
+  onSubmit: (data: { title: string; content: string; groupe_id: string | null; groupe_ids?: string[]; dossier_id: string | null; matiere_id: string | null; pinned: boolean }) => void;
 }) {
+  const hasDefaultClasses = defaultGroupeIds && defaultGroupeIds.size > 0;
   const [title, setTitle] = useState(annonce?.title ?? "");
   const [content, setContent] = useState(annonce?.content ?? "");
-  const [audienceType, setAudienceType] = useState<"global" | "groupe" | "dossier" | "matiere">(
-    annonce?.matiere_id ? "matiere" : annonce?.dossier_id ? "dossier" : annonce?.groupe_id ? "groupe" : "global"
+  const [audienceType, setAudienceType] = useState<"global" | "groupe" | "dossier" | "matiere" | "multi">(
+    annonce?.matiere_id ? "matiere" : annonce?.dossier_id ? "dossier" : annonce?.groupe_id ? "groupe" : hasDefaultClasses ? "multi" : "global"
   );
-  const [groupeId, setGroupeId] = useState(annonce?.groupe_id ?? "");
+  const [groupeId, setGroupeId] = useState(annonce?.groupe_id ?? (hasDefaultClasses && defaultGroupeIds!.size === 1 ? [...defaultGroupeIds!][0] : ""));
   const [dossierId, setDossierId] = useState(annonce?.dossier_id ?? "");
   const [matiereId, setMatiereId] = useState(annonce?.matiere_id ?? "");
   const [pinned, setPinned] = useState(annonce?.pinned ?? false);
+
+  const defaultClassNames = hasDefaultClasses
+    ? [...defaultGroupeIds!].map(id => groupes.find(g => g.id === id)?.name ?? "?").join(", ")
+    : "";
+
+  const canSubmit = !isPending && title.trim() && content.trim() && (
+    audienceType === "global" || audienceType === "multi" ||
+    (audienceType === "groupe" && groupeId) ||
+    (audienceType === "dossier" && dossierId) ||
+    (audienceType === "matiere" && matiereId)
+  );
+
+  const handleSubmit = () => {
+    const base = { title: title.trim(), content: content.trim(), dossier_id: null as string | null, matiere_id: null as string | null, pinned };
+    if (audienceType === "multi" && hasDefaultClasses) {
+      onSubmit({ ...base, groupe_id: null, groupe_ids: [...defaultGroupeIds!] });
+    } else if (audienceType === "groupe") {
+      onSubmit({ ...base, groupe_id: groupeId || null });
+    } else if (audienceType === "dossier") {
+      onSubmit({ ...base, dossier_id: dossierId || null, groupe_id: null });
+    } else if (audienceType === "matiere") {
+      onSubmit({ ...base, matiere_id: matiereId || null, groupe_id: null });
+    } else {
+      onSubmit({ ...base, groupe_id: null });
+    }
+  };
 
   return (
     <div className="p-6 space-y-4">
@@ -214,6 +255,22 @@ function AnnonceFormDark({ annonce, groupes, dossiers, matieres, isPending, onCl
         <h2 className="text-base font-semibold text-white">{annonce ? "Modifier l'annonce" : "Nouvelle annonce"}</h2>
         <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
       </div>
+
+      {/* Pre-filled classes banner */}
+      {!annonce && hasDefaultClasses && audienceType === "multi" && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ backgroundColor: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.2)" }}>
+          <Users size={13} style={{ color: "#34D399" }} />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold" style={{ color: "#34D399" }}>
+              {defaultGroupeIds!.size} classe{defaultGroupeIds!.size > 1 ? "s" : ""} sélectionnée{defaultGroupeIds!.size > 1 ? "s" : ""}
+            </p>
+            <p className="text-[10px] truncate" style={{ color: "rgba(52,211,153,0.7)" }}>{defaultClassNames}</p>
+          </div>
+          <button onClick={() => setAudienceType("global")} className="text-[10px] px-2 py-1 rounded-lg" style={{ color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            Changer
+          </button>
+        </div>
+      )}
 
       <div>
         <label className="text-xs mb-1.5 block" style={{ color: "rgba(255,255,255,0.5)" }}>Titre *</label>
@@ -225,33 +282,37 @@ function AnnonceFormDark({ annonce, groupes, dossiers, matieres, isPending, onCl
         <textarea value={content} onChange={e => setContent(e.target.value)} rows={5} placeholder="Rédigez votre annonce..." className={F + " resize-none"} />
       </div>
 
-      <div>
-        <label className="text-xs mb-1.5 block" style={{ color: "rgba(255,255,255,0.5)" }}>Destinataires</label>
-        <select value={audienceType} onChange={e => setAudienceType(e.target.value as any)} className={F}>
-          <option value="global">Tout le monde</option>
-          {groupes.length > 0 && <option value="groupe">Une classe</option>}
-          {dossiers.length > 0 && <option value="dossier">Une formation</option>}
-          {matieres.length > 0 && <option value="matiere">Une matière</option>}
-        </select>
-      </div>
-
-      {audienceType === "groupe" && (
-        <select value={groupeId} onChange={e => setGroupeId(e.target.value)} className={F}>
-          <option value="">Choisir une classe...</option>
-          {groupes.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-      )}
-      {audienceType === "dossier" && (
-        <select value={dossierId} onChange={e => setDossierId(e.target.value)} className={F}>
-          <option value="">Choisir un dossier...</option>
-          {dossiers.map(d => <option key={d.id} value={d.id}>{getDossierPathLabel(d.id, dossiers)}</option>)}
-        </select>
-      )}
-      {audienceType === "matiere" && (
-        <select value={matiereId} onChange={e => setMatiereId(e.target.value)} className={F}>
-          <option value="">Choisir une matière...</option>
-          {matieres.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
+      {/* Audience selector (only if not multi-class from sidebar) */}
+      {audienceType !== "multi" && (
+        <>
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: "rgba(255,255,255,0.5)" }}>Destinataires</label>
+            <select value={audienceType} onChange={e => setAudienceType(e.target.value as any)} className={F}>
+              <option value="global">Tout le monde</option>
+              {groupes.length > 0 && <option value="groupe">Une classe</option>}
+              {dossiers.length > 0 && <option value="dossier">Une formation</option>}
+              {matieres.length > 0 && <option value="matiere">Une matière</option>}
+            </select>
+          </div>
+          {audienceType === "groupe" && (
+            <select value={groupeId} onChange={e => setGroupeId(e.target.value)} className={F}>
+              <option value="">Choisir une classe...</option>
+              {groupes.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
+          {audienceType === "dossier" && (
+            <select value={dossierId} onChange={e => setDossierId(e.target.value)} className={F}>
+              <option value="">Choisir un dossier...</option>
+              {dossiers.map(d => <option key={d.id} value={d.id}>{getDossierPathLabel(d.id, dossiers)}</option>)}
+            </select>
+          )}
+          {audienceType === "matiere" && (
+            <select value={matiereId} onChange={e => setMatiereId(e.target.value)} className={F}>
+              <option value="">Choisir une matière...</option>
+              {matieres.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
+        </>
       )}
 
       <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "rgba(255,255,255,0.6)" }}>
@@ -261,12 +322,10 @@ function AnnonceFormDark({ annonce, groupes, dossiers, matieres, isPending, onCl
 
       <div className="flex justify-end gap-3 pt-2">
         <button onClick={onClose} className="px-4 py-2 text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>Annuler</button>
-        <button
-          onClick={() => onSubmit({ title: title.trim(), content: content.trim(), groupe_id: audienceType === "groupe" ? groupeId || null : null, dossier_id: audienceType === "dossier" ? dossierId || null : null, matiere_id: audienceType === "matiere" ? matiereId || null : null, pinned })}
-          disabled={isPending || !title.trim() || !content.trim() || (audienceType === "groupe" && !groupeId) || (audienceType === "dossier" && !dossierId) || (audienceType === "matiere" && !matiereId)}
+        <button onClick={handleSubmit} disabled={!canSubmit}
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg disabled:opacity-50" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
           {isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          {annonce ? "Enregistrer" : "Publier"}
+          {annonce ? "Enregistrer" : audienceType === "multi" && defaultGroupeIds && defaultGroupeIds.size > 1 ? `Publier (${defaultGroupeIds.size} classes)` : "Publier"}
         </button>
       </div>
     </div>
