@@ -143,10 +143,20 @@ export function AnnoncesTab({
           </p>
 
           {filteredAnnonces.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16" style={{ color: "rgba(255,255,255,0.3)" }}>
-              <Megaphone size={32} className="mb-3 opacity-30" />
-              <p className="text-sm">Aucune annonce</p>
-              <p className="text-xs mt-1">Sélectionne des classes à gauche puis clique "Nouvelle annonce"</p>
+            <div className="flex flex-col items-center justify-center py-20" style={{ color: "rgba(255,255,255,0.3)" }}>
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ backgroundColor: "rgba(201,168,76,0.08)" }}>
+                <Megaphone size={28} style={{ color: "rgba(201,168,76,0.4)" }} />
+              </div>
+              <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.5)" }}>
+                {!selectedGroupeIds || selectedGroupeIds.size === 0
+                  ? "Sélectionne des classes à gauche"
+                  : "Aucune annonce pour cette sélection"}
+              </p>
+              <p className="text-xs mt-1.5 max-w-xs text-center" style={{ color: "rgba(255,255,255,0.25)" }}>
+                {!selectedGroupeIds || selectedGroupeIds.size === 0
+                  ? "Coche les formations, universités ou classes dans la sidebar pour voir et créer des annonces ciblées."
+                  : "Clique sur « Nouvelle annonce » en haut à droite pour en créer une."}
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -226,19 +236,15 @@ function AnnonceEditor({ annonce, selectedGroupeIds, groupes, isPending, onBack,
       </button>
 
       {/* Target summary banner */}
-      {isCreate && (
-        <div className="p-4 rounded-xl" style={{ backgroundColor: hasTargets ? "rgba(52,211,153,0.06)" : "rgba(201,168,76,0.06)", border: hasTargets ? "1px solid rgba(52,211,153,0.15)" : "1px solid rgba(201,168,76,0.15)" }}>
+      {isCreate && hasTargets && (
+        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)" }}>
           <div className="flex items-center gap-2">
-            <Users size={14} style={{ color: hasTargets ? "#34D399" : "#C9A84C" }} />
+            <Users size={14} style={{ color: "#34D399" }} />
             <div>
-              <p className="text-xs font-semibold" style={{ color: hasTargets ? "#34D399" : "#C9A84C" }}>
-                {hasTargets ? `${selectedGroupeIds!.size} classe${selectedGroupeIds!.size > 1 ? "s" : ""} ciblée${selectedGroupeIds!.size > 1 ? "s" : ""}` : "Annonce globale"}
+              <p className="text-xs font-semibold" style={{ color: "#34D399" }}>
+                Destinataires : {selectedGroupeIds!.size} classe{selectedGroupeIds!.size > 1 ? "s" : ""}
               </p>
-              {hasTargets ? (
-                <p className="text-[10px] mt-0.5" style={{ color: "rgba(52,211,153,0.6)" }}>{targetNames.join(", ")}</p>
-              ) : (
-                <p className="text-[10px] mt-0.5" style={{ color: "rgba(201,168,76,0.6)" }}>Coche des classes à gauche pour cibler, ou publie pour tout le monde</p>
-              )}
+              <p className="text-[10px] mt-0.5" style={{ color: "rgba(52,211,153,0.6)" }}>{targetNames.join(" · ")}</p>
             </div>
           </div>
         </div>

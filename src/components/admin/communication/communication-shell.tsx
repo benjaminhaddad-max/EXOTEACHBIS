@@ -89,10 +89,18 @@ export function CommunicationShell({
             </span>
           )}
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {tab === "annonces" && selectedGroupeIds.size === 0 && (
+              <span className="text-[10px] italic" style={{ color: "rgba(255,255,255,0.3)" }}>← Sélectionne d&apos;abord les destinataires</span>
+            )}
             {tab === "annonces" && (
-              <button onClick={() => setCreateAnnonce(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
+              <button onClick={() => { if (selectedGroupeIds.size > 0) setCreateAnnonce(true); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{
+                  backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(255,255,255,0.06)",
+                  color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(255,255,255,0.25)",
+                  cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
+                }}>
                 <Plus size={13} /> Nouvelle annonce
               </button>
             )}
