@@ -622,26 +622,52 @@ export function UtilisateursShell({
               <p className="text-[10px] text-gray-400 mb-5 ml-[52px]">{pathParts.join(" › ")}</p>
 
               {/* Classes with expandable access trees */}
-              {directGroups.length > 0 && (
+              {(directGroups.length > 0 || true) && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
                       Classes ({directGroups.length})
                     </h3>
+                  </div>
+
+                  {/* Inline create class form */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nom de la nouvelle classe..."
+                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/50"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const input = e.currentTarget;
+                          const name = input.value.trim();
+                          if (!name) return;
+                          input.value = "";
+                          startTransition(async () => {
+                            const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
+                            if ("error" in res) { showToast(res.error!, "error"); return; }
+                            showToast("Classe créée !", "success");
+                            window.location.reload();
+                          });
+                        }
+                      }}
+                    />
                     <button
-                      onClick={() => {
-                        const name = prompt("Nom de la classe :");
-                        if (!name?.trim()) return;
+                      onClick={(e) => {
+                        const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                        const name = input?.value?.trim();
+                        if (!name) { input?.focus(); return; }
+                        input.value = "";
                         startTransition(async () => {
-                          const res = await createGroupe({ name: name.trim(), formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
+                          const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
                           if ("error" in res) { showToast(res.error!, "error"); return; }
-                          showToast("Classe créée", "success");
+                          showToast("Classe créée !", "success");
                           window.location.reload();
                         });
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-gold hover:bg-gold/5 transition-colors border border-gold/20"
+                      className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+                      style={{ backgroundColor: "#0e1e35" }}
                     >
-                      <Plus size={10} /> Nouvelle classe
+                      <Plus size={14} />
                     </button>
                   </div>
 
@@ -842,28 +868,7 @@ export function UtilisateursShell({
                 </div>
               )}
 
-              {directGroups.length === 0 && (
-                <div className="text-center py-10 bg-gray-50 rounded-xl">
-                  <Users className="mx-auto h-8 w-8 text-gray-300 mb-2" />
-                  <p className="text-sm font-medium text-gray-400">Aucune classe ici</p>
-                  <button
-                    onClick={() => {
-                      const name = prompt("Nom de la classe :");
-                      if (!name?.trim()) return;
-                      startTransition(async () => {
-                        const res = await createGroupe({ name: name.trim(), formation_dossier_id: dossier.id, color: "#3B82F6", annee: "2026-2027" });
-                        if ("error" in res) { showToast(res.error!, "error"); return; }
-                        showToast("Classe créée", "success");
-                        window.location.reload();
-                      });
-                    }}
-                    className="mt-3 flex items-center gap-1.5 mx-auto px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
-                    style={{ backgroundColor: "#0e1e35" }}
-                  >
-                    <Plus size={12} /> Créer une classe
-                  </button>
-                </div>
-              )}
+              {/* Empty state handled by the inline form above */}
             </div>
           );
         })()}
