@@ -119,6 +119,11 @@ function toLocalDateTimeInput(value?: string | null) {
   return local.toISOString().slice(0, 16);
 }
 
+function fromLocalDateTimeInput(value: string) {
+  if (!value) return "";
+  return new Date(value).toISOString();
+}
+
 function initialPointADraft(profile?: CoachingStudentProfile | null): PointADraft {
   return {
     mentality: profile?.mentality ?? "passif",
@@ -172,7 +177,15 @@ export function CoachingShell({
   const groupsById = useMemo(() => new Map(groupes.map((group) => [group.id, group])), [groupes]);
   const coachesById = useMemo(() => new Map(coaches.map((coach) => [coach.id, coach])), [coaches]);
   const formsByStudentId = useMemo(() => new Map(intakeForms.map((form) => [form.student_id, form])), [intakeForms]);
-  const bookingsByStudentId = useMemo(() => new Map(bookings.map((booking) => [booking.student_id, booking])), [bookings]);
+  const bookingsByStudentId = useMemo(() => {
+    const map = new Map<string, CoachingCallBooking>();
+    for (const booking of bookings) {
+      if (!map.has(booking.student_id)) {
+        map.set(booking.student_id, booking);
+      }
+    }
+    return map;
+  }, [bookings]);
   const bookingsBySlotId = useMemo(() => new Map(bookings.map((booking) => [booking.slot_id, booking])), [bookings]);
   const pointAByStudentId = useMemo(
     () => new Map(pointAProfiles.map((profile) => [profile.student_id, profile])),
@@ -471,7 +484,7 @@ export function CoachingShell({
                 type="datetime-local"
                 value={toLocalDateTimeInput(slotDraft.startAt)}
                 onChange={(event) =>
-                  setSlotDraft((current) => ({ ...current, startAt: new Date(event.target.value).toISOString() }))
+                  setSlotDraft((current) => ({ ...current, startAt: fromLocalDateTimeInput(event.target.value) }))
                 }
                 className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
               />
@@ -483,7 +496,7 @@ export function CoachingShell({
                 type="datetime-local"
                 value={toLocalDateTimeInput(slotDraft.endAt)}
                 onChange={(event) =>
-                  setSlotDraft((current) => ({ ...current, endAt: new Date(event.target.value).toISOString() }))
+                  setSlotDraft((current) => ({ ...current, endAt: fromLocalDateTimeInput(event.target.value) }))
                 }
                 className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
               />
