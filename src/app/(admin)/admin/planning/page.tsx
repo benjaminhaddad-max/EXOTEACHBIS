@@ -14,7 +14,7 @@ export default async function PlanningPage() {
   ]);
 
   return (
-    <div className="bg-[#0e1e35] rounded-2xl min-h-[calc(100vh-8rem)] overflow-hidden">
+    <div className="bg-[#0e1e35] rounded-2xl h-[calc(100vh-9rem)] overflow-hidden flex flex-col">
       <PlanningShell
         initialEvents={(eventsRes.data ?? []) as any[]}
         groupes={(groupesRes.data ?? []) as Groupe[]}

@@ -172,7 +172,7 @@ export function PlanningShell({
     : `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
 
       {/* Toast */}
       {toast && (
@@ -354,7 +354,7 @@ function PlanningSidebar({
 
   return (
     <div
-      className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto"
+      className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full"
       style={{ width: 220, backgroundColor: "rgba(0,0,0,0.15)" }}
     >
       {/* Header */}
