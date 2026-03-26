@@ -466,16 +466,6 @@ export function UtilisateursShell({
           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
             Formations & Classes
           </span>
-          <button
-            onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: null })}
-            title="Nouveau groupe"
-            className="rounded p-0.5 transition-colors"
-            style={{ color: "rgba(255,255,255,0.3)" }}
-            onMouseOver={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
-            onMouseOut={e => (e.currentTarget.style.color = "rgba(255,255,255,0.3)")}
-          >
-            <Plus size={12} />
-          </button>
         </div>
 
         {/* Dossier tree with groups */}

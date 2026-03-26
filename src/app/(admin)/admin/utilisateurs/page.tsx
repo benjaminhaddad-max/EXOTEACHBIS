@@ -48,7 +48,7 @@ export default async function UtilisateursPage() {
   const adminSettings = parsePedagogieAdminSettings((adminSettingsRes.data ?? []) as { key: string; value: unknown }[]);
 
   return (
-    <div className="bg-[#0e1e35] rounded-2xl min-h-[calc(100vh-8rem)] overflow-hidden">
+    <div className="bg-[#0e1e35] rounded-2xl min-h-[calc(100vh-4rem)] overflow-hidden -m-6 lg:-m-8">
       <UtilisateursShell
         initialUsers={(usersRes.data ?? []) as Profile[]}
         initialGroupes={(groupesRes.data ?? []) as Groupe[]}
