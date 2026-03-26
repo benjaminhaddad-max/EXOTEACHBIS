@@ -451,7 +451,7 @@ export function UtilisateursShell({
           }}
         >
           <Settings size={14} />
-          Administration
+          Formations & classes
         </button>
 
         {/* Groupes header */}
@@ -757,7 +757,7 @@ function AdministrationView({
         <div className="mb-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-white">Offres, classes et accès</h2>
+              <h2 className="text-lg font-bold text-white">Formations & classes</h2>
               <p className="mt-1 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
                 Clique sur une offre pour la modifier, ou sur une classe pour gérer ses utilisateurs et ses accès.
               </p>
