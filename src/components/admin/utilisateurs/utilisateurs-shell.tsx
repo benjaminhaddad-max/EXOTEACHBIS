@@ -1815,8 +1815,8 @@ function ComptesView({
           </div>
         )}
 
-        {/* Classe */}
-        {filteredClasses.length > 0 && (
+        {/* Classe — only show when a university is selected */}
+        {filterUniversityId && filteredClasses.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
             {[{ id: "", name: "Toutes", uniName: "", count: filtered.length, color: "" }, ...filteredClasses].map(f => (
