@@ -993,16 +993,16 @@ function SortableTreeNode({
 // SORTABLE SUB-DOSSIER CARD (grille drag & drop)
 // =============================================
 
-// Type-based visual styles for sub-dossier cards
+// Type-based visual styles for sub-dossier cards — Diploma Santé charte graphique
 const CARD_STYLES: Record<string, { icon: typeof Folder; gradient: string; iconBg: string; iconColor: string; badgeBg: string; badgeText: string; border: string }> = {
-  offer: { icon: GraduationCap, gradient: "linear-gradient(135deg, #0e1e35 0%, #1a3050 100%)", iconBg: "rgba(201,168,76,0.15)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.15)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.2)" },
-  university: { icon: Building2, gradient: "linear-gradient(135deg, #1a1145 0%, #2d1b69 100%)", iconBg: "rgba(139,92,246,0.15)", iconColor: "#A78BFA", badgeBg: "rgba(139,92,246,0.15)", badgeText: "#A78BFA", border: "rgba(139,92,246,0.2)" },
-  semester: { icon: Calendar, gradient: "linear-gradient(135deg, #0f2027 0%, #203a43 100%)", iconBg: "rgba(56,189,248,0.15)", iconColor: "#38BDF8", badgeBg: "rgba(56,189,248,0.15)", badgeText: "#38BDF8", border: "rgba(56,189,248,0.2)" },
-  subject: { icon: BookOpen, gradient: "linear-gradient(135deg, #1a2332 0%, #1e3a2f 100%)", iconBg: "rgba(52,211,153,0.15)", iconColor: "#34D399", badgeBg: "rgba(52,211,153,0.15)", badgeText: "#34D399", border: "rgba(52,211,153,0.2)" },
-  module: { icon: Layers, gradient: "linear-gradient(135deg, #1a1e2e 0%, #2a2040 100%)", iconBg: "rgba(244,114,182,0.15)", iconColor: "#F472B6", badgeBg: "rgba(244,114,182,0.15)", badgeText: "#F472B6", border: "rgba(244,114,182,0.2)" },
-  option: { icon: Sparkles, gradient: "linear-gradient(135deg, #2a1f0e 0%, #3d2b10 100%)", iconBg: "rgba(251,191,36,0.15)", iconColor: "#FBBF24", badgeBg: "rgba(251,191,36,0.15)", badgeText: "#FBBF24", border: "rgba(251,191,36,0.2)" },
-  period: { icon: Clock, gradient: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)", iconBg: "rgba(129,140,248,0.15)", iconColor: "#818CF8", badgeBg: "rgba(129,140,248,0.15)", badgeText: "#818CF8", border: "rgba(129,140,248,0.2)" },
-  generic: { icon: Folder, gradient: "linear-gradient(135deg, #1f2937 0%, #374151 100%)", iconBg: "rgba(156,163,175,0.15)", iconColor: "#9CA3AF", badgeBg: "rgba(156,163,175,0.15)", badgeText: "#9CA3AF", border: "rgba(156,163,175,0.2)" },
+  offer:      { icon: GraduationCap, gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1a3555 100%)", iconBg: "rgba(201,168,76,0.18)", iconColor: "#E3C286", badgeBg: "rgba(201,168,76,0.18)", badgeText: "#E3C286", border: "rgba(201,168,76,0.35)" },
+  university: { icon: Building2,     gradient: "linear-gradient(145deg, #0e1e35 0%, #14253d 50%, #182c47 100%)", iconBg: "rgba(255,255,255,0.08)", iconColor: "#ffffff", badgeBg: "rgba(201,168,76,0.15)", badgeText: "#E3C286", border: "rgba(255,255,255,0.12)" },
+  semester:   { icon: Calendar,      gradient: "linear-gradient(145deg, #111f33 0%, #15283e 50%, #1a3048 100%)", iconBg: "rgba(201,168,76,0.12)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.12)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.18)" },
+  subject:    { icon: BookOpen,      gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1e3654 100%)", iconBg: "rgba(201,168,76,0.2)", iconColor: "#E3C286", badgeBg: "rgba(52,211,153,0.12)", badgeText: "#6EE7B7", border: "rgba(201,168,76,0.25)" },
+  module:     { icon: Layers,        gradient: "linear-gradient(145deg, #101b2d 0%, #152438 50%, #1a2d42 100%)", iconBg: "rgba(201,168,76,0.12)", iconColor: "#D4B65C", badgeBg: "rgba(201,168,76,0.1)", badgeText: "#D4B65C", border: "rgba(201,168,76,0.15)" },
+  option:     { icon: Sparkles,      gradient: "linear-gradient(145deg, #141e2c 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(251,191,36,0.12)", iconColor: "#FBBF24", badgeBg: "rgba(251,191,36,0.12)", badgeText: "#FBBF24", border: "rgba(251,191,36,0.18)" },
+  period:     { icon: Clock,         gradient: "linear-gradient(145deg, #0e1a2b 0%, #132236 50%, #172a40 100%)", iconBg: "rgba(201,168,76,0.1)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.1)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.12)" },
+  generic:    { icon: Folder,        gradient: "linear-gradient(145deg, #151f2e 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(255,255,255,0.06)", iconColor: "#94A3B8", badgeBg: "rgba(255,255,255,0.06)", badgeText: "#94A3B8", border: "rgba(255,255,255,0.08)" },
 };
 
 function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossier: Dossier; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
@@ -1012,27 +1012,30 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
   const CardIcon = cs.icon;
 
   return (
-    <div ref={setNodeRef} style={style} className="group relative cursor-pointer rounded-xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg" >
+    <div ref={setNodeRef} style={style} className="group relative cursor-pointer rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_8px_30px_rgba(201,168,76,0.12)]">
       {/* Grip */}
-      <span {...attributes} {...listeners} className="absolute left-2 top-2 cursor-grab touch-none text-white/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-10">
+      <span {...attributes} {...listeners} className="absolute left-2 top-2 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-10">
         <GripVertical className="h-4 w-4" />
       </span>
 
-      <button onClick={onClick} className="flex flex-col items-center gap-3 w-full p-5 pb-4 text-center" style={{ background: cs.gradient, border: `1px solid ${cs.border}` }}>
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden" style={{ backgroundColor: cs.iconBg }}>
+      <button onClick={onClick} className="relative flex flex-col items-center gap-2.5 w-full p-6 pb-5 text-center rounded-2xl overflow-hidden" style={{ background: cs.gradient, border: `1px solid ${cs.border}` }}>
+        {/* Subtle gold glow on hover */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: "radial-gradient(circle at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 70%)" }} />
+
+        <div className="relative flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden backdrop-blur-sm" style={{ backgroundColor: cs.iconBg }}>
           {dossier.icon_url
-            ? <img src={dossier.icon_url} alt="" className="h-8 w-8 object-contain" />
-            : <CardIcon className="h-7 w-7" style={{ color: cs.iconColor }} />}
+            ? <img src={dossier.icon_url} alt="" className="h-7 w-7 object-contain" />
+            : <CardIcon className="h-6 w-6" style={{ color: cs.iconColor }} />}
         </div>
-        <p className="text-sm font-bold text-white line-clamp-2 leading-snug min-h-[2.5rem]">{dossier.name}</p>
-        <span className="rounded-full px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
+        <p className="relative text-[13px] font-bold text-white/90 line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-white transition-colors">{dossier.name}</p>
+        <span className="relative rounded-full px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-widest" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
       </button>
 
-      <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition group-hover:opacity-100 z-10">
-        <button onClick={onEdit} className="rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-white/80 transition"><Pencil className="h-3 w-3" /></button>
-        <button onClick={onDelete} className="rounded-lg p-1.5 text-white/40 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>
+      <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-10">
+        <button onClick={onEdit} className="rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70 transition"><Pencil className="h-3 w-3" /></button>
+        <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>
       </div>
     </div>
   );
