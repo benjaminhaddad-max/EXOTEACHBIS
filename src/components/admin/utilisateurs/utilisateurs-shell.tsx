@@ -828,14 +828,47 @@ export function UtilisateursShell({
                 </div>
               )}
 
-              {/* Add class button */}
-              <button
-                onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
-                className="w-full mt-3 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-gold/40 hover:bg-gold/5 text-gray-400 hover:text-gold transition-colors"
-              >
-                <Plus size={16} />
-                <span className="text-sm font-medium">Ajouter une classe</span>
-              </button>
+              {/* Add class — inline input */}
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  id={`new-class-${dossier.id}`}
+                  type="text"
+                  placeholder="Nom de la nouvelle classe..."
+                  className="flex-1 px-3 py-2.5 text-sm border-2 border-dashed border-gray-200 rounded-xl focus:border-gold/40 focus:outline-none bg-transparent placeholder:text-gray-400"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const input = e.currentTarget;
+                      const name = input.value.trim();
+                      if (!name) return;
+                      input.value = "";
+                      startTransition(async () => {
+                        const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
+                        if ("error" in res) { showToast(res.error!, "error"); return; }
+                        showToast("Classe créée !", "success");
+                        window.location.reload();
+                      });
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById(`new-class-${dossier.id}`) as HTMLInputElement;
+                    const name = input?.value?.trim();
+                    if (!name) { input?.focus(); return; }
+                    input.value = "";
+                    startTransition(async () => {
+                      const res = await createGroupe({ name, formation_dossier_id: dossier.id, color: ["#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6","#EC4899"][directGroups.length % 6], annee: "2026-2027" });
+                      if ("error" in res) { showToast(res.error!, "error"); return; }
+                      showToast("Classe créée !", "success");
+                      window.location.reload();
+                    });
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors shrink-0"
+                  style={{ backgroundColor: "#0e1e35" }}
+                >
+                  + Classe
+                </button>
+              </div>
 
               {/* Pedagogical team */}
               <PedagogicalTeamSection

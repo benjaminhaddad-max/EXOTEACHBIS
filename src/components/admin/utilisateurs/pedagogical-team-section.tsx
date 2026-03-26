@@ -172,7 +172,7 @@ export function PedagogicalTeamSection({
                                 onChange={(e) => setAddGroupeId(e.target.value)}
                                 className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gold/50 bg-white"
                               >
-                                <option value="">Classe (optionnel)...</option>
+                                <option value="">Choisir la classe *</option>
                                 {uniClasses.map(c => (
                                   <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
@@ -189,7 +189,7 @@ export function PedagogicalTeamSection({
                                 onClick={() => {
                                   if (addProfId) handleAssign(addProfId, mat.id, roleType, addGroupeId || undefined);
                                 }}
-                                disabled={!addProfId}
+                                disabled={!addProfId || (roleType === "cours" && !addGroupeId)}
                                 className="text-[10px] px-3 py-1 rounded bg-navy text-white font-medium disabled:opacity-40"
                               >
                                 Valider
