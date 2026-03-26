@@ -10,6 +10,8 @@ import {
   CheckSquare,
   Copy,
   CircleDot,
+  Eye,
+  EyeOff,
   GripVertical,
   ListChecks,
   Loader2,
@@ -141,6 +143,7 @@ export function ConfigurationShell({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(templateToDraft(initialTemplates[0] ?? null));
   const [toast, setToast] = useState<Toast>(null);
+  const [showStudentPreview, setShowStudentPreview] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -411,6 +414,16 @@ export function ConfigurationShell({
 
             <button
               type="button"
+              onClick={() => setShowStudentPreview((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-2.5 text-sm font-medium transition hover:opacity-90"
+              style={{ borderColor: DS.line, color: DS.navy }}
+            >
+              {showStudentPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showStudentPreview ? "Masquer l'aperçu élève" : "Voir l'aperçu élève"}
+            </button>
+
+            <button
+              type="button"
               onClick={handleSaveTemplate}
               disabled={isPending || !templateDraft.title.trim()}
               className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
@@ -461,6 +474,14 @@ export function ConfigurationShell({
                     <span className="rounded-full px-3 py-1 font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>{stats.required} obligatoire(s)</span>
                   </div>
                 </div>
+
+                {showStudentPreview && (
+                  <StudentPreviewCard
+                    title={templateDraft.title}
+                    description={templateDraft.description}
+                    fields={selectedFields}
+                  />
+                )}
 
                 {selectedFields.length === 0 ? (
                   <div className="rounded-[28px] border-2 border-dashed border-[#ddd2b8] bg-white/70 p-10 text-center text-sm text-[#7c7664]">
@@ -854,6 +875,126 @@ function FieldTypePicker({
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function StudentPreviewCard({
+  title,
+  description,
+  fields,
+}: {
+  title: string;
+  description: string;
+  fields: FormField[];
+}) {
+  return (
+    <section className="overflow-hidden rounded-[28px] border bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_34%),linear-gradient(135deg,_#0f1e36_0%,_#12314d_48%,_#1f5d84_100%)] p-6 text-white shadow-sm">
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d3ab67]">Aperçu élève</p>
+            <h3 className="mt-2 text-2xl font-semibold">{title || "Titre du formulaire"}</h3>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
+              {description || "Voici comment le formulaire apparaîtra côté élève."}
+            </p>
+          </div>
+          <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">
+            Vue lecture seule
+          </span>
+        </div>
+
+        <div className="space-y-4 rounded-[28px] border border-white/10 bg-white/8 p-4 backdrop-blur-sm">
+          {fields.length === 0 ? (
+            <div className="rounded-[24px] border-2 border-dashed border-white/15 p-8 text-center text-sm text-white/65">
+              Ajoute des questions pour voir l’aperçu élève.
+            </div>
+          ) : (
+            fields.map((field, index) => <StudentPreviewQuestion key={field.id} field={field} index={index + 1} />)
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StudentPreviewQuestion({
+  field,
+  index,
+}: {
+  field: FormField;
+  index: number;
+}) {
+  const options = getFieldOptions(field);
+
+  return (
+    <div className="rounded-[24px] border border-white/10 bg-white p-5 text-[#12314d] shadow-[0_1px_0_rgba(15,30,54,0.04)]">
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#12314d] text-sm font-semibold text-white">
+          {index}
+        </div>
+        <div className="w-full">
+          <div className="flex flex-wrap items-center gap-3">
+            <h4 className="text-lg font-semibold">{field.label}</h4>
+            {field.required && (
+              <span className="rounded-full bg-[#f5ecdd] px-2.5 py-1 text-[11px] font-semibold text-[#12314d]">
+                Obligatoire
+              </span>
+            )}
+          </div>
+          {field.helper_text && <p className="mt-2 text-sm leading-6 text-[#61778a]">{field.helper_text}</p>}
+
+          <div className="mt-5">
+            {field.field_type === "select" ? (
+              <select
+                disabled
+                className="h-14 w-full rounded-3xl border border-[#d8e3eb] bg-white px-5 text-sm text-[#61778a] outline-none"
+              >
+                <option>Selectionner une reponse</option>
+                {options.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            ) : field.field_type === "radio" ? (
+              <div className="flex flex-wrap gap-3">
+                {options.map((option) => (
+                  <div
+                    key={option}
+                    className="rounded-2xl border border-[#d8e3eb] bg-white px-4 py-3 text-sm font-medium text-[#12314d]"
+                  >
+                    {option}
+                  </div>
+                ))}
+              </div>
+            ) : field.field_type === "checkboxes" ? (
+              <div className="space-y-3">
+                {options.map((option) => (
+                  <label
+                    key={option}
+                    className="flex items-center gap-3 rounded-2xl border border-[#d8e3eb] bg-white px-4 py-3 text-sm text-[#12314d]"
+                  >
+                    <input type="checkbox" disabled className="h-4 w-4 rounded border-gray-300" />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+            ) : field.field_type === "long_text" ? (
+              <textarea
+                rows={5}
+                disabled
+                placeholder={field.placeholder ?? ""}
+                className="w-full rounded-3xl border border-[#d8e3eb] bg-white px-5 py-4 text-sm leading-6 text-[#61778a] outline-none"
+              />
+            ) : (
+              <input
+                disabled
+                placeholder={field.placeholder ?? ""}
+                className="h-14 w-full rounded-3xl border border-[#d8e3eb] bg-white px-5 text-sm text-[#61778a] outline-none"
+              />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
