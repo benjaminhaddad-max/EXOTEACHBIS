@@ -25,7 +25,7 @@ type Toast = { message: string; kind: "success" | "error" } | null;
 const F = "w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25";
 
 export function AnnoncesTab({
-  initialAnnonces, groupes, dossiers, matieres, currentProfile, sidebarFilter,
+  initialAnnonces, groupes, dossiers, matieres, currentProfile, sidebarFilter, selectedGroupeIds,
 }: {
   initialAnnonces: Annonce[];
   groupes: Groupe[];
@@ -33,6 +33,7 @@ export function AnnoncesTab({
   matieres: Matiere[];
   currentProfile: Profile | null;
   sidebarFilter: SidebarFilter;
+  selectedGroupeIds?: Set<string>;
 }) {
   const [annonces, setAnnonces] = useState<Annonce[]>(initialAnnonces);
   const [modal, setModal] = useState<Modal>(null);
@@ -50,14 +51,16 @@ export function AnnoncesTab({
     if (data) setAnnonces(data as any[]);
   };
 
-  // Filter by sidebar
+  // Filter by selected classes (multi-select checkboxes)
   const filteredAnnonces = useMemo(() => {
-    if (sidebarFilter.type === "all") return annonces;
-    if (sidebarFilter.type === "groupe") return annonces.filter(a => a.groupe_id === sidebarFilter.groupeId);
-    if (sidebarFilter.type === "university") return annonces.filter(a => a.dossier_id === sidebarFilter.dossierId);
-    if (sidebarFilter.type === "offer") return annonces.filter(a => a.dossier_id === sidebarFilter.offerId);
-    return annonces;
-  }, [annonces, sidebarFilter]);
+    if (!selectedGroupeIds || selectedGroupeIds.size === 0) return annonces;
+    return annonces.filter(a => {
+      // Show global annonces + annonces targeting any of the selected classes
+      if (!a.groupe_id && !a.dossier_id && !a.matiere_id) return true; // global
+      if (a.groupe_id && selectedGroupeIds.has(a.groupe_id)) return true;
+      return false;
+    });
+  }, [annonces, selectedGroupeIds]);
 
   const getAudienceBadge = (a: Annonce) => {
     if (a.matiere_id) { const m = a.matiere ?? matieres.find(i => i.id === a.matiere_id); return m ? { label: m.name, color: m.color, icon: <BookOpen size={9} /> } : null; }
