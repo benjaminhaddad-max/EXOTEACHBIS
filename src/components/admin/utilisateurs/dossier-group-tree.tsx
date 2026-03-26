@@ -346,44 +346,7 @@ function DossierTreeNode({
             />
           ))}
 
-          {/* Linked groups AFTER content — with "CLASSES" separator */}
-          {linkedGroups.length > 0 && (
-            <div style={{ paddingLeft: (depth + 1) * 14 + 4 }}>
-              <div className="flex items-center gap-2 py-1 mt-1">
-                <span className="text-[8px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.2)" }}>Classes</span>
-                <span className="h-px flex-1" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-              </div>
-              {linkedGroups.map(g => {
-                const memberCount = memberCountByGroup.get(g.id) || 0;
-                const isGroupSelected = selectedGroupeId === g.id;
-                return (
-                  <div
-                    key={g.id}
-                    onClick={() => onSelectGroup(g.id)}
-                    style={{
-                      backgroundColor: isGroupSelected ? "rgba(255,255,255,0.12)" : "transparent",
-                      borderRadius: 6,
-                      marginBottom: 1,
-                    }}
-                    className="flex items-center gap-1.5 py-1 pr-2 cursor-pointer hover:bg-white/5 transition-colors"
-                  >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                    <span className="text-[11px] truncate flex-1" style={{
-                      color: isGroupSelected ? "white" : "rgba(255,255,255,0.6)",
-                      fontWeight: isGroupSelected ? 600 : 400,
-                    }}>
-                      {g.name}
-                    </span>
-                    {memberCount > 0 && (
-                      <span className="text-[9px] shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>
-                        {memberCount}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* Classes are NOT shown in the tree — managed in right panel */}
         </div>
       )}
     </div>

@@ -748,27 +748,31 @@ export function UtilisateursShell({
                           })()}
 
                           {/* Members */}
-                          {members.length > 0 && (
-                            <div className="mt-3 pt-2 border-t border-gray-100">
-                              <p className="text-[10px] font-bold uppercase text-gray-400 px-2 mb-1">Membres</p>
-                              {members.map(u => (
-                                <div key={u.id} className="flex items-center gap-2 px-2 py-1">
-                                  <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-500 shrink-0">
+                          <div className="mt-3 pt-2 border-t border-gray-100">
+                            <div className="flex items-center justify-between px-2 mb-1">
+                              <p className="text-[10px] font-bold uppercase text-gray-400">Membres ({members.length})</p>
+                              <button
+                                onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                                className="text-[9px] font-medium text-blue-600 hover:text-blue-800"
+                              >
+                                + Ajouter
+                              </button>
+                            </div>
+                            {members.length > 0 ? (
+                              members.map(u => (
+                                <div key={u.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50">
+                                  <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500 shrink-0">
                                     {(u.first_name?.[0] || "").toUpperCase()}{(u.last_name?.[0] || "").toUpperCase()}
                                   </div>
-                                  <span className="text-[11px] text-gray-700 truncate">{u.first_name} {u.last_name}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs text-gray-800 block truncate">{u.first_name} {u.last_name}</span>
+                                    <span className="text-[9px] text-gray-400">{u.email}</span>
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="px-2 py-2">
-                            <button
-                              onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
-                              className="text-[10px] font-medium text-blue-600 hover:text-blue-800"
-                            >
-                              Gérer les membres →
-                            </button>
+                              ))
+                            ) : (
+                              <p className="text-[10px] text-gray-400 px-2 py-1">Aucun membre</p>
+                            )}
                           </div>
                         </div>
                       </details>
