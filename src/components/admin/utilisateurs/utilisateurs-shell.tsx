@@ -27,6 +27,7 @@ import {
 import { DOSSIER_TYPE_META, getDossierPathLabel, inferOfferFromAncestors } from "@/lib/pedagogie-structure";
 import type { DossierNamePreset, FormationOfferSetting } from "@/lib/pedagogie-admin-settings";
 import { expandDossierTree } from "@/lib/access-scope";
+import { DossierGroupTree } from "./dossier-group-tree";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,8 +201,9 @@ export function UtilisateursShell({
   initialFormationOffers: FormationOfferSetting[];
   initialDossierNamePresets: DossierNamePreset[];
 }) {
-  const [view, setView] = useState<"comptes" | "groupe" | "administration">("comptes");
+  const [view, setView] = useState<"comptes" | "groupe" | "administration" | "dossier_summary">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
+  const [selectedDossierId, setSelectedDossierId] = useState<string | null>(null);
   const [users, setUsers] = useState<Profile[]>(initialUsers);
   const [groupes, setGroupes] = useState<Groupe[]>(initialGroupes);
   const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
@@ -454,14 +456,14 @@ export function UtilisateursShell({
           Formations & classes
         </button>
 
-        {/* Groupes header */}
+        {/* Arborescence header */}
         <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-            Offres & classes
+            Arborescence
           </span>
           <button
             onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: null })}
-            title="Nouveau groupe racine"
+            title="Nouveau groupe"
             className="rounded p-0.5 transition-colors"
             style={{ color: "rgba(255,255,255,0.3)" }}
             onMouseOver={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
@@ -471,27 +473,18 @@ export function UtilisateursShell({
           </button>
         </div>
 
-        {/* Group tree */}
+        {/* Dossier tree with groups */}
         <div className="flex-1 overflow-y-auto px-2 pb-4">
-          {offerBuckets.every((bucket) => bucket.groups.length === 0) ? (
-            <p className="text-[11px] text-center py-4" style={{ color: "rgba(255,255,255,0.3)" }}>
-              Aucun groupe
-            </p>
-          ) : (
-            offerBuckets.map((bucket) => (
-              <OfferGroupSection
-                key={bucket.code}
-                bucket={bucket}
-                selectedId={selectedGroupeId}
-                users={users}
-                onSelect={(id) => { setView("groupe"); setSelectedGroupeId(id); }}
-                onAddRootGroup={(formationDossierId) => setModal({ type: "create_groupe", parentId: null, formationDossierId })}
-                onAddChild={(parentId) => setModal({ type: "create_groupe", parentId })}
-                onEdit={(g) => setModal({ type: "edit_groupe", groupe: g })}
-                onDelete={handleDeleteGroupe}
-              />
-            ))
-          )}
+          <DossierGroupTree
+            dossiers={initialDossiers}
+            groupes={groupes}
+            users={users}
+            selectedGroupeId={selectedGroupeId}
+            selectedDossierId={selectedDossierId}
+            onSelectGroup={(id) => { setView("groupe"); setSelectedGroupeId(id); setSelectedDossierId(null); }}
+            onSelectDossier={(id) => { setView("dossier_summary"); setSelectedDossierId(id); setSelectedGroupeId(null); }}
+            onCreateGroup={(dossierId) => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossierId })}
+          />
         </div>
       </div>
 
@@ -533,6 +526,59 @@ export function UtilisateursShell({
             Sélectionner un groupe dans l&apos;arborescence
           </div>
         )}
+        {view === "dossier_summary" && selectedDossierId && (() => {
+          const dossier = initialDossiers.find(d => d.id === selectedDossierId);
+          if (!dossier) return null;
+          const linkedGroups = groupes.filter(g => g.formation_dossier_id === dossier.id);
+          const totalMembers = linkedGroups.reduce((sum, g) => sum + users.filter(u => u.groupe_id === g.id).length, 0);
+          const meta = DOSSIER_TYPE_META[dossier.dossier_type];
+          return (
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.1)" }}>
+                  <BookOpen size={18} style={{ color: "#C9A84C" }} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">{dossier.name}</h2>
+                  <p className="text-xs text-gray-500">{meta?.shortLabel ?? dossier.dossier_type} · {linkedGroups.length} classe{linkedGroups.length !== 1 ? "s" : ""} · {totalMembers} membre{totalMembers !== 1 ? "s" : ""}</p>
+                </div>
+              </div>
+
+              {linkedGroups.length > 0 ? (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Classes rattachées</h3>
+                  {linkedGroups.map(g => {
+                    const mc = users.filter(u => u.groupe_id === g.id).length;
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gold/30 hover:bg-gold/5 transition-colors text-left"
+                      >
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                        <span className="text-sm font-medium text-gray-800 flex-1">{g.name}</span>
+                        <span className="text-xs text-gray-400">{mc} membre{mc !== 1 ? "s" : ""}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Users className="mx-auto h-10 w-10 text-gray-200 mb-3" />
+                  <p className="text-sm font-medium text-gray-400">Aucune classe ici</p>
+                  <p className="text-xs text-gray-300 mt-1">Créez une classe pour ce noeud</p>
+                  <button
+                    onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
+                    className="mt-4 flex items-center gap-1.5 mx-auto px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+                    style={{ backgroundColor: "#0e1e35" }}
+                  >
+                    <Plus size={12} /> Créer une classe
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {view === "administration" && (
           <AdministrationView
             formationOffers={formationOffers}
