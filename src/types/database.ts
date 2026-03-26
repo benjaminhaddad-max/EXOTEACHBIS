@@ -494,6 +494,7 @@ export interface CoachingNote {
   title: string;
   content: string;
   created_at: string;
+  author?: Profile;
 }
 
 export interface CoachingIntervention {
@@ -510,6 +511,8 @@ export interface CoachingIntervention {
   completed_at: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  owner?: Profile | null;
+  requested_by?: Profile | null;
 }
 
 // =============================================

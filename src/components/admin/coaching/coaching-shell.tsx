@@ -25,7 +25,7 @@ import {
   COACHING_WEEKLY_FORM,
   calculateCoachingStatus,
 } from "@/lib/coaching";
-import type { CoachingCohort, CoachingStudent, Profile } from "@/types/database";
+import type { CoachingCohort, CoachingIntervention, CoachingNote, CoachingStudent, CoachingWeeklyCheckin, Profile } from "@/types/database";
 import { CoachingWorkspace } from "./coaching-workspace";
 
 type CoachingStat = {
@@ -42,6 +42,9 @@ type CoachingShellProps = {
   assignments: (CoachingStudent & { student?: Profile; coach?: Profile | null })[];
   students: Profile[];
   coaches: Profile[];
+  checkins: CoachingWeeklyCheckin[];
+  notes: CoachingNote[];
+  interventions: CoachingIntervention[];
 };
 
 const scenarioEvaluations = [
@@ -121,6 +124,9 @@ export function CoachingShell({
   assignments,
   students,
   coaches,
+  checkins,
+  notes,
+  interventions,
 }: CoachingShellProps) {
   return (
     <div className="space-y-6">
@@ -184,6 +190,9 @@ export function CoachingShell({
         initialAssignments={assignments}
         students={students}
         coaches={coaches}
+        initialCheckins={checkins}
+        initialNotes={notes}
+        initialInterventions={interventions}
       />
 
       <section className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">

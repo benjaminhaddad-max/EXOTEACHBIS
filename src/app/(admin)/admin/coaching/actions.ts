@@ -3,7 +3,24 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { CoachingCohort, CoachingProfileType, CoachingStudent, CoachingStudentStatus } from "@/types/database";
+import { calculateCoachingStatus } from "@/lib/coaching";
+import type {
+  CoachingCohort,
+  CoachingIntervention,
+  CoachingInterventionChannel,
+  CoachingInterventionStatus,
+  CoachingMainBlocker,
+  CoachingMentalState,
+  CoachingMomentum,
+  CoachingNote,
+  CoachingNoteType,
+  CoachingProfileType,
+  CoachingStudent,
+  CoachingStudentStatus,
+  CoachingUnderstandingLevel,
+  CoachingWeeklyCheckin,
+  CoachingHoursBucket,
+} from "@/types/database";
 
 const PATH = "/admin/coaching";
 
@@ -119,4 +136,204 @@ export async function updateCoachingStudent(data: {
 
   revalidatePath(PATH);
   return { success: true, row: updatedRow as CoachingStudent };
+}
+
+export async function createCoachingWeeklyCheckin(data: {
+  cohortId: string;
+  coachingStudentId: string;
+  studentId: string;
+  weekStart: string;
+  hours_bucket: CoachingHoursBucket;
+  understanding_level: CoachingUnderstandingLevel;
+  mental_state: CoachingMentalState;
+  main_blocker: CoachingMainBlocker;
+  momentum: CoachingMomentum;
+  free_text?: string | null;
+}) {
+  const access = await ensureAdminAccess();
+  if ("error" in access) return access;
+
+  const admin = createAdminClient();
+  const { data: previousCheckin } = await admin
+    .from("coaching_weekly_checkins")
+    .select("momentum")
+    .eq("student_id", data.studentId)
+    .lt("week_start", data.weekStart)
+    .order("week_start", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const evaluation = calculateCoachingStatus({
+    hoursBucket: data.hours_bucket,
+    understanding: data.understanding_level,
+    mentalState: data.mental_state,
+    mainBlocker: data.main_blocker,
+    momentum: data.momentum,
+    previousMomentum: (previousCheckin?.momentum as CoachingMomentum | null | undefined) ?? null,
+  });
+
+  const { data: checkin, error } = await admin
+    .from("coaching_weekly_checkins")
+    .upsert(
+      {
+        cohort_id: data.cohortId,
+        coaching_student_id: data.coachingStudentId,
+        student_id: data.studentId,
+        week_start: data.weekStart,
+        hours_bucket: data.hours_bucket,
+        understanding_level: data.understanding_level,
+        mental_state: data.mental_state,
+        main_blocker: data.main_blocker,
+        momentum: data.momentum,
+        free_text: data.free_text?.trim() || null,
+        computed_status: evaluation.status,
+        signal_reasons: evaluation.reasons,
+      },
+      { onConflict: "student_id,week_start" }
+    )
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  const { data: updatedStudent, error: studentError } = await admin
+    .from("coaching_students")
+    .update({
+      current_status: evaluation.status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", data.coachingStudentId)
+    .select("*")
+    .single();
+
+  if (studentError) return { error: studentError.message };
+
+  let autoIntervention: CoachingIntervention | null = null;
+
+  if (evaluation.status !== "green") {
+    const channel: CoachingInterventionChannel = evaluation.status === "red" ? "call" : "email";
+    const { data: intervention } = await admin
+      .from("coaching_interventions")
+      .insert({
+        cohort_id: data.cohortId,
+        coaching_student_id: data.coachingStudentId,
+        student_id: data.studentId,
+        owner_id: null,
+        requested_by_id: access.userId,
+        channel,
+        status: "todo",
+        reason: `Alerte automatique après check-in: ${evaluation.reasons.join(" ")}`,
+        metadata: {
+          source: "weekly_checkin_auto",
+          computed_status: evaluation.status,
+        },
+      })
+      .select("*")
+      .single();
+
+    autoIntervention = (intervention as CoachingIntervention | null) ?? null;
+  }
+
+  revalidatePath(PATH);
+  return {
+    success: true,
+    checkin: checkin as CoachingWeeklyCheckin,
+    updatedStudent: updatedStudent as CoachingStudent,
+    evaluation,
+    autoIntervention,
+  };
+}
+
+export async function createCoachingNote(data: {
+  cohortId: string;
+  coachingStudentId: string;
+  studentId: string;
+  noteType: CoachingNoteType;
+  title: string;
+  content: string;
+}) {
+  const access = await ensureAdminAccess();
+  if ("error" in access) return access;
+
+  const admin = createAdminClient();
+  const { data: note, error } = await admin
+    .from("coaching_notes")
+    .insert({
+      cohort_id: data.cohortId,
+      coaching_student_id: data.coachingStudentId,
+      student_id: data.studentId,
+      author_id: access.userId,
+      note_type: data.noteType,
+      title: data.title.trim(),
+      content: data.content.trim(),
+    })
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(PATH);
+  return { success: true, note: note as CoachingNote, authorId: access.userId };
+}
+
+export async function createCoachingIntervention(data: {
+  cohortId: string;
+  coachingStudentId: string;
+  studentId: string;
+  ownerId?: string | null;
+  channel: CoachingInterventionChannel;
+  reason: string;
+  scheduledAt?: string | null;
+}) {
+  const access = await ensureAdminAccess();
+  if ("error" in access) return access;
+
+  const admin = createAdminClient();
+  const { data: intervention, error } = await admin
+    .from("coaching_interventions")
+    .insert({
+      cohort_id: data.cohortId,
+      coaching_student_id: data.coachingStudentId,
+      student_id: data.studentId,
+      owner_id: data.ownerId ?? null,
+      requested_by_id: access.userId,
+      channel: data.channel,
+      status: data.scheduledAt ? "scheduled" : "todo",
+      reason: data.reason.trim(),
+      scheduled_at: data.scheduledAt || null,
+      metadata: {},
+    })
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(PATH);
+  return { success: true, intervention: intervention as CoachingIntervention, requesterId: access.userId };
+}
+
+export async function updateCoachingInterventionStatus(data: {
+  id: string;
+  status: CoachingInterventionStatus;
+}) {
+  const access = await ensureAdminAccess();
+  if ("error" in access) return access;
+
+  const admin = createAdminClient();
+  const completedAt = data.status === "done" ? new Date().toISOString() : null;
+
+  const { data: intervention, error } = await admin
+    .from("coaching_interventions")
+    .update({
+      status: data.status,
+      completed_at: completedAt,
+    })
+    .eq("id", data.id)
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(PATH);
+  return { success: true, intervention: intervention as CoachingIntervention };
 }

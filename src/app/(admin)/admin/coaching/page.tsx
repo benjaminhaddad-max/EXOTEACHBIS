@@ -1,7 +1,7 @@
 import { Header } from "@/components/header";
 import { CoachingShell } from "@/components/admin/coaching/coaching-shell";
 import { createClient } from "@/lib/supabase/server";
-import type { CoachingCohort, CoachingStudent, Profile } from "@/types/database";
+import type { CoachingCohort, CoachingIntervention, CoachingNote, CoachingStudent, CoachingWeeklyCheckin, Profile } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,9 @@ export default async function CoachingPage() {
     coachesRes,
     cohortsRes,
     assignmentsRes,
+    checkinsRes,
+    notesRes,
+    interventionsRes,
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "eleve"),
     supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "coach"),
@@ -52,10 +55,38 @@ export default async function CoachingPage() {
         )
       `)
       .order("created_at", { ascending: false }),
+    supabase.from("coaching_weekly_checkins").select("*").order("submitted_at", { ascending: false }),
+    supabase
+      .from("coaching_notes")
+      .select(`
+        *,
+        author:profiles!coaching_notes_author_id_fkey(
+          id, email, first_name, last_name, phone, role, avatar_url, groupe_id, filiere_id, access_dossier_id, created_at, updated_at
+        )
+      `)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("coaching_interventions")
+      .select(`
+        *,
+        owner:profiles!coaching_interventions_owner_id_fkey(
+          id, email, first_name, last_name, phone, role, avatar_url, groupe_id, filiere_id, access_dossier_id, created_at, updated_at
+        ),
+        requested_by:profiles!coaching_interventions_requested_by_id_fkey(
+          id, email, first_name, last_name, phone, role, avatar_url, groupe_id, filiere_id, access_dossier_id, created_at, updated_at
+        )
+      `)
+      .order("created_at", { ascending: false }),
   ]);
 
-  const setupComplete = !cohortsRes.error && !assignmentsRes.error;
-  const setupError = cohortsRes.error?.message ?? assignmentsRes.error?.message ?? null;
+  const setupComplete = !cohortsRes.error && !assignmentsRes.error && !checkinsRes.error && !notesRes.error && !interventionsRes.error;
+  const setupError =
+    cohortsRes.error?.message ??
+    assignmentsRes.error?.message ??
+    checkinsRes.error?.message ??
+    notesRes.error?.message ??
+    interventionsRes.error?.message ??
+    null;
 
   const stats = [
     {
@@ -91,6 +122,9 @@ export default async function CoachingPage() {
         assignments={(assignmentsRes.data ?? []) as (CoachingStudent & { student?: Profile; coach?: Profile | null })[]}
         students={(studentsRes.data ?? []) as Profile[]}
         coaches={(coachesRes.data ?? []) as Profile[]}
+        checkins={(checkinsRes.data ?? []) as CoachingWeeklyCheckin[]}
+        notes={(notesRes.data ?? []) as CoachingNote[]}
+        interventions={(interventionsRes.data ?? []) as CoachingIntervention[]}
       />
     </div>
   );
