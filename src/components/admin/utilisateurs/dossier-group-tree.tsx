@@ -219,33 +219,40 @@ function DossierTreeNode({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          paddingLeft: depth * 14 + 4,
+          paddingLeft: depth * 20 + 8,
           backgroundColor: isSelected ? "rgba(201,168,76,0.12)" : hovered ? "rgba(255,255,255,0.04)" : "transparent",
-          borderRadius: 6,
-          marginBottom: 1,
+          borderRadius: 8,
+          marginBottom: 2,
+          borderLeft: isSelected ? "3px solid #C9A84C" : "3px solid transparent",
         }}
-        className="flex items-center gap-1 py-1 pr-1.5 cursor-pointer transition-colors"
+        className="flex items-center gap-2 py-2.5 pr-3 cursor-pointer transition-all"
       >
         {/* Expand toggle */}
         <button
           onClick={(e) => { e.stopPropagation(); if (hasChildren) setExpanded(p => !p); }}
-          className="w-4 h-4 flex items-center justify-center shrink-0"
-          style={{ color: hasChildren ? "rgba(255,255,255,0.4)" : "transparent" }}
+          className="w-5 h-5 flex items-center justify-center shrink-0 rounded"
+          style={{ color: hasChildren ? "rgba(255,255,255,0.45)" : "transparent" }}
         >
           {hasChildren
-            ? (expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />)
+            ? (expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
             : null}
         </button>
 
-        {/* Icon + name */}
+        {/* Icon */}
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: accentColor + "18" }}>
+          <Icon size={15} style={{ color: accentColor }} />
+        </div>
+
+        {/* Name */}
         <button
           onClick={() => onSelectDossier(node.id)}
-          className="flex items-center gap-1.5 flex-1 min-w-0"
+          className="flex-1 min-w-0 text-left"
         >
-          <Icon size={13} style={{ color: accentColor }} className="shrink-0" />
-          <span className="text-[11px] truncate" style={{
-            color: isSelected ? "#E3C286" : "rgba(255,255,255,0.75)",
+          <span className="truncate block" style={{
+            color: isSelected ? "#E3C286" : "rgba(255,255,255,0.85)",
             fontWeight: depth === 0 ? 700 : isSelected ? 600 : 500,
+            fontSize: depth === 0 ? 14 : 13,
+            lineHeight: "1.3",
           }}>
             {node.name}
           </span>
@@ -253,9 +260,9 @@ function DossierTreeNode({
 
         {/* Group count badge */}
         {totalGroups > 0 && (
-          <span className="text-[9px] px-1.5 rounded-full shrink-0" style={{
-            backgroundColor: "rgba(201,168,76,0.1)",
-            color: "rgba(201,168,76,0.6)",
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{
+            backgroundColor: "rgba(201,168,76,0.12)",
+            color: "#C9A84C",
           }}>
             {totalGroups}
           </span>
