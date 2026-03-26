@@ -562,102 +562,177 @@ export function UtilisateursShell({
           const dossier = initialDossiers.find(d => d.id === selectedDossierId);
           if (!dossier) return null;
 
-          // Get directly linked groups
-          const directGroups = groupes.filter(g => g.formation_dossier_id === dossier.id);
-
-          // Get inherited groups: groups linked to ANY ancestor dossier
-          const ancestorIds = new Set<string>();
-          let current = dossier;
-          while (current.parent_id) {
-            ancestorIds.add(current.parent_id);
-            const parent = initialDossiers.find(d => d.id === current.parent_id);
-            if (!parent) break;
-            current = parent;
+          // Get all groups that could have access (linked to this dossier or any ancestor)
+          const ancestorIds = new Set<string>([dossier.id]);
+          let cur = dossier;
+          while (cur.parent_id) {
+            ancestorIds.add(cur.parent_id);
+            const par = initialDossiers.find(d => d.id === cur.parent_id);
+            if (!par) break;
+            cur = par;
           }
-          const inheritedGroups = groupes.filter(g =>
-            g.formation_dossier_id && ancestorIds.has(g.formation_dossier_id) && !directGroups.some(dg => dg.id === g.id)
+          const relevantGroups = groupes.filter(g =>
+            g.formation_dossier_id && ancestorIds.has(g.formation_dossier_id)
           );
-
-          const allGroups = [...directGroups, ...inheritedGroups];
-          const totalMembers = allGroups.reduce((sum, g) => sum + users.filter(u => u.groupe_id === g.id).length, 0);
           const meta = DOSSIER_TYPE_META[dossier.dossier_type];
 
-          // Build breadcrumb path
+          // Build breadcrumb
           const pathParts: string[] = [dossier.name];
-          let p = dossier;
-          while (p.parent_id) {
-            const par = initialDossiers.find(d => d.id === p.parent_id);
+          let p2 = dossier;
+          while (p2.parent_id) {
+            const par = initialDossiers.find(d => d.id === p2.parent_id);
             if (!par) break;
             pathParts.unshift(par.name);
-            p = par;
+            p2 = par;
           }
+
+          // Check access: does a group have access to this specific dossier?
+          const hasAccess = (groupeId: string) => {
+            return groupeDossierAcces.some(a => a.groupe_id === groupeId && a.dossier_id === dossier.id);
+          };
+
+          // Check user-level exclusion
+          const isUserExcluded = (userId: string) => {
+            return profileDossierAccessExclusions.some(e => e.profile_id === userId && e.dossier_id === dossier.id);
+          };
+
+          // Check user-level extra access
+          const hasUserExtraAccess = (userId: string) => {
+            return profileDossierAcces.some(a => a.profile_id === userId && a.dossier_id === dossier.id);
+          };
 
           return (
             <div className="p-6">
+              {/* Header */}
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.1)" }}>
                   <BookOpen size={18} style={{ color: "#C9A84C" }} />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h2 className="text-lg font-bold text-gray-900">{dossier.name}</h2>
-                  <p className="text-xs text-gray-500">{meta?.shortLabel ?? dossier.dossier_type} · {allGroups.length} classe{allGroups.length !== 1 ? "s" : ""} · {totalMembers} membre{totalMembers !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-gray-500">{meta?.shortLabel ?? dossier.dossier_type}</p>
                 </div>
+                <button
+                  onClick={() => {
+                    const n = prompt("Renommer :", dossier.name);
+                    if (n?.trim() && n.trim() !== dossier.name) {
+                      startTransition(async () => {
+                        await updateDossierAction(dossier.id, { name: n.trim(), color: dossier.color, visible: dossier.visible });
+                        window.location.reload();
+                      });
+                    }
+                  }}
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Renommer"
+                >
+                  <Pencil size={14} />
+                </button>
               </div>
-              {pathParts.length > 1 && (
-                <p className="text-[10px] text-gray-400 mb-6 ml-[52px]">{pathParts.join(" › ")}</p>
-              )}
+              <p className="text-[10px] text-gray-400 mb-5 ml-[52px]">{pathParts.join(" › ")}</p>
 
-              {allGroups.length > 0 ? (
-                <div className="space-y-2">
-                  {directGroups.length > 0 && (
-                    <>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Classes directes</h3>
-                      {directGroups.map(g => {
-                        const mc = users.filter(u => u.groupe_id === g.id).length;
-                        return (
-                          <button key={g.id} onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gold/30 hover:bg-gold/5 transition-colors text-left">
-                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                            <span className="text-sm font-medium text-gray-800 flex-1">{g.name}</span>
-                            <span className="text-xs text-gray-400">{mc} membre{mc !== 1 ? "s" : ""}</span>
+              {/* Accès par classe */}
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
+                Accès des classes à « {dossier.name} »
+              </h3>
+
+              {relevantGroups.length > 0 ? (
+                <div className="space-y-3">
+                  {relevantGroups.map(g => {
+                    const members = users.filter(u => u.groupe_id === g.id);
+                    const groupHasAccess = hasAccess(g.id);
+                    const linkedDossier = initialDossiers.find(d => d.id === g.formation_dossier_id);
+                    const isInherited = g.formation_dossier_id !== dossier.id;
+
+                    return (
+                      <div key={g.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                        {/* Class header with toggle */}
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                          <div className="flex-1 min-w-0">
+                            <button
+                              onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                              className="text-sm font-semibold text-gray-800 hover:text-blue-600 transition-colors"
+                            >
+                              {g.name}
+                            </button>
+                            <p className="text-[10px] text-gray-400">
+                              {members.length} membre{members.length !== 1 ? "s" : ""}
+                              {isInherited && linkedDossier && <span> · via {linkedDossier.name}</span>}
+                            </p>
+                          </div>
+                          {/* Toggle access */}
+                          <button
+                            onClick={() => {
+                              startTransition(async () => {
+                                const currentIds = groupeDossierAcces.filter(a => a.groupe_id === g.id).map(a => a.dossier_id);
+                                const newIds = groupHasAccess
+                                  ? currentIds.filter(id => id !== dossier.id)
+                                  : [...currentIds, dossier.id];
+                                await saveGroupeDossierAcces(g.id, newIds);
+                                setGroupeDossierAcces(prev => [
+                                  ...prev.filter(a => a.groupe_id !== g.id),
+                                  ...newIds.map(did => ({ groupe_id: g.id, dossier_id: did, created_at: "" }))
+                                ]);
+                              });
+                            }}
+                            className={`relative w-10 h-5 rounded-full transition-colors ${groupHasAccess ? "bg-emerald-500" : "bg-gray-300"}`}
+                          >
+                            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${groupHasAccess ? "left-5" : "left-0.5"}`} />
                           </button>
-                        );
-                      })}
-                    </>
-                  )}
-                  {inheritedGroups.length > 0 && (
-                    <>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 mt-4">Classes héritées (parent)</h3>
-                      {inheritedGroups.map(g => {
-                        const mc = users.filter(u => u.groupe_id === g.id).length;
-                        const linkedDossier = initialDossiers.find(d => d.id === g.formation_dossier_id);
-                        return (
-                          <button key={g.id} onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors text-left opacity-75">
-                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-gray-700 block">{g.name}</span>
-                              {linkedDossier && <span className="text-[10px] text-gray-400">via {linkedDossier.name}</span>}
-                            </div>
-                            <span className="text-xs text-gray-400">{mc} membre{mc !== 1 ? "s" : ""}</span>
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
+                        </div>
+
+                        {/* Members with individual toggles */}
+                        {members.length > 0 && (
+                          <div className="border-t border-gray-100 px-4 py-2 space-y-1">
+                            {members.map(u => {
+                              const excluded = isUserExcluded(u.id);
+                              const extraAccess = hasUserExtraAccess(u.id);
+                              return (
+                                <div key={u.id} className="flex items-center gap-2 py-1">
+                                  <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500 shrink-0">
+                                    {(u.first_name?.[0] || "").toUpperCase()}{(u.last_name?.[0] || "").toUpperCase()}
+                                  </div>
+                                  <span className="text-xs text-gray-700 flex-1 truncate">
+                                    {u.first_name} {u.last_name}
+                                  </span>
+                                  {excluded && (
+                                    <span className="text-[9px] bg-red-50 text-red-600 px-1.5 rounded">Exclu</span>
+                                  )}
+                                  {extraAccess && !excluded && (
+                                    <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 rounded">+Accès</span>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      startTransition(async () => {
+                                        if (excluded) {
+                                          // Remove exclusion
+                                          setProfileDossierAccessExclusions(prev => prev.filter(e => !(e.profile_id === u.id && e.dossier_id === dossier.id)));
+                                          // TODO: server action to remove exclusion
+                                        } else {
+                                          // Add exclusion
+                                          setProfileDossierAccessExclusions(prev => [...prev, { profile_id: u.id, dossier_id: dossier.id, created_at: "" }]);
+                                          // TODO: server action to add exclusion
+                                        }
+                                      });
+                                    }}
+                                    className={`relative w-8 h-4 rounded-full transition-colors ${!excluded ? "bg-emerald-400" : "bg-gray-300"}`}
+                                  >
+                                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${!excluded ? "left-4" : "left-0.5"}`} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <Users className="mx-auto h-10 w-10 text-gray-200 mb-3" />
-                  <p className="text-sm font-medium text-gray-400">Aucune classe ici</p>
-                  <p className="text-xs text-gray-300 mt-1">Créez une classe ou rattachez-en une au dossier parent</p>
-                  <button
-                    onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
-                    className="mt-4 flex items-center gap-1.5 mx-auto px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
-                    style={{ backgroundColor: "#0e1e35" }}
-                  >
-                    <Plus size={12} /> Créer une classe
-                  </button>
+                <div className="text-center py-12 bg-gray-50 rounded-xl">
+                  <Users className="mx-auto h-8 w-8 text-gray-300 mb-2" />
+                  <p className="text-sm font-medium text-gray-400">Aucune classe liée</p>
+                  <p className="text-xs text-gray-300 mt-1">Créez une classe dans une université parente</p>
                 </div>
               )}
             </div>
