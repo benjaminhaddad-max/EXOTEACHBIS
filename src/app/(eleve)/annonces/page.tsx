@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import { canAccessDossier, getAccessScopeForUser } from "@/lib/access-scope";
+import { getDossierPathLabel } from "@/lib/pedagogie-structure";
 import { Header } from "@/components/header";
-import { Megaphone, Pin, Users } from "lucide-react";
+import { Megaphone, Pin, Users, FolderTree, BookOpen } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -14,22 +16,32 @@ export default async function AnnoncesElevePage() {
     .eq("id", user!.id)
     .single();
 
-  // Fetch annonces: global + user's groupe
-  const { data: annonces } = profile?.groupe_id
-    ? await supabase
-        .from("posts")
-        .select("*, author:profiles(first_name, last_name), groupe:groupes(name, color)")
-        .eq("type", "annonce")
-        .or(`groupe_id.is.null,groupe_id.eq.${profile.groupe_id}`)
-        .order("pinned", { ascending: false })
-        .order("created_at", { ascending: false })
-    : await supabase
-        .from("posts")
-        .select("*, author:profiles(first_name, last_name), groupe:groupes(name, color)")
-        .eq("type", "annonce")
-        .is("groupe_id", null)
-        .order("pinned", { ascending: false })
-        .order("created_at", { ascending: false });
+  const scope = await getAccessScopeForUser(supabase as any, user!.id);
+
+  const [{ data: annonces }, { data: dossiers }, { data: matieres }] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("*, author:profiles(first_name, last_name), groupe:groupes(name, color), dossier:dossiers(id, name, color, parent_id), matiere:matieres(id, name, color, dossier_id)")
+      .eq("type", "annonce")
+      .order("pinned", { ascending: false })
+      .order("created_at", { ascending: false }),
+    supabase.from("dossiers").select("id, name, parent_id, color"),
+    supabase.from("matieres").select("id, name, color, dossier_id"),
+  ]);
+
+  const accessibleMatiereIds = new Set(
+    (matieres ?? [])
+      .filter((matiere: any) => scope.unrestricted || (matiere.dossier_id && scope.allowedDossierIds.has(matiere.dossier_id)))
+      .map((matiere: any) => matiere.id)
+  );
+
+  const filteredAnnonces = (annonces ?? []).filter((annonce: any) => {
+    if (!annonce.groupe_id && !annonce.dossier_id && !annonce.matiere_id) return true;
+    if (annonce.groupe_id) return annonce.groupe_id === profile?.groupe_id;
+    if (annonce.dossier_id) return canAccessDossier(annonce.dossier_id, scope);
+    if (annonce.matiere_id) return accessibleMatiereIds.has(annonce.matiere_id);
+    return false;
+  });
 
   const now = new Date();
 
@@ -37,7 +49,7 @@ export default async function AnnoncesElevePage() {
     <div>
       <Header title="Annonces" />
 
-      {!annonces || annonces.length === 0 ? (
+      {!filteredAnnonces || filteredAnnonces.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-navy/20 bg-navy/5 p-12 text-center">
           <Megaphone className="mx-auto h-12 w-12 text-navy/30" />
           <h3 className="mt-4 text-lg font-semibold text-navy">Aucune annonce</h3>
@@ -45,13 +57,33 @@ export default async function AnnoncesElevePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {annonces.map((a: any) => {
+          {filteredAnnonces.map((a: any) => {
             const createdAt = new Date(a.created_at);
             const diffHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
             const isNew = diffHours < 24;
             const authorName = a.author
               ? `${a.author.first_name ?? ""} ${a.author.last_name ?? ""}`.trim()
               : "L'équipe pédagogique";
+
+            const audienceBadge = a.matiere
+              ? {
+                  icon: <BookOpen size={10} />,
+                  label: a.matiere.name,
+                  style: { backgroundColor: `${a.matiere.color}22`, color: a.matiere.color },
+                }
+              : a.dossier_id
+                ? {
+                    icon: <FolderTree size={10} />,
+                    label: getDossierPathLabel(a.dossier_id, (dossiers ?? []) as any[]),
+                    style: { backgroundColor: "rgba(201,168,76,0.14)", color: "#B9891E" },
+                  }
+                : a.groupe
+                  ? {
+                      icon: <Users size={10} />,
+                      label: a.groupe.name,
+                      style: { backgroundColor: a.groupe.color, color: "white" },
+                    }
+                  : null;
 
             return (
               <article key={a.id} className={`bg-white rounded-xl border ${a.pinned ? "border-indigo-200 shadow-md" : "border-gray-200 shadow-sm"} overflow-hidden`}>
@@ -67,9 +99,9 @@ export default async function AnnoncesElevePage() {
                       {isNew && (
                         <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">Nouveau</span>
                       )}
-                      {a.groupe && (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-white font-medium" style={{ backgroundColor: a.groupe.color }}>
-                          <Users size={10} /> {a.groupe.name}
+                      {audienceBadge && (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium max-w-[360px]" style={audienceBadge.style}>
+                          {audienceBadge.icon} <span className="truncate">{audienceBadge.label}</span>
                         </span>
                       )}
                     </div>

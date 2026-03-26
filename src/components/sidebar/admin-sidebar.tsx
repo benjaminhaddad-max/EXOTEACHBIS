@@ -1,5 +1,6 @@
 "use client";
 
+import { useUser } from "@/hooks/use-user";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -31,9 +32,14 @@ const adminNavItems = [
 ];
 
 export function AdminSidebar() {
+  const { profile } = useUser();
+  const navItems = profile?.role === "prof"
+    ? adminNavItems.filter((item) => item.href === "/admin/annonces")
+    : adminNavItems;
+
   return (
     <SidebarShell>
-      {adminNavItems.map((item) => (
+      {navItems.map((item) => (
         <SidebarItem key={item.href} {...item} />
       ))}
     </SidebarShell>

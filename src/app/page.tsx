@@ -24,5 +24,9 @@ export default async function Home() {
     redirect("/admin/dashboard");
   }
 
+  if (role === "prof") {
+    redirect("/admin/annonces");
+  }
+
   redirect("/dashboard");
 }

@@ -359,8 +359,11 @@ export type PostType = "annonce" | "forum_question" | "forum_reply";
 export interface Post {
   id: string;
   author_id: string;
+  title: string | null;
   cours_id: string | null;
   groupe_id: string | null;
+  dossier_id: string | null;
+  matiere_id: string | null;
   parent_id: string | null;
   content: string;
   content_json: Record<string, unknown> | null;
@@ -370,6 +373,9 @@ export interface Post {
   updated_at: string;
   // Relations
   author?: Profile;
+  groupe?: Groupe | null;
+  dossier?: Dossier | null;
+  matiere?: Matiere | null;
   replies?: Post[];
 }
 

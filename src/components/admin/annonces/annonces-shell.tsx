@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import {
-  Megaphone, Plus, Pencil, Trash2, Pin, X, Check, AlertCircle, Loader2, Users,
+  Megaphone, Plus, Pencil, Trash2, Pin, X, Check, AlertCircle, Loader2, Users, FolderTree, BookOpen,
 } from "lucide-react";
-import type { Groupe } from "@/types/database";
+import { getDossierPathLabel } from "@/lib/pedagogie-structure";
+import type { Dossier, Groupe, Matiere, Profile } from "@/types/database";
 import { createAnnonce, updateAnnonce, deleteAnnonce, togglePin } from "@/app/(admin)/admin/annonces/actions";
 
 type Annonce = {
@@ -12,9 +13,14 @@ type Annonce = {
   title: string | null;
   content: string;
   groupe_id: string | null;
+  dossier_id: string | null;
+  matiere_id: string | null;
   pinned: boolean;
   created_at: string;
   author: { first_name: string | null; last_name: string | null } | null;
+  groupe?: { name: string; color: string } | null;
+  dossier?: { id: string; name: string; color: string; parent_id: string | null } | null;
+  matiere?: { id: string; name: string; color: string; dossier_id: string | null } | null;
 };
 
 type Modal = { type: "create" } | { type: "edit"; annonce: Annonce } | null;
@@ -23,9 +29,15 @@ type Toast = { message: string; kind: "success" | "error" } | null;
 export function AnnoncesShell({
   initialAnnonces,
   groupes,
+  dossiers,
+  matieres,
+  currentProfile,
 }: {
   initialAnnonces: Annonce[];
   groupes: Groupe[];
+  dossiers: Dossier[];
+  matieres: Matiere[];
+  currentProfile: Profile | null;
 }) {
   const [annonces, setAnnonces] = useState<Annonce[]>(initialAnnonces);
   const [modal, setModal] = useState<Modal>(null);
@@ -40,13 +52,57 @@ export function AnnoncesShell({
   const refresh = async () => {
     const { createClient } = await import("@/lib/supabase/client");
     const sb = createClient();
-    const { data } = await sb
+    let query = sb
       .from("posts")
-      .select("*, author:profiles(first_name, last_name)")
+      .select("*, author:profiles(first_name, last_name), groupe:groupes(name, color), dossier:dossiers(id, name, color, parent_id), matiere:matieres(id, name, color, dossier_id)")
       .eq("type", "annonce")
       .order("pinned", { ascending: false })
       .order("created_at", { ascending: false });
+
+    if (currentProfile?.role === "prof") {
+      query = query.eq("author_id", currentProfile.id);
+    }
+
+    const { data } = await query;
     if (data) setAnnonces(data as any[]);
+  };
+
+  const getAudienceBadge = (annonce: Annonce) => {
+    if (annonce.matiere_id) {
+      const matiere = annonce.matiere ?? matieres.find((item) => item.id === annonce.matiere_id);
+      return matiere
+        ? {
+            label: matiere.name,
+            icon: <BookOpen size={10} />,
+            backgroundColor: `${matiere.color}22`,
+            color: matiere.color,
+          }
+        : null;
+    }
+
+    if (annonce.dossier_id) {
+      const path = getDossierPathLabel(annonce.dossier_id, dossiers);
+      return {
+        label: path,
+        icon: <FolderTree size={10} />,
+        backgroundColor: "rgba(201,168,76,0.14)",
+        color: "#B9891E",
+      };
+    }
+
+    if (annonce.groupe_id) {
+      const groupe = annonce.groupe ?? groupes.find((item) => item.id === annonce.groupe_id);
+      return groupe
+        ? {
+            label: groupe.name,
+            icon: <Users size={10} />,
+            backgroundColor: groupe.color,
+            color: "white",
+          }
+        : null;
+    }
+
+    return null;
   };
 
   const handleDelete = (id: string) => {
@@ -101,10 +157,10 @@ export function AnnoncesShell({
       ) : (
         <div className="space-y-3">
           {annonces.map((a) => {
-            const groupe = groupes.find((g) => g.id === a.groupe_id);
             const authorName = a.author
               ? `${a.author.first_name ?? ""} ${a.author.last_name ?? ""}`.trim()
               : "Admin";
+            const audienceBadge = getAudienceBadge(a);
             return (
               <div key={a.id} className={`bg-white rounded-xl border ${a.pinned ? "border-indigo-300 ring-1 ring-indigo-100" : "border-gray-200"} shadow-sm p-5`}>
                 <div className="flex items-start justify-between gap-3">
@@ -115,13 +171,13 @@ export function AnnoncesShell({
                           <Pin size={10} /> Épinglée
                         </span>
                       )}
-                      {groupe ? (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium text-white" style={{ backgroundColor: groupe.color }}>
-                          <Users size={10} /> {groupe.name}
+                      {audienceBadge ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium max-w-[360px]" style={{ backgroundColor: audienceBadge.backgroundColor, color: audienceBadge.color }}>
+                          {audienceBadge.icon} <span className="truncate">{audienceBadge.label}</span>
                         </span>
                       ) : (
                         <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">
-                          Tous les groupes
+                          Tous les utilisateurs concernés
                         </span>
                       )}
                     </div>
@@ -160,6 +216,8 @@ export function AnnoncesShell({
             <AnnonceForm
               annonce={modal.type === "edit" ? modal.annonce : undefined}
               groupes={groupes}
+              dossiers={dossiers}
+              matieres={matieres}
               isPending={isPending}
               onClose={() => setModal(null)}
               onSubmit={(data) => {
@@ -181,16 +239,30 @@ export function AnnoncesShell({
   );
 }
 
-function AnnonceForm({ annonce, groupes, isPending, onClose, onSubmit }: {
+function AnnonceForm({ annonce, groupes, dossiers, matieres, isPending, onClose, onSubmit }: {
   annonce?: Annonce;
   groupes: Groupe[];
+  dossiers: Dossier[];
+  matieres: Matiere[];
   isPending: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: {
+    title: string;
+    content: string;
+    groupe_id: string | null;
+    dossier_id: string | null;
+    matiere_id: string | null;
+    pinned: boolean;
+  }) => void;
 }) {
   const [title, setTitle] = useState(annonce?.title ?? "");
   const [content, setContent] = useState(annonce?.content ?? "");
+  const [audienceType, setAudienceType] = useState<"global" | "groupe" | "dossier" | "matiere">(
+    annonce?.matiere_id ? "matiere" : annonce?.dossier_id ? "dossier" : annonce?.groupe_id ? "groupe" : "global"
+  );
   const [groupeId, setGroupeId] = useState(annonce?.groupe_id ?? "");
+  const [dossierId, setDossierId] = useState(annonce?.dossier_id ?? "");
+  const [matiereId, setMatiereId] = useState(annonce?.matiere_id ?? "");
   const [pinned, setPinned] = useState(annonce?.pinned ?? false);
 
   return (
@@ -217,12 +289,55 @@ function AnnonceForm({ annonce, groupes, isPending, onClose, onSubmit }: {
 
       <div>
         <label className="text-xs text-gray-500 mb-1.5 block">Destinataires</label>
-        <select value={groupeId} onChange={(e) => setGroupeId(e.target.value)}
+        <select value={audienceType} onChange={(e) => setAudienceType(e.target.value as any)}
           className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
-          <option value="">Tous les groupes</option>
-          {groupes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          <option value="global">Tout le monde concerné</option>
+          {groupes.length > 0 && <option value="groupe">Une classe / un groupe</option>}
+          {dossiers.length > 0 && <option value="dossier">Une formation / un dossier</option>}
+          {matieres.length > 0 && <option value="matiere">Une matière</option>}
         </select>
       </div>
+
+      {audienceType === "groupe" && (
+        <div>
+          <label className="text-xs text-gray-500 mb-1.5 block">Classe / groupe</label>
+          <select value={groupeId} onChange={(e) => setGroupeId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
+            <option value="">Choisir une classe...</option>
+            {groupes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {audienceType === "dossier" && (
+        <div>
+          <label className="text-xs text-gray-500 mb-1.5 block">Formation / dossier</label>
+          <select value={dossierId} onChange={(e) => setDossierId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
+            <option value="">Choisir un dossier...</option>
+            {dossiers.map((dossier) => (
+              <option key={dossier.id} value={dossier.id}>
+                {getDossierPathLabel(dossier.id, dossiers)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {audienceType === "matiere" && (
+        <div>
+          <label className="text-xs text-gray-500 mb-1.5 block">Matière</label>
+          <select value={matiereId} onChange={(e) => setMatiereId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
+            <option value="">Choisir une matière...</option>
+            {matieres.map((matiere) => (
+              <option key={matiere.id} value={matiere.id}>
+                {matiere.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} className="w-4 h-4 rounded accent-indigo-600" />
@@ -232,8 +347,22 @@ function AnnonceForm({ annonce, groupes, isPending, onClose, onSubmit }: {
       <div className="flex justify-end gap-3 pt-2">
         <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Annuler</button>
         <button
-          onClick={() => onSubmit({ title: title.trim(), content: content.trim(), groupe_id: groupeId || null, pinned })}
-          disabled={isPending || !title.trim() || !content.trim()}
+          onClick={() => onSubmit({
+            title: title.trim(),
+            content: content.trim(),
+            groupe_id: audienceType === "groupe" ? groupeId || null : null,
+            dossier_id: audienceType === "dossier" ? dossierId || null : null,
+            matiere_id: audienceType === "matiere" ? matiereId || null : null,
+            pinned,
+          })}
+          disabled={
+            isPending ||
+            !title.trim() ||
+            !content.trim() ||
+            (audienceType === "groupe" && !groupeId) ||
+            (audienceType === "dossier" && !dossierId) ||
+            (audienceType === "matiere" && !matiereId)
+          }
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
           {isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
