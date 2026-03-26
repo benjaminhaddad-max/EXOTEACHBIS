@@ -19,6 +19,7 @@ import {
   COACHING_WORK_CAPACITY_OPTIONS,
   calculateConfidenceScore,
 } from "@/lib/coaching-score";
+import { getCoachingFormAnswers } from "@/lib/form-builder";
 import {
   createCoachCallSlot,
   saveStudentPointAProfile,
@@ -34,6 +35,8 @@ import type {
   CoachingSchoolLevel,
   CoachingStudentProfile,
   CoachingWorkCapacity,
+  FormField,
+  FormTemplate,
   Groupe,
   Profile,
 } from "@/types/database";
@@ -69,6 +72,8 @@ type CoachingShellProps = {
   initialSlots: CoachingCallSlot[];
   initialBookings: CoachingCallBooking[];
   initialPointAProfiles: CoachingStudentProfile[];
+  formTemplate: FormTemplate | null;
+  formFields: FormField[];
   setupError?: string | null;
 };
 
@@ -143,6 +148,8 @@ export function CoachingShell({
   initialSlots,
   initialBookings,
   initialPointAProfiles,
+  formTemplate,
+  formFields,
   setupError,
 }: CoachingShellProps) {
   const [intakeForms] = useState(initialIntakeForms);
@@ -212,6 +219,7 @@ export function CoachingShell({
   const selectedBooking = selectedStudent ? bookingsByStudentId.get(selectedStudent.id) ?? null : null;
   const selectedBookingSlot = selectedBooking ? slots.find((slot) => slot.id === selectedBooking.slot_id) ?? null : null;
   const selectedPointA = selectedStudent ? pointAByStudentId.get(selectedStudent.id) ?? null : null;
+  const selectedAnswers = useMemo(() => getCoachingFormAnswers(selectedForm), [selectedForm]);
 
   useEffect(() => {
     setPointADraft(initialPointADraft(selectedPointA));
@@ -727,18 +735,28 @@ export function CoachingShell({
                 {!selectedForm ? (
                   <p className="mt-3 text-sm text-gray-500">L'élève n'a pas encore rempli son onboarding.</p>
                 ) : (
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <AnswerField label="Téléphone" value={selectedForm.phone} />
-                    <AnswerField label="Ville" value={selectedForm.city} />
-                    <AnswerField label="Spécialités bac" value={selectedForm.bac_specialties} />
-                    <AnswerField label="Parcours" value={selectedForm.parcours_label} />
-                    <AnswerField label="Pourquoi médecine ?" value={selectedForm.why_medicine} />
-                    <AnswerField label="Attentes" value={selectedForm.expectations} />
-                    <AnswerField label="Inquiétude principale" value={selectedForm.main_worry} />
-                    <AnswerField label="Méthode actuelle" value={selectedForm.current_method_description} />
-                    <AnswerField label="Points forts" value={selectedForm.strengths} />
-                    <AnswerField label="Points faibles" value={selectedForm.weaknesses} />
-                    <AnswerField label="Disponibilités" value={selectedForm.availability_notes} />
+                  <div className="mt-4 space-y-4">
+                    {formTemplate && (
+                      <div className="rounded-2xl bg-gray-50 p-4">
+                        <p className="text-sm font-semibold text-gray-900">{formTemplate.title}</p>
+                        {formTemplate.description && <p className="mt-1 text-sm text-gray-500">{formTemplate.description}</p>}
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {formFields.length > 0
+                        ? formFields.map((field) => (
+                            <AnswerField
+                              key={field.id}
+                              label={field.label}
+                              value={selectedAnswers[field.key]}
+                              className={field.width === "full" ? "md:col-span-2" : ""}
+                            />
+                          ))
+                        : Object.entries(selectedAnswers).map(([key, value]) => (
+                            <AnswerField key={key} label={key} value={value} />
+                          ))}
+                    </div>
                   </div>
                 )}
               </section>
@@ -890,9 +908,17 @@ function SummaryCard({
   );
 }
 
-function AnswerField({ label, value }: { label: string; value?: string | null }) {
+function AnswerField({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value?: string | null;
+  className?: string;
+}) {
   return (
-    <div className="rounded-2xl bg-gray-50 p-4">
+    <div className={`rounded-2xl bg-gray-50 p-4 ${className}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
       <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">{value?.trim() || "—"}</p>
     </div>

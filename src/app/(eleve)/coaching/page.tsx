@@ -7,6 +7,8 @@ import type {
   CoachingCallBooking,
   CoachingCallSlot,
   CoachingIntakeForm,
+  FormField,
+  FormTemplate,
   Groupe,
   Profile,
 } from "@/types/database";
@@ -40,11 +42,13 @@ export default async function StudentCoachingPage() {
   let booking: CoachingCallBooking | null = null;
   let bookingSlot: CoachingCallSlot | null = null;
   let availableSlots: CoachingCallSlot[] = [];
+  let formTemplate: FormTemplate | null = null;
+  let formFields: FormField[] = [];
   let setupError: string | null = null;
 
   if (currentProfile.groupe_id) {
     const now = new Date().toISOString();
-    const [groupeRes, coachesRes, formRes, bookingRes, slotsRes, bookingsRes] = await Promise.all([
+    const [groupeRes, coachesRes, formRes, bookingRes, slotsRes, bookingsRes, templateRes] = await Promise.all([
       admin.from("groupes").select("*").eq("id", currentProfile.groupe_id).maybeSingle(),
       admin.from("profiles").select("*").eq("role", "coach").eq("groupe_id", currentProfile.groupe_id).order("last_name").order("first_name"),
       admin.from("coaching_intake_forms").select("*").eq("student_id", currentProfile.id).maybeSingle(),
@@ -62,6 +66,7 @@ export default async function StudentCoachingPage() {
         .select("*")
         .eq("groupe_id", currentProfile.groupe_id)
         .in("status", ["booked", "completed"]),
+      admin.from("form_templates").select("*").eq("slug", "coaching_onboarding").eq("is_active", true).maybeSingle(),
     ]);
 
     setupError =
@@ -71,12 +76,27 @@ export default async function StudentCoachingPage() {
       bookingRes.error?.message ??
       slotsRes.error?.message ??
       bookingsRes.error?.message ??
+      templateRes.error?.message ??
       null;
 
     groupe = (groupeRes.data ?? null) as Groupe | null;
     coaches = (coachesRes.data ?? []) as Profile[];
     intakeForm = (formRes.data ?? null) as CoachingIntakeForm | null;
     booking = (bookingRes.data ?? null) as CoachingCallBooking | null;
+    formTemplate = (templateRes.data ?? null) as FormTemplate | null;
+
+    if (formTemplate?.id) {
+      const fieldsRes = await admin
+        .from("form_fields")
+        .select("*")
+        .eq("form_template_id", formTemplate.id)
+        .order("order_index");
+
+      if (!setupError && fieldsRes.error) {
+        setupError = fieldsRes.error.message;
+      }
+      formFields = (fieldsRes.data ?? []) as FormField[];
+    }
 
     if (booking?.slot_id) {
       const bookingSlotRes = await admin.from("coaching_call_slots").select("*").eq("id", booking.slot_id).maybeSingle();
@@ -108,6 +128,8 @@ export default async function StudentCoachingPage() {
         initialBooking={booking}
         initialBookingSlot={bookingSlot}
         initialAvailableSlots={availableSlots}
+        formTemplate={formTemplate}
+        formFields={formFields}
         setupError={setupError}
       />
     </div>

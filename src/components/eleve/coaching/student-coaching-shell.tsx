@@ -3,20 +3,25 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   AlertCircle,
+  ArrowRight,
   CalendarClock,
   CheckCircle2,
   Loader2,
   PhoneCall,
+  Sparkles,
   UserRound,
 } from "lucide-react";
 import {
   bookStudentCoachingCall,
   submitStudentCoachingForm,
 } from "@/app/(admin)/admin/coaching/actions";
+import { getCoachingFormAnswers, getFieldOptions } from "@/lib/form-builder";
 import type {
   CoachingCallBooking,
   CoachingCallSlot,
   CoachingIntakeForm,
+  FormField,
+  FormTemplate,
   Groupe,
   Profile,
 } from "@/types/database";
@@ -26,20 +31,6 @@ type Toast = {
   message: string;
 } | null;
 
-type FormDraft = {
-  phone: string;
-  city: string;
-  bac_specialties: string;
-  parcours_label: string;
-  why_medicine: string;
-  expectations: string;
-  main_worry: string;
-  current_method_description: string;
-  strengths: string;
-  weaknesses: string;
-  availability_notes: string;
-};
-
 type StudentCoachingShellProps = {
   currentProfile: Profile;
   groupe: Groupe | null;
@@ -48,7 +39,10 @@ type StudentCoachingShellProps = {
   initialBooking: CoachingCallBooking | null;
   initialBookingSlot: CoachingCallSlot | null;
   initialAvailableSlots: CoachingCallSlot[];
+  formTemplate: FormTemplate | null;
+  formFields: FormField[];
   setupError?: string | null;
+  [key: string]: unknown;
 };
 
 function getDisplayName(profile?: Profile | null) {
@@ -67,20 +61,9 @@ function formatDateTime(value?: string | null) {
   });
 }
 
-function initialFormDraft(form?: CoachingIntakeForm | null, profile?: Profile | null): FormDraft {
-  return {
-    phone: form?.phone ?? profile?.phone ?? "",
-    city: form?.city ?? "",
-    bac_specialties: form?.bac_specialties ?? "",
-    parcours_label: form?.parcours_label ?? "",
-    why_medicine: form?.why_medicine ?? "",
-    expectations: form?.expectations ?? "",
-    main_worry: form?.main_worry ?? "",
-    current_method_description: form?.current_method_description ?? "",
-    strengths: form?.strengths ?? "",
-    weaknesses: form?.weaknesses ?? "",
-    availability_notes: form?.availability_notes ?? "",
-  };
+function buildInitialDraft(form: CoachingIntakeForm | null, fields: FormField[]) {
+  const answers = getCoachingFormAnswers(form);
+  return Object.fromEntries(fields.map((field) => [field.key, answers[field.key] ?? ""]));
 }
 
 export function StudentCoachingShell({
@@ -91,13 +74,15 @@ export function StudentCoachingShell({
   initialBooking,
   initialBookingSlot,
   initialAvailableSlots,
+  formTemplate,
+  formFields,
   setupError,
 }: StudentCoachingShellProps) {
   const [form, setForm] = useState(initialForm);
   const [booking, setBooking] = useState(initialBooking);
   const [bookingSlot, setBookingSlot] = useState(initialBookingSlot);
   const [availableSlots, setAvailableSlots] = useState(initialAvailableSlots);
-  const [draft, setDraft] = useState<FormDraft>(initialFormDraft(initialForm, currentProfile));
+  const [draft, setDraft] = useState<Record<string, string>>(() => buildInitialDraft(initialForm, formFields));
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -107,13 +92,22 @@ export function StudentCoachingShell({
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    setDraft(buildInitialDraft(form, formFields));
+  }, [form?.id, formFields]);
+
   const coachesById = useMemo(() => new Map(coaches.map((coach) => [coach.id, coach])), [coaches]);
+  const requiredFields = useMemo(() => formFields.filter((field) => field.required), [formFields]);
+  const answeredRequiredCount = requiredFields.filter((field) => draft[field.key]?.trim()).length;
+  const completionRatio = requiredFields.length === 0 ? 100 : Math.round((answeredRequiredCount / requiredFields.length) * 100);
 
   if (setupError) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        La base coaching n'est pas prête: {setupError}. Applique d'abord la migration
+        La base coaching n'est pas prête: {setupError}. Applique d'abord les migrations
         <span className="mx-1 font-semibold">`023_reset_coaching_first_brick.sql`</span>
+        et
+        <span className="mx-1 font-semibold">`024_form_builder_for_coaching.sql`</span>
         puis recharge la page.
       </div>
     );
@@ -128,9 +122,22 @@ export function StudentCoachingShell({
     );
   }
 
+  if (!formTemplate || formFields.length === 0) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+        Aucun formulaire coaching actif n'est configuré pour le moment. L'équipe admin doit d'abord le paramétrer dans
+        l'espace Configuration.
+      </div>
+    );
+  }
+
   const handleSubmitForm = () => {
     startTransition(async () => {
-      const response = await submitStudentCoachingForm(draft);
+      const response = await submitStudentCoachingForm({
+        form_template_id: formTemplate.id,
+        answers: draft,
+      });
+
       if (!("success" in response)) {
         setToast({ kind: "error", message: response.error ?? "Une erreur est survenue." });
         return;
@@ -168,8 +175,10 @@ export function StudentCoachingShell({
     });
   };
 
+  const canSubmit = requiredFields.every((field) => draft[field.key]?.trim());
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {toast && (
         <div
           className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-xl ${
@@ -181,176 +190,155 @@ export function StudentCoachingShell({
         </div>
       )}
 
-      <section className="rounded-3xl border border-[#d8dce8] bg-gradient-to-br from-[#0f1e36] via-[#142948] to-[#1b3761] p-6 text-white shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <StepCard
-            step="1"
-            title="Ton formulaire"
-            text="On apprend à te connaître pour préparer un vrai appel utile."
-            done={Boolean(form)}
-          />
-          <StepCard
-            step="2"
-            title="Ton rendez-vous"
-            text="Juste après, tu réserves ton créneau avec un coach de ta classe."
-            done={Boolean(booking)}
-          />
-          <StepCard
-            step="3"
-            title="Ton appel onboarding"
-            text="Le coach fait le point avec toi et prépare la suite de ton accompagnement."
-            done={booking?.status === "completed"}
-          />
+      <section className="overflow-hidden rounded-[32px] border border-[#d8dce8] bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,_#0f1e36_0%,_#132a48_48%,_#1e4466_100%)] p-6 text-white shadow-sm">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#f1d48b]">
+            <Sparkles className="h-3.5 w-3.5" />
+            Coaching {groupe.name}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+            <div className="space-y-4">
+              <h2 className="max-w-2xl text-3xl font-semibold leading-tight">
+                Commence par un vrai onboarding, puis réserve ton appel avec un coach de ta promo.
+              </h2>
+              <p className="max-w-2xl text-sm leading-6 text-white/75">
+                Le but n'est pas de remplir un formulaire “pour remplir un formulaire”. Plus tes réponses sont honnêtes,
+                plus ton appel sera utile.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">Progression</p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-[#f1d48b]" style={{ width: `${completionRatio}%` }} />
+              </div>
+              <p className="mt-3 text-sm text-white/80">
+                {answeredRequiredCount}/{requiredFields.length} questions obligatoires complétées
+              </p>
+              <div className="mt-5 space-y-3 text-sm">
+                <StepRow title="1. Formulaire" done={Boolean(form)} />
+                <StepRow title="2. Réservation d'appel" done={Boolean(booking)} />
+                <StepRow title="3. Point avec le coach" done={booking?.status === "completed"} />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-2">
-            <UserRound className="h-5 w-5 text-navy" />
+      <section className="mx-auto max-w-4xl space-y-8">
+        <div className="rounded-[32px] border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Formulaire d'onboarding</h2>
-              <p className="text-sm text-gray-500">Réponds sérieusement, ton coach s'appuiera dessus pendant l'appel.</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Étape 1</p>
+              <h3 className="mt-2 text-3xl font-semibold text-gray-900">{formTemplate.title}</h3>
+              {formTemplate.description && <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">{formTemplate.description}</p>}
             </div>
+            {form && (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Déjà enregistré
+              </span>
+            )}
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <InputField label="Téléphone" value={draft.phone} onChange={(value) => setDraft((current) => ({ ...current, phone: value }))} />
-            <InputField label="Ville" value={draft.city} onChange={(value) => setDraft((current) => ({ ...current, city: value }))} />
-            <InputField
-              label="Spécialités au bac"
-              value={draft.bac_specialties}
-              onChange={(value) => setDraft((current) => ({ ...current, bac_specialties: value }))}
-            />
-            <InputField
-              label="Ton parcours actuel"
-              value={draft.parcours_label}
-              onChange={(value) => setDraft((current) => ({ ...current, parcours_label: value }))}
-            />
-            <TextAreaField
-              label="Pourquoi veux-tu faire médecine ?"
-              value={draft.why_medicine}
-              onChange={(value) => setDraft((current) => ({ ...current, why_medicine: value }))}
-            />
-            <TextAreaField
-              label="Qu'attends-tu du coaching ?"
-              value={draft.expectations}
-              onChange={(value) => setDraft((current) => ({ ...current, expectations: value }))}
-            />
-            <TextAreaField
-              label="Ta plus grosse inquiétude aujourd'hui"
-              value={draft.main_worry}
-              onChange={(value) => setDraft((current) => ({ ...current, main_worry: value }))}
-            />
-            <TextAreaField
-              label="Comment travailles-tu actuellement ?"
-              value={draft.current_method_description}
-              onChange={(value) => setDraft((current) => ({ ...current, current_method_description: value }))}
-            />
-            <TextAreaField
-              label="Tes points forts"
-              value={draft.strengths}
-              onChange={(value) => setDraft((current) => ({ ...current, strengths: value }))}
-            />
-            <TextAreaField
-              label="Tes points faibles"
-              value={draft.weaknesses}
-              onChange={(value) => setDraft((current) => ({ ...current, weaknesses: value }))}
-            />
-            <TextAreaField
-              label="Tes disponibilités ou contraintes"
-              value={draft.availability_notes}
-              onChange={(value) => setDraft((current) => ({ ...current, availability_notes: value }))}
-              className="md:col-span-2"
-            />
+          <div className="mt-8 space-y-5">
+            {formFields.map((field, index) => (
+              <QuestionBlock
+                key={field.id}
+                index={index + 1}
+                field={field}
+                value={draft[field.key] ?? ""}
+                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+              />
+            ))}
           </div>
 
           <button
             type="button"
             onClick={handleSubmitForm}
-            disabled={isPending || !draft.phone.trim() || !draft.why_medicine.trim() || !draft.main_worry.trim()}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isPending || !canSubmit}
+            className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-navy px-5 py-3 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             {form ? "Mettre à jour mes réponses" : "Valider mon formulaire"}
           </button>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-2">
-              <PhoneCall className="h-5 w-5 text-navy" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Tes coachs</h2>
-                <p className="text-sm text-gray-500">{groupe.name}</p>
-              </div>
+        <div className="rounded-[32px] border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Étape 2</p>
+              <h3 className="mt-2 text-3xl font-semibold text-gray-900">Réserve ton appel</h3>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
+                Une fois le formulaire envoyé, tu choisis un créneau avec un coach de ta classe.
+              </p>
             </div>
-
-            <div className="mt-4 space-y-3">
-              {coaches.length === 0 ? (
-                <p className="text-sm text-gray-500">Aucun coach n'est encore rattaché à ta classe.</p>
-              ) : (
-                coaches.map((coach) => (
-                  <div key={coach.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-sm font-semibold text-gray-900">{getDisplayName(coach)}</p>
-                    <p className="mt-1 text-sm text-gray-500">{coach.email}</p>
-                  </div>
-                ))
-              )}
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Coachs disponibles</p>
+              <p className="mt-2 text-sm font-medium text-gray-700">{coaches.length} coach(s) rattaché(s) à {groupe.name}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="h-5 w-5 text-navy" />
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Réserver ton appel</h2>
-                <p className="text-sm text-gray-500">
-                  {form
-                    ? "Choisis maintenant ton créneau."
-                    : "Le formulaire doit être rempli avant de réserver un rendez-vous."}
-                </p>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {coaches.map((coach) => (
+              <div key={coach.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-white p-3 text-navy shadow-sm">
+                    <UserRound className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{getDisplayName(coach)}</p>
+                    <p className="text-sm text-gray-500">{coach.email}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
+          </div>
 
+          <div className="mt-8">
             {booking && bookingSlot ? (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                <p className="font-semibold">Ton rendez-vous est réservé.</p>
-                <p className="mt-2">
+              <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-900">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <p className="font-semibold">Ton rendez-vous est réservé</p>
+                </div>
+                <p className="mt-4 text-base">
                   {formatDateTime(bookingSlot.start_at)} avec {getDisplayName(coachesById.get(booking.coach_id) ?? null)}
                 </p>
-                {bookingSlot.location && <p className="mt-1">Lieu / lien: {bookingSlot.location}</p>}
+                {bookingSlot.location && <p className="mt-2">Lieu / lien: {bookingSlot.location}</p>}
+              </div>
+            ) : !form ? (
+              <div className="rounded-3xl border-2 border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+                Envoie d'abord ton formulaire pour débloquer les créneaux d'appel.
+              </div>
+            ) : availableSlots.length === 0 ? (
+              <div className="rounded-3xl border-2 border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+                Aucun créneau n'est disponible pour l'instant. Reviens plus tard ou contacte l'équipe.
               </div>
             ) : (
-              <div className="mt-4 space-y-3">
-                {!form ? (
-                  <div className="rounded-2xl border-2 border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
-                    Valide d'abord ton formulaire pour débloquer les créneaux.
-                  </div>
-                ) : availableSlots.length === 0 ? (
-                  <div className="rounded-2xl border-2 border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
-                    Aucun créneau n'est disponible pour l'instant. Reviens un peu plus tard ou contacte l'équipe.
-                  </div>
-                ) : (
-                  availableSlots.map((slot) => (
-                    <div key={slot.id} className="rounded-2xl border border-gray-200 p-4">
-                      <p className="text-sm font-semibold text-gray-900">{formatDateTime(slot.start_at)}</p>
+              <div className="space-y-4">
+                {availableSlots.map((slot) => (
+                  <div key={slot.id} className="flex flex-col gap-4 rounded-3xl border border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Créneau disponible</p>
+                      <p className="mt-2 text-lg font-semibold text-gray-900">{formatDateTime(slot.start_at)}</p>
                       <p className="mt-1 text-sm text-gray-500">
                         {getDisplayName(coachesById.get(slot.coach_id) ?? null)}
+                        {slot.location ? ` · ${slot.location}` : ""}
                       </p>
-                      {slot.location && <p className="mt-1 text-xs text-gray-500">{slot.location}</p>}
-                      <button
-                        type="button"
-                        onClick={() => handleBookSlot(slot)}
-                        disabled={isPending || !form}
-                        className="mt-3 inline-flex items-center gap-2 rounded-xl bg-navy px-3 py-2 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
-                        Réserver ce créneau
-                      </button>
                     </div>
-                  ))
-                )}
+                    <button
+                      type="button"
+                      onClick={() => handleBookSlot(slot)}
+                      disabled={isPending || !form}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
+                      Réserver ce créneau
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -360,62 +348,87 @@ export function StudentCoachingShell({
   );
 }
 
-function StepCard({ step, title, text, done }: { step: string; title: string; text: string; done: boolean }) {
+function StepRow({ title, done }: { title: string; done: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-      <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-sm font-semibold text-white">
-          {step}
-        </span>
-        {done && <CheckCircle2 className="h-5 w-5 text-emerald-300" />}
-      </div>
-      <p className="mt-4 text-sm font-semibold text-white">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-white/75">{text}</p>
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+      <span className="text-white/85">{title}</span>
+      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${done ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-white/60"}`}>
+        {done ? "OK" : "À faire"}
+      </span>
     </div>
   );
 }
 
-function InputField({
-  label,
+function QuestionBlock({
+  index,
+  field,
   value,
   onChange,
 }: {
-  label: string;
+  index: number;
+  field: FormField;
   value: string;
   onChange: (value: string) => void;
 }) {
-  return (
-    <label className="space-y-2 text-sm">
-      <span className="font-medium text-gray-700">{label}</span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
-      />
-    </label>
-  );
-}
+  const options = getFieldOptions(field);
 
-function TextAreaField({
-  label,
-  value,
-  onChange,
-  className = "",
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  className?: string;
-}) {
   return (
-    <label className={`space-y-2 text-sm ${className}`}>
-      <span className="font-medium text-gray-700">{label}</span>
-      <textarea
-        rows={4}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-navy"
-      />
-    </label>
+    <div className="rounded-[28px] border border-gray-200 bg-[#fcfcfb] p-6 shadow-[0_1px_0_rgba(15,30,54,0.04)]">
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-navy text-sm font-semibold text-white">
+          {index}
+        </div>
+        <div className="w-full">
+          <div className="flex flex-wrap items-center gap-3">
+            <h4 className="text-lg font-semibold text-gray-900">{field.label}</h4>
+            {field.required && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                Obligatoire
+              </span>
+            )}
+          </div>
+          {field.helper_text && <p className="mt-2 text-sm leading-6 text-gray-500">{field.helper_text}</p>}
+
+          <div className="mt-5">
+            {field.field_type === "select" ? (
+              <div className="flex flex-wrap gap-3">
+                {options.map((option) => {
+                  const selected = value === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onChange(option)}
+                      className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                        selected
+                          ? "border-navy bg-navy text-white shadow-sm"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : field.field_type === "long_text" ? (
+              <textarea
+                rows={5}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={field.placeholder ?? ""}
+                className="w-full rounded-3xl border border-gray-200 bg-white px-5 py-4 text-sm leading-6 text-gray-700 outline-none transition focus:border-navy"
+              />
+            ) : (
+              <input
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={field.placeholder ?? ""}
+                className="h-14 w-full rounded-3xl border border-gray-200 bg-white px-5 text-sm text-gray-700 outline-none transition focus:border-navy"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

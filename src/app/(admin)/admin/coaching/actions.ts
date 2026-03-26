@@ -65,17 +65,8 @@ function canCoachAccessStudent(coachGroupId: string | null, studentGroupId: stri
 }
 
 export async function submitStudentCoachingForm(data: {
-  phone: string;
-  city: string;
-  bac_specialties: string;
-  parcours_label: string;
-  why_medicine: string;
-  expectations: string;
-  main_worry: string;
-  current_method_description: string;
-  strengths: string;
-  weaknesses: string;
-  availability_notes: string;
+  form_template_id: string;
+  answers: Record<string, string>;
 }) {
   const auth = await requireStudent();
   if ("error" in auth) return auth;
@@ -84,20 +75,36 @@ export async function submitStudentCoachingForm(data: {
   }
 
   const admin = createAdminClient();
+  const { data: template } = await admin
+    .from("form_templates")
+    .select("id, is_active")
+    .eq("id", data.form_template_id)
+    .maybeSingle();
+
+  if (!template?.is_active) {
+    return { error: "Le formulaire n'est pas disponible pour le moment." };
+  }
+
+  const sanitizedAnswers = Object.fromEntries(
+    Object.entries(data.answers ?? {}).map(([key, value]) => [key, typeof value === "string" ? value.trim() : ""])
+  );
+
   const payload = {
     student_id: auth.user.id,
     groupe_id: auth.profile.groupe_id,
-    phone: data.phone.trim() || null,
-    city: data.city.trim() || null,
-    bac_specialties: data.bac_specialties.trim() || null,
-    parcours_label: data.parcours_label.trim() || null,
-    why_medicine: data.why_medicine.trim() || null,
-    expectations: data.expectations.trim() || null,
-    main_worry: data.main_worry.trim() || null,
-    current_method_description: data.current_method_description.trim() || null,
-    strengths: data.strengths.trim() || null,
-    weaknesses: data.weaknesses.trim() || null,
-    availability_notes: data.availability_notes.trim() || null,
+    form_template_id: template.id,
+    answers: sanitizedAnswers,
+    phone: sanitizedAnswers.phone || null,
+    city: sanitizedAnswers.city || null,
+    bac_specialties: sanitizedAnswers.bac_specialties || null,
+    parcours_label: sanitizedAnswers.parcours_label || null,
+    why_medicine: sanitizedAnswers.why_medicine || null,
+    expectations: sanitizedAnswers.expectations || null,
+    main_worry: sanitizedAnswers.main_worry || null,
+    current_method_description: sanitizedAnswers.current_method_description || null,
+    strengths: sanitizedAnswers.strengths || null,
+    weaknesses: sanitizedAnswers.weaknesses || null,
+    availability_notes: sanitizedAnswers.availability_notes || null,
     updated_at: new Date().toISOString(),
   };
 

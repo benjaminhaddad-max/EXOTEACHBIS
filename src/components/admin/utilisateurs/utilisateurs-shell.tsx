@@ -302,11 +302,15 @@ export function UtilisateursShell({
 
   const handleSaveUser = useCallback((userId: string, changes: AdminUserChanges) => {
     startTransition(async () => {
-      const res = await updateUserAdminProfile({ userId, ...changes });
-      if ("error" in res) { showToast(res.error!, "error"); return; }
-      await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]);
-      setModal(null);
-      showToast("Modifié", "success");
+      try {
+        const res = await updateUserAdminProfile({ userId, ...changes });
+        if ("error" in res) { showToast(res.error!, "error"); return; }
+        await Promise.all([refreshUsers(), refreshProfMatieres(), refreshProfileDossierAcces(), refreshProfileDossierAccessExclusions()]);
+        setModal(null);
+        showToast("Modifié", "success");
+      } catch (err: any) {
+        showToast("Erreur: " + (err?.message ?? "inconnue"), "error");
+      }
     });
   }, [showToast, refreshUsers, refreshProfMatieres, refreshProfileDossierAcces, refreshProfileDossierAccessExclusions]);
 

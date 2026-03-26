@@ -8,6 +8,8 @@ import type {
   CoachingCallSlot,
   CoachingIntakeForm,
   CoachingStudentProfile,
+  FormField,
+  FormTemplate,
   Groupe,
   Profile,
 } from "@/types/database";
@@ -47,6 +49,8 @@ export default async function CoachingPage() {
     slots: [] as CoachingCallSlot[],
     bookings: [] as CoachingCallBooking[],
     pointAProfiles: [] as CoachingStudentProfile[],
+    formTemplate: null as FormTemplate | null,
+    formFields: [] as FormField[],
   };
 
   let data = emptyData;
@@ -81,7 +85,7 @@ export default async function CoachingPage() {
       ? admin.from("coaching_student_profiles").select("*").eq("groupe_id", coachGroupId!).order("reviewed_at", { ascending: false, nullsFirst: false })
       : admin.from("coaching_student_profiles").select("*").order("reviewed_at", { ascending: false, nullsFirst: false });
 
-    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes] = await Promise.all([
+    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes] = await Promise.all([
       groupesQuery,
       studentsQuery,
       coachesQuery,
@@ -89,6 +93,7 @@ export default async function CoachingPage() {
       slotsQuery,
       bookingsQuery,
       pointAProfilesQuery,
+      admin.from("form_templates").select("*").eq("slug", "coaching_onboarding").eq("is_active", true).maybeSingle(),
     ]);
 
     setupError =
@@ -99,7 +104,22 @@ export default async function CoachingPage() {
       slotsRes.error?.message ??
       bookingsRes.error?.message ??
       pointAProfilesRes.error?.message ??
+      formTemplateRes.error?.message ??
       null;
+
+    let formFields: FormField[] = [];
+    if (formTemplateRes.data?.id) {
+      const formFieldsRes = await admin
+        .from("form_fields")
+        .select("*")
+        .eq("form_template_id", formTemplateRes.data.id)
+        .order("order_index");
+
+      if (!setupError && formFieldsRes.error) {
+        setupError = formFieldsRes.error.message;
+      }
+      formFields = (formFieldsRes.data ?? []) as FormField[];
+    }
 
     data = {
       groupes: (groupesRes.data ?? []) as Groupe[],
@@ -109,6 +129,8 @@ export default async function CoachingPage() {
       slots: (slotsRes.data ?? []) as CoachingCallSlot[],
       bookings: (bookingsRes.data ?? []) as CoachingCallBooking[],
       pointAProfiles: (pointAProfilesRes.data ?? []) as CoachingStudentProfile[],
+      formTemplate: (formTemplateRes.data ?? null) as FormTemplate | null,
+      formFields,
     };
   }
 
@@ -124,6 +146,8 @@ export default async function CoachingPage() {
         initialSlots={data.slots}
         initialBookings={data.bookings}
         initialPointAProfiles={data.pointAProfiles}
+        formTemplate={data.formTemplate}
+        formFields={data.formFields}
         setupError={setupError}
       />
     </div>

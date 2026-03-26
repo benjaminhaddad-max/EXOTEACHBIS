@@ -403,6 +403,40 @@ export interface CalendarEvent {
 }
 
 // =============================================
+// Formulaires dynamiques
+// =============================================
+
+export type FormFieldType = "short_text" | "long_text" | "select";
+export type FormFieldWidth = "half" | "full";
+
+export interface FormTemplate {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  context: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormField {
+  id: string;
+  form_template_id: string;
+  key: string;
+  label: string;
+  helper_text: string | null;
+  placeholder: string | null;
+  field_type: FormFieldType;
+  required: boolean;
+  options: string[];
+  width: FormFieldWidth;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// =============================================
 // Coaching
 // =============================================
 
@@ -416,6 +450,8 @@ export interface CoachingIntakeForm {
   id: string;
   student_id: string;
   groupe_id: string | null;
+  form_template_id: string | null;
+  answers: Record<string, string>;
   phone: string | null;
   city: string | null;
   bac_specialties: string | null;
