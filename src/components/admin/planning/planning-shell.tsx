@@ -778,6 +778,195 @@ function EventDetail({
 
 // ─── Event Form ───────────────────────────────────────────────────────────────
 
+// ─── GroupeTreeSelect ─────────────────────────────────────────────────────────
+
+function GroupeTreeSelect({
+  dossiers, groupes, selectedIds, onChange, isEditMode,
+}: {
+  dossiers: Dossier[];
+  groupes: Groupe[];
+  selectedIds: Set<string>;
+  onChange: (ids: Set<string>) => void;
+  isEditMode?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
+  const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
+
+  const unisByOffer = useMemo(() => {
+    const m = new Map<string, Dossier[]>();
+    for (const u of universities) { if (u.parent_id) { if (!m.has(u.parent_id)) m.set(u.parent_id, []); m.get(u.parent_id)!.push(u); } }
+    return m;
+  }, [universities]);
+
+  const groupsByUni = useMemo(() => {
+    const m = new Map<string, Groupe[]>();
+    for (const g of groupes) { if (g.formation_dossier_id) { if (!m.has(g.formation_dossier_id)) m.set(g.formation_dossier_id, []); m.get(g.formation_dossier_id)!.push(g); } }
+    return m;
+  }, [groupes]);
+
+  // Get all group ids under a university
+  const getUniGroupIds = (uniId: string) => (groupsByUni.get(uniId) ?? []).map(g => g.id);
+  // Get all group ids under an offer
+  const getOfferGroupIds = (offerId: string) => {
+    const ids: string[] = [];
+    for (const u of (unisByOffer.get(offerId) ?? [])) ids.push(...getUniGroupIds(u.id));
+    return ids;
+  };
+
+  const toggleIds = (ids: string[]) => {
+    const next = new Set(selectedIds);
+    const allChecked = ids.every(id => next.has(id));
+    if (allChecked) { for (const id of ids) next.delete(id); }
+    else { for (const id of ids) next.add(id); }
+    onChange(next);
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onChange(next);
+  };
+
+  // Summary text
+  const summaryText = useMemo(() => {
+    if (selectedIds.size === 0) return "Global (toutes les classes)";
+    if (selectedIds.size === groupes.length) return "Toutes les classes";
+    // Check if a whole offer is selected
+    for (const o of offers) {
+      const ids = getOfferGroupIds(o.id);
+      if (ids.length > 0 && ids.every(id => selectedIds.has(id)) && ids.length === selectedIds.size) return `${o.name} (${ids.length} classes)`;
+    }
+    if (selectedIds.size === 1) {
+      const g = groupes.find(g => selectedIds.has(g.id));
+      if (g) {
+        const uni = universities.find(u => u.id === g.formation_dossier_id);
+        return `${g.name}${uni ? ` — ${uni.name}` : ""}`;
+      }
+    }
+    return `${selectedIds.size} classe${selectedIds.size > 1 ? "s" : ""} sélectionnée${selectedIds.size > 1 ? "s" : ""}`;
+  }, [selectedIds, groupes, offers, universities]);
+
+  const Checkbox = ({ checked, partial }: { checked: boolean; partial?: boolean }) => (
+    <div className="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0" style={{
+      borderColor: checked || partial ? "#C9A84C" : "rgba(255,255,255,0.2)",
+      backgroundColor: checked ? "#C9A84C" : "transparent",
+    }}>
+      {checked && <Check size={9} style={{ color: "#0e1e35" }} strokeWidth={3} />}
+      {!checked && partial && <div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: "#C9A84C" }} />}
+    </div>
+  );
+
+  return (
+    <div>
+      <label className="text-xs text-white/50 mb-1.5 block">Classes ciblées</label>
+      {/* Summary button */}
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white text-left focus:outline-none focus:border-white/30 transition-colors"
+      >
+        <Users size={13} style={{ color: "rgba(255,255,255,0.4)" }} />
+        <span className="flex-1 truncate">{summaryText}</span>
+        <ChevronDown size={13} style={{ color: "rgba(255,255,255,0.3)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+      </button>
+
+      {/* Tree dropdown */}
+      {open && (
+        <div className="mt-1 rounded-xl border border-white/10 bg-[#0a1628] max-h-56 overflow-y-auto p-2 space-y-0.5">
+          {/* Global option */}
+          <button
+            type="button"
+            onClick={() => onChange(new Set())}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors"
+            style={{ backgroundColor: selectedIds.size === 0 ? "rgba(201,168,76,0.12)" : "transparent" }}
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = selectedIds.size === 0 ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.04)")}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = selectedIds.size === 0 ? "rgba(201,168,76,0.12)" : "transparent")}
+          >
+            <Checkbox checked={selectedIds.size === 0} />
+            <span className="text-[11px] font-semibold" style={{ color: selectedIds.size === 0 ? "#E3C286" : "rgba(255,255,255,0.6)" }}>
+              Global (toutes les classes)
+            </span>
+          </button>
+
+          <div className="border-t border-white/5 my-1" />
+
+          {offers.map(offer => {
+            const offerIds = getOfferGroupIds(offer.id);
+            const allChecked = offerIds.length > 0 && offerIds.every(id => selectedIds.has(id));
+            const someChecked = offerIds.some(id => selectedIds.has(id));
+            return (
+              <div key={offer.id}>
+                {/* Offer row */}
+                <button
+                  type="button"
+                  onClick={() => toggleIds(offerIds)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors"
+                  onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+                  onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                >
+                  <Checkbox checked={allChecked} partial={!allChecked && someChecked} />
+                  <GraduationCap size={11} style={{ color: "#C9A84C" }} />
+                  <span className="text-[11px] font-bold" style={{ color: "#C9A84C" }}>{offer.name}</span>
+                </button>
+
+                {/* Universities under this offer */}
+                {(unisByOffer.get(offer.id) ?? []).map(uni => {
+                  const uniIds = getUniGroupIds(uni.id);
+                  const uAllChecked = uniIds.length > 0 && uniIds.every(id => selectedIds.has(id));
+                  const uSomeChecked = uniIds.some(id => selectedIds.has(id));
+                  return (
+                    <div key={uni.id} className="ml-3">
+                      {/* University row */}
+                      <button
+                        type="button"
+                        onClick={() => toggleIds(uniIds)}
+                        className="w-full flex items-center gap-2 pl-2 pr-2 py-1 rounded-lg text-left transition-colors"
+                        onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+                        onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <Checkbox checked={uAllChecked} partial={!uAllChecked && uSomeChecked} />
+                        <Building2 size={10} style={{ color: "#A78BFA" }} />
+                        <span className="text-[10px] font-semibold" style={{ color: "#A78BFA" }}>{uni.name}</span>
+                      </button>
+
+                      {/* Classes */}
+                      {(groupsByUni.get(uni.id) ?? []).map(g => {
+                        const isChecked = selectedIds.has(g.id);
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => toggleOne(g.id)}
+                            className="w-full flex items-center gap-2 pl-6 pr-2 py-1 rounded-lg text-left transition-colors"
+                            onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+                            onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                          >
+                            <Checkbox checked={isChecked} />
+                            <span className="w-3 h-3 rounded flex items-center justify-center text-[8px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>
+                              {g.name[0]?.toUpperCase()}
+                            </span>
+                            <span className="text-[10px] font-medium" style={{ color: isChecked ? "#E3C286" : "rgba(255,255,255,0.6)" }}>
+                              {g.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── EventForm ────────────────────────────────────────────────────────────────
+
 function EventForm({
   event, prefill, defaultGroupeId, groupes, dossiers = [], onSubmit, onClose, isPending,
 }: {
@@ -798,11 +987,42 @@ function EventForm({
   const [startAt, setStartAt] = useState(defaultStart);
   const [endAt, setEndAt] = useState(defaultEnd);
   const [type, setType] = useState(event?.type ?? "cours");
-  const [groupeId, setGroupeId] = useState(event?.groupe_id ?? defaultGroupeId ?? "");
   const [zoomLink, setZoomLink] = useState(event?.zoom_link ?? "");
   const [location, setLocation] = useState(event?.location ?? "");
 
+  // Multi-select group IDs
+  const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(() => {
+    // Edit mode: pre-check the event's group
+    if (event?.groupe_id) return new Set([event.groupe_id]);
+    // Create mode: pre-check from sidebar selection
+    if (defaultGroupeId) return new Set([defaultGroupeId]);
+    return new Set();
+  });
+
+  const isEditMode = !!event;
+
   const field = "w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30";
+
+  const handleSubmit = () => {
+    const base = {
+      title: title.trim(),
+      description: description.trim() || undefined,
+      start_at: new Date(startAt).toISOString(),
+      end_at: new Date(endAt).toISOString(),
+      type,
+      zoom_link: zoomLink.trim() || undefined,
+      location: location.trim() || undefined,
+    };
+
+    if (isEditMode) {
+      // Edit: keep single groupe_id
+      onSubmit({ ...base, groupe_id: selectedGroupeIds.size > 0 ? [...selectedGroupeIds][0] : null });
+    } else {
+      // Create: pass groupe_ids array for batch insert
+      const ids = [...selectedGroupeIds];
+      onSubmit({ ...base, groupe_ids: ids.length > 0 ? ids : undefined, groupe_id: ids.length === 0 ? null : undefined });
+    }
+  };
 
   return (
     <div className="p-6 space-y-4">
@@ -818,63 +1038,24 @@ function EventForm({
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre..." className={field} autoFocus />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-white/50 mb-1.5 block">Type</label>
-          <select value={type} onChange={(e) => setType(e.target.value)} className={field}>
-            <option value="cours">Cours</option>
-            <option value="examen">Examen</option>
-            <option value="reunion">Réunion</option>
-            <option value="autre">Autre</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-white/50 mb-1.5 block">Classe</label>
-          <select value={groupeId} onChange={(e) => setGroupeId(e.target.value)} className={field}>
-            <option value="">— Global (toutes les classes) —</option>
-            {(() => {
-              // Build offer → university → groups tree for the select
-              const dossierMap = new Map(dossiers.map(d => [d.id, d]));
-              const offers = dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
-              const unis = dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index);
-              const unisByOffer = new Map<string, Dossier[]>();
-              for (const u of unis) {
-                if (u.parent_id) {
-                  if (!unisByOffer.has(u.parent_id)) unisByOffer.set(u.parent_id, []);
-                  unisByOffer.get(u.parent_id)!.push(u);
-                }
-              }
-              const groupsByUni = new Map<string, Groupe[]>();
-              for (const g of groupes) {
-                if (g.formation_dossier_id) {
-                  if (!groupsByUni.has(g.formation_dossier_id)) groupsByUni.set(g.formation_dossier_id, []);
-                  groupsByUni.get(g.formation_dossier_id)!.push(g);
-                }
-              }
-              return offers.map(offer => {
-                const offerUnis = unisByOffer.get(offer.id) ?? [];
-                const options: React.ReactNode[] = [];
-                for (const uni of offerUnis) {
-                  const uniGroups = groupsByUni.get(uni.id) ?? [];
-                  for (const g of uniGroups) {
-                    options.push(
-                      <option key={g.id} value={g.id}>
-                        {g.name} — {uni.name} ({offer.name})
-                      </option>
-                    );
-                  }
-                }
-                if (options.length === 0) return null;
-                return (
-                  <optgroup key={offer.id} label={offer.name}>
-                    {options}
-                  </optgroup>
-                );
-              });
-            })()}
-          </select>
-        </div>
+      <div>
+        <label className="text-xs text-white/50 mb-1.5 block">Type</label>
+        <select value={type} onChange={(e) => setType(e.target.value)} className={field}>
+          <option value="cours">Cours</option>
+          <option value="examen">Examen</option>
+          <option value="reunion">Réunion</option>
+          <option value="autre">Autre</option>
+        </select>
       </div>
+
+      {/* Classes ciblées — tree multi-select */}
+      <GroupeTreeSelect
+        dossiers={dossiers}
+        groupes={groupes}
+        selectedIds={selectedGroupeIds}
+        onChange={setSelectedGroupeIds}
+        isEditMode={isEditMode}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -905,21 +1086,12 @@ function EventForm({
       <div className="flex justify-end gap-3 pt-2">
         <button onClick={onClose} className="px-4 py-2 text-sm text-white/60 hover:text-white transition-colors">Annuler</button>
         <button
-          onClick={() => onSubmit({
-            title: title.trim(),
-            description: description.trim() || undefined,
-            start_at: new Date(startAt).toISOString(),
-            end_at: new Date(endAt).toISOString(),
-            type,
-            groupe_id: groupeId || null,
-            zoom_link: zoomLink.trim() || undefined,
-            location: location.trim() || undefined,
-          })}
+          onClick={handleSubmit}
           disabled={isPending || !title.trim() || !startAt || !endAt}
           className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C] text-[#0e1e35] text-sm font-semibold rounded-lg hover:bg-[#A8892E] disabled:opacity-50 transition-colors"
         >
           {isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          {event ? "Enregistrer" : "Créer"}
+          {event ? "Enregistrer" : selectedGroupeIds.size > 1 ? `Créer (${selectedGroupeIds.size} classes)` : "Créer"}
         </button>
       </div>
     </div>
