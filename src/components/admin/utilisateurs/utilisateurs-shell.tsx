@@ -1742,7 +1742,7 @@ function GroupeDetail({
   onSaveAccess: (groupeId: string, dossierIds: string[]) => void;
   showToast: (msg: string, kind: "success" | "error") => void;
 }) {
-  const [tab, setTab] = useState<"membres" | "acces" | "parametres">("membres");
+  const [tab, setTab] = useState<"membres" | "acces" | "parametres">("acces");
   const members = useMemo(() => allUsers.filter(u => u.groupe_id === groupe.id), [allUsers, groupe.id]);
   const parentGroupe = groupe.parent_id ? allGroupes.find(g => g.id === groupe.parent_id) : null;
 
