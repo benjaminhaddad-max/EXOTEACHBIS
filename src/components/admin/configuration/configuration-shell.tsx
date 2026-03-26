@@ -375,9 +375,9 @@ export function ConfigurationShell({
           </div>
         </div>
 
-        <div className="px-4 py-6 lg:px-6">
-          <div className="mx-auto max-w-4xl">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr),72px]">
+        <div className="px-4 py-6 lg:px-8 xl:px-10">
+          <div className="mx-auto max-w-[1500px]">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr),88px]">
               <div className="space-y-4">
                 <div className="rounded-[28px] border border-[#e5dcc7] border-t-[10px] border-t-[#7a6d2e] bg-white p-6 shadow-[0_18px_40px_rgba(80,62,24,0.07)]">
                   <input
