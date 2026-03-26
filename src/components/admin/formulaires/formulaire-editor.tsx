@@ -327,7 +327,7 @@ export function FormulaireEditor({
   );
 }
 
-// ─── Targeting Panel (tree with checkboxes) ───────────────────────────────────
+// ─── Targeting Panel (unified tree: Offer → Uni → Class → Students) ──────────
 
 function TargetingPanel({ templateDraft, setTemplateDraft, dossiers, groupes, students }: {
   templateDraft: TemplateDraft;
@@ -336,8 +336,8 @@ function TargetingPanel({ templateDraft, setTemplateDraft, dossiers, groupes, st
   groupes: Groupe[];
   students: Profile[];
 }) {
-  const [studentSearch, setStudentSearch] = useState("");
-  const [open, setOpen] = useState(true);
+  const [searchQ, setSearchQ] = useState("");
+  const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
 
   const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
   const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
@@ -351,10 +351,33 @@ function TargetingPanel({ templateDraft, setTemplateDraft, dossiers, groupes, st
     for (const g of groupes) if (g.formation_dossier_id) { if (!m.has(g.formation_dossier_id)) m.set(g.formation_dossier_id, []); m.get(g.formation_dossier_id)!.push(g); }
     return m;
   }, [groupes]);
-  const filteredStudents = useMemo(() => {
-    const q = studentSearch.trim().toLowerCase();
-    return q ? students.filter(s => profileName(s).toLowerCase().includes(q)).slice(0, 20) : students.slice(0, 20);
-  }, [students, studentSearch]);
+  // Students by groupe_id
+  const studentsByGroupe = useMemo(() => {
+    const m = new Map<string, Profile[]>();
+    const noGroup: Profile[] = [];
+    for (const s of students) {
+      if (s.groupe_id) { if (!m.has(s.groupe_id)) m.set(s.groupe_id, []); m.get(s.groupe_id)!.push(s); }
+      else noGroup.push(s);
+    }
+    return { byGroup: m, noGroup };
+  }, [students]);
+
+  const toggleClassExpand = (gid: string) => setExpandedClasses(prev => { const n = new Set(prev); if (n.has(gid)) n.delete(gid); else n.add(gid); return n; });
+
+  // Is a student individually selected?
+  const isStudentSelected = (sid: string) => templateDraft.target_type === "selection" && templateDraft.target_student_ids.includes(sid);
+
+  const toggleStudent = (sid: string) => {
+    const current = templateDraft.target_student_ids;
+    const has = current.includes(sid);
+    const next = has ? current.filter(id => id !== sid) : [...current, sid];
+    setTemplateDraft(d => ({ ...d, target_type: "selection", target_offer_code: null, target_university_dossier_id: null, target_groupe_id: null, target_student_id: null, target_student_ids: next }));
+  };
+
+  const selectGlobal = () => setTemplateDraft(d => ({ ...d, target_type: "global", target_offer_code: null, target_university_dossier_id: null, target_groupe_id: null, target_student_id: null, target_student_ids: [] }));
+  const selectOffer = (code: string) => setTemplateDraft(d => ({ ...d, target_type: "offer", target_offer_code: code, target_university_dossier_id: null, target_groupe_id: null, target_student_id: null, target_student_ids: [] }));
+  const selectUni = (id: string) => setTemplateDraft(d => ({ ...d, target_type: "university", target_university_dossier_id: id, target_offer_code: null, target_groupe_id: null, target_student_id: null, target_student_ids: [] }));
+  const selectGroupe = (id: string) => setTemplateDraft(d => ({ ...d, target_type: "groupe", target_groupe_id: id, target_offer_code: null, target_university_dossier_id: null, target_student_id: null, target_student_ids: [] }));
 
   const Chk = ({ checked, partial }: { checked: boolean; partial?: boolean }) => (
     <div className="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0" style={{
@@ -366,100 +389,129 @@ function TargetingPanel({ templateDraft, setTemplateDraft, dossiers, groupes, st
     </div>
   );
 
-  // Summary text
+  // Summary
   const summary = useMemo(() => {
     const t = templateDraft.target_type;
     if (t === "global") return "Tous les élèves";
-    if (t === "offer") {
-      const o = offers.find(d => (d.formation_offer ?? d.id) === templateDraft.target_offer_code);
-      return o ? `Formation · ${o.name}` : "Formation entière";
-    }
-    if (t === "university") {
-      const u = universities.find(d => d.id === templateDraft.target_university_dossier_id);
-      return u ? `Fac · ${u.name}` : "Fac entière";
-    }
-    if (t === "groupe") {
-      const g = groupes.find(g => g.id === templateDraft.target_groupe_id);
-      return g ? `Classe · ${g.name}` : "Classe entière";
-    }
-    if (t === "student") return "Un élève";
+    if (t === "offer") { const o = offers.find(d => (d.formation_offer ?? d.id) === templateDraft.target_offer_code); return o ? o.name : "Formation"; }
+    if (t === "university") { const u = universities.find(d => d.id === templateDraft.target_university_dossier_id); return u ? u.name : "Fac"; }
+    if (t === "groupe") { const g = groupes.find(g => g.id === templateDraft.target_groupe_id); return g ? g.name : "Classe"; }
     if (t === "selection") return `${templateDraft.target_student_ids.length} élève(s)`;
     return "—";
   }, [templateDraft, offers, universities, groupes]);
 
+  // Search filter
+  const matchesSearch = (name: string) => {
+    if (!searchQ.trim()) return true;
+    return name.toLowerCase().includes(searchQ.toLowerCase());
+  };
+
   return (
-    <div className="p-4 rounded-2xl space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-      <div className="flex items-center justify-between">
+    <div className="p-4 rounded-2xl space-y-2" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="flex items-center justify-between mb-1">
         <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#C9A84C" }}>Ciblage</p>
         <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>{summary}</span>
       </div>
 
-      {/* Global option */}
-      <button onClick={() => setTemplateDraft(d => ({ ...d, target_type: "global" }))}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left"
-        style={{ backgroundColor: templateDraft.target_type === "global" ? "rgba(201,168,76,0.1)" : "transparent", border: templateDraft.target_type === "global" ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent" }}>
+      {/* Search */}
+      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg">
+        <Search size={11} style={{ color: "rgba(255,255,255,0.25)" }} />
+        <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Rechercher un élève, une classe..." className="flex-1 bg-transparent text-[11px] text-white outline-none placeholder:text-white/25" />
+      </div>
+
+      {/* Global */}
+      <button onClick={selectGlobal} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left"
+        style={{ backgroundColor: templateDraft.target_type === "global" ? "rgba(201,168,76,0.1)" : "transparent", border: templateDraft.target_type === "global" ? "1px solid rgba(201,168,76,0.2)" : "1px solid transparent" }}>
         <Chk checked={templateDraft.target_type === "global"} />
-        <Users size={12} style={{ color: templateDraft.target_type === "global" ? "#C9A84C" : "rgba(255,255,255,0.3)" }} />
+        <Users size={11} style={{ color: templateDraft.target_type === "global" ? "#C9A84C" : "rgba(255,255,255,0.3)" }} />
         <span className="text-[11px] font-semibold" style={{ color: templateDraft.target_type === "global" ? "#E3C286" : "rgba(255,255,255,0.5)" }}>Tous les élèves</span>
       </button>
 
       <div className="border-t border-white/5" />
 
-      {/* Offer → University → Groups tree */}
-      <div className="max-h-64 overflow-y-auto space-y-0.5">
+      {/* Tree: Offer → Uni → Class → Students */}
+      <div className="max-h-[400px] overflow-y-auto space-y-0.5 pr-1">
         {offers.map(offer => {
           const offerUnis = unisByOffer.get(offer.id) ?? [];
-          const isOfferSelected = templateDraft.target_type === "offer" && (templateDraft.target_offer_code === (offer.formation_offer ?? offer.id));
-          // Check if any uni or group under this offer is selected
-          const hasChildSelected = offerUnis.some(u =>
-            (templateDraft.target_type === "university" && templateDraft.target_university_dossier_id === u.id) ||
-            (groupsByUni.get(u.id) ?? []).some(g => templateDraft.target_type === "groupe" && templateDraft.target_groupe_id === g.id)
-          );
+          const isOfferSel = templateDraft.target_type === "offer" && templateDraft.target_offer_code === (offer.formation_offer ?? offer.id);
+          const hasChild = offerUnis.some(u => (templateDraft.target_type === "university" && templateDraft.target_university_dossier_id === u.id) || (groupsByUni.get(u.id) ?? []).some(g => templateDraft.target_type === "groupe" && templateDraft.target_groupe_id === g.id));
+          const hasStudentChild = templateDraft.target_type === "selection" && offerUnis.some(u => (groupsByUni.get(u.id) ?? []).some(g => (studentsByGroupe.byGroup.get(g.id) ?? []).some(s => templateDraft.target_student_ids.includes(s.id))));
 
           return (
             <div key={offer.id}>
-              <button onClick={() => setTemplateDraft(d => ({ ...d, target_type: "offer", target_offer_code: offer.formation_offer ?? offer.id, target_university_dossier_id: null, target_groupe_id: null, target_student_id: null, target_student_ids: [] }))}
+              <button onClick={() => selectOffer(offer.formation_offer ?? offer.id)}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
-                style={{ backgroundColor: isOfferSelected ? "rgba(201,168,76,0.08)" : "transparent" }}
-                onMouseOver={e => { if (!isOfferSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                onMouseOut={e => { if (!isOfferSelected) e.currentTarget.style.backgroundColor = "transparent"; }}>
-                <Chk checked={isOfferSelected} partial={!isOfferSelected && hasChildSelected} />
-                <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(201,168,76,0.18)" }}>
-                  <span className="text-[8px] font-bold" style={{ color: "#C9A84C" }}>🎓</span>
-                </div>
-                <span className="flex-1 text-[11px] font-bold truncate" style={{ color: isOfferSelected ? "#E3C286" : "#C9A84C" }}>{offer.name}</span>
+                style={{ backgroundColor: isOfferSel ? "rgba(201,168,76,0.08)" : "transparent" }}
+                onMouseOver={e => { if (!isOfferSel) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)"; }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = isOfferSel ? "rgba(201,168,76,0.08)" : "transparent"; }}>
+                <Chk checked={isOfferSel} partial={!isOfferSel && (hasChild || hasStudentChild)} />
+                <span className="flex-1 text-[11px] font-bold truncate" style={{ color: isOfferSel ? "#E3C286" : "#C9A84C" }}>{offer.name}</span>
               </button>
 
-              {/* Universities */}
               {offerUnis.map(uni => {
                 const uniGroups = groupsByUni.get(uni.id) ?? [];
-                const isUniSelected = templateDraft.target_type === "university" && templateDraft.target_university_dossier_id === uni.id;
-                const hasGrpSelected = uniGroups.some(g => templateDraft.target_type === "groupe" && templateDraft.target_groupe_id === g.id);
+                const isUniSel = templateDraft.target_type === "university" && templateDraft.target_university_dossier_id === uni.id;
+                const hasGrp = uniGroups.some(g => templateDraft.target_type === "groupe" && templateDraft.target_groupe_id === g.id);
 
                 return (
                   <div key={uni.id} className="ml-3">
-                    <button onClick={() => setTemplateDraft(d => ({ ...d, target_type: "university", target_university_dossier_id: uni.id, target_offer_code: null, target_groupe_id: null, target_student_id: null, target_student_ids: [] }))}
-                      className="w-full flex items-center gap-2 pl-3 pr-2 py-1 rounded-lg transition-all text-left"
-                      style={{ backgroundColor: isUniSelected ? "rgba(167,139,250,0.08)" : "transparent" }}
-                      onMouseOver={e => { if (!isUniSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                      onMouseOut={e => { if (!isUniSelected) e.currentTarget.style.backgroundColor = "transparent"; }}>
-                      <Chk checked={isUniSelected || isOfferSelected} partial={!isUniSelected && !isOfferSelected && hasGrpSelected} />
-                      <span className="text-[10px] font-semibold truncate" style={{ color: isUniSelected ? "#A78BFA" : "rgba(167,139,250,0.7)" }}>{uni.name}</span>
+                    <button onClick={() => selectUni(uni.id)}
+                      className="w-full flex items-center gap-2 pl-2 pr-2 py-1 rounded-lg transition-all text-left"
+                      style={{ backgroundColor: isUniSel ? "rgba(167,139,250,0.06)" : "transparent" }}
+                      onMouseOver={e => { if (!isUniSel) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)"; }}
+                      onMouseOut={e => { e.currentTarget.style.backgroundColor = isUniSel ? "rgba(167,139,250,0.06)" : "transparent"; }}>
+                      <Chk checked={isUniSel || isOfferSel} partial={!isUniSel && !isOfferSel && hasGrp} />
+                      <span className="text-[10px] font-semibold truncate" style={{ color: isUniSel ? "#A78BFA" : "rgba(167,139,250,0.65)" }}>{uni.name}</span>
                     </button>
 
-                    {/* Groups */}
                     {uniGroups.map(g => {
-                      const isGrpSelected = templateDraft.target_type === "groupe" && templateDraft.target_groupe_id === g.id;
+                      const isGrpSel = templateDraft.target_type === "groupe" && templateDraft.target_groupe_id === g.id;
+                      const classStudents = studentsByGroupe.byGroup.get(g.id) ?? [];
+                      const isExpanded = expandedClasses.has(g.id);
+                      const hasStudentSel = templateDraft.target_type === "selection" && classStudents.some(s => templateDraft.target_student_ids.includes(s.id));
+                      const filteredClassStudents = classStudents.filter(s => matchesSearch(profileName(s)));
+
                       return (
-                        <button key={g.id} onClick={() => setTemplateDraft(d => ({ ...d, target_type: "groupe", target_groupe_id: g.id, target_offer_code: null, target_university_dossier_id: null, target_student_id: null, target_student_ids: [] }))}
-                          className="w-full flex items-center gap-2 pl-7 pr-2 py-1 rounded-lg transition-all text-left"
-                          style={{ backgroundColor: isGrpSelected ? "rgba(201,168,76,0.08)" : "transparent" }}
-                          onMouseOver={e => { if (!isGrpSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                          onMouseOut={e => { if (!isGrpSelected) e.currentTarget.style.backgroundColor = "transparent"; }}>
-                          <Chk checked={isGrpSelected || isUniSelected || isOfferSelected} />
-                          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>{g.name[0]?.toUpperCase()}</span>
-                          <span className="text-[10px] font-medium truncate" style={{ color: isGrpSelected ? "#E3C286" : "rgba(255,255,255,0.55)" }}>{g.name}</span>
-                        </button>
+                        <div key={g.id} className="ml-3">
+                          {/* Class row */}
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => selectGroupe(g.id)}
+                              className="flex-1 flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg transition-all text-left"
+                              style={{ backgroundColor: isGrpSel ? "rgba(52,211,153,0.06)" : "transparent" }}
+                              onMouseOver={e => { if (!isGrpSel) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)"; }}
+                              onMouseOut={e => { e.currentTarget.style.backgroundColor = isGrpSel ? "rgba(52,211,153,0.06)" : "transparent"; }}>
+                              <Chk checked={isGrpSel || isUniSel || isOfferSel} partial={!isGrpSel && !isUniSel && !isOfferSel && hasStudentSel} />
+                              <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>{g.name[0]?.toUpperCase()}</span>
+                              <span className="text-[10px] font-medium truncate" style={{ color: isGrpSel ? "#34D399" : "rgba(255,255,255,0.55)" }}>{g.name}</span>
+                            </button>
+                            {classStudents.length > 0 && (
+                              <button onClick={() => toggleClassExpand(g.id)} className="px-1.5 py-1 rounded text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+                                {isExpanded ? "▾" : "▸"} <span className="text-[8px]">{classStudents.length}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Students under this class */}
+                          {isExpanded && filteredClassStudents.length > 0 && (
+                            <div className="ml-5 space-y-0.5 mt-0.5 mb-1">
+                              {filteredClassStudents.map(s => {
+                                const isSel = isStudentSelected(s.id);
+                                const inherited = isGrpSel || isUniSel || isOfferSel || templateDraft.target_type === "global";
+                                return (
+                                  <button key={s.id} onClick={() => { if (!inherited) toggleStudent(s.id); }}
+                                    className="w-full flex items-center gap-2 pl-1 pr-2 py-0.5 rounded text-left transition-all"
+                                    style={{ backgroundColor: isSel ? "rgba(56,189,248,0.06)" : "transparent", opacity: inherited ? 0.5 : 1 }}
+                                    disabled={inherited}
+                                    onMouseOver={e => { if (!inherited && !isSel) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)"; }}
+                                    onMouseOut={e => { e.currentTarget.style.backgroundColor = isSel ? "rgba(56,189,248,0.06)" : "transparent"; }}>
+                                    <Chk checked={isSel || inherited} />
+                                    <span className="text-[9px] truncate" style={{ color: isSel ? "#38BDF8" : "rgba(255,255,255,0.45)" }}>{profileName(s)}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -468,53 +520,29 @@ function TargetingPanel({ templateDraft, setTemplateDraft, dossiers, groupes, st
             </div>
           );
         })}
-      </div>
 
-      <div className="border-t border-white/5" />
-
-      {/* Student targeting */}
-      <button onClick={() => setTemplateDraft(d => ({ ...d, target_type: "student", target_offer_code: null, target_university_dossier_id: null, target_groupe_id: null, target_student_ids: [] }))}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left"
-        style={{ backgroundColor: templateDraft.target_type === "student" ? "rgba(56,189,248,0.08)" : "transparent", border: templateDraft.target_type === "student" ? "1px solid rgba(56,189,248,0.2)" : "1px solid transparent" }}>
-        <Chk checked={templateDraft.target_type === "student"} />
-        <span className="text-[11px] font-semibold" style={{ color: templateDraft.target_type === "student" ? "#38BDF8" : "rgba(255,255,255,0.5)" }}>Un élève précis</span>
-      </button>
-      {templateDraft.target_type === "student" && (
-        <select value={templateDraft.target_student_id ?? ""} onChange={e => setTemplateDraft(d => ({ ...d, target_student_id: e.target.value || null }))} className={F}>
-          <option value="">Sélectionner un élève</option>
-          {students.map(s => <option key={s.id} value={s.id}>{profileName(s)}</option>)}
-        </select>
-      )}
-
-      <button onClick={() => setTemplateDraft(d => ({ ...d, target_type: "selection", target_offer_code: null, target_university_dossier_id: null, target_groupe_id: null, target_student_id: null }))}
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-left"
-        style={{ backgroundColor: templateDraft.target_type === "selection" ? "rgba(244,114,182,0.08)" : "transparent", border: templateDraft.target_type === "selection" ? "1px solid rgba(244,114,182,0.2)" : "1px solid transparent" }}>
-        <Chk checked={templateDraft.target_type === "selection"} />
-        <span className="text-[11px] font-semibold" style={{ color: templateDraft.target_type === "selection" ? "#F472B6" : "rgba(255,255,255,0.5)" }}>Groupe d&apos;élèves</span>
-        {templateDraft.target_type === "selection" && templateDraft.target_student_ids.length > 0 && (
-          <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(244,114,182,0.15)", color: "#F472B6" }}>{templateDraft.target_student_ids.length}</span>
-        )}
-      </button>
-      {templateDraft.target_type === "selection" && (
-        <div className="space-y-2 ml-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg">
-            <Search size={11} style={{ color: "rgba(255,255,255,0.3)" }} />
-            <input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Chercher un élève..." className="flex-1 bg-transparent text-[11px] text-white outline-none placeholder:text-white/30" />
-          </div>
-          <div className="max-h-36 overflow-y-auto space-y-0.5">
-            {filteredStudents.map(s => {
-              const checked = templateDraft.target_student_ids.includes(s.id);
+        {/* Students without a class */}
+        {studentsByGroupe.noGroup.length > 0 && (
+          <div className="mt-2 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            <p className="text-[9px] font-semibold uppercase tracking-widest mb-1 px-2" style={{ color: "rgba(255,255,255,0.2)" }}>Sans classe</p>
+            {studentsByGroupe.noGroup.filter(s => matchesSearch(profileName(s))).map(s => {
+              const isSel = isStudentSelected(s.id);
+              const inherited = templateDraft.target_type === "global";
               return (
-                <label key={s.id} className="flex items-center gap-2 px-2 py-1 rounded-lg text-[10px] cursor-pointer transition-colors"
-                  style={{ backgroundColor: checked ? "rgba(244,114,182,0.06)" : "transparent", color: checked ? "#F472B6" : "rgba(255,255,255,0.5)" }}>
-                  <input type="checkbox" checked={checked} onChange={e => setTemplateDraft(d => ({ ...d, target_student_ids: e.target.checked ? [...d.target_student_ids, s.id] : d.target_student_ids.filter(id => id !== s.id) }))} className="rounded" style={{ accentColor: "#F472B6" }} />
-                  {profileName(s)}
-                </label>
+                <button key={s.id} onClick={() => { if (!inherited) toggleStudent(s.id); }}
+                  className="w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left transition-all"
+                  style={{ backgroundColor: isSel ? "rgba(56,189,248,0.06)" : "transparent", opacity: inherited ? 0.5 : 1 }}
+                  disabled={inherited}
+                  onMouseOver={e => { if (!inherited && !isSel) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)"; }}
+                  onMouseOut={e => { e.currentTarget.style.backgroundColor = isSel ? "rgba(56,189,248,0.06)" : "transparent"; }}>
+                  <Chk checked={isSel || inherited} />
+                  <span className="text-[9px] truncate" style={{ color: isSel ? "#38BDF8" : "rgba(255,255,255,0.4)" }}>{profileName(s)}</span>
+                </button>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
