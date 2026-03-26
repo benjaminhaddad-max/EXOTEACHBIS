@@ -93,14 +93,14 @@ export function CommunicationShell({
             {tab === "annonces" && (
               <>
                 {selectedGroupeIds.size === 0 && (
-                  <span className="text-[10px] italic" style={{ color: "rgba(255,255,255,0.35)" }}>← Sélectionne les destinataires</span>
+                  <span className="text-[11px] italic font-medium" style={{ color: "#C9A84C" }}>← Sélectionne d'abord les destinataires</span>
                 )}
                 <button onClick={() => { if (selectedGroupeIds.size > 0) setCreateAnnonce(true); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                   style={{
-                    backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(201,168,76,0.15)",
-                    color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(201,168,76,0.5)",
-                    border: selectedGroupeIds.size > 0 ? "none" : "1px solid rgba(201,168,76,0.2)",
+                    backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(201,168,76,0.3)",
+                    color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(201,168,76,0.7)",
+                    border: selectedGroupeIds.size > 0 ? "none" : "1px dashed rgba(201,168,76,0.5)",
                     cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
                   }}>
                   <Plus size={13} /> Nouvelle annonce
@@ -110,14 +110,14 @@ export function CommunicationShell({
             {tab === "formulaires" && isAdmin && (
               <>
                 {selectedGroupeIds.size === 0 && (
-                  <span className="text-[10px] italic" style={{ color: "rgba(255,255,255,0.35)" }}>← Sélectionne les destinataires</span>
+                  <span className="text-[11px] italic font-medium" style={{ color: "#C9A84C" }}>← Sélectionne d'abord les destinataires</span>
                 )}
                 <button onClick={() => { if (selectedGroupeIds.size > 0) setCreateForm(true); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                   style={{
-                    backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(201,168,76,0.15)",
-                    color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(201,168,76,0.5)",
-                    border: selectedGroupeIds.size > 0 ? "none" : "1px solid rgba(201,168,76,0.2)",
+                    backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(201,168,76,0.3)",
+                    color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(201,168,76,0.7)",
+                    border: selectedGroupeIds.size > 0 ? "none" : "1px dashed rgba(201,168,76,0.5)",
                     cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
                   }}>
                   <Plus size={13} /> Nouveau formulaire
