@@ -24,7 +24,7 @@ const adminNavItems = [
   { href: "/admin/questions-reponses", label: "Questions / Réponses", icon: MessageCircleQuestion },
   { href: "/admin/annonces", label: "Annonces", icon: Megaphone },
   { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
-  { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard },
+  // { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard }, // Désactivé temporairement
   { href: "/admin/planning", label: "Planning", icon: Calendar },
   { href: "/admin/configuration", label: "Configuration", icon: Settings },
   { href: "/admin/aide", label: "Aide", icon: HelpCircle },
