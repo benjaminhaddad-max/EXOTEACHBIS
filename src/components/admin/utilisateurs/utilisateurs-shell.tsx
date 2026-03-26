@@ -529,44 +529,96 @@ export function UtilisateursShell({
         {view === "dossier_summary" && selectedDossierId && (() => {
           const dossier = initialDossiers.find(d => d.id === selectedDossierId);
           if (!dossier) return null;
-          const linkedGroups = groupes.filter(g => g.formation_dossier_id === dossier.id);
-          const totalMembers = linkedGroups.reduce((sum, g) => sum + users.filter(u => u.groupe_id === g.id).length, 0);
+
+          // Get directly linked groups
+          const directGroups = groupes.filter(g => g.formation_dossier_id === dossier.id);
+
+          // Get inherited groups: groups linked to ANY ancestor dossier
+          const ancestorIds = new Set<string>();
+          let current = dossier;
+          while (current.parent_id) {
+            ancestorIds.add(current.parent_id);
+            const parent = initialDossiers.find(d => d.id === current.parent_id);
+            if (!parent) break;
+            current = parent;
+          }
+          const inheritedGroups = groupes.filter(g =>
+            g.formation_dossier_id && ancestorIds.has(g.formation_dossier_id) && !directGroups.some(dg => dg.id === g.id)
+          );
+
+          const allGroups = [...directGroups, ...inheritedGroups];
+          const totalMembers = allGroups.reduce((sum, g) => sum + users.filter(u => u.groupe_id === g.id).length, 0);
           const meta = DOSSIER_TYPE_META[dossier.dossier_type];
+
+          // Build breadcrumb path
+          const pathParts: string[] = [dossier.name];
+          let p = dossier;
+          while (p.parent_id) {
+            const par = initialDossiers.find(d => d.id === p.parent_id);
+            if (!par) break;
+            pathParts.unshift(par.name);
+            p = par;
+          }
+
           return (
             <div className="p-6">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,168,76,0.1)" }}>
                   <BookOpen size={18} style={{ color: "#C9A84C" }} />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">{dossier.name}</h2>
-                  <p className="text-xs text-gray-500">{meta?.shortLabel ?? dossier.dossier_type} · {linkedGroups.length} classe{linkedGroups.length !== 1 ? "s" : ""} · {totalMembers} membre{totalMembers !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-gray-500">{meta?.shortLabel ?? dossier.dossier_type} · {allGroups.length} classe{allGroups.length !== 1 ? "s" : ""} · {totalMembers} membre{totalMembers !== 1 ? "s" : ""}</p>
                 </div>
               </div>
+              {pathParts.length > 1 && (
+                <p className="text-[10px] text-gray-400 mb-6 ml-[52px]">{pathParts.join(" › ")}</p>
+              )}
 
-              {linkedGroups.length > 0 ? (
+              {allGroups.length > 0 ? (
                 <div className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Classes rattachées</h3>
-                  {linkedGroups.map(g => {
-                    const mc = users.filter(u => u.groupe_id === g.id).length;
-                    return (
-                      <button
-                        key={g.id}
-                        onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gold/30 hover:bg-gold/5 transition-colors text-left"
-                      >
-                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                        <span className="text-sm font-medium text-gray-800 flex-1">{g.name}</span>
-                        <span className="text-xs text-gray-400">{mc} membre{mc !== 1 ? "s" : ""}</span>
-                      </button>
-                    );
-                  })}
+                  {directGroups.length > 0 && (
+                    <>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Classes directes</h3>
+                      {directGroups.map(g => {
+                        const mc = users.filter(u => u.groupe_id === g.id).length;
+                        return (
+                          <button key={g.id} onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gold/30 hover:bg-gold/5 transition-colors text-left">
+                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                            <span className="text-sm font-medium text-gray-800 flex-1">{g.name}</span>
+                            <span className="text-xs text-gray-400">{mc} membre{mc !== 1 ? "s" : ""}</span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                  {inheritedGroups.length > 0 && (
+                    <>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 mt-4">Classes héritées (parent)</h3>
+                      {inheritedGroups.map(g => {
+                        const mc = users.filter(u => u.groupe_id === g.id).length;
+                        const linkedDossier = initialDossiers.find(d => d.id === g.formation_dossier_id);
+                        return (
+                          <button key={g.id} onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors text-left opacity-75">
+                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium text-gray-700 block">{g.name}</span>
+                              {linkedDossier && <span className="text-[10px] text-gray-400">via {linkedDossier.name}</span>}
+                            </div>
+                            <span className="text-xs text-gray-400">{mc} membre{mc !== 1 ? "s" : ""}</span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-12">
                   <Users className="mx-auto h-10 w-10 text-gray-200 mb-3" />
                   <p className="text-sm font-medium text-gray-400">Aucune classe ici</p>
-                  <p className="text-xs text-gray-300 mt-1">Créez une classe pour ce noeud</p>
+                  <p className="text-xs text-gray-300 mt-1">Créez une classe ou rattachez-en une au dossier parent</p>
                   <button
                     onClick={() => setModal({ type: "create_groupe", parentId: null, formationDossierId: dossier.id })}
                     className="mt-4 flex items-center gap-1.5 mx-auto px-4 py-2 rounded-lg text-xs font-semibold text-white transition-colors"
