@@ -251,59 +251,15 @@ function DossierTreeNode({
           </span>
         </button>
 
-        {/* Stats + actions */}
-        <div className="flex items-center gap-0.5 shrink-0">
-          {totalGroups > 0 && !hovered && (
-            <span className="text-[9px] px-1.5 rounded-full" style={{
-              backgroundColor: "rgba(201,168,76,0.1)",
-              color: "rgba(201,168,76,0.6)",
-            }}>
-              {totalGroups}
-            </span>
-          )}
-          {hovered && (
-            <div className="flex items-center gap-0.5">
-              {onCreateSubDossier && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onCreateSubDossier(node.id); }}
-                  className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-white/10"
-                  style={{ color: "rgba(255,255,255,0.4)" }}
-                  title="Ajouter un sous-dossier"
-                >
-                  <FolderPlus size={10} />
-                </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); onCreateGroup(node.id); }}
-                className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-white/10"
-                style={{ color: "rgba(255,255,255,0.4)" }}
-                title="Créer une classe ici"
-              >
-                <Plus size={10} />
-              </button>
-              {onEditDossier && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onEditDossier(node); }}
-                  className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-white/10"
-                  style={{ color: "rgba(255,255,255,0.35)" }}
-                  title="Renommer"
-                >
-                  <Pencil size={9} />
-                </button>
-              )}
-              {onDeleteDossier && node.children.length === 0 && (groupsByDossier.get(node.id) || []).length === 0 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteDossier(node.id); }}
-                  className="w-5 h-5 flex items-center justify-center rounded transition-colors hover:bg-red-500/20"
-                  style={{ color: "rgba(255,255,255,0.25)" }}
-                  title="Supprimer"
-                >
-                  <Trash2 size={9} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Group count badge */}
+        {totalGroups > 0 && (
+          <span className="text-[9px] px-1.5 rounded-full shrink-0" style={{
+            backgroundColor: "rgba(201,168,76,0.1)",
+            color: "rgba(201,168,76,0.6)",
+          }}>
+            {totalGroups}
+          </span>
+        )}
       </div>
 
       {/* Children + linked groups */}

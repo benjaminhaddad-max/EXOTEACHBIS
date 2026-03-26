@@ -692,41 +692,49 @@ export function UtilisateursShell({
                             };
 
                             return (
-                              <div className="space-y-1">
+                              <div className="space-y-0.5">
                                 {children.map(child => {
                                   const subChildren = initialDossiers.filter(d => d.parent_id === child.id).sort((a, b) => a.order_index - b.order_index);
                                   const childMeta = DOSSIER_TYPE_META[child.dossier_type] as { shortLabel?: string } | undefined;
                                   const childCours = (initialCours ?? []).filter(c => c.dossier_id === child.id);
+                                  const hasContent = subChildren.length > 0 || childCours.length > 0;
                                   return (
-                                    <div key={child.id}>
-                                      <label className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                    <details key={child.id} className="group/sem" open={accessSet.has(child.id)}>
+                                      <summary className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                                        {hasContent && <ChevronRight size={12} className="text-gray-400 transition-transform group-open/sem:rotate-90 shrink-0" />}
+                                        {!hasContent && <span className="w-3" />}
                                         <input
                                           type="checkbox"
                                           checked={accessSet.has(child.id)}
-                                          onChange={() => toggleAccess(child.id)}
+                                          onChange={(e) => { e.stopPropagation(); toggleAccess(child.id); }}
+                                          onClick={(e) => e.stopPropagation()}
                                           className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                                         />
-                                        <span className="text-sm font-medium text-gray-800">{child.name}</span>
+                                        <span className="text-sm font-medium text-gray-800 flex-1">{child.name}</span>
                                         <span className="text-[9px] text-gray-400 uppercase">{childMeta?.shortLabel ?? ""}</span>
-                                      </label>
+                                      </summary>
                                       {/* Sub-level: matières under semester */}
                                       {subChildren.length > 0 && (
-                                        <div className="ml-8 space-y-0.5">
+                                        <div className="ml-9 space-y-0.5 pb-1">
                                           {subChildren.map(sub => {
                                             const subMeta = DOSSIER_TYPE_META[sub.dossier_type] as { shortLabel?: string } | undefined;
                                             const subCours2 = (initialCours ?? []).filter(c => c.dossier_id === sub.id);
+                                            const hasCours = subCours2.length > 0;
                                             return (
-                                              <div key={sub.id}>
-                                                <label className="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-50 cursor-pointer">
+                                              <details key={sub.id} className="group/mat">
+                                                <summary className="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-50 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                                                  {hasCours && <ChevronRight size={10} className="text-gray-400 transition-transform group-open/mat:rotate-90 shrink-0" />}
+                                                  {!hasCours && <span className="w-2.5" />}
                                                   <input
                                                     type="checkbox"
                                                     checked={accessSet.has(sub.id)}
-                                                    onChange={() => toggleAccess(sub.id)}
+                                                    onChange={(e) => { e.stopPropagation(); toggleAccess(sub.id); }}
+                                                    onClick={(e) => e.stopPropagation()}
                                                     className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                                                   />
-                                                  <span className="text-xs text-gray-700">{sub.name}</span>
+                                                  <span className="text-xs text-gray-700 flex-1">{sub.name}</span>
                                                   <span className="text-[8px] text-gray-400 uppercase">{subMeta?.shortLabel ?? ""}</span>
-                                                </label>
+                                                </summary>
                                                 {/* Cours/chapters under matière */}
                                                 {subCours2.length > 0 && (
                                                   <div className="ml-7 space-y-0">
@@ -757,14 +765,14 @@ export function UtilisateursShell({
                                                     ))}
                                                   </div>
                                                 )}
-                                              </div>
+                                              </details>
                                             );
                                           })}
                                         </div>
                                       )}
                                       {/* Cours directly under this child (e.g. chapters under a matière) */}
                                       {childCours.length > 0 && subChildren.length === 0 && (
-                                        <div className="ml-8 space-y-0">
+                                        <div className="ml-9 space-y-0 pb-1">
                                           {childCours.map(c => (
                                             <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
                                               <input
@@ -790,7 +798,7 @@ export function UtilisateursShell({
                                           ))}
                                         </div>
                                       )}
-                                    </div>
+                                    </details>
                                   );
                                 })}
                                 {children.length === 0 && (
