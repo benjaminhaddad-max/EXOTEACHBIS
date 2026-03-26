@@ -26,7 +26,7 @@ type CalEvent = {
 type ViewMode = "week" | "month";
 
 type Modal =
-  | { type: "create"; prefill?: { date: Date; hour: number }; defaultGroupeId?: string | null }
+  | { type: "create"; prefill?: { date: Date; hour: number }; defaultGroupeIds?: string[] }
   | { type: "edit"; event: CalEvent }
   | { type: "view"; event: CalEvent }
   | null;
@@ -237,7 +237,7 @@ export function PlanningShell({
             </div>
 
             <button
-              onClick={() => setModal({ type: "create", defaultGroupeId: selectedGroupeIds.size === 1 ? [...selectedGroupeIds][0] : null })}
+              onClick={() => setModal({ type: "create", defaultGroupeIds: [...selectedGroupeIds] })}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] transition-colors"
             >
               <Plus size={13} /> Nouvel événement
@@ -252,7 +252,7 @@ export function PlanningShell({
               days={weekDays}
               events={filteredEvents}
               groupes={groupes}
-              onCellClick={(date, hour) => setModal({ type: "create", prefill: { date, hour }, defaultGroupeId: selectedGroupeIds.size === 1 ? [...selectedGroupeIds][0] : null })}
+              onCellClick={(date, hour) => setModal({ type: "create", prefill: { date, hour }, defaultGroupeIds: [...selectedGroupeIds] })}
               onEventClick={(e) => setModal({ type: "view", event: e })}
             />
           ) : (
@@ -261,7 +261,7 @@ export function PlanningShell({
               month={currentDate.getMonth()}
               cells={monthDays}
               events={filteredEvents}
-              onCellClick={(date) => setModal({ type: "create", prefill: { date, hour: 9 }, defaultGroupeId: selectedGroupeIds.size === 1 ? [...selectedGroupeIds][0] : null })}
+              onCellClick={(date) => setModal({ type: "create", prefill: { date, hour: 9 }, defaultGroupeIds: [...selectedGroupeIds] })}
               onEventClick={(e) => setModal({ type: "view", event: e })}
             />
           )}
@@ -291,7 +291,7 @@ export function PlanningShell({
               <EventForm
                 event={modal.type === "edit" ? modal.event : undefined}
                 prefill={modal.type === "create" ? modal.prefill : undefined}
-                defaultGroupeId={modal.type === "create" ? modal.defaultGroupeId : undefined}
+                defaultGroupeIds={modal.type === "create" ? modal.defaultGroupeIds : undefined}
                 groupes={groupes}
                 dossiers={dossiers}
                 onSubmit={(data) => {
@@ -968,11 +968,11 @@ function GroupeTreeSelect({
 // ─── EventForm ────────────────────────────────────────────────────────────────
 
 function EventForm({
-  event, prefill, defaultGroupeId, groupes, dossiers = [], onSubmit, onClose, isPending,
+  event, prefill, defaultGroupeIds, groupes, dossiers = [], onSubmit, onClose, isPending,
 }: {
   event?: CalEvent;
   prefill?: { date: Date; hour: number };
-  defaultGroupeId?: string | null;
+  defaultGroupeIds?: string[];
   groupes: Groupe[];
   dossiers?: Dossier[];
   onSubmit: (data: any) => void;
@@ -995,7 +995,7 @@ function EventForm({
     // Edit mode: pre-check the event's group
     if (event?.groupe_id) return new Set([event.groupe_id]);
     // Create mode: pre-check from sidebar selection
-    if (defaultGroupeId) return new Set([defaultGroupeId]);
+    if (defaultGroupeIds && defaultGroupeIds.length > 0) return new Set(defaultGroupeIds);
     return new Set();
   });
 
