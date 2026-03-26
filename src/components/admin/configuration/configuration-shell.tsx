@@ -56,6 +56,18 @@ const FIELD_LIBRARY: FieldLibraryItem[] = [
   { type: "select", title: "Liste", icon: <ListChecks className="h-4 w-4" /> },
 ];
 
+const DS = {
+  navy: "#12314d",
+  navyDark: "#1a2438",
+  blue: "#4fabdb",
+  blueSoft: "#a3cceb",
+  bluePale: "#a2d8f6",
+  gold: "#d3ab67",
+  goldSoft: "#f5ecdd",
+  line: "#d8e3eb",
+  bg: "#f5f8fb",
+};
+
 function templateToDraft(template?: FormTemplate | null): TemplateDraft {
   return {
     id: template?.id,
@@ -103,6 +115,13 @@ function getFieldIcon(type: FormFieldType) {
   if (type === "checkboxes") return <CheckSquare className="h-4 w-4" />;
   if (type === "select") return <ListChecks className="h-4 w-4" />;
   return <Type className="h-4 w-4" />;
+}
+
+function getFieldTypeSymbol(type: FormFieldType) {
+  if (type === "checkboxes") return "□";
+  if (type === "radio") return "○";
+  if (type === "select") return "▾";
+  return null;
 }
 
 export function ConfigurationShell({
@@ -355,14 +374,22 @@ export function ConfigurationShell({
         </div>
       )}
 
-      <section className="overflow-hidden rounded-[30px] border border-[#ddd7f0] bg-[#f4f1fb] shadow-sm">
-        <div className="border-b border-[#e1dbf3] bg-white px-5 py-4">
+      <section className="overflow-hidden rounded-[30px] border shadow-sm" style={{ borderColor: DS.line, backgroundColor: DS.bg }}>
+        <div className="border-b bg-white px-5 py-4" style={{ borderColor: DS.line }}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-3 rounded-2xl px-3 py-2" style={{ backgroundColor: "#f8fbfd" }}>
+                <img src="/logo-ds.svg" alt="Diploma Santé" className="h-8 w-auto object-contain" />
+                <div className="leading-tight">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: DS.gold }}>Diploma Santé</p>
+                  <p className="text-sm font-medium" style={{ color: DS.navy }}>Builder de formulaires</p>
+                </div>
+              </div>
               <select
                 value={selectedTemplateId}
                 onChange={(event) => setSelectedTemplateId(event.target.value)}
-                className="rounded-2xl border border-[#ddd3bb] bg-white px-4 py-2.5 text-sm font-medium text-[#2f3640] outline-none focus:border-[#7a6d2e]"
+                className="rounded-2xl border bg-white px-4 py-2.5 text-sm font-medium outline-none"
+                style={{ borderColor: DS.line, color: DS.navy }}
               >
                 {templates.map((template) => (
                   <option key={template.id} value={template.id}>
@@ -374,7 +401,8 @@ export function ConfigurationShell({
               <button
                 type="button"
                 onClick={handleAddTemplate}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#ddd3bb] bg-white px-4 py-2.5 text-sm font-medium text-[#514a35] transition hover:bg-[#f6f0e2]"
+                className="inline-flex items-center gap-2 rounded-2xl border bg-white px-4 py-2.5 text-sm font-medium transition hover:opacity-90"
+                style={{ borderColor: DS.line, color: DS.navy }}
               >
                 <Plus className="h-4 w-4" />
                 Nouveau formulaire
@@ -385,7 +413,8 @@ export function ConfigurationShell({
               type="button"
               onClick={handleSaveTemplate}
               disabled={isPending || !templateDraft.title.trim()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#7a6d2e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6a5f27] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: DS.navy }}
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Enregistrer le formulaire
@@ -393,9 +422,9 @@ export function ConfigurationShell({
           </div>
         </div>
 
-        <div className="border-b border-[#e1dbf3] bg-white px-5 py-3">
-          <div className="mx-auto flex max-w-[1500px] items-center justify-center gap-8 text-sm font-medium text-[#71688c]">
-            <button type="button" className="border-b-2 border-[#6f48d9] pb-2 text-[#3b2b68]">
+        <div className="border-b bg-white px-5 py-3" style={{ borderColor: DS.line }}>
+          <div className="mx-auto flex max-w-[1500px] items-center justify-center gap-8 text-sm font-medium" style={{ color: DS.navy }}>
+            <button type="button" className="border-b-2 pb-2" style={{ borderColor: DS.blue, color: DS.navy }}>
               Questions
             </button>
             <button type="button" className="pb-2 opacity-70">
@@ -411,23 +440,25 @@ export function ConfigurationShell({
           <div className="mx-auto max-w-[1500px]">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr),88px]">
               <div className="space-y-4">
-                <div className="rounded-[28px] border border-[#dcd5ef] border-t-[10px] border-t-[#6f48d9] bg-white p-6 shadow-[0_18px_40px_rgba(80,62,24,0.07)]">
+                <div className="rounded-[28px] border border-t-[10px] bg-white p-6 shadow-[0_18px_40px_rgba(18,49,77,0.08)]" style={{ borderColor: DS.line, borderTopColor: DS.navy }}>
                   <input
                     value={templateDraft.title}
                     onChange={(event) => setTemplateDraft((current) => ({ ...current, title: event.target.value }))}
                     placeholder="Titre du formulaire"
-                    className="w-full border-none bg-transparent text-3xl font-semibold text-[#1e2a3a] outline-none placeholder:text-[#7c7664]"
+                    className="w-full border-none bg-transparent text-3xl font-semibold outline-none"
+                    style={{ color: DS.navy }}
                   />
                   <textarea
                     rows={2}
                     value={templateDraft.description}
                     onChange={(event) => setTemplateDraft((current) => ({ ...current, description: event.target.value }))}
                     placeholder="Description du formulaire"
-                    className="mt-3 w-full resize-none border-none bg-transparent text-sm leading-6 text-[#6f6753] outline-none placeholder:text-[#9b927d]"
+                    className="mt-3 w-full resize-none border-none bg-transparent text-sm leading-6 outline-none"
+                    style={{ color: "#5f7183" }}
                   />
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-[#7d72a0]">
-                    <span className="rounded-full bg-[#f3efff] px-3 py-1 font-semibold">{stats.total} question(s)</span>
-                    <span className="rounded-full bg-[#f3efff] px-3 py-1 font-semibold">{stats.required} obligatoire(s)</span>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs" style={{ color: DS.navy }}>
+                    <span className="rounded-full px-3 py-1 font-semibold" style={{ backgroundColor: "#eef6fb" }}>{stats.total} question(s)</span>
+                    <span className="rounded-full px-3 py-1 font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>{stats.required} obligatoire(s)</span>
                   </div>
                 </div>
 
@@ -460,8 +491,8 @@ export function ConfigurationShell({
               </div>
 
                 <div className="lg:sticky lg:top-6 lg:h-fit">
-                <div className="rounded-[24px] border border-[#dcd5ef] bg-white p-3 shadow-sm">
-                  <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8d845f]">
+                <div className="rounded-[24px] border bg-white p-3 shadow-sm" style={{ borderColor: DS.line }}>
+                  <p className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: DS.gold }}>
                     Ajouter
                   </p>
                   <div className="space-y-2">
@@ -470,7 +501,8 @@ export function ConfigurationShell({
                         key={item.type}
                         type="button"
                         onClick={() => handleAddField(item.type)}
-                        className="flex w-full items-center justify-center rounded-2xl border border-[#ede4cf] bg-[#fcfbf7] p-3 text-[#5c533e] transition hover:border-[#d8cba7] hover:bg-white"
+                        className="flex w-full items-center justify-center rounded-2xl border p-3 transition hover:bg-white"
+                        style={{ borderColor: DS.line, backgroundColor: "#fbfdff", color: DS.navy }}
                         title={item.title}
                       >
                         {item.icon}
@@ -517,15 +549,20 @@ function SortableQuestionCard({
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`rounded-[24px] border bg-white shadow-[0_12px_30px_rgba(80,62,24,0.06)] ${
-        isSelected ? "border-[#71a1ff] ring-2 ring-[#71a1ff]" : "border-[#dcd5ef]"
+      className={`rounded-[24px] border bg-white shadow-[0_12px_30px_rgba(18,49,77,0.06)] ${
+        isSelected ? "ring-2" : ""
       } ${isDragging ? "opacity-70" : ""}`}
+      style={{
+        ...style,
+        borderColor: isSelected ? DS.blue : DS.line,
+        boxShadow: isSelected ? "0 0 0 2px rgba(79,171,219,0.22)" : undefined,
+      }}
     >
       <div className="flex items-start gap-4 p-5">
         <button
           type="button"
-          className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#f3efff] text-sm font-semibold text-[#6f48d9]"
+          className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold"
+          style={{ backgroundColor: "#eef6fb", color: DS.navy }}
           onClick={onSelect}
         >
           {index}
@@ -543,7 +580,8 @@ function SortableQuestionCard({
               dragHandle={
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-[#9f95bf] transition hover:bg-[#f5f1ff]"
+                  className="rounded-xl p-2 transition hover:bg-[#eef6fb]"
+                  style={{ color: "#8aa3b6" }}
                   {...attributes}
                   {...listeners}
                   title="Glisser pour réordonner"
@@ -568,12 +606,12 @@ function SortableQuestionCard({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
-                      {getFieldIcon(field.field_type)}
-                      {field.label}
-                    </span>
-                    {field.required && (
-                      <span className="rounded-full bg-[#f3efff] px-2 py-1 text-[10px] font-semibold text-[#6f48d9]">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
+                    {getFieldIcon(field.field_type)}
+                    {field.label}
+                  </span>
+                  {field.required && (
+                      <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>
                         Obligatoire
                       </span>
                     )}
@@ -583,7 +621,8 @@ function SortableQuestionCard({
 
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-[#9f95bf] transition hover:bg-[#f5f1ff]"
+                  className="rounded-xl p-2 transition hover:bg-[#eef6fb]"
+                  style={{ color: "#8aa3b6" }}
                   {...attributes}
                   {...listeners}
                   title="Glisser pour réordonner"
@@ -639,16 +678,16 @@ function QuestionEditorCard({
   const isChoiceField = ["radio", "checkboxes", "select"].includes(field.field_type);
 
   return (
-    <div className="mt-5 rounded-[20px] border border-[#e7e1f5] bg-[#fcfbff] p-5">
+    <div className="mt-5 rounded-[20px] border p-5" style={{ borderColor: DS.line, backgroundColor: "#fbfdff" }}>
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1e2a3a]">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: DS.navy }}>
               {getFieldIcon(field.field_type)}
-              Question en cours d'edition
+              Question
             </span>
             {field.required && (
-              <span className="rounded-full bg-[#f3efff] px-2 py-1 text-[10px] font-semibold text-[#6f48d9]">
+              <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: DS.goldSoft, color: DS.navy }}>
                 Obligatoire
               </span>
             )}
@@ -656,55 +695,54 @@ function QuestionEditorCard({
           {dragHandle}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),220px]">
+        <div className="space-y-3">
           <input
             value={field.label}
             onChange={(event) => onChange({ label: event.target.value })}
             placeholder="Question sans titre"
-            className="w-full border-0 border-b-2 border-[#d9d1ef] bg-transparent px-1 py-3 text-lg font-medium text-[#243041] outline-none focus:border-[#6f48d9]"
+            className="w-full border-0 border-b-2 bg-transparent px-1 py-3 text-[1.7rem] font-semibold outline-none"
+            style={{ borderColor: DS.blueSoft, color: DS.navy }}
           />
 
-          <select
+          <div className="space-y-2">
+            <div className="px-1 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
+              Description facultative
+            </div>
+            <input
+              value={field.helper_text ?? ""}
+              onChange={(event) => onChange({ helper_text: event.target.value })}
+              placeholder="Ajoute une précision sous la question si besoin"
+              className="w-full border-0 border-b bg-transparent px-1 py-2 text-sm outline-none"
+              style={{ borderColor: DS.line, color: "#61778a" }}
+            />
+          </div>
+
+          <FieldTypePicker
             value={field.field_type}
-            onChange={(event) =>
+            onChange={(nextType) =>
               onChange({
-                field_type: event.target.value as FormFieldType,
-                options: ["radio", "checkboxes", "select"].includes(event.target.value)
+                field_type: nextType,
+                options: ["radio", "checkboxes", "select"].includes(nextType)
                   ? (optionFields.length > 0 ? optionFields : ["Option 1", "Option 2"])
                   : [],
               })
             }
-            className="w-full rounded-xl border border-[#ded6f2] bg-white px-4 py-3 text-sm text-[#243041] outline-none focus:border-[#6f48d9]"
-          >
-            {Object.entries(FORM_FIELD_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-3">
-          <input
-            value={field.helper_text ?? ""}
-            onChange={(event) => onChange({ helper_text: event.target.value })}
-            placeholder="Description ou aide (optionnel)"
-            className="w-full border-0 border-b border-[#e5dff3] bg-transparent px-1 py-2 text-sm text-[#5f5870] outline-none focus:border-[#6f48d9]"
           />
         </div>
 
         {isChoiceField ? (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {optionFields.map((option, index) => (
-              <div key={`${field.id}-option-${index}`} className="flex items-center gap-3">
-                <span className="w-7 text-center text-[#8e86a8]">
-                  {field.field_type === "checkboxes" ? "□" : field.field_type === "radio" ? "○" : "▾"}
+              <div key={`${field.id}-option-${index}`} className="flex items-center gap-3 rounded-2xl px-2 py-1 transition hover:bg-[#f7fbfe]">
+                <span className="w-7 text-center text-base" style={{ color: "#88a0b0" }}>
+                  {getFieldTypeSymbol(field.field_type)}
                 </span>
                 <input
                   value={option}
                   onChange={(event) => updateOption(index, event.target.value)}
                   placeholder={`Option ${index + 1}`}
-                  className="flex-1 border-0 border-b border-[#e5dff3] bg-transparent px-1 py-3 text-sm text-[#243041] outline-none focus:border-[#6f48d9]"
+                  className="flex-1 border-0 border-b bg-transparent px-1 py-3 text-sm outline-none"
+                  style={{ borderColor: DS.line, color: DS.navy }}
                 />
                 <button
                   type="button"
@@ -720,7 +758,8 @@ function QuestionEditorCard({
             <button
               type="button"
               onClick={addOption}
-              className="inline-flex items-center gap-2 rounded-2xl px-2 py-2 text-sm font-medium text-[#6f48d9] transition hover:bg-[#f3efff]"
+              className="inline-flex items-center gap-2 rounded-2xl px-2 py-2 text-sm font-medium transition hover:bg-[#eef6fb]"
+              style={{ color: DS.blue }}
             >
               <Plus className="h-4 w-4" />
               Ajouter une option
@@ -731,17 +770,19 @@ function QuestionEditorCard({
             value={field.placeholder ?? ""}
             onChange={(event) => onChange({ placeholder: event.target.value })}
             placeholder="Texte de reponse"
-            className="w-full border-0 border-b border-[#e5dff3] bg-transparent px-1 py-3 text-sm text-[#243041] outline-none focus:border-[#6f48d9]"
+            className="w-full border-0 border-b bg-transparent px-1 py-3 text-sm outline-none"
+            style={{ borderColor: DS.line, color: "#61778a" }}
           />
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ebe5f7] pt-4">
-          <label className="inline-flex items-center gap-3 text-sm font-medium text-[#514a35]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4" style={{ borderColor: DS.line }}>
+          <label className="inline-flex items-center gap-3 text-sm font-medium" style={{ color: DS.navy }}>
             <input
               type="checkbox"
               checked={field.required}
               onChange={(event) => onChange({ required: event.target.checked })}
-              className="h-4 w-4 rounded border-gray-300 text-[#6f48d9] focus:ring-[#6f48d9]"
+              className="h-4 w-4 rounded border-gray-300 focus:ring-0"
+              style={{ accentColor: DS.blue }}
             />
             Question obligatoire
           </label>
@@ -750,7 +791,8 @@ function QuestionEditorCard({
             <button
               type="button"
               onClick={onDuplicate}
-              className="inline-flex items-center gap-2 rounded-2xl border border-[#ddd6f2] bg-white px-3 py-2.5 text-sm font-medium text-[#5d4e88] transition hover:bg-[#f6f2ff]"
+              className="inline-flex items-center gap-2 rounded-2xl border bg-white px-3 py-2.5 text-sm font-medium transition hover:bg-[#f7fbfe]"
+              style={{ borderColor: DS.line, color: DS.navy }}
             >
               <Copy className="h-4 w-4" />
               Dupliquer
@@ -767,7 +809,8 @@ function QuestionEditorCard({
               type="button"
               onClick={onSave}
               disabled={isPending || !field.label.trim()}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#6f48d9] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#603bc5] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: DS.navy }}
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Enregistrer
@@ -779,20 +822,57 @@ function QuestionEditorCard({
   );
 }
 
+function FieldTypePicker({
+  value,
+  onChange,
+}: {
+  value: FormFieldType;
+  onChange: (type: FormFieldType) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="px-1 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: DS.gold }}>
+        Type de reponse
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {FIELD_LIBRARY.map((item) => {
+          const active = item.type === value;
+          return (
+            <button
+              key={item.type}
+              type="button"
+              onClick={() => onChange(item.type)}
+              className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-medium transition"
+              style={{
+                borderColor: active ? DS.blue : DS.line,
+                backgroundColor: active ? "#eef6fb" : "#ffffff",
+                color: DS.navy,
+              }}
+            >
+              {item.icon}
+              {item.title}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function FieldPreview({ field }: { field: FormField }) {
   if (["select", "radio", "checkboxes"].includes(field.field_type)) {
     const options = getFieldOptions(field);
     return (
       <div className="space-y-2">
         {options.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#ddd2b8] bg-white px-4 py-3 text-sm text-[#9a937e]">
+          <div className="rounded-2xl border border-dashed bg-white px-4 py-3 text-sm" style={{ borderColor: DS.line, color: "#7f93a1" }}>
             Ajoute des options
           </div>
         ) : (
           options.map((option) => (
-            <div key={option} className="flex items-center gap-3 rounded-2xl border border-[#ebe5f7] bg-white px-4 py-3 text-sm text-[#514a35]">
-              <span className="w-5 text-center text-[#8e86a8]">
-                {field.field_type === "checkboxes" ? "□" : field.field_type === "radio" ? "○" : "▾"}
+            <div key={option} className="flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 text-sm" style={{ borderColor: DS.line, color: DS.navy }}>
+              <span className="w-5 text-center" style={{ color: "#88a0b0" }}>
+                {getFieldTypeSymbol(field.field_type)}
               </span>
               <span>{option}</span>
             </div>
@@ -804,14 +884,14 @@ function FieldPreview({ field }: { field: FormField }) {
 
   if (field.field_type === "long_text") {
     return (
-      <div className="rounded-2xl border border-[#ebe2cb] bg-white px-4 py-4 text-sm text-[#9a937e]">
+      <div className="rounded-2xl border bg-white px-4 py-4 text-sm" style={{ borderColor: DS.line, color: "#7f93a1" }}>
         {field.placeholder || "Réponse longue..."}
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-[#ebe2cb] bg-white px-4 py-3 text-sm text-[#9a937e]">
+    <div className="rounded-2xl border bg-white px-4 py-3 text-sm" style={{ borderColor: DS.line, color: "#7f93a1" }}>
       {field.placeholder || "Réponse courte..."}
     </div>
   );
