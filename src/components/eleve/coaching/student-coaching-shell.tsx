@@ -108,6 +108,7 @@ export function StudentCoachingShell({
 
   const coachesById = useMemo(() => new Map(coaches.map((coach) => [coach.id, coach])), [coaches]);
   const requiredFields = useMemo(() => formFields.filter((field) => field.required), [formFields]);
+  const optionalFields = useMemo(() => formFields.filter((field) => !field.required), [formFields]);
   const answeredRequiredCount = requiredFields.filter((field) => isFilledAnswer(draft[field.key])).length;
   const completionRatio = requiredFields.length === 0 ? 100 : Math.round((answeredRequiredCount / requiredFields.length) * 100);
   const onboardingDone = Boolean(form);
@@ -271,7 +272,7 @@ export function StudentCoachingShell({
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-14 pt-4">
+    <div className="mx-auto max-w-[1450px] px-4 pb-16 pt-5 sm:px-6 xl:px-8">
       {toast && (
         <div
           className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-xl ${
@@ -283,141 +284,135 @@ export function StudentCoachingShell({
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[320px,minmax(0,1fr)]">
-        <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start">
-          <div className="rounded-[34px] border border-[#17324e] bg-[radial-gradient(circle_at_top_right,_rgba(241,212,139,0.18),_transparent_24%),linear-gradient(160deg,_#0f2239_0%,_#163250_55%,_#1d4365_100%)] p-6 text-white shadow-[0_28px_60px_rgba(18,49,77,0.28)]">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f1d48b]">
-              <Sparkles className="h-3.5 w-3.5" />
-              Coaching {groupe.name}
+      <div className="rounded-[40px] border border-[#e4ebf3] bg-[linear-gradient(180deg,#f9fbff_0%,#ffffff_14%,#f6f8fc_100%)] p-4 shadow-[0_30px_80px_rgba(18,49,77,0.08)] sm:p-6 lg:p-8">
+        <section className="rounded-[32px] border border-[#e3ebf5] bg-white p-6 shadow-[0_14px_35px_rgba(18,49,77,0.05)] sm:p-8">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-[#fffdfa] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c5963d]">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Coaching {groupe.name}
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-[#f7fafc] px-3 py-1 text-[11px] font-medium text-[#5d7085]">
+                  <UserRound className="h-3.5 w-3.5" />
+                  {coaches.length} coach{coaches.length > 1 ? "s" : ""} disponible{coaches.length > 1 ? "s" : ""}
+                </div>
+              </div>
+              <p className="mt-5 text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Parcours de départ</p>
+              <h1 className="mt-3 max-w-4xl text-3xl font-semibold leading-tight text-[#12314d] sm:text-[42px]">
+                Ton onboarding doit être simple: répondre clairement, réserver ton appel, avancer.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-[#63768b]">
+                On te guide étape par étape. Tu remplis d’abord les infos essentielles, puis tu réserves ton premier
+                échange avec un coach de ta promo.
+              </p>
             </div>
 
-            <div className="mt-5 space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">Prochaine action</p>
-                <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">{nextAction.title}</h2>
-                <p className="mt-3 text-sm leading-6 text-white/75">{nextAction.body}</p>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[430px] xl:max-w-[520px] xl:flex-1">
+              <SummaryStat
+                label="Questions clés"
+                value={`${answeredRequiredCount}/${requiredFields.length}`}
+                caption={onboardingDone ? "Formulaire prêt" : `${completionRatio}% complété`}
+              />
+              <SummaryStat
+                label="Rendez-vous"
+                value={bookingDone ? "Réservé" : "À caler"}
+                caption={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Après le formulaire"}
+              />
+              <SummaryStat
+                label="Parcours"
+                value={`${completedJourneyCount}/3`}
+                caption={callDone ? "Appel lancé" : "Étapes initiales"}
+              />
+            </div>
+          </div>
+        </section>
 
+        <div className="mt-6 grid gap-6 xl:grid-cols-[300px,minmax(0,1fr)]">
+          <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start">
+            <div className="rounded-[30px] border border-[#dbe7f2] bg-[#12314d] p-5 text-white shadow-[0_28px_55px_rgba(18,49,77,0.24)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">Action guidée</p>
+              <h2 className="mt-3 text-2xl font-semibold leading-tight">{nextAction.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-white/75">{nextAction.body}</p>
               <button
                 type="button"
                 onClick={() => scrollToSection(nextAction.target)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-[#12314d] transition hover:bg-[#f7fbff]"
+                className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-[#12314d] transition hover:bg-[#f6f9fd]"
               >
                 {nextAction.cta}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-6 grid gap-3">
-              <SidebarMetric
-                label="Formulaire"
-                value={`${answeredRequiredCount}/${requiredFields.length}`}
-                detail={onboardingDone ? "Enregistré" : `${completionRatio}% complété`}
-              />
-              <SidebarMetric
-                label="Rendez-vous"
-                value={bookingDone ? "Réservé" : "À planifier"}
-                detail={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Débloqué après l'onboarding"}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-[#e3ebf5] bg-white p-5 shadow-[0_16px_35px_rgba(18,49,77,0.06)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Parcours</p>
-                <h3 className="mt-2 text-xl font-semibold text-[#12314d]">Tes étapes</h3>
+            <div className="rounded-[30px] border border-[#e3ebf5] bg-white p-5 shadow-[0_16px_35px_rgba(18,49,77,0.05)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Feuille de route</p>
+                  <h3 className="mt-2 text-xl font-semibold text-[#12314d]">Tes 3 étapes</h3>
+                </div>
+                <span className="rounded-full bg-[#eef6ff] px-3 py-1 text-[11px] font-semibold text-[#2e6fa3]">
+                  {completedJourneyCount}/3
+                </span>
               </div>
-              <span className="rounded-full bg-[#eef6ff] px-3 py-1 text-[11px] font-semibold text-[#2e6fa3]">
-                {completedJourneyCount}/3
-              </span>
-            </div>
-            <div className="mt-5 space-y-3">
-              {journeySteps.map((step, index) => (
-                <JourneyStep
-                  key={step.id}
-                  index={index + 1}
-                  title={step.title}
-                  description={step.description}
-                  done={step.done}
-                  locked={step.locked}
-                  onClick={() => scrollToSection(step.id)}
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#edf2f7]">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#4fabdb_0%,#12314d_100%)] transition-all"
+                  style={{ width: `${Math.max(12, Math.round((completedJourneyCount / journeySteps.length) * 100))}%` }}
                 />
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[28px] border border-[#e3ebf5] bg-white p-5 shadow-[0_16px_35px_rgba(18,49,77,0.06)]">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-[#eef6ff] p-3 text-[#2e6fa3]">
-                <CalendarClock className="h-5 w-5" />
               </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Appel coaching</p>
-                <h3 className="mt-1 text-lg font-semibold text-[#12314d]">
-                  {bookingSlot ? formatDateTime(bookingSlot.start_at) : "Pas encore réservé"}
-                </h3>
-              </div>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-[#64788d]">
-              {bookingSlot
-                ? `Avec ${getDisplayName(coachesById.get(booking?.coach_id ?? "") ?? null)}${
-                    bookingSlot.location ? ` · ${bookingSlot.location}` : ""
-                  }`
-                : "Ton créneau apparaîtra ici dès qu'il sera réservé."}
-            </p>
-          </div>
-        </aside>
-
-        <main className="space-y-6">
-          <section className="rounded-[34px] border border-[#e2e9f3] bg-[radial-gradient(circle_at_top_left,_rgba(79,171,219,0.14),_transparent_24%),linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)] p-8 shadow-[0_24px_60px_rgba(18,49,77,0.08)]">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#c5963d] shadow-sm">
-                <Sparkles className="h-3.5 w-3.5" />
-                Coaching {groupe.name}
-              </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-[#f6f9fc] px-3 py-1 text-xs font-medium text-[#5b6f84]">
-                <UserRound className="h-3.5 w-3.5" />
-                {coaches.length} coach{coaches.length > 1 ? "s" : ""} pour ta classe
+              <div className="mt-5 space-y-3">
+                {journeySteps.map((step, index) => (
+                  <JourneyStep
+                    key={step.id}
+                    index={index + 1}
+                    title={step.title}
+                    description={step.description}
+                    done={step.done}
+                    locked={step.locked}
+                    onClick={() => scrollToSection(step.id)}
+                  />
+                ))}
               </div>
             </div>
 
-            <div className="mt-6 max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#8a98a8]">Onboarding élève</p>
-              <h1 className="mt-3 text-4xl font-semibold leading-tight text-[#12314d]">
-                Remplis ton profil une bonne fois, puis passe directement à la réservation.
-              </h1>
-              <p className="mt-4 text-sm leading-7 text-[#5f7287]">
-                Cette page doit t’aider à avancer sans hésiter: d’abord ton formulaire, ensuite le créneau, puis ton
-                premier échange avec un coach de ta promo.
+            <div className="rounded-[30px] border border-[#e3ebf5] bg-white p-5 shadow-[0_16px_35px_rgba(18,49,77,0.05)]">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-[#eef6ff] p-3 text-[#2e6fa3]">
+                  <CalendarClock className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Prochain créneau</p>
+                  <h3 className="mt-1 text-lg font-semibold text-[#12314d]">
+                    {bookingSlot ? formatDateTime(bookingSlot.start_at) : "Pas encore réservé"}
+                  </h3>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[#64788d]">
+                {bookingSlot
+                  ? `Avec ${getDisplayName(coachesById.get(booking?.coach_id ?? "") ?? null)}${
+                      bookingSlot.location ? ` · ${bookingSlot.location}` : ""
+                    }`
+                  : "Ton appel apparaîtra ici dès que tu auras choisi un créneau."}
               </p>
             </div>
+          </aside>
 
-            <div className="mt-7 grid gap-3 md:grid-cols-3">
-              <SummaryStat
-                label="Questions obligatoires"
-                value={`${answeredRequiredCount}/${requiredFields.length}`}
-                caption={onboardingDone ? "Onboarding enregistré" : `${completionRatio}% complété`}
-              />
-              <SummaryStat
-                label="Rendez-vous"
-                value={bookingDone ? "Réservé" : "À planifier"}
-                caption={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Juste après le formulaire"}
-              />
-              <SummaryStat
-                label="Progression"
-                value={`${completedJourneyCount}/3`}
-                caption={callDone ? "Parcours lancé" : "Étapes initiales"}
-              />
-            </div>
-          </section>
-
-          <section id="coaching-form-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-8 shadow-[0_24px_60px_rgba(18,49,77,0.07)]">
+          <main className="space-y-6">
+            <section
+              id="coaching-form-step"
+              className="rounded-[34px] border border-[#e2e9f3] bg-white p-6 shadow-[0_24px_60px_rgba(18,49,77,0.07)] sm:p-8"
+            >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Étape 1</p>
               <h3 className="mt-2 text-3xl font-semibold text-[#12314d]">Formulaire d'onboarding</h3>
-              {formTemplate.description && <p className="mt-3 max-w-2xl text-sm leading-7 text-[#62768b]">{formTemplate.description}</p>}
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-[#62768b]">
+                Réponds d’abord aux questions importantes. Ensuite, si tu veux, tu peux compléter les infos plus
+                personnelles pour aider encore plus ton coach.
+              </p>
+              {formTemplate.description && (
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-[#7a8ca0]">{formTemplate.description}</p>
+              )}
             </div>
             <div className="rounded-[24px] border border-[#e3ebf5] bg-[#f8fbfe] px-4 py-3 shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Progression formulaire</p>
@@ -442,16 +437,55 @@ export function StudentCoachingShell({
             </div>
           )}
 
-          <div className="mt-8 space-y-4">
-            {formFields.map((field, index) => (
-              <QuestionBlock
-                key={field.id}
-                index={index + 1}
-                field={field}
-                value={draft[field.key] ?? (field.field_type === "checkboxes" ? [] : "")}
-                onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
-              />
-            ))}
+          <div className="mt-8 space-y-8">
+            <div className="rounded-[28px] border border-[#e8eef5] bg-[#f8fbfe] p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Bloc 1</p>
+                  <h4 className="mt-2 text-xl font-semibold text-[#12314d]">Les indispensables</h4>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#2e6fa3] shadow-sm">
+                  Obligatoire
+                </span>
+              </div>
+              <div className="mt-5 space-y-4">
+                {requiredFields.map((field, index) => (
+                  <QuestionBlock
+                    key={field.id}
+                    index={index + 1}
+                    field={field}
+                    value={draft[field.key] ?? (field.field_type === "checkboxes" ? [] : "")}
+                    onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {optionalFields.length > 0 && (
+              <div className="rounded-[28px] border border-[#e8eef5] bg-white p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Bloc 2</p>
+                    <h4 className="mt-2 text-xl font-semibold text-[#12314d]">Pour aller plus loin</h4>
+                    <p className="mt-1 text-sm text-[#64788d]">Facultatif, mais utile pour préparer un meilleur échange.</p>
+                  </div>
+                  <span className="rounded-full bg-[#f4f6f9] px-3 py-1 text-[11px] font-semibold text-[#708294]">
+                    Facultatif
+                  </span>
+                </div>
+                <div className="mt-5 space-y-4">
+                  {optionalFields.map((field, index) => (
+                    <QuestionBlock
+                      key={field.id}
+                      index={requiredFields.length + index + 1}
+                      field={field}
+                      value={draft[field.key] ?? (field.field_type === "checkboxes" ? [] : "")}
+                      onChange={(value) => setDraft((current) => ({ ...current, [field.key]: value }))}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-8 flex flex-col gap-4 rounded-[28px] border border-[#e7edf5] bg-[#f8fbfe] p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -471,13 +505,13 @@ export function StudentCoachingShell({
           </div>
           </section>
 
-          <section id="coaching-booking-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-8 shadow-[0_24px_60px_rgba(18,49,77,0.07)]">
+          <section id="coaching-booking-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-6 shadow-[0_24px_60px_rgba(18,49,77,0.07)] sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Étape 2</p>
                 <h3 className="mt-2 text-3xl font-semibold text-[#12314d]">Réserve ton appel</h3>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-[#62768b]">
-                Une fois le formulaire envoyé, tu choisis un créneau avec un coach de ta classe.
+                Une fois le formulaire envoyé, choisis simplement le créneau qui te convient le mieux.
                 </p>
               </div>
               <div className="rounded-[24px] border border-[#e3ebf5] bg-[#f8fbfe] px-4 py-3">
@@ -546,7 +580,7 @@ export function StudentCoachingShell({
           </div>
           </section>
 
-          <section id="coaching-call-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-8 shadow-[0_24px_60px_rgba(18,49,77,0.07)]">
+          <section id="coaching-call-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-6 shadow-[0_24px_60px_rgba(18,49,77,0.07)] sm:p-8">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Équipe coaching</p>
@@ -579,7 +613,8 @@ export function StudentCoachingShell({
               )}
             </div>
           </section>
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   );
@@ -597,7 +632,7 @@ function SidebarMetric({ label, value, detail }: { label: string; value: string;
 
 function SummaryStat({ label, value, caption }: { label: string; value: string; caption: string }) {
   return (
-    <div className="rounded-[24px] border border-[#e3ebf5] bg-white/85 p-4 shadow-sm">
+    <div className="rounded-[24px] border border-[#e3ebf5] bg-[#fbfdff] p-4 shadow-sm">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-[#12314d]">{value}</p>
       <p className="mt-1 text-sm text-[#64788d]">{caption}</p>
@@ -685,38 +720,38 @@ function QuestionBlock({
   const currentValue = Array.isArray(value) ? "" : value;
 
   return (
-    <div className="rounded-[28px] border border-[#e6edf5] bg-[#fcfdff] p-6 shadow-[0_12px_30px_rgba(18,49,77,0.04)]">
-      <div className="flex items-start gap-4">
-        <div className="space-y-2">
+    <div className="rounded-[30px] border border-[#e7edf5] bg-white p-5 shadow-[0_14px_36px_rgba(18,49,77,0.04)]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="flex items-center gap-3 sm:w-[88px] sm:flex-col sm:items-start">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#12314d] text-sm font-semibold text-white shadow-sm">
             {index}
           </div>
-          <span className="block text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0b2]">
-            {field.required ? "Requis" : "Libre"}
+          <span
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              field.required ? "bg-amber-100 text-amber-700" : "bg-[#eef2f6] text-[#7e8fa4]"
+            }`}
+          >
+            {field.required ? "Obligatoire" : "Facultatif"}
           </span>
         </div>
-        <div className="w-full">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="rounded-full bg-[#f3f7fb] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7e8fa4]">
-              Question {index}
-            </span>
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-              field.required ? "bg-amber-100 text-amber-700" : "bg-[#eef2f6] text-[#7e8fa4]"
-            }`}>
-              {field.required ? "Obligatoire" : "Facultatif"}
-            </span>
-          </div>
-          <h4 className="mt-3 text-xl font-semibold leading-snug text-[#12314d]">{field.label}</h4>
-          {field.helper_text && <p className="mt-2 text-sm leading-7 text-[#65788d]">{field.helper_text}</p>}
 
-          <div className="mt-5">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-xl font-semibold leading-snug text-[#12314d]">{field.label}</h4>
+          {field.helper_text && (
+            <div className="mt-3 rounded-2xl border border-[#edf2f7] bg-[#f8fbfe] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Contexte facultatif</p>
+              <p className="mt-1 text-sm leading-6 text-[#64788d]">{field.helper_text}</p>
+            </div>
+          )}
+
+          <div className="mt-4">
             {field.field_type === "select" ? (
               <InputShell active={Boolean(currentValue)}>
                 <div className="relative">
                   <select
                     value={currentValue}
                     onChange={(event) => onChange(event.target.value)}
-                    className="h-10 w-full appearance-none bg-transparent pr-10 text-sm text-[#12314d] outline-none"
+                  className="h-11 w-full appearance-none bg-transparent pr-10 text-base text-[#12314d] outline-none"
                   >
                     <option value="">Sélectionner une réponse</option>
                     {options.map((option) => (
@@ -737,10 +772,10 @@ function QuestionBlock({
                       key={option}
                       type="button"
                       onClick={() => onChange(option)}
-                      className={`flex w-full items-center gap-3 rounded-[22px] border px-4 py-3.5 text-left text-sm font-medium transition ${
+                      className={`flex w-full items-center gap-3 rounded-[22px] border px-4 py-4 text-left text-sm font-medium transition ${
                         selected
-                          ? "border-[#12314d] bg-[#f6f9fc] text-[#12314d] shadow-sm"
-                          : "border-[#dbe5f0] bg-white text-[#5f7287] hover:border-[#c8d5e3]"
+                          ? "border-[#4fabdb] bg-[#f2f9fe] text-[#12314d] shadow-sm"
+                          : "border-[#dbe5f0] bg-[#fbfdff] text-[#5f7287] hover:border-[#c8d5e3]"
                       }`}
                     >
                       <span
@@ -770,10 +805,10 @@ function QuestionBlock({
                         }
                         onChange([...selectedValues, option]);
                       }}
-                      className={`flex w-full items-center gap-3 rounded-[22px] border px-4 py-3.5 text-left text-sm transition ${
+                      className={`flex w-full items-center gap-3 rounded-[22px] border px-4 py-4 text-left text-sm transition ${
                         selected
-                          ? "border-[#12314d] bg-[#f6f9fc] text-[#12314d]"
-                          : "border-[#dbe5f0] bg-white text-[#5f7287] hover:border-[#c8d5e3]"
+                          ? "border-[#4fabdb] bg-[#f2f9fe] text-[#12314d]"
+                          : "border-[#dbe5f0] bg-[#fbfdff] text-[#5f7287] hover:border-[#c8d5e3]"
                       }`}
                     >
                       <span
@@ -795,7 +830,7 @@ function QuestionBlock({
                   value={currentValue}
                   onChange={(event) => onChange(event.target.value)}
                   placeholder={field.placeholder ?? ""}
-                  className="w-full resize-y bg-transparent text-sm leading-7 text-[#12314d] outline-none placeholder:text-[#9babbc]"
+                  className="w-full resize-y bg-transparent text-base leading-7 text-[#12314d] outline-none placeholder:text-[#9babbc]"
                 />
               </InputShell>
             ) : (
@@ -804,7 +839,7 @@ function QuestionBlock({
                   value={currentValue}
                   onChange={(event) => onChange(event.target.value)}
                   placeholder={field.placeholder ?? ""}
-                  className="h-10 w-full bg-transparent text-sm text-[#12314d] outline-none placeholder:text-[#9babbc]"
+                  className="h-11 w-full bg-transparent text-base text-[#12314d] outline-none placeholder:text-[#9babbc]"
                 />
               </InputShell>
             )}
