@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronRight, Folder, FolderOpen,
-  Home, BookOpen, Layers, ArrowRight, Search,
+  ChevronRight, FolderOpen,
+  Home, BookOpen, Layers, ArrowRight, Search, GraduationCap,
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
 import { ExercicesShell } from "@/components/eleve/exercices-shell";
@@ -200,25 +200,38 @@ export function EleveCoursShell({
     selectDossier(preferred);
   }, [allDossiers, selectedId, selectDossier]);
 
+  // Count matières per child dossier for display
+  const childMatiereCount = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const child of childDossiers) {
+      const count = (matiereIdsByDossier.get(child.id) ?? []).length;
+      // Also count sub-dossiers as navigable items
+      const subDossierCount = allDossiers.filter((d) => d.parent_id === child.id).length;
+      map.set(child.id, count || subDossierCount);
+    }
+    return map;
+  }, [childDossiers, matiereIdsByDossier, allDossiers]);
+
   return (
     <div className="flex flex-1 overflow-hidden">
-      <div className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,#F9FBFE_0%,#FFFFFF_18%)]">
+      <div className="flex flex-1 flex-col overflow-hidden bg-[#F4F6FA]">
         {selectedDossier ? (
           <>
-            <div className="border-b border-[#E8EDF5] px-5 py-3 text-xs text-[#8C98A8]">
+            {/* Breadcrumb */}
+            <div className="border-b border-[#E2E8F0] bg-white px-6 py-3 text-xs text-[#8C98A8]">
               <div className="flex flex-wrap items-center gap-1.5">
-                <button onClick={() => setSelectedId(null)} className="rounded-full bg-white p-1.5 shadow-sm ring-1 ring-[#E6EDF6]">
+                <button onClick={() => setSelectedId(null)} className="rounded-full bg-[#F4F6FA] p-1.5 transition hover:bg-[#E2E8F0]">
                   <Home size={12} />
                 </button>
                 {breadcrumb.map((d, i) => (
                   <span key={d.id} className="flex items-center gap-1.5">
-                    <ChevronRight size={11} />
+                    <ChevronRight size={11} className="text-[#C0C8D4]" />
                     <button
                       onClick={() => selectDossier(d)}
-                      className={`rounded-full px-2.5 py-1 transition-colors ${
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
                         i === breadcrumb.length - 1
                           ? "bg-[#0e1e35] text-white"
-                          : "bg-white text-[#5F6F82] ring-1 ring-[#E6EDF6] hover:text-[#0e1e35]"
+                          : "text-[#5F6F82] hover:text-[#0e1e35]"
                       }`}
                     >
                       {d.name}
@@ -228,58 +241,59 @@ export function EleveCoursShell({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="space-y-6">
-                <div className="rounded-[28px] border border-[#E5EDF7] bg-white/95 p-5 shadow-[0_20px_50px_rgba(14,30,53,0.06)]">
-                  <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-bold tracking-tight text-[#0e1e35]">{selectedDossier.name}</h2>
-                    {(coursList.length > 0 || flashcardDecks.length > 0) && (
-                      <div className="flex items-center gap-3 text-xs text-[#8A98A9]">
-                        {coursList.length > 0 && <span className="font-semibold text-[#0e1e35]">{coursList.length} <span className="font-normal text-[#8A98A9]">cours</span></span>}
-                        {flashcardDecks.length > 0 && <span className="font-semibold text-[#0e1e35]">{flashcardDecks.length} <span className="font-normal text-[#8A98A9]">flashcards</span></span>}
-                      </div>
-                    )}
+            <div className="flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-5xl px-6 py-6 space-y-6">
+                {/* Hero header */}
+                <div className="relative overflow-hidden rounded-3xl bg-[#0e1e35] px-7 py-7">
+                  {/* Decorative gradient orb */}
+                  <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#4FABDB]/15 blur-3xl" />
+                  <div className="pointer-events-none absolute -left-10 -bottom-16 h-48 w-48 rounded-full bg-[#C9A84C]/10 blur-3xl" />
+                  <div className="relative flex items-center justify-between gap-6">
+                    <div>
+                      <h2 className="text-2xl font-bold tracking-tight text-white">{selectedDossier.name}</h2>
+                      {selectedDossier.description && (
+                        <p className="mt-1.5 text-sm text-white/60">{selectedDossier.description}</p>
+                      )}
+                      {(coursList.length > 0 || flashcardDecks.length > 0 || childDossiers.length > 0) && (
+                        <div className="mt-3 flex items-center gap-4 text-xs">
+                          {childDossiers.length > 0 && (
+                            <span className="text-[#4FABDB] font-medium">{childDossiers.length} {childDossiers.length > 1 ? "dossiers" : "dossier"}</span>
+                          )}
+                          {coursList.length > 0 && (
+                            <span className="text-[#C9A84C] font-medium">{coursList.length} cours</span>
+                          )}
+                          {flashcardDecks.length > 0 && (
+                            <span className="text-white/50 font-medium">{flashcardDecks.length} flashcards</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="hidden sm:flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
+                      <GraduationCap size={28} className="text-[#C9A84C]" />
+                    </div>
                   </div>
 
-                  <div className="mt-4 relative">
-                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9AACBE]" />
+                  {/* Search bar inside hero */}
+                  <div className="relative mt-5">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
                     <input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Rechercher un cours, un chapitre ou une flashcard..."
-                      className="w-full rounded-2xl border border-[#DCE7F3] bg-[#F8FBFE] py-3 pl-11 pr-4 text-sm text-[#0e1e35] outline-none transition focus:border-[#4FABDB] focus:bg-white focus:ring-4 focus:ring-[#4FABDB]/10"
+                      className="w-full rounded-xl border border-white/10 bg-white/8 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-[#4FABDB]/50 focus:bg-white/12 focus:ring-2 focus:ring-[#4FABDB]/20"
                     />
                   </div>
 
-                  {filteredChildDossiers.length > 0 && (
-                    <div className="mt-4">
-                      <div className="flex flex-wrap gap-2">
-                        {filteredChildDossiers.map((child) => (
-                          <button
-                            key={child.id}
-                            onClick={() => selectDossier(child)}
-                            className="inline-flex items-center gap-2 rounded-full border border-[#DCE7F3] bg-white px-4 py-2 text-sm font-medium text-[#0e1e35] transition hover:-translate-y-0.5 hover:border-[#4FABDB]/40 hover:shadow-[0_10px_24px_rgba(14,30,53,0.08)]"
-                          >
-                            <span
-                              className="h-2.5 w-2.5 rounded-full"
-                              style={{ backgroundColor: child.color || "#4FABDB" }}
-                            />
-                            {child.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
+                  {/* Tabs inside hero — only at matière level */}
                   {hasDirectLearningContent && childDossiers.length === 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-5 flex gap-2">
                       <button
                         type="button"
                         onClick={() => setActiveTab("cours")}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
                           activeTab === "cours"
-                            ? "bg-[#0e1e35] text-white shadow-sm"
-                            : "border border-[#DCE7F3] bg-white text-[#5F6F82] hover:text-[#0e1e35]"
+                            ? "bg-white text-[#0e1e35] shadow-sm"
+                            : "bg-white/10 text-white/70 hover:bg-white/15 hover:text-white"
                         }`}
                       >
                         Cours
@@ -287,10 +301,10 @@ export function EleveCoursShell({
                       <button
                         type="button"
                         onClick={() => setActiveTab("exercices")}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
                           activeTab === "exercices"
-                            ? "bg-[#0e1e35] text-white shadow-sm"
-                            : "border border-[#DCE7F3] bg-white text-[#5F6F82] hover:text-[#0e1e35]"
+                            ? "bg-white text-[#0e1e35] shadow-sm"
+                            : "bg-white/10 text-white/70 hover:bg-white/15 hover:text-white"
                         }`}
                         disabled={selectedExerciceRoots.length === 0}
                       >
@@ -300,6 +314,36 @@ export function EleveCoursShell({
                     </div>
                   )}
                 </div>
+
+                {/* Child dossiers as proper cards */}
+                {filteredChildDossiers.length > 0 && (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredChildDossiers.map((child) => {
+                      const itemCount = childMatiereCount.get(child.id) ?? 0;
+                      return (
+                        <button
+                          key={child.id}
+                          onClick={() => selectDossier(child)}
+                          className="group relative overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(14,30,53,0.10)] hover:border-[#4FABDB]/30"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${child.color || "#4FABDB"}15` }}>
+                              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: child.color || "#4FABDB" }} />
+                            </div>
+                            <ArrowRight size={16} className="mt-2 shrink-0 text-[#C0C8D4] transition-all duration-200 group-hover:translate-x-1 group-hover:text-[#4FABDB]" />
+                          </div>
+                          <h3 className="mt-3 text-[15px] font-semibold text-[#0e1e35]">{child.name}</h3>
+                          {child.description && (
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#8A98A9]">{child.description}</p>
+                          )}
+                          {itemCount > 0 && (
+                            <p className="mt-2 text-[11px] font-medium text-[#4FABDB]">{itemCount} {itemCount > 1 ? "matières" : "matière"}</p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {activeTab === "cours" && filteredCoursList.length > 0 && (
                   <div>
