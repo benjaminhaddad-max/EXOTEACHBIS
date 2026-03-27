@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useMemo, type Dispatch, type SetStateAction } from "react";
-import {
-  Megaphone, FileText, ChevronDown, GraduationCap, Building2,
-  Layers, Check, Plus, Users,
-} from "lucide-react";
+import { useState, useMemo } from "react";
+import { Megaphone, FileText, Plus, Users } from "lucide-react";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, Groupe, Matiere, Profile } from "@/types/database";
 import type { SidebarFilter } from "@/components/admin/formulaires/formulaires-sidebar";
+import { FormationClassesTreeSidebar } from "@/components/admin/formation-classes-tree-sidebar";
 import { FormulairesShellContent } from "./formulaires-content";
 import { AnnoncesTab } from "./annonces-tab";
 
@@ -54,13 +52,15 @@ export function CommunicationShell({
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Sidebar with checkboxes */}
-      <CommSidebar
+      <FormationClassesTreeSidebar
         dossiers={dossiers}
         groupes={groupes}
         selectedGroupeIds={selectedGroupeIds}
         onToggle={toggleGroupe}
         onSelectAll={selectAll}
         onSetSelection={setSelectedGroupeIds}
+        variant="dark"
+        allItemsLabel="Toutes les communications"
       />
 
       {/* Right content */}
@@ -163,141 +163,3 @@ export function CommunicationShell({
   );
 }
 
-// ─── Communication Sidebar with Checkboxes ────────────────────────────────────
-
-function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll, onSetSelection }: {
-  dossiers: Dossier[]; groupes: Groupe[];
-  selectedGroupeIds: Set<string>;
-  onToggle: (id: string) => void;
-  onSelectAll: () => void;
-  onSetSelection: Dispatch<SetStateAction<Set<string>>>;
-}) {
-  const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
-  const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
-  const unisByOffer = useMemo(() => {
-    const m = new Map<string, Dossier[]>();
-    for (const u of universities) if (u.parent_id) { if (!m.has(u.parent_id)) m.set(u.parent_id, []); m.get(u.parent_id)!.push(u); }
-    return m;
-  }, [universities]);
-  const groupsByUni = useMemo(() => {
-    const m = new Map<string, Groupe[]>();
-    for (const g of groupes) if (g.formation_dossier_id) { if (!m.has(g.formation_dossier_id)) m.set(g.formation_dossier_id, []); m.get(g.formation_dossier_id)!.push(g); }
-    return m;
-  }, [groupes]);
-
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(offers.map(o => o.id)));
-  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-
-  // Get all group IDs under offer/university
-  const getUniGroupIds = (uniId: string) => (groupsByUni.get(uniId) ?? []).map(g => g.id);
-  const getOfferGroupIds = (offerId: string) => { const ids: string[] = []; for (const u of (unisByOffer.get(offerId) ?? [])) ids.push(...getUniGroupIds(u.id)); return ids; };
-
-  /** Coche/décoche toutes les classes listées sans affecter les autres formations / universités. */
-  const toggleGroupIdBlock = (ids: string[]) => {
-    if (ids.length === 0) return;
-    onSetSelection(prev => {
-      const next = new Set(prev);
-      const allOn = ids.every(id => next.has(id));
-      if (allOn) for (const id of ids) next.delete(id);
-      else for (const id of ids) next.add(id);
-      return next;
-    });
-  };
-
-  const Chk = ({ checked, partial }: { checked: boolean; partial?: boolean }) => (
-    <div className="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0" style={{
-      borderColor: checked || partial ? "#C9A84C" : "rgba(255,255,255,0.2)",
-      backgroundColor: checked ? "#C9A84C" : "transparent",
-    }}>
-      {checked && <Check size={9} style={{ color: "#0e1e35" }} strokeWidth={3} />}
-      {!checked && partial && <div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: "#C9A84C" }} />}
-    </div>
-  );
-
-  return (
-    <div className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full" style={{ width: 260, backgroundColor: "rgba(0,0,0,0.15)" }}>
-      <div className="px-4 pt-4 pb-2 shrink-0">
-        <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-          Formations &amp; Classes
-        </p>
-      </div>
-
-      {/* All */}
-      <div className="px-3 pb-1">
-        <button onClick={onSelectAll}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all"
-          style={{ backgroundColor: selectedGroupeIds.size === 0 ? "rgba(201,168,76,0.15)" : "transparent", color: selectedGroupeIds.size === 0 ? "#E3C286" : "rgba(255,255,255,0.5)", border: selectedGroupeIds.size === 0 ? "1px solid rgba(201,168,76,0.25)" : "1px solid transparent" }}>
-          <Layers size={12} />
-          Toutes les communications
-        </button>
-      </div>
-
-      {/* Tree with checkboxes */}
-      <div className="px-3 pb-2 space-y-0.5 flex-1">
-        {offers.map(offer => {
-          const offerUnis = unisByOffer.get(offer.id) ?? [];
-          const offerIds = getOfferGroupIds(offer.id);
-          const allChecked = offerIds.length > 0 && offerIds.every(id => selectedGroupeIds.has(id));
-          const someChecked = offerIds.some(id => selectedGroupeIds.has(id));
-          const isOpen = expanded.has(offer.id);
-
-          return (
-            <div key={offer.id}>
-              <div className="flex items-center gap-1">
-                <button type="button" onClick={() => toggleGroupIdBlock(offerIds)}
-                  className="p-1 shrink-0"><Chk checked={allChecked} partial={!allChecked && someChecked} /></button>
-                <button onClick={() => toggleExpand(offer.id)} className="flex-1 flex items-center gap-1.5 px-1 py-1.5 rounded-lg transition-all text-left"
-                  onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                  <GraduationCap size={11} style={{ color: "#C9A84C" }} />
-                  <span className="flex-1 text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>{offer.name}</span>
-                  <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
-                </button>
-              </div>
-
-              {isOpen && offerUnis.map(uni => {
-                const uniGroups = groupsByUni.get(uni.id) ?? [];
-                const uniIds = getUniGroupIds(uni.id);
-                const uAll = uniIds.length > 0 && uniIds.every(id => selectedGroupeIds.has(id));
-                const uSome = uniIds.some(id => selectedGroupeIds.has(id));
-                const isUniOpen = expanded.has(uni.id);
-
-                return (
-                  <div key={uni.id} className="ml-3">
-                    <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => toggleGroupIdBlock(uniIds)}
-                        className="p-1 shrink-0"><Chk checked={uAll} partial={!uAll && uSome} /></button>
-                      <button onClick={() => toggleExpand(uni.id)} className="flex-1 flex items-center gap-1 pl-1 pr-2 py-1 rounded-lg text-left transition-all"
-                        onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                        <Building2 size={9} style={{ color: "#A78BFA" }} />
-                        <span className="flex-1 text-[10px] font-semibold truncate" style={{ color: "#A78BFA" }}>{uni.name}</span>
-                        {uniGroups.length > 0 && <ChevronDown size={9} style={{ color: "rgba(255,255,255,0.15)", transform: isUniOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />}
-                      </button>
-                    </div>
-
-                    {isUniOpen && uniGroups.map(g => {
-                      const isChecked = selectedGroupeIds.has(g.id);
-                      return (
-                        <button key={g.id} onClick={() => onToggle(g.id)}
-                          className="w-full flex items-center gap-2 pl-6 pr-2 py-1 rounded-lg transition-all text-left"
-                          style={{ backgroundColor: isChecked ? "rgba(201,168,76,0.08)" : "transparent" }}
-                          onMouseOver={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.04)")}
-                          onMouseOut={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.08)" : "transparent")}>
-                          <Chk checked={isChecked} />
-                          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>{g.name[0]?.toUpperCase()}</span>
-                          <span className="text-[10px] font-medium truncate" style={{ color: isChecked ? "#E3C286" : "rgba(255,255,255,0.6)" }}>{g.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Spacer */}
-      <div className="h-4" />
-    </div>
-  );
-}
