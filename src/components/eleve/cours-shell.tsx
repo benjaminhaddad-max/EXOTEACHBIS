@@ -224,6 +224,12 @@ export function EleveCoursShell({
     () => selectedExerciceCours.reduce((sum, cours) => sum + cours.nb_questions, 0),
     [selectedExerciceCours]
   );
+  const hasDirectLearningContent = useMemo(() => {
+    if (!selectedDossier) return false;
+    const directMatiereIds = matiereIdsByDossier.get(selectedDossier.id) ?? [];
+    if (directMatiereIds.length > 0) return true;
+    return allCours.some((cours) => cours.dossier_id === selectedDossier.id);
+  }, [allCours, matiereIdsByDossier, selectedDossier]);
 
   // Drag to resize
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -403,7 +409,7 @@ export function EleveCoursShell({
                       disabled={selectedExerciceRoots.length === 0}
                     >
                       Exercices
-                      {exerciceQuestionCount > 0 ? ` · ${exerciceQuestionCount}` : ""}
+                      {hasDirectLearningContent && exerciceQuestionCount > 0 ? ` · ${exerciceQuestionCount}` : ""}
                     </button>
                   </div>
                 </div>
