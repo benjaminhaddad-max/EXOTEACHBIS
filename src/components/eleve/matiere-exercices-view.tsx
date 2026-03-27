@@ -35,6 +35,7 @@ const TYPES: SerieType[] = ["annales", "qcm_supplementaires", "concours_blanc", 
 export function MatiereExercicesView({ series }: { series: SerieSummaryForStudent[] }) {
   const router = useRouter();
   const [activeType, setActiveType] = useState<SerieType | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
 
   const seriesByType = useMemo(() => {
     const map = new Map<SerieType, SerieSummaryForStudent[]>();
@@ -46,7 +47,19 @@ export function MatiereExercicesView({ series }: { series: SerieSummaryForStuden
 
   const typesWithContent = TYPES.filter((t) => (seriesByType.get(t) ?? []).length > 0);
   const effectiveType = activeType && typesWithContent.includes(activeType) ? activeType : typesWithContent[0] ?? null;
-  const activeSeries = effectiveType ? (seriesByType.get(effectiveType) ?? []) : series;
+  const typeFiltered = effectiveType ? (seriesByType.get(effectiveType) ?? []) : series;
+
+  // Year filter for annales
+  const availableYears = useMemo(() => {
+    if (effectiveType !== "annales") return [];
+    const years = new Set(typeFiltered.map((s) => s.annee).filter(Boolean) as string[]);
+    return Array.from(years).sort().reverse();
+  }, [effectiveType, typeFiltered]);
+
+  const activeSeries = useMemo(() => {
+    if (!selectedYear || effectiveType !== "annales") return typeFiltered;
+    return typeFiltered.filter((s) => s.annee === selectedYear);
+  }, [typeFiltered, selectedYear, effectiveType]);
 
   if (series.length === 0) {
     return (
@@ -69,7 +82,7 @@ export function MatiereExercicesView({ series }: { series: SerieSummaryForStuden
             return (
               <button
                 key={type}
-                onClick={() => setActiveType(type)}
+                onClick={() => { setActiveType(type); setSelectedYear(null); }}
                 className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
                 style={{
                   backgroundColor: isActive ? config.bgAccent : "white",
@@ -91,6 +104,35 @@ export function MatiereExercicesView({ series }: { series: SerieSummaryForStuden
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Year filter for annales */}
+      {effectiveType === "annales" && availableYears.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSelectedYear(null)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              selectedYear === null
+                ? "bg-[#0e1e35] text-white"
+                : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#0e1e35]"
+            }`}
+          >
+            Toutes
+          </button>
+          {availableYears.map((year) => (
+            <button
+              key={year}
+              onClick={() => setSelectedYear(year)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                selectedYear === year
+                  ? "bg-[#f59e0b] text-white"
+                  : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#f59e0b] hover:border-[#f59e0b]/30"
+              }`}
+            >
+              {year}
+            </button>
+          ))}
         </div>
       )}
 
