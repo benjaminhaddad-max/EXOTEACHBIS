@@ -15,6 +15,7 @@ import {
 } from "@/app/(admin)/admin/examens/actions";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { ParametrageShell } from "@/components/admin/examens/parametrage-shell";
 
 export type ExamenSerieWithCoeff = {
   series_id: string;
@@ -88,6 +89,7 @@ export function ExamensShell({
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+  const [tab, setTab] = useState<"examens" | "parametrage">("examens");
 
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -166,7 +168,7 @@ export function ExamensShell({
 
 
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-medium ${
@@ -178,38 +180,20 @@ export function ExamensShell({
         </div>
       )}
 
-      {/* Sidebar */}
-      <ExamensSidebar
-        dossiers={dossiers}
-        groupes={groupes}
-        selectedGroupeIds={selectedGroupeIds}
-        onToggle={toggleGroupe}
-        onSelectAll={selectAll}
-      />
-
-      {/* Right content */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base font-semibold text-white">Examens blancs</h1>
-            <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
-              {filteredExamens.length} examen{filteredExamens.length !== 1 ? "s" : ""}
-            </span>
-            {selectedGroupeIds.size > 0 && (
-              <span className="text-[10px] px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>
-                {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/examens/coefficients"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-white/70 text-xs font-medium rounded-lg hover:bg-white/15 transition-colors"
-            >
-              <Settings2 size={13} /> Coefficients
-            </Link>
+      {/* Tab bar */}
+      <div className="flex items-center justify-between px-5 border-b border-white/10 shrink-0" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+        <div className="flex items-center gap-0">
+          {(["examens", "parametrage"] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className="relative px-5 py-3 text-xs font-semibold transition-colors"
+              style={{ color: tab === t ? "#C9A84C" : "rgba(255,255,255,0.35)" }}>
+              {t === "examens" ? "Examens blancs" : "Paramétrage"}
+              {tab === t && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ backgroundColor: "#C9A84C" }} />}
+            </button>
+          ))}
+        </div>
+        {tab === "examens" && (
+          <div className="flex items-center gap-2 py-2">
             {selectedGroupeIds.size === 0 && (
               <span className="text-[11px] italic font-medium" style={{ color: "#C9A84C" }}>← Sélectionne les classes cibles</span>
             )}
@@ -226,6 +210,38 @@ export function ExamensShell({
               <Plus size={13} /> Nouvel examen
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Tab content */}
+      {tab === "parametrage" ? (
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <ParametrageShell dossiers={dossiers} allDossiers={allDossiers} embedded />
+        </div>
+      ) : (
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {/* Sidebar */}
+      <ExamensSidebar
+        dossiers={dossiers}
+        groupes={groupes}
+        selectedGroupeIds={selectedGroupeIds}
+        onToggle={toggleGroupe}
+        onSelectAll={selectAll}
+      />
+
+      {/* Right content */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+        {/* Sub-header with count */}
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b border-white/5 shrink-0">
+          <span className="text-xs font-semibold text-white/60">Examens blancs</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
+            {filteredExamens.length} examen{filteredExamens.length !== 1 ? "s" : ""}
+          </span>
+          {selectedGroupeIds.size > 0 && (
+            <span className="text-[10px] px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>
+              {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""}
+            </span>
+          )}
         </div>
 
         {/* List */}
@@ -385,6 +401,9 @@ export function ExamensShell({
             )}
           </div>
         </div>
+      )}
+      </div>
+      </div>
       )}
     </div>
   );

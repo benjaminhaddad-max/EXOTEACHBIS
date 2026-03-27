@@ -18,7 +18,7 @@ type Toast = { message: string; kind: "success" | "error" } | null;
 type ScaleRow = { nb_errors: number; points: number };
 type CoeffRow = { subject_dossier_id: string; name: string; semester: string; coefficient: number };
 
-export function ParametrageShell({ dossiers, allDossiers }: { dossiers: Dossier[]; allDossiers: Dossier[] }) {
+export function ParametrageShell({ dossiers, allDossiers, embedded }: { dossiers: Dossier[]; allDossiers: Dossier[]; embedded?: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
 
@@ -45,18 +45,20 @@ export function ParametrageShell({ dossiers, allDossiers }: { dossiers: Dossier[
 
       {/* Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-white/10 shrink-0">
-          <Link href="/admin/examens" className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
-            <ArrowLeft size={16} style={{ color: "rgba(255,255,255,0.5)" }} />
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold text-white">Paramétrage universités</h1>
-            <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Barème QCM &amp; coefficients matières par défaut
-            </p>
+        {/* Header — masqué en mode embedded (géré par l'onglet parent) */}
+        {!embedded && (
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-white/10 shrink-0">
+            <Link href="/admin/examens" className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+              <ArrowLeft size={16} style={{ color: "rgba(255,255,255,0.5)" }} />
+            </Link>
+            <div>
+              <h1 className="text-base font-semibold text-white">Paramétrage universités</h1>
+              <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Barème QCM &amp; coefficients matières par défaut
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {!selectedUni ? (
           <div className="flex-1 flex items-center justify-center">
