@@ -4,6 +4,7 @@ import { CoachingShell } from "@/components/admin/coaching/coaching-shell";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
+  CoachGroupeAssignment,
   CoachingCallBooking,
   CoachingCallSlot,
   CoachingIntakeForm,
@@ -39,7 +40,6 @@ export default async function CoachingPage() {
   const isCoachOrAdmin = ["admin", "superadmin", "coach"].includes(currentProfile.role);
   const admin = createAdminClient();
   const isCoach = currentProfile.role === "coach";
-  const coachGroupId = currentProfile.groupe_id;
 
   const emptyData = {
     groupes: [] as Groupe[],
@@ -51,41 +51,66 @@ export default async function CoachingPage() {
     pointAProfiles: [] as CoachingStudentProfile[],
     formTemplate: null as FormTemplate | null,
     formFields: [] as FormField[],
+    coachAssignments: [] as CoachGroupeAssignment[],
   };
 
   let data = emptyData;
   let setupError: string | null = null;
 
-  if (isCoachOrAdmin && (!isCoach || coachGroupId)) {
-    const groupesQuery = isCoach
-      ? admin.from("groupes").select("*").eq("id", coachGroupId!).order("name")
-      : admin.from("groupes").select("*").order("name");
+  if (isCoachOrAdmin) {
+    // For coaches, get their assigned groupe IDs from coach_groupe_assignments
+    let coachGroupeIds: string[] = [];
+    if (isCoach) {
+      const { data: assignments } = await admin
+        .from("coach_groupe_assignments")
+        .select("groupe_id")
+        .eq("coach_id", user.id);
+      coachGroupeIds = (assignments ?? []).map((a) => a.groupe_id);
+      // Fallback to profiles.groupe_id for backward compat
+      if (coachGroupeIds.length === 0 && currentProfile.groupe_id) {
+        coachGroupeIds = [currentProfile.groupe_id];
+      }
+    }
 
-    const studentsQuery = isCoach
-      ? admin.from("profiles").select("*").eq("role", "eleve").eq("groupe_id", coachGroupId!).order("last_name").order("first_name")
-      : admin.from("profiles").select("*").eq("role", "eleve").order("last_name").order("first_name");
+    const groupesQuery = isCoach && coachGroupeIds.length > 0
+      ? admin.from("groupes").select("*").in("id", coachGroupeIds).order("name")
+      : isCoach
+        ? admin.from("groupes").select("*").limit(0) // no groups assigned
+        : admin.from("groupes").select("*").order("name");
 
-    const coachesQuery = isCoach
-      ? admin.from("profiles").select("*").eq("role", "coach").eq("groupe_id", coachGroupId!).order("last_name").order("first_name")
-      : admin.from("profiles").select("*").eq("role", "coach").order("last_name").order("first_name");
+    const studentsQuery = isCoach && coachGroupeIds.length > 0
+      ? admin.from("profiles").select("*").eq("role", "eleve").in("groupe_id", coachGroupeIds).order("last_name").order("first_name")
+      : isCoach
+        ? admin.from("profiles").select("*").eq("role", "eleve").limit(0)
+        : admin.from("profiles").select("*").eq("role", "eleve").order("last_name").order("first_name");
 
-    const intakeFormsQuery = isCoach
-      ? admin.from("coaching_intake_forms").select("*").eq("groupe_id", coachGroupId!).order("submitted_at", { ascending: false })
-      : admin.from("coaching_intake_forms").select("*").order("submitted_at", { ascending: false });
+    const coachesQuery = admin.from("profiles").select("*").eq("role", "coach").order("last_name").order("first_name");
+
+    const intakeFormsQuery = isCoach && coachGroupeIds.length > 0
+      ? admin.from("coaching_intake_forms").select("*").in("groupe_id", coachGroupeIds).order("submitted_at", { ascending: false })
+      : isCoach
+        ? admin.from("coaching_intake_forms").select("*").limit(0)
+        : admin.from("coaching_intake_forms").select("*").order("submitted_at", { ascending: false });
 
     const slotsQuery = isCoach
-      ? admin.from("coaching_call_slots").select("*").eq("groupe_id", coachGroupId!).order("start_at")
+      ? admin.from("coaching_call_slots").select("*").eq("coach_id", user.id).order("start_at")
       : admin.from("coaching_call_slots").select("*").order("start_at");
 
-    const bookingsQuery = isCoach
-      ? admin.from("coaching_call_bookings").select("*").eq("groupe_id", coachGroupId!).order("booked_at", { ascending: false })
-      : admin.from("coaching_call_bookings").select("*").order("booked_at", { ascending: false });
+    const bookingsQuery = isCoach && coachGroupeIds.length > 0
+      ? admin.from("coaching_call_bookings").select("*").in("groupe_id", coachGroupeIds).order("booked_at", { ascending: false })
+      : isCoach
+        ? admin.from("coaching_call_bookings").select("*").eq("coach_id", user.id).order("booked_at", { ascending: false })
+        : admin.from("coaching_call_bookings").select("*").order("booked_at", { ascending: false });
 
-    const pointAProfilesQuery = isCoach
-      ? admin.from("coaching_student_profiles").select("*").eq("groupe_id", coachGroupId!).order("reviewed_at", { ascending: false, nullsFirst: false })
-      : admin.from("coaching_student_profiles").select("*").order("reviewed_at", { ascending: false, nullsFirst: false });
+    const pointAProfilesQuery = isCoach && coachGroupeIds.length > 0
+      ? admin.from("coaching_student_profiles").select("*").in("groupe_id", coachGroupeIds).order("reviewed_at", { ascending: false, nullsFirst: false })
+      : isCoach
+        ? admin.from("coaching_student_profiles").select("*").limit(0)
+        : admin.from("coaching_student_profiles").select("*").order("reviewed_at", { ascending: false, nullsFirst: false });
 
-    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes] = await Promise.all([
+    const assignmentsQuery = admin.from("coach_groupe_assignments").select("*").order("created_at");
+
+    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes] = await Promise.all([
       groupesQuery,
       studentsQuery,
       coachesQuery,
@@ -94,6 +119,7 @@ export default async function CoachingPage() {
       bookingsQuery,
       pointAProfilesQuery,
       admin.from("form_templates").select("*").eq("slug", "coaching_onboarding").eq("is_active", true).maybeSingle(),
+      assignmentsQuery,
     ]);
 
     setupError =
@@ -131,6 +157,7 @@ export default async function CoachingPage() {
       pointAProfiles: (pointAProfilesRes.data ?? []) as CoachingStudentProfile[],
       formTemplate: (formTemplateRes.data ?? null) as FormTemplate | null,
       formFields,
+      coachAssignments: (assignmentsRes.data ?? []) as CoachGroupeAssignment[],
     };
   }
 
@@ -148,6 +175,7 @@ export default async function CoachingPage() {
         initialPointAProfiles={data.pointAProfiles}
         formTemplate={data.formTemplate}
         formFields={data.formFields}
+        coachAssignments={data.coachAssignments}
         setupError={setupError}
       />
     </div>

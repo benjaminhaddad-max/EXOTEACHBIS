@@ -134,15 +134,13 @@ export function EleveCoursShell({
   const selectDossier = useCallback((dossier: Dossier) => {
     let target = dossier;
 
-    // Auto-skip: if a dossier has exactly 1 child folder and no direct content, drill into it
+    // Auto-skip: if a dossier has exactly 1 child folder, drill into it directly
     while (true) {
       const children = allDossiers
         .filter((d) => d.parent_id === target.id)
         .sort((a, b) => a.order_index - b.order_index);
-      const directMatieres = matiereIdsByDossier.get(target.id) ?? [];
-      const directCours = allCours.filter((c) => c.dossier_id === target.id);
 
-      if (children.length === 1 && directMatieres.length === 0 && directCours.length === 0) {
+      if (children.length === 1) {
         target = children[0];
       } else {
         break;

@@ -14,6 +14,7 @@ import type {
   CoachingSchoolLevel,
   CoachingStudentProfile,
   CoachingWorkCapacity,
+  CoachGroupeAssignment,
   FormAnswerValue,
 } from "@/types/database";
 
@@ -59,6 +60,21 @@ async function requireCoachOrAdmin() {
     return { error: "Accès refusé" as const };
   }
   return auth;
+}
+
+async function getCoachGroupeIds(coachId: string): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("coach_groupe_assignments")
+    .select("groupe_id")
+    .eq("coach_id", coachId);
+  return (data ?? []).map((r) => r.groupe_id);
+}
+
+async function canCoachAccessGroupe(coachId: string, groupeId: string | null): Promise<boolean> {
+  if (!groupeId) return false;
+  const ids = await getCoachGroupeIds(coachId);
+  return ids.includes(groupeId);
 }
 
 function canCoachAccessStudent(coachGroupId: string | null, studentGroupId: string | null) {
@@ -212,7 +228,7 @@ export async function createCoachCallSlot(data: {
   const admin = createAdminClient();
   const isCoach = auth.profile.role === "coach";
   const coachId = isCoach ? auth.user.id : data.coach_id;
-  const groupeId = isCoach ? auth.profile.groupe_id : data.groupe_id;
+  const groupeId = isCoach ? data.groupe_id : data.groupe_id;
 
   if (!coachId || !groupeId) {
     return { error: "Coach et classe requis pour créer un créneau." };
@@ -233,18 +249,12 @@ export async function createCoachCallSlot(data: {
     return { error: "Un coach ne peut créer des créneaux que pour lui-même." };
   }
 
-  const { data: coachProfile } = await admin
-    .from("profiles")
-    .select("id, role, groupe_id")
-    .eq("id", coachId)
-    .maybeSingle();
-
-  if (!coachProfile || coachProfile.role !== "coach") {
-    return { error: "Coach introuvable." };
-  }
-
-  if (coachProfile.groupe_id && coachProfile.groupe_id !== groupeId) {
-    return { error: "Ce coach n'est pas rattaché à cette classe." };
+  // Verify coach is assigned to this groupe (multi-group check)
+  if (isCoach) {
+    const hasAccess = await canCoachAccessGroupe(coachId, groupeId);
+    if (!hasAccess) {
+      return { error: "Tu n'es pas rattaché à cette classe." };
+    }
   }
 
   const { data: slot, error } = await admin
@@ -380,4 +390,110 @@ export async function saveStudentPointAProfile(data: {
 
   revalidatePath(ADMIN_PATH);
   return { success: true, profile: profile as CoachingStudentProfile };
+}
+
+// ─── Coach ↔ Groupe assignment actions ───────────────────────────────────────
+
+export async function assignCoachToGroupe(data: { coach_id: string; groupe_id: string }) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+  if (auth.profile.role === "coach") {
+    return { error: "Seul un admin peut assigner un coach à une classe." };
+  }
+
+  const admin = createAdminClient();
+  const { data: assignment, error } = await admin
+    .from("coach_groupe_assignments")
+    .upsert({ coach_id: data.coach_id, groupe_id: data.groupe_id }, { onConflict: "coach_id,groupe_id" })
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  return { success: true, assignment: assignment as CoachGroupeAssignment };
+}
+
+export async function removeCoachFromGroupe(data: { coach_id: string; groupe_id: string }) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+  if (auth.profile.role === "coach") {
+    return { error: "Seul un admin peut retirer un coach d'une classe." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("coach_groupe_assignments")
+    .delete()
+    .eq("coach_id", data.coach_id)
+    .eq("groupe_id", data.groupe_id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  return { success: true };
+}
+
+export async function deleteCoachCallSlot(slotId: string) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+
+  // Check if slot has a booking
+  const { data: booking } = await admin
+    .from("coaching_call_bookings")
+    .select("id")
+    .eq("slot_id", slotId)
+    .maybeSingle();
+
+  if (booking) {
+    return { error: "Ce créneau a déjà été réservé par un élève. Annule le RDV d'abord." };
+  }
+
+  const { data: slot } = await admin
+    .from("coaching_call_slots")
+    .select("coach_id")
+    .eq("id", slotId)
+    .maybeSingle();
+
+  if (!slot) return { error: "Créneau introuvable." };
+
+  // Coach can only delete their own slots
+  if (auth.profile.role === "coach" && slot.coach_id !== auth.user.id) {
+    return { error: "Tu ne peux supprimer que tes propres créneaux." };
+  }
+
+  const { error } = await admin
+    .from("coaching_call_slots")
+    .delete()
+    .eq("id", slotId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true };
+}
+
+export async function assignCoachToBooking(data: { booking_id: string; coach_id: string }) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+  if (auth.profile.role === "coach") {
+    return { error: "Seul un admin peut réassigner un RDV." };
+  }
+
+  const admin = createAdminClient();
+  const { data: booking, error } = await admin
+    .from("coaching_call_bookings")
+    .update({ coach_id: data.coach_id, updated_at: new Date().toISOString() })
+    .eq("id", data.booking_id)
+    .select("*")
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true, booking: booking as CoachingCallBooking };
 }

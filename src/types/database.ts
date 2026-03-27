@@ -571,6 +571,19 @@ export interface CoachingStudentProfile {
 }
 
 // =============================================
+// Coach ↔ Groupe assignments
+// =============================================
+
+export interface CoachGroupeAssignment {
+  id: string;
+  coach_id: string;
+  groupe_id: string;
+  created_at: string;
+  coach?: Profile | null;
+  groupe?: Groupe | null;
+}
+
+// =============================================
 // Abonnements
 // =============================================
 

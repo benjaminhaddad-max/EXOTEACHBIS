@@ -68,8 +68,9 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Les admins peuvent accéder aux routes étudiants (séries, cours, exercices…)
-    // pour avoir la même expérience que les élèves + les outils d'édition admin
+    // Les admins et coaches peuvent accéder aux routes étudiants (séries, cours, exercices…)
+    // Les admins pour tester + outils d'édition, les coaches pour simuler l'expérience élève
+    // Les actions du coach (entraînements etc.) ne comptent pas car il n'a pas de groupe élève
   }
 
   return supabaseResponse;
