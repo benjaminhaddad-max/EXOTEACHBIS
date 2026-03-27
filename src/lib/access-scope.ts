@@ -151,23 +151,29 @@ export async function getAccessScopeForUser(
     profileRootIds.add(typedProfile.access_dossier_id);
   }
 
-  const inheritedFormationDossierId = getInheritedFormationDossierId(
-    typedProfile.groupe_id,
-    (groupesRes.data ?? []) as GroupeAccessRow[]
-  );
-  if (inheritedFormationDossierId) {
-    groupRootIds.add(inheritedFormationDossierId);
-  }
-
   for (const access of profileAccessRes.data ?? []) {
     if (access?.dossier_id) {
       profileRootIds.add(access.dossier_id);
     }
   }
 
-  for (const access of groupAccessRes.data ?? []) {
-    if (access?.dossier_id) {
-      groupRootIds.add(access.dossier_id);
+  // Granular group access entries take priority
+  const groupAccessEntries = (groupAccessRes.data ?? [])
+    .map((a: any) => a?.dossier_id)
+    .filter(Boolean) as string[];
+
+  for (const id of groupAccessEntries) {
+    groupRootIds.add(id);
+  }
+
+  // Only fall back to formation_dossier_id if group has NO granular access entries
+  if (groupAccessEntries.length === 0) {
+    const inheritedFormationDossierId = getInheritedFormationDossierId(
+      typedProfile.groupe_id,
+      (groupesRes.data ?? []) as GroupeAccessRow[]
+    );
+    if (inheritedFormationDossierId) {
+      groupRootIds.add(inheritedFormationDossierId);
     }
   }
 
