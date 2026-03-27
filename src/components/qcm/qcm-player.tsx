@@ -554,7 +554,7 @@ function CorrectionProposition({
 
   return (
     <div
-      className="rounded-xl border p-3 space-y-2"
+      className="rounded-2xl border p-4 space-y-4"
       style={{
         borderColor: notAnswered ? "#E5E7EB" : isCorrect ? "#BBF7D0" : "#FECACA",
         backgroundColor: notAnswered ? "#F9FAFB" : isCorrect ? "#F0FDF4" : "#FEF2F2",
@@ -578,7 +578,7 @@ function CorrectionProposition({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-start gap-2 flex-wrap">
             <span
               className="text-xs font-bold px-2 py-0.5 rounded-full"
               style={{
@@ -588,39 +588,51 @@ function CorrectionProposition({
             >
               {opt.label}
             </span>
-            <p className="text-sm text-gray-800 flex-1">{opt.text}</p>
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-medium leading-7 text-gray-900">
+                <MathText text={opt.text} />
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {/* Answer comparison */}
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {userAnswer && (
-              <span
-                className="text-[11px] font-semibold px-2 py-0.5 rounded"
-                style={{
-                  backgroundColor: isCorrect ? "#DCFCE7" : "#FEE2E2",
-                  color: isCorrect ? "#16A34A" : "#DC2626",
-                }}
-              >
-                Ta réponse : {userAnswer === "vrai" ? "VRAI" : "FAUX"}
-              </span>
-            )}
-            {!isCorrect && (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-green-100 text-green-700">
-                Bonne réponse : {correctAnswer === "vrai" ? "VRAI" : "FAUX"}
-              </span>
-            )}
-            {notAnswered && (
-              <span className="text-[11px] text-gray-500">Non répondu · bonne réponse : {correctAnswer === "vrai" ? "VRAI" : "FAUX"}</span>
-            )}
-          </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div
+          className="rounded-xl border px-3 py-2.5"
+          style={{
+            borderColor: notAnswered ? "#D1D5DB" : isCorrect ? "#BBF7D0" : "#FECACA",
+            backgroundColor: notAnswered ? "#FFFFFF" : isCorrect ? "#ECFDF3" : "#FEF2F2",
+          }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Ta réponse</p>
+          <p className="mt-1 text-sm font-semibold" style={{ color: notAnswered ? "#6B7280" : isCorrect ? "#15803D" : "#DC2626" }}>
+            {notAnswered ? "Non répondu" : userAnswer === "vrai" ? "VRAI" : "FAUX"}
+          </p>
+        </div>
+
+        <div
+          className="rounded-xl border border-green-200 bg-white px-3 py-2.5"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Réponse attendue</p>
+          <p className="mt-1 text-sm font-semibold text-green-700">
+            {correctAnswer === "vrai" ? "VRAI" : "FAUX"}
+          </p>
         </div>
       </div>
 
       {/* Justification */}
       {opt.justification && (
-        <div className="flex items-start gap-2 pl-8 pt-1">
-          <Lightbulb size={13} className="shrink-0 text-amber-500 mt-0.5" />
-          <p className="text-xs text-gray-600 leading-relaxed">{opt.justification}</p>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-3">
+          <div className="flex items-start gap-2">
+            <Lightbulb size={14} className="shrink-0 text-amber-500 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Pourquoi ?</p>
+              <div className="mt-1 text-sm leading-6 text-amber-950/85">
+                <MathText text={opt.justification} />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -741,7 +753,9 @@ function ResultsScreen({
                         {nbCorrectProps}/{opts.length} props. correctes
                       </span>
                     </div>
-                    <p className="text-sm text-gray-800 line-clamp-2">{q.text}</p>
+                    <div className="text-sm leading-6 text-gray-800">
+                      <MathText text={q.text} />
+                    </div>
                   </div>
 
                   <ChevronRight size={16} className={`shrink-0 text-gray-400 transition-transform mt-1 ${expanded ? "rotate-90" : ""}`} />
@@ -749,7 +763,13 @@ function ResultsScreen({
 
                 {/* Expanded correction */}
                 {expanded && (
-                  <div className="px-4 pb-4 space-y-2 border-t border-gray-50">
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-gray-100 bg-gradient-to-b from-white to-[#FBFCFF]">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Énoncé</p>
+                      <div className="mt-1 text-[15px] leading-7 text-slate-900">
+                        <MathText text={q.text} />
+                      </div>
+                    </div>
                     {opts.map((opt) => (
                       <CorrectionProposition
                         key={opt.id}
@@ -758,9 +778,16 @@ function ResultsScreen({
                       />
                     ))}
                     {q.explanation && (
-                      <div className="flex items-start gap-2 pt-2 pl-1">
-                        <Lightbulb size={14} className="shrink-0 text-amber-500 mt-0.5" />
-                        <p className="text-sm text-gray-600 italic">{q.explanation}</p>
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <Lightbulb size={15} className="shrink-0 text-blue-600 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Mémo du formateur</p>
+                            <div className="mt-1 text-sm leading-6 text-slate-700">
+                              <MathText text={q.explanation} />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
