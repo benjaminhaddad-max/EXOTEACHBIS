@@ -153,13 +153,9 @@ function DossierBranch({
         >
           {hasBranch ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}
         </button>
-        {hasScope ? (
-          <button type="button" className="p-0.5 shrink-0" onClick={() => onToggleDossierSubtree(dossier.id)}>
-            <ChkLight checked={allOn} partial={!allOn && someOn} />
-          </button>
-        ) : (
-          <span className="w-4 shrink-0" />
-        )}
+        <button type="button" className="p-0.5 shrink-0" onClick={() => onToggleDossierSubtree(dossier.id)}>
+          <ChkLight checked={allOn} partial={!allOn && someOn} />
+        </button>
         <button
           type="button"
           className="flex-1 min-w-0 flex items-center gap-1.5 py-1 pr-1 text-left"
