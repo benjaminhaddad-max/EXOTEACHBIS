@@ -1,28 +1,47 @@
 import type { Dossier } from "@/types/database";
 
-/** Dossiers « filière » sous une université (PASS, LAS, etc.) — souvent `subject`, parfois `option`. */
+function nameLooksLikePassLasLsps(name: string): boolean {
+  const n = name.trim().toUpperCase();
+  return (
+    n === "PASS" ||
+    n === "LAS" ||
+    n === "LSPS" ||
+    n.startsWith("PASS ") ||
+    n.startsWith("LAS ") ||
+    n.startsWith("LSPS ")
+  );
+}
+
+/** Dossiers « filière » sous une université : PASS / LAS / LSPS uniquement (pas tout `subject`). */
 export function isUniversityFiliereFolder(c: Dossier): boolean {
-  if (c.dossier_type === "subject") return true;
-  if (c.dossier_type === "option") {
-    const n = c.name.trim().toUpperCase();
-    return (
-      n === "PASS" ||
-      n === "LAS" ||
-      n === "LSPS" ||
-      n.startsWith("PASS ") ||
-      n.startsWith("LAS ") ||
-      n.startsWith("LSPS ")
-    );
+  if (c.dossier_type === "subject" || c.dossier_type === "option") {
+    return nameLooksLikePassLasLsps(c.name);
   }
   return false;
 }
 
+function nameLooksLikeStructuralLoose(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return (
+    n.startsWith("semestre") ||
+    /^s\d+\b/.test(n) ||
+    n.includes("bloc") ||
+    n.includes("trimestre") ||
+    n.includes("modules complémentaires") ||
+    n.includes("module complément")
+  );
+}
+
 /**
  * Nœuds souvent mal rattachés en base (frères de PASS/LAS sous l’université) : à regrouper sous la filière.
+ * Les `option` génériques (ex. Mineure) restent au niveau université.
  */
 export function isLooseStructuralUnderUniversity(c: Dossier): boolean {
   if (isUniversityFiliereFolder(c)) return false;
-  return ["semester", "period", "module", "option"].includes(c.dossier_type);
+  if (c.dossier_type === "semester" || c.dossier_type === "period" || c.dossier_type === "module") return true;
+  if (c.dossier_type === "option") return nameLooksLikeStructuralLoose(c.name);
+  if (c.dossier_type === "generic") return nameLooksLikeStructuralLoose(c.name);
+  return false;
 }
 
 /**
@@ -46,20 +65,24 @@ export function partitionUniversityChildren(children: Dossier[]): {
 
   const assigned = new Set<string>();
   for (const node of candidates) {
-    let target: Dossier | undefined;
+    let targets: Dossier[] = [];
     if (node.formation_offer) {
-      target = filieres.find(f => f.formation_offer && f.formation_offer === node.formation_offer);
+      const fo = filieres.filter(f => f.formation_offer && f.formation_offer === node.formation_offer);
+      if (fo.length) targets = fo;
     }
-    if (!target) {
+    if (targets.length === 0) {
       const nl = node.name.toLowerCase();
-      target = filieres.find(f => f.name && nl.includes(f.name.toLowerCase()));
+      const byName = filieres.filter(f => f.name && nl.includes(f.name.toLowerCase()));
+      if (byName.length) targets = byName;
     }
-    if (!target && filieres.length === 1) target = filieres[0];
+    if (targets.length === 0 && filieres.length === 1) targets = [filieres[0]];
+    // Plusieurs filières (PASS + LAS) et libellés génériques « Semestre 1 » : même arbre en base → sous chaque filière
+    if (targets.length === 0 && filieres.length > 1) targets = [...filieres];
 
-    if (target) {
+    for (const target of targets) {
       injectionMap.get(target.id)!.push(node);
-      assigned.add(node.id);
     }
+    if (targets.length) assigned.add(node.id);
   }
 
   const orphanCandidates = candidates.filter(c => !assigned.has(c.id));
@@ -67,6 +90,16 @@ export function partitionUniversityChildren(children: Dossier[]): {
 
   const topLevel = [...filieres, ...orphanCandidates, ...rest].sort((a, b) => a.order_index - b.order_index);
   return { topLevel, injectionMap };
+}
+
+/** Nœud parent sous lequel on regroupe semestres → filières (évite les `generic` mal typés). */
+function isUniversityLikeParent(d: Dossier): boolean {
+  if (d.dossier_type === "university") return true;
+  if (d.dossier_type === "generic") {
+    const n = d.name.toLowerCase();
+    return n.includes("universit");
+  }
+  return false;
 }
 
 /** Carte parent → enfants avec regroupement université → filière → semestres. */
@@ -80,7 +113,7 @@ export function buildQaPedagogieChildrenMap(dossiers: Dossier[]): Map<string | n
   for (const list of m.values()) list.sort((a, b) => a.order_index - b.order_index);
 
   for (const uni of dossiers) {
-    if (uni.dossier_type !== "university") continue;
+    if (!isUniversityLikeParent(uni)) continue;
     const raw = m.get(uni.id);
     if (!raw?.length) continue;
 
