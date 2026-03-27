@@ -55,6 +55,7 @@ export async function updateUserAdminProfile(data: {
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
 }) {
+  try {
   const adminCheck = await ensureAdminAccess();
   if ("error" in adminCheck) return adminCheck;
 
@@ -210,6 +211,10 @@ export async function updateUserAdminProfile(data: {
 
   revalidatePath(PATH);
   return { success: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { error: `Erreur inattendue: ${msg}` };
+  }
 }
 
 export async function createGroupe(data: {
