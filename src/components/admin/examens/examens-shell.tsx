@@ -7,7 +7,7 @@ import {
   BarChart3, ChevronRight, Settings2, Upload, Download, FileText,
   GraduationCap, Building2, ChevronDown, Users,
 } from "lucide-react";
-import type { Serie, Filiere, SerieType, Dossier, Groupe } from "@/types/database";
+import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/types/database";
 import {
   createExamen, updateExamen, deleteExamen,
   addSerieToExamen, removeSerieFromExamen,
@@ -74,12 +74,14 @@ export function ExamensShell({
   filieres,
   dossiers,
   groupes,
+  matieres,
 }: {
   initialExamens: ExamenWithSeries[];
   allSeries: Serie[];
   filieres: Filiere[];
   dossiers: Dossier[];
   groupes: Groupe[];
+  matieres: Matiere[];
 }) {
   const [examens, setExamens] = useState<ExamenWithSeries[]>(initialExamens);
   const [seriesList, setSeriesList] = useState<Serie[]>(allSeries);
@@ -448,6 +450,7 @@ export function ExamensShell({
               <ComposeModal
                 examen={modal.examen}
                 allSeries={seriesList}
+                matieres={matieres}
                 composeSeries={composeSeries}
                 onAdd={(s) => handleAddSerie(modal.examen, s)}
                 onRemove={(id) => handleRemoveSerie(modal.examen, id)}
@@ -784,6 +787,7 @@ const SERIE_TYPES: { value: SerieType; label: string }[] = [
 function ComposeModal({
   examen,
   allSeries,
+  matieres,
   composeSeries,
   onAdd,
   onRemove,
@@ -796,6 +800,7 @@ function ComposeModal({
 }: {
   examen: ExamenWithSeries;
   allSeries: Serie[];
+  matieres: Matiere[];
   composeSeries: ExamenSerieWithCoeff[];
   onAdd: (s: Serie) => void;
   onRemove: (serieId: string) => void;
@@ -806,31 +811,26 @@ function ComposeModal({
   isPending: boolean;
   showToast: (msg: string, kind: "success" | "error") => void;
 }) {
-  const inExamen = new Set(composeSeries.map((s) => s.series_id));
-  const available = allSeries.filter((s) => !inExamen.has(s.id));
-  const [search, setSearch] = useState("");
-  const filtered = available.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
-
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<SerieType>("concours_blanc");
-  const [creating, setCreating] = useState(false);
-
-  const [importing, setImporting] = useState(false);
-  const [importName, setImportName] = useState("");
-  const [showImport, setShowImport] = useState(false);
+  const [creating, setCreating] = useState<string | null>(null); // matiere_id being created
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
 
-  const handleCreateSerie = async () => {
-    if (!newName.trim()) return;
-    setCreating(true);
+  // Already added matière IDs (via series matiere_id)
+  const addedMatiereIds = new Set(
+    composeSeries.map(es => es.series?.matiere_id).filter(Boolean) as string[]
+  );
+
+  const handleAddMatiere = async (matiere: Matiere) => {
+    setCreating(matiere.id);
     try {
+      const serieName = `${examen.name} — ${matiere.name}`;
       const res = await createSerie({
-        name: newName.trim(),
-        type: newType,
+        name: serieName,
+        type: "concours_blanc" as SerieType,
         timed: false,
         score_definitif: false,
         visible: true,
+        matiere_id: matiere.id,
       });
       if ("error" in res) {
         showToast(res.error!, "error");
@@ -838,11 +838,11 @@ function ComposeModal({
       }
       const newSerie: Serie = {
         id: res.id!,
-        name: newName.trim(),
-        type: newType,
+        name: serieName,
+        type: "concours_blanc",
         description: null,
         cours_id: null,
-        matiere_id: null,
+        matiere_id: matiere.id,
         timed: false,
         duration_minutes: null,
         score_definitif: false,
@@ -852,63 +852,42 @@ function ComposeModal({
         updated_at: new Date().toISOString(),
       };
       onSerieCreated(newSerie);
-      setNewName("");
-      setShowCreate(false);
-      showToast("Série créée et ajoutée", "success");
+      showToast(`Épreuve ${matiere.name} ajoutée`, "success");
     } finally {
-      setCreating(false);
+      setCreating(null);
     }
   };
 
-  const handleImportWord = async (file: File) => {
-    if (!importName.trim()) {
-      showToast("Donnez un nom à la série", "error");
-      return;
-    }
-    setImporting(true);
+  const handleImportWord = async (matiere: Matiere, file: File) => {
+    setImportingId(matiere.id);
     try {
+      const serieName = `${examen.name} — ${matiere.name}`;
       const res = await createSerie({
-        name: importName.trim(),
-        type: "concours_blanc",
+        name: serieName,
+        type: "concours_blanc" as SerieType,
         timed: false,
         score_definitif: false,
         visible: true,
+        matiere_id: matiere.id,
       });
-      if ("error" in res) {
-        showToast(res.error!, "error");
-        return;
-      }
+      if ("error" in res) { showToast(res.error!, "error"); return; }
       const serieId = res.id!;
       const formData = new FormData();
       formData.append("serieId", serieId);
       formData.append("file", file);
       const importRes = await fetch("/api/import-serie", { method: "POST", body: formData });
       const importData = await importRes.json();
-      if (!importRes.ok || importData.error) {
-        showToast(importData.error || "Erreur d'import", "error");
-        return;
-      }
+      if (!importRes.ok || importData.error) { showToast(importData.error || "Erreur d'import", "error"); return; }
       const newSerie: Serie = {
-        id: serieId,
-        name: importName.trim(),
-        type: "concours_blanc",
-        description: null,
-        cours_id: null,
-        matiere_id: null,
-        timed: false,
-        duration_minutes: null,
-        score_definitif: false,
-        visible: true,
-        annee: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        id: serieId, name: serieName, type: "concours_blanc", description: null,
+        cours_id: null, matiere_id: matiere.id, timed: false, duration_minutes: null,
+        score_definitif: false, visible: true, annee: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       };
       onSerieCreated(newSerie);
-      setImportName("");
-      setShowImport(false);
-      showToast(importData.message || "Série importée et ajoutée", "success");
+      showToast(`${matiere.name} importée`, "success");
     } finally {
-      setImporting(false);
+      setImportingId(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -920,199 +899,100 @@ function ComposeModal({
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-white">Séries & Coefficients — {examen.name}</h2>
+        <h2 className="text-base font-semibold text-white">Épreuves — {examen.name}</h2>
         <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
       </div>
 
-      {/* Actions : créer ou importer */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => { setShowCreate(!showCreate); setShowImport(false); }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-            showCreate ? "bg-[#C9A84C] text-[#0e1e35]" : "bg-white/10 text-white/70 hover:bg-white/15"
-          }`}
-        >
-          <Plus size={13} /> Nouvelle série
-        </button>
-        <button
-          onClick={() => { setShowImport(!showImport); setShowCreate(false); }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-            showImport ? "bg-[#C9A84C] text-[#0e1e35]" : "bg-white/10 text-white/70 hover:bg-white/15"
-          }`}
-        >
-          <Upload size={13} /> Importer Word
-        </button>
+      {/* Épreuves dans l'examen */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">
+          Épreuves de l&apos;examen ({composeSeries.length})
+        </p>
+        <div className="space-y-2 max-h-72 overflow-auto pr-1">
+          {composeSeries.length === 0 ? (
+            <div className="text-center py-6 text-white/20">
+              <Layers size={28} className="mx-auto mb-2 opacity-30" />
+              <p className="text-xs">Ajoute des épreuves par matière ci-dessous</p>
+            </div>
+          ) : composeSeries.map((es) => (
+            <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: es.series?.matiere_id ? (matieres.find(m => m.id === es.series?.matiere_id)?.color ?? "#C9A84C") : "#C9A84C" }} />
+                <p className="flex-1 text-xs text-white/80 font-medium line-clamp-1">{es.series?.name ?? "?"}</p>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[10px] text-white/40">Coeff.</span>
+                  <input
+                    type="number" min={0.5} max={10} step={0.5} value={es.coefficient}
+                    onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
+                    className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
+                  />
+                </div>
+                <div className="flex gap-0.5 shrink-0">
+                  <button onClick={() => exportSerie(es.series_id, false)} title="Export sujet" className="p-1 text-white/20 hover:text-white/60 transition-colors"><FileText size={11} /></button>
+                  <button onClick={() => exportSerie(es.series_id, true)} title="Export correction" className="p-1 text-white/20 hover:text-green-400/60 transition-colors"><Download size={11} /></button>
+                </div>
+                <button onClick={() => onRemove(es.series_id)} disabled={isPending} className="text-white/30 hover:text-red-400 transition-colors shrink-0"><ListMinus size={13} /></button>
+              </div>
+              {/* Per-serie dates */}
+              <div className="flex items-center gap-2">
+                <Calendar size={10} className="text-white/20 shrink-0" />
+                <input type="datetime-local"
+                  value={es.debut_at ? new Date(es.debut_at).toISOString().slice(0, 16) : ""}
+                  onChange={(e) => onScheduleChange(es.series_id, e.target.value ? new Date(e.target.value).toISOString() : null, es.fin_at ?? null)}
+                  className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20"
+                />
+                <span className="text-[10px] text-white/20">→</span>
+                <input type="datetime-local"
+                  value={es.fin_at ? new Date(es.fin_at).toISOString().slice(0, 16) : ""}
+                  onChange={(e) => onScheduleChange(es.series_id, es.debut_at ?? null, e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Formulaire de création */}
-      {showCreate && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
-          <p className="text-xs text-white/50 font-medium">Créer une nouvelle série</p>
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nom de la série…"
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
-            onKeyDown={(e) => e.key === "Enter" && handleCreateSerie()}
-          />
-          <select
-            value={newType}
-            onChange={(e) => setNewType(e.target.value as SerieType)}
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-white/30"
-          >
-            {SERIE_TYPES.map((t) => (
-              <option key={t.value} value={t.value} className="bg-[#0e1e35]">{t.label}</option>
-            ))}
-          </select>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setShowCreate(false)}
-              className="px-3 py-1.5 text-xs text-white/50 hover:text-white transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleCreateSerie}
-              disabled={creating || !newName.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] disabled:opacity-50 transition-colors"
-            >
-              {creating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-              Créer & ajouter
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Formulaire d'import Word */}
-      {showImport && (
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
-          <p className="text-xs text-white/50 font-medium">Importer depuis un fichier Word (.docx)</p>
-          <input
-            value={importName}
-            onChange={(e) => setImportName(e.target.value)}
-            placeholder="Nom de la série…"
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".docx,.doc"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportWord(f);
-            }}
-            className="w-full text-xs text-white/60 file:mr-3 file:py-1.5 file:px-3 file:bg-white/10 file:border-0 file:text-xs file:text-white/70 file:rounded-lg file:cursor-pointer hover:file:bg-white/20"
-          />
-          {importing && (
-            <div className="flex items-center gap-2 text-xs text-white/50">
-              <Loader2 size={12} className="animate-spin" /> Import en cours…
-            </div>
-          )}
-          <button
-            onClick={() => setShowImport(false)}
-            className="px-3 py-1.5 text-xs text-white/50 hover:text-white transition-colors"
-          >
-            Annuler
-          </button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-6">
-        {/* In exam */}
-        <div>
-          <p className="text-xs text-white/50 uppercase tracking-wider mb-3">
-            Dans l&apos;examen ({composeSeries.length})
-          </p>
-          <div className="space-y-2 max-h-96 overflow-auto pr-1">
-            {composeSeries.length === 0 ? (
-              <p className="text-xs text-white/30 py-4 text-center">Aucune série</p>
-            ) : composeSeries.map((es) => (
-              <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <p className="flex-1 text-xs text-white/80 line-clamp-1">{es.series?.name ?? "?"}</p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] text-white/40">Coeff.</span>
-                    <input
-                      type="number"
-                      min={0.5}
-                      max={10}
-                      step={0.5}
-                      value={es.coefficient}
-                      onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
-                      className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
-                    />
+      {/* Ajouter une épreuve par matière */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">
+          Ajouter une épreuve par matière
+        </p>
+        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-auto pr-1">
+          {matieres.map(m => {
+            const alreadyAdded = addedMatiereIds.has(m.id);
+            const isCreating = creating === m.id;
+            const isImporting = importingId === m.id;
+            return (
+              <div key={m.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all ${
+                alreadyAdded ? "bg-white/[0.02] opacity-40" : "bg-white/5 border border-white/10 hover:border-white/20"
+              }`}>
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
+                <span className="flex-1 text-xs text-white/70 font-medium truncate">{m.name}</span>
+                {alreadyAdded ? (
+                  <Check size={12} className="text-green-400/60 shrink-0" />
+                ) : isCreating || isImporting ? (
+                  <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
+                ) : (
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      onClick={() => handleAddMatiere(m)}
+                      className="p-1 text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors"
+                      title="Créer épreuve vide"
+                    >
+                      <Plus size={13} />
+                    </button>
+                    <label className="p-1 text-white/30 hover:text-white/60 transition-colors cursor-pointer" title="Importer depuis Word">
+                      <Upload size={12} />
+                      <input ref={fileInputRef} type="file" accept=".docx,.doc" className="hidden"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportWord(m, f); }}
+                      />
+                    </label>
                   </div>
-                  <div className="flex gap-0.5 shrink-0">
-                    <button onClick={() => exportSerie(es.series_id, false)} title="Export sujet" className="p-1 text-white/20 hover:text-white/60 transition-colors"><FileText size={11} /></button>
-                    <button onClick={() => exportSerie(es.series_id, true)} title="Export correction" className="p-1 text-white/20 hover:text-green-400/60 transition-colors"><Download size={11} /></button>
-                  </div>
-                  <button onClick={() => onRemove(es.series_id)} disabled={isPending} className="text-white/30 hover:text-red-400 transition-colors shrink-0"><ListMinus size={13} /></button>
-                </div>
-                {/* Per-serie dates */}
-                <div className="flex items-center gap-2">
-                  <Calendar size={10} className="text-white/20 shrink-0" />
-                  <input
-                    type="datetime-local"
-                    value={es.debut_at ? new Date(es.debut_at).toISOString().slice(0, 16) : ""}
-                    onChange={(e) => onScheduleChange(es.series_id, e.target.value ? new Date(e.target.value).toISOString() : null, es.fin_at ?? null)}
-                    placeholder="Début épreuve"
-                    className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20 placeholder:text-white/20"
-                  />
-                  <span className="text-[10px] text-white/20">→</span>
-                  <input
-                    type="datetime-local"
-                    value={es.fin_at ? new Date(es.fin_at).toISOString().slice(0, 16) : ""}
-                    onChange={(e) => onScheduleChange(es.series_id, es.debut_at ?? null, e.target.value ? new Date(e.target.value).toISOString() : null)}
-                    placeholder="Fin épreuve"
-                    className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20 placeholder:text-white/20"
-                  />
-                </div>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Available */}
-        <div>
-          <p className="text-xs text-white/50 uppercase tracking-wider mb-3">Disponibles ({available.length})</p>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filtrer…"
-            className="w-full mb-2 px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
-          />
-          <div className="space-y-2 max-h-80 overflow-auto pr-1">
-            {filtered.length === 0 ? (
-              <p className="text-xs text-white/30 py-4 text-center">Aucune série disponible</p>
-            ) : filtered.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                <p className="flex-1 text-xs text-white/80 line-clamp-1">{s.name}</p>
-                <div className="flex gap-0.5 shrink-0">
-                  <button
-                    onClick={() => exportSerie(s.id, false)}
-                    title="Export sujet"
-                    className="p-1 text-white/20 hover:text-white/60 transition-colors"
-                  >
-                    <FileText size={11} />
-                  </button>
-                  <button
-                    onClick={() => exportSerie(s.id, true)}
-                    title="Export correction"
-                    className="p-1 text-white/20 hover:text-green-400/60 transition-colors"
-                  >
-                    <Download size={11} />
-                  </button>
-                </div>
-                <button
-                  onClick={() => onAdd(s)}
-                  disabled={isPending}
-                  className="text-white/30 hover:text-green-400 transition-colors shrink-0"
-                >
-                  <ListPlus size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
 
