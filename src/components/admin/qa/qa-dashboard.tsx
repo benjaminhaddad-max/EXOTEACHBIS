@@ -233,7 +233,7 @@ export function QaDashboard({
                 className="flex-1 text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-100"
               >
                 <option value="all">Tous les statuts</option>
-                <option value="escalated">🔴 Escaladées</option>
+                <option value="escalated">🔴 Envoyée au prof</option>
                 <option value="ai_answered">🤖 IA répondu</option>
                 <option value="prof_answered">✅ Prof répondu</option>
                 <option value="resolved">✓ Résolues</option>

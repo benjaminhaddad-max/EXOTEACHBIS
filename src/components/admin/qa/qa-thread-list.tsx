@@ -15,7 +15,7 @@ interface QaThreadListProps {
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Bot }> = {
   ai_pending: { label: "IA en cours", color: "bg-gray-100 text-gray-600", icon: Clock },
   ai_answered: { label: "IA répondu", color: "bg-blue-100 text-blue-600", icon: Bot },
-  escalated: { label: "Escaladée", color: "bg-red-100 text-red-600", icon: AlertCircle },
+  escalated: { label: "Envoyée au prof", color: "bg-red-100 text-red-600", icon: AlertCircle },
   prof_answered: { label: "Prof répondu", color: "bg-amber-100 text-amber-600", icon: MessageSquare },
   resolved: { label: "Résolue", color: "bg-emerald-100 text-emerald-600", icon: CheckCircle2 },
 };

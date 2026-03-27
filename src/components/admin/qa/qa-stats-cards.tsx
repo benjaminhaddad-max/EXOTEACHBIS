@@ -18,9 +18,18 @@ export function QaStatsCards({ threads }: QaStatsCardsProps) {
     (t) => t.status === "resolved" && t.resolved_at && new Date(t.resolved_at).toDateString() === today
   ).length;
 
-  const cards = [
+  const cards: {
+    label: string;
+    value: number;
+    icon: typeof AlertCircle;
+    color: string;
+    iconColor: string;
+    title?: string;
+  }[] = [
     {
-      label: "Escaladées",
+      label: "Envoyée au prof",
+      title:
+        "L’élève a demandé à parler à un prof après la réponse de l’IA (bouton du type « Parler au prof »). À traiter en priorité.",
       value: escalated,
       icon: AlertCircle,
       color: "text-red-600 bg-red-50 border-red-100",
@@ -56,7 +65,8 @@ export function QaStatsCards({ threads }: QaStatsCardsProps) {
         return (
           <div
             key={c.label}
-            className={`rounded-xl border px-4 py-3 ${c.color}`}
+            className={`rounded-xl border px-4 py-3 ${c.color} cursor-help`}
+            title={c.title}
           >
             <div className="flex items-center gap-2">
               <Icon className={`w-4 h-4 ${c.iconColor}`} />
