@@ -80,7 +80,6 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
         initialThreadId={params.thread}
         qaDossiers={availableDossiers}
         qaMatieres={qaMatieres}
-        qaCours={qaCours}
       />
     </div>
   );

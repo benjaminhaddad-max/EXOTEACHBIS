@@ -11,28 +11,22 @@ import {
   Layers,
   Check,
   Folder,
-  ScrollText,
 } from "lucide-react";
 import { buildQaPedagogieChildrenMap } from "@/lib/qa-pedagogie-tree";
-import type { Cours, Dossier, DossierType, Matiere } from "@/types/database";
+import type { Dossier, DossierType, Matiere } from "@/types/database";
 
-function collectMatiereAndCoursIdsInSubtree(
+function collectMatiereIdsInSubtree(
   rootId: string,
   childrenByParent: Map<string | null, Dossier[]>,
   matieresByDossier: Map<string, Matiere[]>,
-  coursByMatiereId: Map<string, Cours[]>
-): { matiereIds: string[]; coursIds: string[] } {
+): string[] {
   const matiereIds: string[] = [];
-  const coursIds: string[] = [];
   const walk = (did: string) => {
-    for (const mat of matieresByDossier.get(did) ?? []) {
-      matiereIds.push(mat.id);
-      for (const c of coursByMatiereId.get(mat.id) ?? []) coursIds.push(c.id);
-    }
+    for (const mat of matieresByDossier.get(did) ?? []) matiereIds.push(mat.id);
     for (const ch of childrenByParent.get(did) ?? []) walk(ch.id);
   };
   walk(rootId);
-  return { matiereIds, coursIds };
+  return matiereIds;
 }
 
 function DossierTypeIcon({ type, className }: { type: DossierType; className?: string }) {
@@ -71,96 +65,45 @@ function ChkLight({ checked, partial }: { checked: boolean; partial?: boolean })
 function MatiereBranch({
   matiere,
   depth,
-  coursList,
   selectedMatiereIds,
-  selectedCoursIds,
   onToggleMatiere,
-  onToggleCours,
   threadCountByMatiereId,
-  threadCountByCoursId,
 }: {
   matiere: Matiere;
   depth: number;
-  coursList: Cours[];
   selectedMatiereIds: Set<string>;
-  selectedCoursIds: Set<string>;
   onToggleMatiere: (id: string) => void;
-  onToggleCours: (id: string) => void;
   threadCountByMatiereId: Record<string, number>;
-  threadCountByCoursId: Record<string, number>;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasCours = coursList.length > 0;
   const cnt = threadCountByMatiereId[matiere.id] ?? 0;
   const isOn = selectedMatiereIds.has(matiere.id);
   const pad = depth * 10 + 36;
 
   return (
-    <div>
-      <div
-        className="flex items-center gap-0.5 py-0.5 rounded-md hover:bg-gray-50"
-        style={{ paddingLeft: pad }}
+    <div
+      className="flex items-center gap-0.5 py-0.5 rounded-md hover:bg-gray-50"
+      style={{ paddingLeft: pad }}
+    >
+      <span className="w-5 shrink-0" />
+      <button type="button" className="p-0.5 shrink-0" onClick={() => onToggleMatiere(matiere.id)}>
+        <ChkLight checked={isOn} />
+      </button>
+      <button
+        type="button"
+        className="flex-1 min-w-0 flex items-center gap-1.5 py-1 pr-1 text-left"
+        onClick={() => onToggleMatiere(matiere.id)}
       >
-        <button
-          type="button"
-          className="w-5 h-7 flex items-center justify-center shrink-0 text-gray-400"
-          onClick={e => {
-            e.stopPropagation();
-            if (hasCours) setExpanded(p => !p);
-          }}
-          disabled={!hasCours}
-        >
-          {hasCours ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}
-        </button>
-        <button type="button" className="p-0.5 shrink-0" onClick={() => onToggleMatiere(matiere.id)}>
-          <ChkLight checked={isOn} />
-        </button>
-        <button
-          type="button"
-          className="flex-1 min-w-0 flex items-center gap-1.5 py-1 pr-1 text-left"
-          onClick={() => hasCours && setExpanded(p => !p)}
-        >
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: matiere.color }} />
-          <BookOpen size={11} className="shrink-0 text-blue-700/70" />
-          <span className={`flex-1 text-[10px] font-medium truncate ${isOn ? "text-blue-950" : "text-gray-700"}`}>
-            {matiere.name}
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: matiere.color }} />
+        <BookOpen size={11} className="shrink-0 text-blue-700/70" />
+        <span className={`flex-1 text-[10px] font-medium truncate ${isOn ? "text-blue-950" : "text-gray-700"}`}>
+          {matiere.name}
+        </span>
+        {cnt > 0 && (
+          <span className="text-[9px] tabular-nums px-1.5 py-0.5 rounded-full bg-gray-200/80 text-gray-700 shrink-0">
+            {cnt}
           </span>
-          {cnt > 0 && (
-            <span className="text-[9px] tabular-nums px-1.5 py-0.5 rounded-full bg-gray-200/80 text-gray-700 shrink-0">
-              {cnt}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {expanded &&
-        hasCours &&
-        coursList.map(c => {
-          const cOn = selectedCoursIds.has(c.id);
-          const cCnt = threadCountByCoursId[c.id] ?? 0;
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => onToggleCours(c.id)}
-              className={`w-full flex items-center gap-2 py-1 pr-2 rounded-md text-left transition-colors ${
-                cOn ? "bg-indigo-50/90" : "hover:bg-gray-50"
-              }`}
-              style={{ paddingLeft: pad + 18 }}
-            >
-              <ChkLight checked={cOn} />
-              <ScrollText size={11} className="shrink-0 text-indigo-600/80" />
-              <span className={`flex-1 text-[10px] font-medium truncate ${cOn ? "text-indigo-950" : "text-gray-600"}`}>
-                {c.name}
-              </span>
-              {cCnt > 0 && (
-                <span className="text-[9px] tabular-nums px-1.5 py-0.5 rounded-full bg-gray-200/80 text-gray-700 shrink-0">
-                  {cCnt}
-                </span>
-              )}
-            </button>
-          );
-        })}
+        )}
+      </button>
     </div>
   );
 }
@@ -170,42 +113,30 @@ function DossierBranch({
   depth,
   childrenByParent,
   matieresByDossier,
-  coursByMatiereId,
   selectedMatiereIds,
-  selectedCoursIds,
   onToggleMatiere,
-  onToggleCours,
   onToggleDossierSubtree,
   threadCountByMatiereId,
-  threadCountByCoursId,
 }: {
   dossier: Dossier;
   depth: number;
   childrenByParent: Map<string | null, Dossier[]>;
   matieresByDossier: Map<string, Matiere[]>;
-  coursByMatiereId: Map<string, Cours[]>;
   selectedMatiereIds: Set<string>;
-  selectedCoursIds: Set<string>;
   onToggleMatiere: (id: string) => void;
-  onToggleCours: (id: string) => void;
   onToggleDossierSubtree: (dossierId: string) => void;
   threadCountByMatiereId: Record<string, number>;
-  threadCountByCoursId: Record<string, number>;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const children = childrenByParent.get(dossier.id) ?? [];
   const mats = matieresByDossier.get(dossier.id) ?? [];
-  const { matiereIds: sm, coursIds: sc } = useMemo(
-    () =>
-      collectMatiereAndCoursIdsInSubtree(dossier.id, childrenByParent, matieresByDossier, coursByMatiereId),
-    [dossier.id, childrenByParent, matieresByDossier, coursByMatiereId]
+  const sm = useMemo(
+    () => collectMatiereIdsInSubtree(dossier.id, childrenByParent, matieresByDossier),
+    [dossier.id, childrenByParent, matieresByDossier]
   );
-  const hasScope = sm.length > 0 || sc.length > 0;
-  const allMatOn = sm.length > 0 && sm.every(id => selectedMatiereIds.has(id));
-  const allCoursOn = sc.length === 0 || sc.every(id => selectedCoursIds.has(id));
-  const allOn = hasScope && allMatOn && allCoursOn;
-  const someOn =
-    sm.some(id => selectedMatiereIds.has(id)) || sc.some(id => selectedCoursIds.has(id));
+  const hasScope = sm.length > 0;
+  const allOn = hasScope && sm.every(id => selectedMatiereIds.has(id));
+  const someOn = sm.some(id => selectedMatiereIds.has(id));
   const hasBranch = children.length > 0 || mats.length > 0;
 
   return (
@@ -217,10 +148,7 @@ function DossierBranch({
         <button
           type="button"
           className="w-5 h-7 flex items-center justify-center shrink-0 text-gray-400"
-          onClick={e => {
-            e.stopPropagation();
-            setExpanded(p => !p);
-          }}
+          onClick={e => { e.stopPropagation(); setExpanded(p => !p); }}
           disabled={!hasBranch}
         >
           {hasBranch ? (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : null}
@@ -252,13 +180,9 @@ function DossierBranch({
               key={m.id}
               matiere={m}
               depth={depth + 1}
-              coursList={coursByMatiereId.get(m.id) ?? []}
               selectedMatiereIds={selectedMatiereIds}
-              selectedCoursIds={selectedCoursIds}
               onToggleMatiere={onToggleMatiere}
-              onToggleCours={onToggleCours}
               threadCountByMatiereId={threadCountByMatiereId}
-              threadCountByCoursId={threadCountByCoursId}
             />
           ))}
           {children.map(ch => (
@@ -268,14 +192,10 @@ function DossierBranch({
               depth={depth + 1}
               childrenByParent={childrenByParent}
               matieresByDossier={matieresByDossier}
-              coursByMatiereId={coursByMatiereId}
               selectedMatiereIds={selectedMatiereIds}
-              selectedCoursIds={selectedCoursIds}
               onToggleMatiere={onToggleMatiere}
-              onToggleCours={onToggleCours}
               onToggleDossierSubtree={onToggleDossierSubtree}
               threadCountByMatiereId={threadCountByMatiereId}
-              threadCountByCoursId={threadCountByCoursId}
             />
           ))}
         </div>
@@ -287,29 +207,19 @@ function DossierBranch({
 export function QaPedagogieMatiereTreeSidebar({
   dossiers,
   matieres,
-  cours,
   selectedMatiereIds,
-  selectedCoursIds,
   onToggleMatiere,
-  onToggleCours,
   onSelectAllMatieres,
   onSetMatiereSelection,
-  onSetCoursSelection,
   threadCountByMatiereId = {},
-  threadCountByCoursId = {},
 }: {
   dossiers: Dossier[];
   matieres: Matiere[];
-  cours: Cours[];
   selectedMatiereIds: Set<string>;
-  selectedCoursIds: Set<string>;
   onToggleMatiere: (id: string) => void;
-  onToggleCours: (id: string) => void;
   onSelectAllMatieres: () => void;
   onSetMatiereSelection: Dispatch<SetStateAction<Set<string>>>;
-  onSetCoursSelection: Dispatch<SetStateAction<Set<string>>>;
   threadCountByMatiereId?: Record<string, number>;
-  threadCountByCoursId?: Record<string, number>;
 }) {
   const childrenByParent = useMemo(() => buildQaPedagogieChildrenMap(dossiers), [dossiers]);
 
@@ -326,42 +236,16 @@ export function QaPedagogieMatiereTreeSidebar({
     return map;
   }, [matieres]);
 
-  const coursByMatiereId = useMemo(() => {
-    const map = new Map<string, Cours[]>();
-    for (const c of cours) {
-      if (!c.matiere_id) continue;
-      if (!map.has(c.matiere_id)) map.set(c.matiere_id, []);
-      map.get(c.matiere_id)!.push(c);
-    }
-    for (const list of map.values()) list.sort((a, b) => a.order_index - b.order_index);
-    return map;
-  }, [cours]);
-
   const roots = childrenByParent.get(null) ?? [];
 
   const handleToggleDossierSubtree = (dossierId: string) => {
-    const { matiereIds, coursIds } = collectMatiereAndCoursIdsInSubtree(
-      dossierId,
-      childrenByParent,
-      matieresByDossier,
-      coursByMatiereId
-    );
-    if (matiereIds.length === 0 && coursIds.length === 0) return;
-
-    const allMatOn = matiereIds.length > 0 && matiereIds.every(id => selectedMatiereIds.has(id));
-    const allCoursOn = coursIds.length === 0 || coursIds.every(id => selectedCoursIds.has(id));
-    const turnOff = allMatOn && allCoursOn;
-
+    const matiereIds = collectMatiereIdsInSubtree(dossierId, childrenByParent, matieresByDossier);
+    if (matiereIds.length === 0) return;
+    const allOn = matiereIds.every(id => selectedMatiereIds.has(id));
     onSetMatiereSelection(prev => {
       const next = new Set(prev);
-      if (turnOff) for (const id of matiereIds) next.delete(id);
+      if (allOn) for (const id of matiereIds) next.delete(id);
       else for (const id of matiereIds) next.add(id);
-      return next;
-    });
-    onSetCoursSelection(prev => {
-      const next = new Set(prev);
-      if (turnOff) for (const id of coursIds) next.delete(id);
-      else for (const id of coursIds) next.add(id);
       return next;
     });
   };
@@ -371,7 +255,7 @@ export function QaPedagogieMatiereTreeSidebar({
       <div className="px-3 pt-3 pb-2 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Pédagogie</p>
         <p className="text-[9px] text-gray-400 mt-0.5 leading-snug">
-          Offre (ex. PREPA PASS) → université → semestre → matière → chapitre
+          Offre → université → semestre → matière
         </p>
       </div>
 
@@ -380,17 +264,12 @@ export function QaPedagogieMatiereTreeSidebar({
           type="button"
           onClick={onSelectAllMatieres}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-            selectedMatiereIds.size === 0 && selectedCoursIds.size === 0
+            selectedMatiereIds.size === 0
               ? "bg-blue-50 text-blue-800 border border-blue-200"
               : "text-gray-600 border border-transparent hover:bg-gray-100"
           }`}
         >
-          <Layers
-            size={12}
-            className={
-              selectedMatiereIds.size === 0 && selectedCoursIds.size === 0 ? "text-blue-600" : "text-gray-500"
-            }
-          />
+          <Layers size={12} className={selectedMatiereIds.size === 0 ? "text-blue-600" : "text-gray-500"} />
           Toutes les questions
         </button>
       </div>
@@ -406,14 +285,10 @@ export function QaPedagogieMatiereTreeSidebar({
               depth={0}
               childrenByParent={childrenByParent}
               matieresByDossier={matieresByDossier}
-              coursByMatiereId={coursByMatiereId}
               selectedMatiereIds={selectedMatiereIds}
-              selectedCoursIds={selectedCoursIds}
               onToggleMatiere={onToggleMatiere}
-              onToggleCours={onToggleCours}
               onToggleDossierSubtree={handleToggleDossierSubtree}
               threadCountByMatiereId={threadCountByMatiereId}
-              threadCountByCoursId={threadCountByCoursId}
             />
           ))
         )}
