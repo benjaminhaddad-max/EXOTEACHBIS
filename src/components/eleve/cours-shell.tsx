@@ -241,52 +241,69 @@ export function EleveCoursShell({
             <div className="flex-1 overflow-y-auto">
               <div className="mx-auto max-w-5xl px-6 py-6 space-y-6">
                 {/* Hero header */}
-                <div className="relative overflow-hidden rounded-3xl bg-[#0e1e35] px-7 py-7">
-                  {/* Decorative gradient orb */}
-                  <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#4FABDB]/15 blur-3xl" />
-                  <div className="pointer-events-none absolute -left-10 -bottom-16 h-48 w-48 rounded-full bg-[#C9A84C]/10 blur-3xl" />
-                  <div className="relative flex items-center justify-between gap-6">
-                    <div className="space-y-1">
-                      {breadcrumb.map((d, i) => (
-                        <h2
-                          key={d.id}
-                          className={`font-bold tracking-tight ${
-                            i === breadcrumb.length - 1
-                              ? "text-2xl text-white"
-                              : "text-lg text-white/50"
-                          }`}
-                        >
-                          {d.name}
-                        </h2>
-                      ))}
-                      {(coursList.length > 0 || flashcardDecks.length > 0 || childDossiers.length > 0) && (
-                        <div className="mt-2 flex items-center gap-4 text-xs">
-                          {childDossiers.length > 0 && (
-                            <span className="text-[#4FABDB] font-medium">{childDossiers.length} {childDossiers.length > 1 ? "dossiers" : "dossier"}</span>
-                          )}
-                          {coursList.length > 0 && (
-                            <span className="text-[#C9A84C] font-medium">{coursList.length} cours</span>
-                          )}
-                          {flashcardDecks.length > 0 && (
-                            <span className="text-white/50 font-medium">{flashcardDecks.length} flashcards</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="hidden sm:flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-                      <GraduationCap size={28} className="text-[#C9A84C]" />
-                    </div>
-                  </div>
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0e1e35] via-[#142740] to-[#0e1e35] px-8 py-8">
+                  <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#4FABDB]/10 blur-3xl" />
+                  <div className="pointer-events-none absolute right-1/3 -bottom-20 h-40 w-40 rounded-full bg-[#C9A84C]/8 blur-3xl" />
 
-                  {/* Search bar inside hero */}
-                  <div className="relative mt-5">
-                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
-                    <input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Rechercher un cours, un chapitre ou une flashcard..."
-                      className="w-full rounded-xl border border-white/10 bg-white/8 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-[#4FABDB]/50 focus:bg-white/12 focus:ring-2 focus:ring-[#4FABDB]/20"
-                    />
+                  <div className="relative">
+                    {/* Ancestor pills */}
+                    {breadcrumb.length > 1 && (
+                      <div className="mb-4 flex flex-wrap items-center gap-2">
+                        {breadcrumb.slice(0, -1).map((d) => (
+                          <span
+                            key={d.id}
+                            className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3.5 py-1 text-xs font-semibold tracking-wide text-white/70 backdrop-blur-sm"
+                          >
+                            {d.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Title row */}
+                    <div className="flex items-center justify-between gap-6">
+                      <div>
+                        <h2 className="text-3xl font-extrabold tracking-tight text-white">
+                          {selectedDossier.name}
+                        </h2>
+                        {selectedDossier.description && (
+                          <p className="mt-1.5 text-sm text-white/50">{selectedDossier.description}</p>
+                        )}
+                        {(coursList.length > 0 || flashcardDecks.length > 0 || childDossiers.length > 0) && (
+                          <div className="mt-3 flex items-center gap-3">
+                            {childDossiers.length > 0 && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#4FABDB]/15 px-3 py-1 text-xs font-semibold text-[#4FABDB]">
+                                {childDossiers.length} {childDossiers.length > 1 ? "dossiers" : "dossier"}
+                              </span>
+                            )}
+                            {coursList.length > 0 && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#C9A84C]/15 px-3 py-1 text-xs font-semibold text-[#C9A84C]">
+                                {coursList.length} cours
+                              </span>
+                            )}
+                            {flashcardDecks.length > 0 && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/50">
+                                {flashcardDecks.length} flashcards
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="hidden sm:flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/8 ring-1 ring-white/10">
+                        <GraduationCap size={26} className="text-[#C9A84C]" />
+                      </div>
+                    </div>
+
+                    {/* Search bar */}
+                    <div className="relative mt-6">
+                      <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
+                      <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Rechercher un cours, un chapitre ou une flashcard..."
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 py-3.5 pl-11 pr-4 text-sm text-white placeholder:text-white/25 outline-none transition focus:border-[#4FABDB]/40 focus:bg-white/10 focus:ring-2 focus:ring-[#4FABDB]/15"
+                      />
+                    </div>
                   </div>
 
                   {/* Tabs inside hero — only at matière level */}
