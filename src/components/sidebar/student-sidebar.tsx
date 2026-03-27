@@ -8,7 +8,6 @@ import {
 
   MessageCircleQuestion,
   UserCircle,
-  UsersRound,
   Megaphone,
   TrendingUp,
 
@@ -26,9 +25,6 @@ const studentNavItems = [
   { href: "/progression", label: "Progression", icon: TrendingUp },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/coaching", label: "Coaching", icon: Handshake },
-
-
-  { href: "/equipe", label: "Équipe", icon: UsersRound },
   { href: "/profil", label: "Profil", icon: UserCircle },
 ];
 
