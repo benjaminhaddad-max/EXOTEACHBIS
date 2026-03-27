@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type Dispatch, type SetStateAction } from "react";
 import {
   Megaphone, FileText, ChevronDown, GraduationCap, Building2,
   Layers, Check, Plus, Users,
@@ -60,6 +60,7 @@ export function CommunicationShell({
         selectedGroupeIds={selectedGroupeIds}
         onToggle={toggleGroupe}
         onSelectAll={selectAll}
+        onSetSelection={setSelectedGroupeIds}
       />
 
       {/* Right content */}
@@ -164,9 +165,12 @@ export function CommunicationShell({
 
 // ─── Communication Sidebar with Checkboxes ────────────────────────────────────
 
-function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll }: {
+function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll, onSetSelection }: {
   dossiers: Dossier[]; groupes: Groupe[];
-  selectedGroupeIds: Set<string>; onToggle: (id: string) => void; onSelectAll: () => void;
+  selectedGroupeIds: Set<string>;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  onSetSelection: Dispatch<SetStateAction<Set<string>>>;
 }) {
   const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
   const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
@@ -188,15 +192,16 @@ function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectA
   const getUniGroupIds = (uniId: string) => (groupsByUni.get(uniId) ?? []).map(g => g.id);
   const getOfferGroupIds = (offerId: string) => { const ids: string[] = []; for (const u of (unisByOffer.get(offerId) ?? [])) ids.push(...getUniGroupIds(u.id)); return ids; };
 
-  const toggleIds = (ids: string[]) => {
-    const next = new Set(selectedGroupeIds);
-    const allChecked = ids.every(id => next.has(id));
-    if (allChecked) for (const id of ids) next.delete(id);
-    else for (const id of ids) next.add(id);
-    // Use onToggle indirectly by calling selectAll then adding
-    // Actually just rebuild set
-    onSelectAll(); // clear
-    setTimeout(() => { for (const id of (allChecked ? [] : ids)) onToggle(id); }, 0);
+  /** Coche/décoche toutes les classes listées sans affecter les autres formations / universités. */
+  const toggleGroupIdBlock = (ids: string[]) => {
+    if (ids.length === 0) return;
+    onSetSelection(prev => {
+      const next = new Set(prev);
+      const allOn = ids.every(id => next.has(id));
+      if (allOn) for (const id of ids) next.delete(id);
+      else for (const id of ids) next.add(id);
+      return next;
+    });
   };
 
   const Chk = ({ checked, partial }: { checked: boolean; partial?: boolean }) => (
@@ -239,7 +244,7 @@ function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectA
           return (
             <div key={offer.id}>
               <div className="flex items-center gap-1">
-                <button onClick={() => { const next = new Set(selectedGroupeIds); if (allChecked) for (const id of offerIds) next.delete(id); else for (const id of offerIds) next.add(id); onSelectAll(); setTimeout(() => { for (const id of (allChecked ? [] : [...next])) onToggle(id); }, 0); }}
+                <button type="button" onClick={() => toggleGroupIdBlock(offerIds)}
                   className="p-1 shrink-0"><Chk checked={allChecked} partial={!allChecked && someChecked} /></button>
                 <button onClick={() => toggleExpand(offer.id)} className="flex-1 flex items-center gap-1.5 px-1 py-1.5 rounded-lg transition-all text-left"
                   onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
@@ -259,7 +264,7 @@ function CommSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectA
                 return (
                   <div key={uni.id} className="ml-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => { const next = new Set(selectedGroupeIds); if (uAll) for (const id of uniIds) next.delete(id); else for (const id of uniIds) next.add(id); onSelectAll(); setTimeout(() => { for (const id of [...next]) onToggle(id); }, 0); }}
+                      <button type="button" onClick={() => toggleGroupIdBlock(uniIds)}
                         className="p-1 shrink-0"><Chk checked={uAll} partial={!uAll && uSome} /></button>
                       <button onClick={() => toggleExpand(uni.id)} className="flex-1 flex items-center gap-1 pl-1 pr-2 py-1 rounded-lg text-left transition-all"
                         onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
