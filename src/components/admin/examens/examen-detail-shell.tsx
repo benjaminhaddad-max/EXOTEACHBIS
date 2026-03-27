@@ -110,6 +110,7 @@ export function ExamenDetailShell({
   const toggleSemester = (id: string) => setExpandedSemesters(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const addedMatiereIds = new Set(epreuves.map(es => es.series?.matiere_id).filter(Boolean));
+  const addedSerieNames = new Set(epreuves.map(es => es.series?.name).filter(Boolean));
 
   // --- HANDLERS ---
   const handleAddSubject = async (subject: Dossier) => {
@@ -404,7 +405,8 @@ export function ExamenDetailShell({
                   </button>
                   {isOpen && subjects.map(sub => {
                     const matiere = matieres.find(m => m.dossier_id === sub.id);
-                    const added = !!matiere && addedMatiereIds.has(matiere.id);
+                    const added = (!!matiere && addedMatiereIds.has(matiere.id))
+                      || Array.from(addedSerieNames).some(n => n?.endsWith(`— ${sub.name}`));
                     const isCreatingThis = creating === sub.id;
                     return (
                       <div key={sub.id} className={`flex items-center gap-2 ml-5 px-3 py-1.5 rounded-lg transition-all ${added ? "opacity-30" : "hover:bg-white/[0.04]"}`}>
