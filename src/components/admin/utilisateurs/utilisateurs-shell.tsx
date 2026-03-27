@@ -3191,9 +3191,21 @@ function EditUserModal({
   const normalizedCurrentExcludedAccess = [...excludedAccessIds].sort().join("|");
   const normalizedNextExcludedAccess = [...excludedInheritedAccessIds].sort().join("|");
   const inheritedAccessIds = groupeId ? (groupeAccessById.get(groupeId) ?? []) : [];
-  const inheritedExpandedIds = useMemo(
-    () => [...expandDossierTree(dossiers, inheritedAccessIds)],
+  const inheritedExpandedSet = useMemo(
+    () => expandDossierTree(dossiers, inheritedAccessIds),
     [dossiers, inheritedAccessIds]
+  );
+  const personalExpandedSet = useMemo(
+    () => expandDossierTree(dossiers, personalAccessIds),
+    [dossiers, personalAccessIds]
+  );
+  const excludedExpandedSet = useMemo(
+    () => expandDossierTree(dossiers, excludedInheritedAccessIds),
+    [dossiers, excludedInheritedAccessIds]
+  );
+  const inheritedExpandedIds = useMemo(
+    () => [...inheritedExpandedSet],
+    [inheritedExpandedSet]
   );
   const inheritedTree = useMemo(
     () => filterDossierTreeByAllowedIds(dossierTree, new Set(inheritedExpandedIds)),
@@ -3217,6 +3229,48 @@ function EditUserModal({
         ? prev.filter((id) => id !== matiereId)
         : [...prev, matiereId]
     );
+  };
+
+  const toggleContentAccess = ({
+    dossierId,
+    hasInheritedAccess,
+    hasPersonalAccess,
+    hasExcludedAccess,
+    hasExactPersonalAccess,
+    hasExactExclusion,
+  }: {
+    dossierId: string;
+    hasInheritedAccess: boolean;
+    hasPersonalAccess: boolean;
+    hasExcludedAccess: boolean;
+    hasExactPersonalAccess: boolean;
+    hasExactExclusion: boolean;
+  }) => {
+    const nextPersonal = new Set(personalAccessIds);
+    const nextExcluded = new Set(excludedInheritedAccessIds);
+    const hasEffectiveAccess = (hasInheritedAccess && !hasExcludedAccess) || hasPersonalAccess;
+
+    if (hasEffectiveAccess) {
+      if (hasExactPersonalAccess) {
+        nextPersonal.delete(dossierId);
+      }
+
+      if (hasInheritedAccess) {
+        nextExcluded.add(dossierId);
+      }
+    } else {
+      if (hasExactExclusion) {
+        nextExcluded.delete(dossierId);
+      }
+
+      const stillBlockedByAncestorExclusion = hasExcludedAccess && !hasExactExclusion;
+      if (!hasInheritedAccess || stillBlockedByAncestorExclusion) {
+        nextPersonal.add(dossierId);
+      }
+    }
+
+    setPersonalAccessIds([...nextPersonal]);
+    setExcludedInheritedAccessIds([...nextExcluded]);
   };
 
   return (
@@ -3401,9 +3455,11 @@ function EditUserModal({
                   {children.map(child => {
                     const subChildren = dossiers.filter(d => d.parent_id === child.id).sort((a, b) => a.order_index - b.order_index);
                     const childMeta = DOSSIER_TYPE_META[child.dossier_type] as { shortLabel?: string } | undefined;
-                    const isClassAccess = classAccessSet.has(child.id);
-                    const isPersonalAccess = personalAccessSet.has(child.id);
-                    const isExcluded = excludedSet.has(child.id);
+                    const isClassAccess = inheritedExpandedSet.has(child.id);
+                    const isPersonalAccess = personalExpandedSet.has(child.id);
+                    const isExcluded = excludedExpandedSet.has(child.id);
+                    const isExactPersonalAccess = personalAccessSet.has(child.id);
+                    const isExactExcluded = excludedSet.has(child.id);
                     const hasAccess = (isClassAccess && !isExcluded) || isPersonalAccess;
 
                     return (
@@ -3416,36 +3472,33 @@ function EditUserModal({
                             checked={hasAccess}
                             onChange={(e) => {
                               e.stopPropagation();
-                              if (isClassAccess && !isExcluded) {
-                                // Has access via class → exclude it
-                                setExcludedInheritedAccessIds(prev => [...prev, child.id]);
-                              } else if (isExcluded) {
-                                // Was excluded → remove exclusion
-                                setExcludedInheritedAccessIds(prev => prev.filter(id => id !== child.id));
-                              } else if (isPersonalAccess) {
-                                // Has personal access → remove it
-                                setPersonalAccessIds(prev => prev.filter(id => id !== child.id));
-                              } else {
-                                // No access → add personal
-                                setPersonalAccessIds(prev => [...prev, child.id]);
-                              }
+                              toggleContentAccess({
+                                dossierId: child.id,
+                                hasInheritedAccess: isClassAccess,
+                                hasPersonalAccess: isPersonalAccess,
+                                hasExcludedAccess: isExcluded,
+                                hasExactPersonalAccess: isExactPersonalAccess,
+                                hasExactExclusion: isExactExcluded,
+                              });
                             }}
                             onClick={(e) => e.stopPropagation()}
                             className="w-4 h-4 rounded border-gray-500 text-emerald-600 focus:ring-emerald-500"
                           />
                           <span className="text-sm font-medium flex-1" style={{ color: hasAccess ? "white" : "rgba(255,255,255,0.5)" }}>{child.name}</span>
-                          {isClassAccess && !isExcluded && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(52,211,153,0.15)", color: "#6EE7B7" }}>classe</span>}
-                          {isPersonalAccess && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#E3C286" }}>perso</span>}
-                          {isExcluded && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#FCA5A5" }}>retiré</span>}
+                          {classAccessSet.has(child.id) && !isExcluded && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(52,211,153,0.15)", color: "#6EE7B7" }}>classe</span>}
+                          {isExactPersonalAccess && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#E3C286" }}>perso</span>}
+                          {isExactExcluded && <span className="text-[8px] px-1.5 rounded-full" style={{ backgroundColor: "rgba(239,68,68,0.15)", color: "#FCA5A5" }}>retiré</span>}
                           <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>{childMeta?.shortLabel ?? ""}</span>
                         </summary>
                         {subChildren.length > 0 && (
                           <div className="ml-9 space-y-0.5 pb-1">
                             {subChildren.map(sub => {
                               const subMeta2 = DOSSIER_TYPE_META[sub.dossier_type] as { shortLabel?: string } | undefined;
-                              const subIsClass = classAccessSet.has(sub.id);
-                              const subIsPersonal = personalAccessSet.has(sub.id);
-                              const subIsExcluded = excludedSet.has(sub.id);
+                              const subIsClass = inheritedExpandedSet.has(sub.id);
+                              const subIsPersonal = personalExpandedSet.has(sub.id);
+                              const subIsExcluded = excludedExpandedSet.has(sub.id);
+                              const subIsExactPersonal = personalAccessSet.has(sub.id);
+                              const subIsExactExcluded = excludedSet.has(sub.id);
                               const subHasAccess = (subIsClass && !subIsExcluded) || subIsPersonal;
                               const subCours = cours.filter(c => c.dossier_id === sub.id);
                               return (
@@ -3458,10 +3511,14 @@ function EditUserModal({
                                       checked={subHasAccess}
                                       onChange={(e) => {
                                         e.stopPropagation();
-                                        if (subIsClass && !subIsExcluded) setExcludedInheritedAccessIds(prev => [...prev, sub.id]);
-                                        else if (subIsExcluded) setExcludedInheritedAccessIds(prev => prev.filter(id => id !== sub.id));
-                                        else if (subIsPersonal) setPersonalAccessIds(prev => prev.filter(id => id !== sub.id));
-                                        else setPersonalAccessIds(prev => [...prev, sub.id]);
+                                        toggleContentAccess({
+                                          dossierId: sub.id,
+                                          hasInheritedAccess: subIsClass,
+                                          hasPersonalAccess: subIsPersonal,
+                                          hasExcludedAccess: subIsExcluded,
+                                          hasExactPersonalAccess: subIsExactPersonal,
+                                          hasExactExclusion: subIsExactExcluded,
+                                        });
                                       }}
                                       onClick={(e) => e.stopPropagation()}
                                       className="w-3.5 h-3.5 rounded border-gray-500 text-emerald-600 focus:ring-emerald-500"
@@ -3479,11 +3536,15 @@ function EditUserModal({
                                               type="checkbox"
                                               checked={coursChecked}
                                               onChange={() => {
-                                                // For now, toggling a cours toggles its parent matière
-                                                if (subIsClass && !subIsExcluded) setExcludedInheritedAccessIds(prev => [...prev, sub.id]);
-                                                else if (subIsExcluded) setExcludedInheritedAccessIds(prev => prev.filter(id => id !== sub.id));
-                                                else if (subIsPersonal) setPersonalAccessIds(prev => prev.filter(id => id !== sub.id));
-                                                else setPersonalAccessIds(prev => [...prev, sub.id]);
+                                                // For now, toggling a cours toggles its parent matière.
+                                                toggleContentAccess({
+                                                  dossierId: sub.id,
+                                                  hasInheritedAccess: subIsClass,
+                                                  hasPersonalAccess: subIsPersonal,
+                                                  hasExcludedAccess: subIsExcluded,
+                                                  hasExactPersonalAccess: subIsExactPersonal,
+                                                  hasExactExclusion: subIsExactExcluded,
+                                                });
                                               }}
                                               className="w-3 h-3 rounded border-gray-600 text-emerald-600 focus:ring-emerald-500"
                                             />
