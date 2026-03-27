@@ -2,12 +2,13 @@
 
 import { useState, useMemo, useTransition, useEffect } from "react";
 import {
-  FileText, Clock, Users, Check, AlertCircle, Search, Eye,
+  FileText, Clock, Users, Check, AlertCircle, Search,
   ChevronRight, Pencil, BarChart3, Copy, X, GraduationCap, Building2,
 } from "lucide-react";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, FormTargetType, Groupe, Profile } from "@/types/database";
 import type { SidebarFilter } from "@/components/admin/formulaires/formulaires-sidebar";
 import { FormulaireEditor } from "@/components/admin/formulaires/formulaire-editor";
+import { FormResponsesView } from "@/components/admin/formulaires/form-responses-view";
 import { duplicateFormTemplate } from "@/app/(admin)/admin/configuration/actions";
 
 type ActiveView = "list" | "editor" | "responses";
@@ -174,70 +175,9 @@ export function FormulairesShellContent({
       )}
 
       {activeView === "responses" && selectedTemplate && (
-        <ResponsesView template={selectedTemplate} fields={selectedFields} responses={selectedResponses} />
+        <FormResponsesView template={selectedTemplate} fields={selectedFields} responses={selectedResponses} />
       )}
     </div>
   );
 }
 
-// ─── Responses (copied from formulaires-shell for independence) ───────────────
-
-function ResponsesView({ template, fields, responses }: { template: FormTemplate; fields: FormField[]; responses: CoachingIntakeForm[] }) {
-  const [sel, setSel] = useState<CoachingIntakeForm | null>(null);
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Total</p>
-          <p className="text-2xl font-bold text-white">{responses.length}</p>
-        </div>
-        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Dernière</p>
-          <p className="text-sm font-semibold text-white">{formatDate(responses[0]?.submitted_at)}</p>
-        </div>
-        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Questions</p>
-          <p className="text-2xl font-bold text-white">{fields.length}</p>
-        </div>
-      </div>
-      {responses.length === 0 ? (
-        <div className="text-center py-12" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune réponse</div>
-      ) : (
-        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-          <table className="w-full text-sm">
-            <thead><tr style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
-              <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>Élève</th>
-              <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</th>
-              <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>Date</th>
-              <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>Actions</th>
-            </tr></thead>
-            <tbody>{responses.map((r, i) => (
-              <tr key={r.id} className="cursor-pointer" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} onClick={() => setSel(r)}
-                onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                <td className="px-4 py-3 text-white font-medium">{profileName(r.student)}</td>
-                <td className="px-4 py-3" style={{ color: "rgba(255,255,255,0.5)" }}>{r.groupe?.name ?? "—"}</td>
-                <td className="px-4 py-3" style={{ color: "rgba(255,255,255,0.5)" }}>{formatDate(r.submitted_at)}</td>
-                <td className="px-4 py-3 text-right"><button onClick={e => { e.stopPropagation(); setSel(r); }} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: "#C9A84C", backgroundColor: "rgba(201,168,76,0.1)" }}><Eye size={11} className="inline mr-1" />Détail</button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-      {sel && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSel(null)}>
-          <div className="bg-[#0e1e35] border border-white/15 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div><h3 className="text-base font-semibold text-white">{profileName(sel.student)}</h3><p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{sel.groupe?.name ?? "Sans classe"} · {formatDate(sel.submitted_at)}</p></div>
-              <button onClick={() => setSel(null)} className="text-white/40 hover:text-white text-lg">×</button>
-            </div>
-            <div className="space-y-3">{fields.map(f => { const a = sel.answers?.[f.key]; const v = Array.isArray(a) ? a.join(", ") : a ?? "—"; return (
-              <div key={f.id} className="p-3 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>{f.label}</p>
-                <p className="text-sm text-white">{v || <span style={{ color: "rgba(255,255,255,0.2)" }}>Non renseigné</span>}</p>
-              </div>); })}</div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}

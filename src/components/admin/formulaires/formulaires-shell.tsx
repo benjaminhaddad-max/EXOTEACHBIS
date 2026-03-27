@@ -2,13 +2,14 @@
 
 import { useState, useMemo, useTransition } from "react";
 import {
-  FileText, Clock, Users, Check, AlertCircle, Plus, Search, Eye,
+  FileText, Clock, Users, Check, AlertCircle, Plus, Search,
   ChevronRight, Pencil, BarChart3, Copy, X, GraduationCap, Building2,
 } from "lucide-react";
 import type { CoachingIntakeForm, Dossier, FormField, FormTemplate, FormTargetType, Groupe, Profile } from "@/types/database";
 import { duplicateFormTemplate } from "@/app/(admin)/admin/configuration/actions";
 import { FormulairesSidebar, type SidebarFilter } from "./formulaires-sidebar";
 import { FormulaireEditor } from "./formulaire-editor";
+import { FormResponsesView } from "./form-responses-view";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -219,11 +220,7 @@ export function FormulairesShell({
           )}
 
           {activeView === "responses" && selectedTemplate && (
-            <ResponsesView
-              template={selectedTemplate}
-              fields={selectedFields}
-              responses={selectedResponses}
-            />
+            <FormResponsesView template={selectedTemplate} fields={selectedFields} responses={selectedResponses} />
           )}
         </div>
       </div>
@@ -461,121 +458,3 @@ function useState_transition() {
   return [isPending, (fn: () => Promise<void>) => startTransition(fn)] as const;
 }
 
-// ─── Responses View ───────────────────────────────────────────────────────────
-
-function ResponsesView({
-  template, fields, responses,
-}: {
-  template: FormTemplate;
-  fields: FormField[];
-  responses: CoachingIntakeForm[];
-}) {
-  const [selectedResponse, setSelectedResponse] = useState<CoachingIntakeForm | null>(null);
-
-  return (
-    <div className="space-y-4">
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Total réponses</p>
-          <p className="text-2xl font-bold text-white">{responses.length}</p>
-        </div>
-        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Dernière réponse</p>
-          <p className="text-sm font-semibold text-white">{formatDate(responses[0]?.submitted_at)}</p>
-        </div>
-        <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>Questions</p>
-          <p className="text-2xl font-bold text-white">{fields.length}</p>
-        </div>
-      </div>
-
-      {/* Table */}
-      {responses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16" style={{ color: "rgba(255,255,255,0.3)" }}>
-          <BarChart3 size={32} className="mb-3 opacity-30" />
-          <p className="text-sm">Aucune réponse pour ce formulaire</p>
-        </div>
-      ) : (
-        <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Élève</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Date</th>
-                <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {responses.map((r, i) => (
-                <tr
-                  key={r.id}
-                  className="transition-colors cursor-pointer"
-                  style={{ borderTop: "1px solid rgba(255,255,255,0.05)", backgroundColor: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)" }}
-                  onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
-                  onMouseOut={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)")}
-                  onClick={() => setSelectedResponse(r)}
-                >
-                  <td className="px-4 py-3 text-white font-medium">{profileName(r.student)}</td>
-                  <td className="px-4 py-3" style={{ color: "rgba(255,255,255,0.5)" }}>{r.groupe?.name ?? "—"}</td>
-                  <td className="px-4 py-3" style={{ color: "rgba(255,255,255,0.5)" }}>{formatDate(r.submitted_at)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedResponse(r); }}
-                      className="text-[11px] px-2 py-1 rounded-lg transition-colors"
-                      style={{ color: "#C9A84C", backgroundColor: "rgba(201,168,76,0.1)" }}
-                    >
-                      <Eye size={11} className="inline mr-1" /> Détail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Detail modal */}
-      {selectedResponse && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setSelectedResponse(null)}
-        >
-          <div
-            className="bg-[#0e1e35] border border-white/15 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl p-6"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-semibold text-white">{profileName(selectedResponse.student)}</h3>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                  {selectedResponse.groupe?.name ?? "Sans classe"} · {formatDate(selectedResponse.submitted_at)}
-                </p>
-              </div>
-              <button onClick={() => setSelectedResponse(null)} className="text-white/40 hover:text-white text-lg">×</button>
-            </div>
-
-            <div className="space-y-3">
-              {fields.map(f => {
-                const answer = selectedResponse.answers?.[f.key];
-                const displayValue = Array.isArray(answer) ? answer.join(", ") : answer ?? "—";
-                return (
-                  <div key={f.id} className="p-3 rounded-xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>
-                      {f.label}
-                    </p>
-                    <p className="text-sm text-white">{displayValue || <span style={{ color: "rgba(255,255,255,0.2)" }}>Non renseigné</span>}</p>
-                  </div>
-                );
-              })}
-              {fields.length === 0 && (
-                <p className="text-xs text-center py-4" style={{ color: "rgba(255,255,255,0.3)" }}>Aucun champ configuré</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
