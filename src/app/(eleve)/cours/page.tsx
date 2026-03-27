@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { EleveCoursShell } from "@/components/eleve/cours-shell";
+import { getExercicesData } from "@/app/(eleve)/exercices/actions";
 import { canAccessMatiere, filterDossiersByAccess, getAccessScopeForUser } from "@/lib/access-scope";
 import type { Cours, Matiere } from "@/types/database";
 
@@ -12,7 +13,7 @@ export default async function CoursPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [dossiersRes, matieresRes, coursRes, flashcardDecksRes, scope] = await Promise.all([
+  const [dossiersRes, matieresRes, coursRes, flashcardDecksRes, scope, exercicesData] = await Promise.all([
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("matieres").select("*").eq("visible", true).order("order_index"),
     supabase.from("cours").select("*").eq("visible", true).order("order_index"),
@@ -22,6 +23,7 @@ export default async function CoursPage() {
       .eq("visible", true)
       .order("created_at", { ascending: false }),
     getAccessScopeForUser(supabase, user!.id),
+    getExercicesData(),
   ]);
 
   const dossiers = filterDossiersByAccess(dossiersRes.data ?? [], scope);
@@ -67,6 +69,8 @@ export default async function CoursPage() {
         initialMatieres={matieres}
         initialCours={cours}
         initialFlashcardDecks={flashcardDecks}
+        initialExerciceTree={exercicesData.tree}
+        initialExerciceCours={exercicesData.allCours}
       />
     </div>
   );

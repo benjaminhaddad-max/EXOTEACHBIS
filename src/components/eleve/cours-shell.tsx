@@ -7,6 +7,8 @@ import {
   Home, BookOpen, GripVertical, Layers, ArrowRight, Search,
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
+import { ExercicesShell } from "@/components/eleve/exercices-shell";
+import type { DossierNode as ExerciceDossierNode, CoursNode as ExerciceCoursNode } from "@/app/(eleve)/exercices/actions";
 
 type DossierNode = Dossier & { children: DossierNode[] };
 
@@ -36,6 +38,25 @@ function getBreadcrumb(id: string | null, allDossiers: Dossier[]): Dossier[] {
   const d = allDossiers.find((x) => x.id === id);
   if (!d) return [];
   return [...getBreadcrumb(d.parent_id, allDossiers), d];
+}
+
+function findExerciceNodeById(nodes: ExerciceDossierNode[], id: string): ExerciceDossierNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const found = findExerciceNodeById(node.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function collectExerciceCoursIds(nodes: ExerciceDossierNode[]): string[] {
+  const ids: string[] = [];
+  const walk = (node: ExerciceDossierNode) => {
+    ids.push(...node.cours.map((cours) => cours.id));
+    node.children.forEach(walk);
+  };
+  nodes.forEach(walk);
+  return ids;
 }
 
 // ─── Tree node ────────────────────────────────────────────────────────────────
@@ -92,11 +113,15 @@ export function EleveCoursShell({
   initialMatieres,
   initialCours,
   initialFlashcardDecks,
+  initialExerciceTree,
+  initialExerciceCours,
 }: {
   initialDossiers: Dossier[];
   initialMatieres: Matiere[];
   initialCours: Cours[];
   initialFlashcardDecks: FlashcardDeck[];
+  initialExerciceTree: ExerciceDossierNode[];
+  initialExerciceCours: ExerciceCoursNode[];
 }) {
   const router = useRouter();
   const [allDossiers] = useState<Dossier[]>(initialDossiers);
@@ -109,6 +134,7 @@ export function EleveCoursShell({
   const [childDossiers, setChildDossiers] = useState<Dossier[]>([]);
   const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"cours" | "exercices">("cours");
 
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -182,6 +208,22 @@ export function EleveCoursShell({
       return haystack.includes(normalizedSearch);
     });
   }, [flashcardDecks, normalizedSearch]);
+
+  const selectedExerciceRoots = useMemo(() => {
+    if (!selectedDossier) return [];
+    const node = findExerciceNodeById(initialExerciceTree, selectedDossier.id);
+    return node ? [node] : [];
+  }, [initialExerciceTree, selectedDossier]);
+
+  const selectedExerciceCours = useMemo(() => {
+    const ids = new Set(collectExerciceCoursIds(selectedExerciceRoots));
+    return initialExerciceCours.filter((cours) => ids.has(cours.id));
+  }, [initialExerciceCours, selectedExerciceRoots]);
+
+  const exerciceQuestionCount = useMemo(
+    () => selectedExerciceCours.reduce((sum, cours) => sum + cours.nb_questions, 0),
+    [selectedExerciceCours]
+  );
 
   // Drag to resize
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -337,9 +379,36 @@ export function EleveCoursShell({
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("cours")}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        activeTab === "cours"
+                          ? "bg-[#12314D] text-white shadow-sm"
+                          : "border border-[#DCE7F3] bg-white text-[#5F6F82] hover:text-[#12314D]"
+                      }`}
+                    >
+                      Cours
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("exercices")}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        activeTab === "exercices"
+                          ? "bg-[#12314D] text-white shadow-sm"
+                          : "border border-[#DCE7F3] bg-white text-[#5F6F82] hover:text-[#12314D]"
+                      }`}
+                      disabled={selectedExerciceRoots.length === 0}
+                    >
+                      Exercices
+                      {exerciceQuestionCount > 0 ? ` · ${exerciceQuestionCount}` : ""}
+                    </button>
+                  </div>
                 </div>
 
-                {filteredCoursList.length > 0 && (
+                {activeTab === "cours" && filteredCoursList.length > 0 && (
                   <div>
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#90A0B2]">Cours &amp; Exercices</p>
@@ -365,9 +434,9 @@ export function EleveCoursShell({
                           <h3 className="text-base font-semibold leading-snug text-[#12314D]">{c.name}</h3>
                           <div className="mt-4 flex items-center justify-between gap-3">
                             <span className="text-xs text-[#8EA0B2]">Cours et exercices associes</span>
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#4FABDB] transition-all group-hover:gap-1.5">
-                              Ouvrir
-                              <ArrowRight size={12} />
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#2E6FA3] transition-all duration-200 group-hover:border-[#4FABDB]/40 group-hover:bg-[#EEF8FF] group-hover:text-[#12314D] group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.18)]">
+                              <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Ouvrir</span>
+                              <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
                             </span>
                           </div>
                         </button>
@@ -376,7 +445,7 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {filteredFlashcardDecks.length > 0 && (
+                {activeTab === "cours" && filteredFlashcardDecks.length > 0 && (
                   <div>
                     <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#90A0B2]">Flashcards</p>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -417,9 +486,9 @@ export function EleveCoursShell({
                                 </span>
                               )}
                             </div>
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#4FABDB] transition-all group-hover:gap-1.5">
-                              Réviser
-                              <ArrowRight size={12} />
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#2E6FA3] transition-all duration-200 group-hover:border-[#4FABDB]/40 group-hover:bg-[#EEF8FF] group-hover:text-[#12314D] group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.18)]">
+                              <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Réviser</span>
+                              <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
                             </span>
                           </div>
                         </button>
@@ -428,7 +497,21 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && filteredFlashcardDecks.length === 0 && (
+                {activeTab === "exercices" && selectedExerciceRoots.length > 0 && (
+                  <div className="overflow-hidden rounded-[28px] border border-[#E5EDF7] bg-white shadow-[0_20px_50px_rgba(18,49,77,0.06)]">
+                    <ExercicesShell tree={selectedExerciceRoots} allCours={selectedExerciceCours} />
+                  </div>
+                )}
+
+                {activeTab === "exercices" && selectedExerciceRoots.length === 0 && (
+                  <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
+                    <Layers size={40} className="mb-3 text-[#D0D9E4]" />
+                    <p className="text-sm font-medium text-[#7D8C9E]">Aucun exercice disponible à cette échelle</p>
+                    <p className="mt-1 text-xs text-[#A2AEBC]">Descends dans une matière ou un chapitre pour t’entraîner.</p>
+                  </div>
+                )}
+
+                {activeTab === "cours" && filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && filteredFlashcardDecks.length === 0 && (
                   <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
                     <FolderOpen size={40} className="mb-3 text-[#D0D9E4]" />
                     <p className="text-sm font-medium text-[#7D8C9E]">
