@@ -368,7 +368,7 @@ export function QaPedagogieMatiereTreeSidebar({
       <div className="px-3 pt-3 pb-2 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Pédagogie</p>
         <p className="text-[9px] text-gray-400 mt-0.5 leading-snug">
-          Offre → université → filière → semestre → matière → chapitre
+          Offre (ex. PREPA PASS) → université → semestre → matière → chapitre
         </p>
       </div>
 
