@@ -689,19 +689,19 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
           </div>
 
           {/* Time + actions */}
-          <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/8 mt-1">
-            <div className="flex items-center gap-1 flex-1">
-              <Clock size={10} className="text-white/25" />
+          <div className="flex items-center gap-3 px-4 py-3 border-t border-white/8">
+            <Clock size={12} className="text-white/30 shrink-0" />
+            <div className="flex items-center gap-1.5 flex-1">
               <input
-                type="number" min={0} max={23} value={timeH}
-                onChange={e => handleTime("h", e.target.value)}
-                className="w-9 bg-white/6 border border-white/10 rounded-lg px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-[#C9A84C]/40"
+                type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={timeH}
+                onChange={e => handleTime("h", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                className="w-10 bg-white/8 border border-white/15 rounded-lg py-1.5 text-xs text-white text-center font-mono focus:outline-none focus:border-[#C9A84C]/60"
               />
-              <span className="text-white/25 text-xs font-bold">:</span>
+              <span className="text-white/40 text-sm font-bold">:</span>
               <input
-                type="number" min={0} max={59} value={timeM}
-                onChange={e => handleTime("m", e.target.value)}
-                className="w-9 bg-white/6 border border-white/10 rounded-lg px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-[#C9A84C]/40"
+                type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={timeM}
+                onChange={e => handleTime("m", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                className="w-10 bg-white/8 border border-white/15 rounded-lg py-1.5 text-xs text-white text-center font-mono focus:outline-none focus:border-[#C9A84C]/60"
               />
             </div>
             <button
