@@ -17,16 +17,16 @@ import { FlashcardsSection } from "./flashcards-section";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-type SerieType = "annales" | "qcm_supplementaires" | "concours_blanc" | "revision";
+export type SerieType = "annales" | "qcm_supplementaires" | "concours_blanc" | "revision";
 
-type SerieSummary = {
+export type SerieSummary = {
   id: string; name: string; type: string; visible: boolean;
   timed: boolean; duration_minutes: number | null;
   score_definitif: boolean; cours_id: string | null;
   nb_questions: number; annee: string | null;
 };
 
-type CoursBasic = { id: string; name: string; dossier_id: string };
+export type CoursBasic = { id: string; name: string; dossier_id: string };
 
 const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
   annales:             { label: "Annales corrigées",   icon: <BookOpen size={14} />,   color: "text-amber-300",  bg: "bg-amber-500/15",  border: "border-amber-500/30" },
@@ -301,7 +301,7 @@ function EditSerieModal({
 
 // ─── Full Serie Editor Modal ───────────────────────────────────────────────
 
-function FullSerieEditor({
+export function FullSerieEditor({
   serie, coursList, onClose, onSaved,
 }: {
   serie: SerieSummary; coursList: CoursBasic[];

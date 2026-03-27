@@ -14,6 +14,7 @@ import {
 } from "@/app/(admin)/admin/examens/actions";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
+import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
 
 type ExamenSerieWithCoeff = {
   series_id: string;
@@ -68,6 +69,7 @@ export function ExamenDetailShell({
   const [isPending, startTransition] = useTransition();
   const [creating, setCreating] = useState<string | null>(null);
   const [resultsVisible, setResultsVisible] = useState(initialExamen.results_visible);
+  const [editingSerie, setEditingSerie] = useState<SerieSummary | null>(null);
 
   // Results state
   const [resultTab, setResultTab] = useState<"global" | "serie">("global");
@@ -315,12 +317,26 @@ export function ExamenDetailShell({
                   <button onClick={() => exportSerie(es.series_id, true)} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-green-400/80 hover:bg-green-500/10 transition-colors">
                     <Download size={10} /> Correction
                   </button>
-                  <Link
-                    href={`/admin/pedagogie?dossier=${es.series?.matiere_id ? (matieres.find(m => m.id === es.series?.matiere_id)?.dossier_id ?? "") : ""}&serie=${es.series_id}`}
+                  <button
+                    onClick={() => {
+                      if (!es.series) return;
+                      setEditingSerie({
+                        id: es.series_id,
+                        name: es.series.name,
+                        type: es.series.type ?? "concours_blanc",
+                        visible: es.series.visible ?? true,
+                        timed: (es.series as any).timed ?? false,
+                        duration_minutes: (es.series as any).duration_minutes ?? null,
+                        score_definitif: (es.series as any).score_definitif ?? false,
+                        cours_id: (es.series as any).cours_id ?? null,
+                        nb_questions: (es.series as any).nb_questions ?? 0,
+                        annee: (es.series as any).annee ?? null,
+                      });
+                    }}
                     className="flex items-center gap-1 px-2 py-1 bg-[#C9A84C]/10 rounded-lg text-[10px] text-[#C9A84C]/70 hover:text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors ml-auto"
                   >
                     Éditer QCM →
-                  </Link>
+                  </button>
                 </div>
               </div>
             ))}
@@ -484,6 +500,16 @@ export function ExamenDetailShell({
           </div>
         </div>
       </div>
+
+      {/* Inline QCM serie editor */}
+      {editingSerie && (
+        <FullSerieEditor
+          serie={editingSerie}
+          coursList={[]}
+          onClose={() => setEditingSerie(null)}
+          onSaved={() => setEditingSerie(null)}
+        />
+      )}
     </div>
   );
 }
