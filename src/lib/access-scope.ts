@@ -19,6 +19,12 @@ export interface AccessScope {
   allowedDossierIds: Set<string>;
 }
 
+type GroupeAccessRow = {
+  id: string;
+  parent_id: string | null;
+  formation_dossier_id: string | null;
+};
+
 export function expandDossierTree(
   dossiers: Pick<Dossier, "id" | "parent_id">[],
   rootIds: string[]
@@ -46,6 +52,25 @@ export function expandDossierTree(
   }
 
   return visited;
+}
+
+function getInheritedFormationDossierId(
+  groupeId: string | null | undefined,
+  groupes: GroupeAccessRow[]
+) {
+  const groupeMap = new Map(groupes.map((g) => [g.id, g]));
+  let currentId = groupeId ?? null;
+
+  while (currentId) {
+    const groupe = groupeMap.get(currentId);
+    if (!groupe) break;
+    if (groupe.formation_dossier_id) {
+      return groupe.formation_dossier_id;
+    }
+    currentId = groupe.parent_id;
+  }
+
+  return null;
 }
 
 export async function getAccessScopeForUser(
@@ -76,11 +101,14 @@ export async function getAccessScopeForUser(
     };
   }
 
-  const [dossiersRes, groupAccessRes, profileAccessRes, profileExclusionRes] = await Promise.all([
+  const [dossiersRes, groupesRes, groupAccessRes, profileAccessRes, profileExclusionRes] = await Promise.all([
     supabase
       .from("dossiers")
       .select("id, parent_id")
       .eq("visible", true),
+    supabase
+      .from("groupes")
+      .select("id, parent_id, formation_dossier_id"),
     typedProfile.groupe_id
       ? supabase
           .from("groupe_dossier_acces")
@@ -102,6 +130,14 @@ export async function getAccessScopeForUser(
 
   if (typedProfile.access_dossier_id) {
     profileRootIds.add(typedProfile.access_dossier_id);
+  }
+
+  const inheritedFormationDossierId = getInheritedFormationDossierId(
+    typedProfile.groupe_id,
+    (groupesRes.data ?? []) as GroupeAccessRow[]
+  );
+  if (inheritedFormationDossierId) {
+    groupRootIds.add(inheritedFormationDossierId);
   }
 
   for (const access of profileAccessRes.data ?? []) {
