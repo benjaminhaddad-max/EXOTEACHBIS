@@ -573,12 +573,26 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [popupPos, setPopupPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0, left: 0 });
   const parsed = value ? new Date(value) : null;
   const [viewYear, setViewYear] = useState(() => parsed?.getFullYear() ?? new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => parsed?.getMonth() ?? new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<Date | null>(parsed);
   const [timeH, setTimeH] = useState(() => parsed ? String(parsed.getHours()).padStart(2, "0") : "08");
   const [timeM, setTimeM] = useState(() => parsed ? String(parsed.getMinutes()).padStart(2, "0") : "00");
+
+  const handleOpen = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      if (placement === "right") {
+        setPopupPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+      } else {
+        setPopupPos({ top: r.bottom + 6, left: r.left });
+      }
+    }
+    setOpen(o => !o);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -621,7 +635,8 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={handleOpen}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-medium transition-all ${
           selectedDate
             ? "bg-white/8 border-[#C9A84C]/30 text-white/80 hover:border-[#C9A84C]/50"
@@ -633,7 +648,7 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
       </button>
 
       {open && (
-        <div className={`absolute z-50 top-full mt-1.5 ${placement === "right" ? "right-0" : "left-0"} rounded-2xl border border-white/12 shadow-2xl overflow-hidden`} style={{ backgroundColor: "#0a1828", minWidth: 248 }}>
+        <div className="fixed z-[9999] rounded-2xl border border-white/12 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0a1828", minWidth: 248, top: popupPos.top, ...(popupPos.left !== undefined ? { left: popupPos.left } : { right: popupPos.right }) }}>
           {/* Month nav */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
             <button onClick={prevMonth} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors text-sm">‹</button>
