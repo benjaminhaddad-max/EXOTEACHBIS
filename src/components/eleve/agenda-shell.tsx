@@ -359,6 +359,15 @@ export function AgendaShell({
                       const res = await updateStudentEvent(modal.event.id, data);
                       if ("error" in res && res.error) { showToast(res.error, false); return; }
                       showToast("Session modifiée", true);
+                    } else if (data._batch) {
+                      const items = data._batch as any[];
+                      let errors = 0;
+                      for (const item of items) {
+                        const res = await createStudentEvent(item);
+                        if ("error" in res && res.error) errors++;
+                      }
+                      if (errors > 0) { showToast(`${errors} erreur(s) sur ${items.length}`, false); }
+                      else { showToast(`${items.length} session${items.length > 1 ? "s" : ""} créée${items.length > 1 ? "s" : ""}`, true); }
                     } else {
                       const res = await createStudentEvent(data as any);
                       if ("error" in res && res.error) { showToast(res.error, false); return; }
@@ -687,7 +696,9 @@ function RevisionForm({
 }) {
   const [revType, setRevType] = useState<RevisionType>(event?.revision_type ?? "apprentissage_fiche");
   const [matiereId, setMatiereId] = useState<string>(event?.matiere_id ?? "");
-  const [coursId, setCoursId] = useState<string>(event?.cours_id ?? "");
+  const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(
+    () => event?.cours_id ? new Set([event.cours_id]) : new Set(),
+  );
   const [startAt, setStartAt] = useState(
     prefill ? fmt(prefill.date, prefill.hour) : event ? new Date(event.start_at).toISOString().slice(0, 16) : "",
   );
@@ -703,28 +714,73 @@ function RevisionForm({
 
   const showCours = needsCours(revType);
 
+  const toggleCours = (id: string) => {
+    setSelectedCoursIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedCoursIds.size === filteredCours.length) {
+      setSelectedCoursIds(new Set());
+    } else {
+      setSelectedCoursIds(new Set(filteredCours.map((c) => c.id)));
+    }
+  };
+
   const autoTitle = useMemo(() => {
     const meta = REVISION_TYPE_META[revType];
     const mat = matieres.find((m) => m.id === matiereId);
-    const co = cours.find((c) => c.id === coursId);
     let t = meta.label;
     if (mat) t += ` — ${mat.name}`;
-    if (co && showCours) t += ` › ${co.name}`;
+    if (showCours && selectedCoursIds.size === 1) {
+      const co = cours.find((c) => c.id === [...selectedCoursIds][0]);
+      if (co) t += ` › ${co.name}`;
+    } else if (showCours && selectedCoursIds.size > 1) {
+      t += ` › ${selectedCoursIds.size} chapitres`;
+    }
     return t;
-  }, [revType, matiereId, coursId, matieres, cours, showCours]);
+  }, [revType, matiereId, selectedCoursIds, matieres, cours, showCours]);
 
   const handleSubmit = () => {
     const col = REVISION_TYPE_META[revType]?.color;
-    onSubmit({
-      title: autoTitle,
+    const base = {
       revision_type: revType,
       matiere_id: matiereId || null,
-      cours_id: (showCours && coursId) ? coursId : null,
       start_at: new Date(startAt).toISOString(),
       end_at: new Date(endAt).toISOString(),
       notes: notes.trim() || null,
       color: col || null,
-    });
+    };
+
+    if (event) {
+      // Edit mode: single event, keep first selected cours
+      const firstCoursId = showCours && selectedCoursIds.size > 0 ? [...selectedCoursIds][0] : null;
+      const co = firstCoursId ? cours.find((c) => c.id === firstCoursId) : null;
+      const mat = matieres.find((m) => m.id === matiereId);
+      let title = REVISION_TYPE_META[revType].label;
+      if (mat) title += ` — ${mat.name}`;
+      if (co) title += ` › ${co.name}`;
+      onSubmit({ ...base, title, cours_id: firstCoursId });
+      return;
+    }
+
+    // Create mode: one event per selected chapter (or one if no chapters)
+    if (showCours && selectedCoursIds.size > 0) {
+      const mat = matieres.find((m) => m.id === matiereId);
+      const items = [...selectedCoursIds].map((cid) => {
+        const co = cours.find((c) => c.id === cid);
+        let title = REVISION_TYPE_META[revType].label;
+        if (mat) title += ` — ${mat.name}`;
+        if (co) title += ` › ${co.name}`;
+        return { ...base, title, cours_id: cid };
+      });
+      onSubmit({ _batch: items });
+    } else {
+      onSubmit({ ...base, title: autoTitle, cours_id: null });
+    }
   };
 
   const field = "w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold/40 focus:border-gold transition-all";
@@ -744,7 +800,7 @@ function RevisionForm({
             const Icon = REVISION_ICON_MAP[meta.icon] ?? BookOpen;
             const active = revType === key;
             return (
-              <button key={key} type="button" onClick={() => { setRevType(key); setCoursId(""); }}
+              <button key={key} type="button" onClick={() => { setRevType(key); setSelectedCoursIds(new Set()); }}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium border transition-all ${active ? "border-2 shadow-sm" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}
                 style={active ? { borderColor: meta.color, backgroundColor: meta.color + "10", color: meta.color } : {}}>
                 <Icon size={14} />
@@ -758,7 +814,7 @@ function RevisionForm({
       {/* Matière */}
       <div>
         <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Matière</label>
-        <select value={matiereId} onChange={(e) => { setMatiereId(e.target.value); setCoursId(""); }} className={field}>
+        <select value={matiereId} onChange={(e) => { setMatiereId(e.target.value); setSelectedCoursIds(new Set()); }} className={field}>
           <option value="">— Choisir une matière —</option>
           {matieres.map((m) => (
             <option key={m.id} value={m.id}>{m.name}</option>
@@ -766,16 +822,37 @@ function RevisionForm({
         </select>
       </div>
 
-      {/* Cours (chapitre) */}
-      {showCours && matiereId && (
+      {/* Chapitres (multi-select checkboxes) */}
+      {showCours && matiereId && filteredCours.length > 0 && (
         <div>
-          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Chapitre (cours)</label>
-          <select value={coursId} onChange={(e) => setCoursId(e.target.value)} className={field}>
-            <option value="">— Choisir un chapitre —</option>
-            {filteredCours.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-gray-500">Chapitres</label>
+            <button type="button" onClick={toggleAll}
+              className="text-[10px] font-semibold text-gold hover:text-gold/70 transition-colors">
+              {selectedCoursIds.size === filteredCours.length ? "Tout désélectionner" : "Tout sélectionner"}
+            </button>
+          </div>
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 divide-y divide-gray-100">
+            {filteredCours.map((c) => {
+              const checked = selectedCoursIds.has(c.id);
+              return (
+                <label key={c.id}
+                  className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${checked ? "bg-gold/5" : "hover:bg-gray-100"}`}>
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${checked ? "bg-gold border-gold" : "border-gray-300 bg-white"}`}>
+                    {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+                  </div>
+                  <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleCours(c.id)} />
+                  <span className={`text-xs font-medium ${checked ? "text-gray-900" : "text-gray-600"}`}>{c.name}</span>
+                </label>
+              );
+            })}
+          </div>
+          {selectedCoursIds.size > 0 && (
+            <p className="text-[10px] text-gray-400 mt-1">
+              {selectedCoursIds.size} chapitre{selectedCoursIds.size > 1 ? "s" : ""} sélectionné{selectedCoursIds.size > 1 ? "s" : ""}
+              {!event && selectedCoursIds.size > 1 && " — un événement sera créé par chapitre"}
+            </p>
+          )}
         </div>
       )}
 
@@ -811,7 +888,7 @@ function RevisionForm({
           className="flex items-center gap-2 px-4 py-2 bg-gold text-navy text-sm font-bold rounded-lg hover:bg-gold/80 disabled:opacity-50 transition-all shadow-sm"
         >
           {isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          {event ? "Enregistrer" : "Créer la session"}
+          {event ? "Enregistrer" : selectedCoursIds.size > 1 ? `Créer ${selectedCoursIds.size} sessions` : "Créer la session"}
         </button>
       </div>
     </div>
