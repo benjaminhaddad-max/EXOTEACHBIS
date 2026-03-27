@@ -50,6 +50,37 @@ function collectExerciceCoursIds(nodes: ExerciceDossierNode[]): string[] {
   return ids;
 }
 
+function isUniversityLikeDossier(dossier: Dossier): boolean {
+  if (dossier.dossier_type === "university") return true;
+  const name = dossier.name.toLowerCase();
+  return (
+    name.includes("universit") ||
+    name.includes("facult") ||
+    name.includes("paris-cité") ||
+    name.includes("paris cite") ||
+    name.includes("paris-nord") ||
+    name.includes("sorbonne")
+  );
+}
+
+function getDefaultStudentDossier(dossiers: Dossier[]): Dossier | null {
+  const roots = dossiers.filter((d) => d.parent_id === null).sort((a, b) => a.order_index - b.order_index);
+  if (roots.length !== 1) return roots[0] ?? null;
+
+  let current = roots[0];
+  if (isUniversityLikeDossier(current)) return current;
+
+  while (true) {
+    const children = dossiers
+      .filter((d) => d.parent_id === current.id)
+      .sort((a, b) => a.order_index - b.order_index);
+
+    if (children.length !== 1) return current;
+    if (isUniversityLikeDossier(children[0])) return children[0];
+    current = children[0];
+  }
+}
+
 // ─── Main shell ───────────────────────────────────────────────────────────────
 
 export function EleveCoursShell({
@@ -162,9 +193,11 @@ export function EleveCoursShell({
   }, [allCours, matiereIdsByDossier, selectedDossier]);
 
   useEffect(() => {
-    if (selectedId || rootDossiers.length !== 1) return;
-    selectDossier(rootDossiers[0]);
-  }, [selectedId, selectDossier, rootDossiers]);
+    if (selectedId) return;
+    const preferred = getDefaultStudentDossier(allDossiers);
+    if (!preferred) return;
+    selectDossier(preferred);
+  }, [allDossiers, selectedId, selectDossier]);
 
   return (
     <div className="flex flex-1 overflow-hidden">
