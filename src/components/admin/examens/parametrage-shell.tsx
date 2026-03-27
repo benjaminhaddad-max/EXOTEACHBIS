@@ -154,9 +154,9 @@ function ParametrageSidebar({ dossiers, selectedId, onSelect }: {
 
 const DEFAULT_SCALES: ScaleRow[] = [
   { nb_errors: 0, points: 1 },
-  { nb_errors: 1, points: 0.5 },
-  { nb_errors: 2, points: 0.2 },
-  { nb_errors: 3, points: 0 },
+  { nb_errors: 1, points: -0.25 },
+  { nb_errors: 2, points: -0.5 },
+  { nb_errors: 3, points: -1 },
 ];
 
 function GradingScaleSection({ universityId, universityName, showToast }: {
@@ -207,9 +207,9 @@ function GradingScaleSection({ universityId, universityName, showToast }: {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-semibold text-white">Barème QCM</h2>
+          <h2 className="text-sm font-semibold text-white">Notation QCM</h2>
           <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Points attribués selon le nombre d&apos;erreurs — {universityName}
+            Score par question selon le nb d&apos;erreurs. Valeurs négatives = pénalité. — {universityName}
           </p>
         </div>
         <button onClick={handleSave} disabled={saving || loading}
@@ -234,7 +234,7 @@ function GradingScaleSection({ universityId, universityName, showToast }: {
                   Nb erreurs
                 </th>
                 <th className="text-[10px] font-semibold uppercase tracking-wider text-left px-4 py-2.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-                  Points attribués
+                  Score (négatif = pénalité)
                 </th>
                 <th className="w-10" />
               </tr>
@@ -250,9 +250,9 @@ function GradingScaleSection({ universityId, universityName, showToast }: {
                     />
                   </td>
                   <td className="px-4 py-2">
-                    <input type="number" min={0} step={0.1}
+                    <input type="number" step={0.05}
                       value={row.points}
-                      onChange={e => updateRow(idx, "points", parseFloat(e.target.value) || 0)}
+                      onChange={e => updateRow(idx, "points", parseFloat(e.target.value) ?? 0)}
                       className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
                     />
                   </td>

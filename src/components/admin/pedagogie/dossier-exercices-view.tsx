@@ -302,10 +302,11 @@ function EditSerieModal({
 // ─── Full Serie Editor Modal ───────────────────────────────────────────────
 
 export function FullSerieEditor({
-  serie, coursList, onClose, onSaved,
+  serie, coursList, onClose, onSaved, readonlyType,
 }: {
   serie: SerieSummary; coursList: CoursBasic[];
   onClose: () => void; onSaved: () => void;
+  readonlyType?: boolean;
 }) {
   // Settings
   const [name, setName] = useState(serie.name);
@@ -400,7 +401,7 @@ export function FullSerieEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
-      <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border border-white/10 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+      <div className="w-full max-w-6xl h-[92vh] flex flex-col rounded-2xl border border-white/10 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 shrink-0">
@@ -460,12 +461,21 @@ export function FullSerieEditor({
             <div>
               <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">Type</p>
               <div className="space-y-1.5">
-                {TYPES.map((t) => (
-                  <button key={t} type="button" onClick={() => setType(t)}
-                    className={`w-full py-2 px-3 rounded-lg text-[11px] font-semibold border text-left transition-colors ${type === t ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/10 text-white/40 hover:border-white/20 hover:text-white/60"}`}>
-                    {TYPE_CONFIG[t].label}
-                  </button>
-                ))}
+                {TYPES.map((t) => {
+                  const isSelected = type === t;
+                  const isDisabled = readonlyType && !isSelected;
+                  return (
+                    <button key={t} type="button" onClick={() => !isDisabled && setType(t)}
+                      disabled={isDisabled}
+                      className={`w-full py-2 px-3 rounded-lg text-[11px] font-semibold border text-left transition-colors
+                        ${isSelected ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : ""}
+                        ${isDisabled ? "border-white/5 text-white/15 cursor-not-allowed opacity-40" : ""}
+                        ${!isSelected && !isDisabled ? "border-white/10 text-white/40 hover:border-white/20 hover:text-white/60" : ""}
+                      `}>
+                      {TYPE_CONFIG[t].label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="divide-y divide-white/8">

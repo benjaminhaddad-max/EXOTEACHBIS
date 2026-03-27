@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useRef } from "react";
+import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import {
   ArrowLeft, Plus, Trash2, X, Check, AlertCircle, Loader2,
   Calendar, Clock, Layers, ChevronDown, Download, FileText,
@@ -293,24 +293,23 @@ export function ExamenDetailShell({
                       onChange={(e) => handleCoeffChange(es.series_id, Number(e.target.value) || 1)}
                       className="w-14 px-1.5 py-1 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50" />
                   </div>
-                  <div className="flex-1 flex items-center gap-1">
-                    <Calendar size={10} className="text-white/20 shrink-0" />
-                    <input type="datetime-local" value={es.debut_at ? new Date(es.debut_at).toISOString().slice(0, 16) : ""}
-                      onChange={(e) => handleScheduleChange(es.series_id, e.target.value ? new Date(e.target.value).toISOString() : null, es.fin_at ?? null)}
-                      className="flex-1 px-1.5 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20 min-w-0" />
+                  <div className="flex items-center gap-1.5 flex-1">
+                    <DateTimePicker
+                      value={es.debut_at ?? null}
+                      placeholder="Début..."
+                      onChange={(v) => handleScheduleChange(es.series_id, v, es.fin_at ?? null)}
+                    />
                     <span className="text-[10px] text-white/15">→</span>
-                    <input type="datetime-local" value={es.fin_at ? new Date(es.fin_at).toISOString().slice(0, 16) : ""}
-                      onChange={(e) => handleScheduleChange(es.series_id, es.debut_at ?? null, e.target.value ? new Date(e.target.value).toISOString() : null)}
-                      className="flex-1 px-1.5 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20 min-w-0" />
+                    <DateTimePicker
+                      value={es.fin_at ?? null}
+                      placeholder="Fin..."
+                      onChange={(v) => handleScheduleChange(es.series_id, es.debut_at ?? null, v)}
+                    />
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-1.5">
-                  <label className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 cursor-pointer transition-colors">
-                    <Upload size={10} /> Import Word
-                    <input type="file" accept=".docx,.doc" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const formData = new FormData(); formData.append("serieId", es.series_id); formData.append("file", f); fetch("/api/import-serie", { method: "POST", body: formData }).then(r => r.json()).then(d => { if (d.error) showToast(d.error, "error"); else showToast("Sujet importé", "success"); }); } }} />
-                  </label>
                   <button onClick={() => exportSerie(es.series_id, false)} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors">
                     <FileText size={10} /> Sujet
                   </button>
@@ -508,7 +507,146 @@ export function ExamenDetailShell({
           coursList={[]}
           onClose={() => setEditingSerie(null)}
           onSaved={() => setEditingSerie(null)}
+          readonlyType
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Modern DateTimePicker ────────────────────────────────────────────────────
+
+const MONTHS_FR = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
+const DAYS_FR = ["L", "M", "M", "J", "V", "S", "D"];
+
+export function DateTimePicker({ value, onChange, placeholder }: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const parsed = value ? new Date(value) : null;
+  const [viewYear, setViewYear] = useState(() => parsed?.getFullYear() ?? new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => parsed?.getMonth() ?? new Date().getMonth());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(parsed);
+  const [timeH, setTimeH] = useState(() => parsed ? String(parsed.getHours()).padStart(2, "0") : "08");
+  const [timeM, setTimeM] = useState(() => parsed ? String(parsed.getMinutes()).padStart(2, "0") : "00");
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const applyDateTime = (date: Date, h: string, m: string) => {
+    const d = new Date(date);
+    d.setHours(parseInt(h) || 0, parseInt(m) || 0, 0, 0);
+    onChange(d.toISOString());
+  };
+
+  const selectDay = (day: number) => {
+    const d = new Date(viewYear, viewMonth, day);
+    setSelectedDate(d);
+    applyDateTime(d, timeH, timeM);
+  };
+
+  const handleTime = (field: "h" | "m", val: string) => {
+    const padded = val.padStart(2, "0");
+    if (field === "h") { setTimeH(padded); if (selectedDate) applyDateTime(selectedDate, padded, timeM); }
+    else { setTimeM(padded); if (selectedDate) applyDateTime(selectedDate, timeH, padded); }
+  };
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  const firstDayOfWeek = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const today = new Date();
+
+  const label = selectedDate
+    ? `${selectedDate.getDate()} ${MONTHS_FR[selectedDate.getMonth()]} ${selectedDate.getFullYear()} · ${timeH}:${timeM}`
+    : placeholder;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-medium transition-all ${
+          selectedDate
+            ? "bg-white/8 border-[#C9A84C]/30 text-white/80 hover:border-[#C9A84C]/50"
+            : "bg-white/3 border-white/8 text-white/30 hover:border-white/15 hover:text-white/50"
+        }`}
+      >
+        <Calendar size={9} className={selectedDate ? "text-[#C9A84C]/70" : ""} />
+        {label}
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full mt-1.5 left-0 rounded-2xl border border-white/12 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0a1828", minWidth: 248 }}>
+          {/* Month nav */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+            <button onClick={prevMonth} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors text-sm">‹</button>
+            <span className="text-xs font-bold text-white">{MONTHS_FR[viewMonth]} {viewYear}</span>
+            <button onClick={nextMonth} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors text-sm">›</button>
+          </div>
+
+          {/* Calendar grid */}
+          <div className="px-3 pt-2 pb-1">
+            <div className="grid grid-cols-7 mb-1">
+              {DAYS_FR.map((d, i) => (
+                <span key={i} className="text-center text-[9px] font-bold text-white/20 py-1">{d}</span>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-0.5">
+              {Array.from({ length: firstDayOfWeek }).map((_, i) => <div key={`pad-${i}`} />)}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1;
+                const isSelected = selectedDate?.getFullYear() === viewYear && selectedDate?.getMonth() === viewMonth && selectedDate?.getDate() === day;
+                const isToday = today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
+                return (
+                  <button key={day} onClick={() => selectDay(day)}
+                    className={`h-7 w-full rounded-lg text-[11px] font-semibold transition-all ${
+                      isSelected
+                        ? "bg-[#C9A84C] text-[#0a1828] shadow-sm"
+                        : isToday
+                        ? "text-[#C9A84C] border border-[#C9A84C]/30"
+                        : "text-white/55 hover:bg-white/8 hover:text-white"
+                    }`}>
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Time + actions */}
+          <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/8 mt-1">
+            <div className="flex items-center gap-1 flex-1">
+              <Clock size={10} className="text-white/25" />
+              <input
+                type="number" min={0} max={23} value={timeH}
+                onChange={e => handleTime("h", e.target.value)}
+                className="w-9 bg-white/6 border border-white/10 rounded-lg px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-[#C9A84C]/40"
+              />
+              <span className="text-white/25 text-xs font-bold">:</span>
+              <input
+                type="number" min={0} max={59} value={timeM}
+                onChange={e => handleTime("m", e.target.value)}
+                className="w-9 bg-white/6 border border-white/10 rounded-lg px-1 py-1 text-[11px] text-white text-center focus:outline-none focus:border-[#C9A84C]/40"
+              />
+            </div>
+            <button
+              onClick={() => { setSelectedDate(null); onChange(null); setOpen(false); }}
+              className="text-[10px] text-white/25 hover:text-white/50 transition-colors px-1"
+            >
+              Effacer
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
