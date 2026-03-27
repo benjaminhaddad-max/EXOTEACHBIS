@@ -2,7 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { RevisionType } from "@/types/database";
+import type { RevisionType, Matiere, Cours } from "@/types/database";
+import {
+  getAccessScopeForUser,
+  canAccessMatiere,
+} from "@/lib/access-scope";
 
 export async function getStudentMatieresCours() {
   const supabase = await createClient();
@@ -11,35 +15,48 @@ export async function getStudentMatieresCours() {
   } = await supabase.auth.getUser();
   if (!user) return { matieres: [], cours: [] };
 
-  const { getAccessScopeForUser, canAccessMatiere } = await import(
-    "@/lib/access-scope"
-  );
   const scope = await getAccessScopeForUser(supabase, user.id);
 
   const [matRes, coursRes] = await Promise.all([
     supabase
       .from("matieres")
-      .select("id, name, color, dossier_id")
+      .select("id, name, color, dossier_id, order_index")
       .eq("visible", true)
-      .order("name"),
+      .order("order_index"),
     supabase
       .from("cours")
-      .select("id, name, matiere_id, dossier_id")
+      .select("id, name, matiere_id, dossier_id, order_index")
       .eq("visible", true)
       .order("order_index"),
   ]);
 
-  const matieres = (matRes.data ?? []).filter((m) =>
-    canAccessMatiere(m, scope),
-  );
-  const matiereIds = new Set(matieres.map((m) => m.id));
+  const allMatieres = (matRes.data ?? []) as Pick<Matiere, "id" | "name" | "color" | "dossier_id" | "order_index">[];
+  const accessibleMatieres = allMatieres.filter((m) => canAccessMatiere(m, scope));
+  const accessibleMatiereIds = new Set(accessibleMatieres.map((m) => m.id));
 
-  const cours = (coursRes.data ?? []).filter((c: any) => {
-    if (c.dossier_id && scope.allowedDossierIds.has(c.dossier_id)) return true;
-    return c.matiere_id ? matiereIds.has(c.matiere_id) : false;
+  const allCours = (coursRes.data ?? []) as Pick<Cours, "id" | "name" | "matiere_id" | "dossier_id" | "order_index">[];
+  const cours = allCours.filter((c) => {
+    if (c.dossier_id) return scope.allowedDossierIds.has(c.dossier_id);
+    return c.matiere_id ? accessibleMatiereIds.has(c.matiere_id) : false;
   });
 
-  return { matieres, cours };
+  const matiereIdsWithCours = new Set(cours.map((c) => c.matiere_id).filter(Boolean) as string[]);
+  const matieres = accessibleMatieres.filter((m) => matiereIdsWithCours.has(m.id));
+
+  return {
+    matieres: matieres.map((m) => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      dossier_id: m.dossier_id,
+    })),
+    cours: cours.map((c) => ({
+      id: c.id,
+      name: c.name,
+      matiere_id: c.matiere_id,
+      dossier_id: c.dossier_id,
+    })),
+  };
 }
 
 export async function createStudentEvent(data: {
