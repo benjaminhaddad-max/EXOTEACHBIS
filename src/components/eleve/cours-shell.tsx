@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
 import { ExercicesShell } from "@/components/eleve/exercices-shell";
-import { MatiereExercicesView } from "@/components/eleve/matiere-exercices-view";
+import { MatiereExercicesView, type SerieSummaryForStudent } from "@/components/eleve/matiere-exercices-view";
 import type { DossierNode as ExerciceDossierNode, CoursNode as ExerciceCoursNode } from "@/app/(eleve)/exercices/actions";
 
 type FlashcardDeck = {
@@ -92,6 +92,7 @@ export function EleveCoursShell({
   initialExerciceTree,
   initialExerciceCours,
   userId,
+  initialSeries,
 }: {
   initialDossiers: Dossier[];
   initialMatieres: Matiere[];
@@ -100,6 +101,7 @@ export function EleveCoursShell({
   initialExerciceTree: ExerciceDossierNode[];
   initialExerciceCours: ExerciceCoursNode[];
   userId: string;
+  initialSeries: SerieSummaryForStudent[];
 }) {
   const router = useRouter();
   const [allDossiers] = useState<Dossier[]>(initialDossiers);

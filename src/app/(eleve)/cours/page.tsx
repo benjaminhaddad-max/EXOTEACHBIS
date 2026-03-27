@@ -4,6 +4,7 @@ import { EleveCoursShell } from "@/components/eleve/cours-shell";
 import { getExercicesData } from "@/app/(eleve)/exercices/actions";
 import { canAccessMatiere, filterDossiersByAccess, getAccessScopeForUser } from "@/lib/access-scope";
 import type { Cours, Matiere } from "@/types/database";
+import type { SerieSummaryForStudent } from "@/components/eleve/matiere-exercices-view";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function CoursPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [dossiersRes, matieresRes, coursRes, flashcardDecksRes, scope, exercicesData] = await Promise.all([
+  const [dossiersRes, matieresRes, coursRes, flashcardDecksRes, scope, exercicesData, seriesRes] = await Promise.all([
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("matieres").select("*").eq("visible", true).order("order_index"),
     supabase.from("cours").select("*").eq("visible", true).order("order_index"),
@@ -24,6 +25,11 @@ export default async function CoursPage() {
       .order("created_at", { ascending: false }),
     getAccessScopeForUser(supabase, user!.id),
     getExercicesData(),
+    supabase
+      .from("series")
+      .select("id, name, type, timed, duration_minutes, annee, matiere_id, cours_id, series_questions(id)")
+      .eq("visible", true)
+      .order("created_at", { ascending: false }),
   ]);
 
   const dossiers = filterDossiersByAccess(dossiersRes.data ?? [], scope);
@@ -61,6 +67,52 @@ export default async function CoursPage() {
     nb_cards: deck.flashcards?.length ?? 0,
   }));
 
+  // Build series summaries for student view
+  const allSeriesRaw = (seriesRes.data ?? []) as unknown as Array<{
+    id: string; name: string; type: string; timed: boolean;
+    duration_minutes: number | null; annee: string | null;
+    matiere_id: string | null; cours_id: string | null;
+    series_questions?: { id: string }[];
+  }>;
+
+  // Fetch last attempts for this user
+  const serieIds = allSeriesRaw.map((s) => s.id);
+  let attemptScores = new Map<string, number>();
+  if (serieIds.length > 0) {
+    const { data: attempts } = await supabase
+      .from("serie_attempts")
+      .select("series_id, score")
+      .eq("user_id", user!.id)
+      .in("series_id", serieIds)
+      .order("ended_at", { ascending: false });
+    if (attempts) {
+      for (const a of attempts) {
+        if (!attemptScores.has(a.series_id) && a.score != null) {
+          attemptScores.set(a.series_id, a.score);
+        }
+      }
+    }
+  }
+
+  const allSeries: SerieSummaryForStudent[] = allSeriesRaw
+    .filter((s) => {
+      if (s.matiere_id && allowedMatiereIds.has(s.matiere_id)) return true;
+      if (s.cours_id && allowedCoursIds.has(s.cours_id)) return true;
+      return false;
+    })
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      type: s.type,
+      timed: s.timed,
+      duration_minutes: s.duration_minutes,
+      annee: s.annee,
+      matiere_id: s.matiere_id,
+      cours_id: s.cours_id,
+      nb_questions: s.series_questions?.length ?? 0,
+      last_score: attemptScores.get(s.id) ?? null,
+    }));
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <Header title="Cours & Exercices" />
@@ -72,6 +124,7 @@ export default async function CoursPage() {
         initialExerciceTree={exercicesData.tree}
         initialExerciceCours={exercicesData.allCours}
         userId={user!.id}
+        initialSeries={allSeries}
       />
     </div>
   );

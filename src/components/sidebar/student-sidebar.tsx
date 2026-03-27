@@ -5,7 +5,7 @@ import {
   BookOpen,
   FileCheck,
   Calendar,
-  MessageSquare,
+
   MessageCircleQuestion,
   UserCircle,
   UsersRound,
@@ -27,7 +27,7 @@ const studentNavItems = [
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/coaching", label: "Coaching", icon: Handshake },
   { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/forum", label: "Forum", icon: MessageSquare },
+
   { href: "/equipe", label: "Équipe", icon: UsersRound },
   { href: "/profil", label: "Profil", icon: UserCircle },
 ];
