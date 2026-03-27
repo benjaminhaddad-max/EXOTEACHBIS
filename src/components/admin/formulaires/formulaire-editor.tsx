@@ -282,24 +282,6 @@ export function FormulaireEditor({
               <p className="text-[9px] mt-1" style={{ color: "rgba(201,168,76,0.5)" }}>Coche des classes dans la sidebar pour cibler</p>
             </div>
           )}
-
-          <div className="space-y-2 pt-2">
-            <label className="block space-y-1">
-              <span className="text-[10px] font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Usage</span>
-              <select value={templateDraft.context === "generic" || ["coaching", "pass", "las", "lsps", "autre"].includes(templateDraft.context) ? templateDraft.context : "autre"} onChange={e => setTemplateDraft(d => ({ ...d, context: e.target.value }))} className={F + " text-xs"}>
-                <option value="generic">Formulaire libre</option>
-                <option value="coaching">Coaching</option>
-                <option value="pass">PASS</option>
-                <option value="las">LAS</option>
-                <option value="lsps">LSPS</option>
-                <option value="autre">Autre</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2 text-[11px]" style={{ color: "rgba(255,255,255,0.5)" }}>
-              <input type="checkbox" checked={templateDraft.is_active} onChange={e => setTemplateDraft(d => ({ ...d, is_active: e.target.checked }))} className="rounded" style={{ accentColor: "#34D399" }} />
-              Formulaire actif
-            </label>
-          </div>
         </div>
       </div>
 
