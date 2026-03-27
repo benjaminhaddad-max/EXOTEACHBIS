@@ -4,6 +4,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   ChevronDown, ChevronRight, GraduationCap, Building2, Calendar, BookOpen, Layers, Check, Folder,
 } from "lucide-react";
+import { buildQaPedagogieChildrenMap } from "@/lib/qa-pedagogie-tree";
 import type { Dossier, DossierType, Matiere } from "@/types/database";
 
 function collectMatiereIdsInSubtree(
@@ -185,16 +186,7 @@ export function QaPedagogieMatiereTreeSidebar({
   onSetMatiereSelection: Dispatch<SetStateAction<Set<string>>>;
   threadCountByMatiereId?: Record<string, number>;
 }) {
-  const childrenByParent = useMemo(() => {
-    const m = new Map<string | null, Dossier[]>();
-    for (const d of dossiers) {
-      const p = d.parent_id;
-      if (!m.has(p)) m.set(p, []);
-      m.get(p)!.push(d);
-    }
-    for (const list of m.values()) list.sort((a, b) => a.order_index - b.order_index);
-    return m;
-  }, [dossiers]);
+  const childrenByParent = useMemo(() => buildQaPedagogieChildrenMap(dossiers), [dossiers]);
 
   const matieresByDossier = useMemo(() => {
     const map = new Map<string, Matiere[]>();
