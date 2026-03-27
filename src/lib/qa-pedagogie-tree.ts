@@ -12,12 +12,13 @@ function nameLooksLikePassLasLsps(name: string): boolean {
   );
 }
 
-/** Dossiers « filière » sous une université : PASS / LAS / LSPS uniquement (pas tout `subject`). */
+/**
+ * Dossiers « filière » sous une université : nom PASS / LAS / LSPS.
+ * En base ils sont souvent en `generic` ou `module`, pas seulement `subject` / `option`.
+ */
 export function isUniversityFiliereFolder(c: Dossier): boolean {
-  if (c.dossier_type === "subject" || c.dossier_type === "option") {
-    return nameLooksLikePassLasLsps(c.name);
-  }
-  return false;
+  if (c.dossier_type === "semester" || c.dossier_type === "period") return false;
+  return nameLooksLikePassLasLsps(c.name);
 }
 
 function nameLooksLikeStructuralLoose(name: string): boolean {

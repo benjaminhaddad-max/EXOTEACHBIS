@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAccessScopeForUser } from "@/lib/access-scope";
 import { QaDashboard } from "@/components/admin/qa/qa-dashboard";
-import type { Dossier, Matiere } from "@/types/database";
+import type { Cours, Dossier, Matiere } from "@/types/database";
 import type { QaThread } from "@/types/qa";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
   const scope = await getAccessScopeForUser(supabase as any, user.id);
   const role = profile.role;
 
-  const [threadsRes, dossiersRes, matieresRes, profMatieresRes] = await Promise.all([
+  const [threadsRes, dossiersRes, matieresRes, coursRes, profMatieresRes] = await Promise.all([
     supabase
       .from("qa_threads")
       .select(`
@@ -47,6 +47,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
       .limit(1, { referencedTable: "qa_messages" }),
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("matieres").select("*").eq("visible", true).order("order_index"),
+    supabase.from("cours").select("*").eq("visible", true).order("order_index"),
     role === "prof"
       ? supabase.from("prof_matieres").select("matiere_id").eq("prof_id", user.id)
       : Promise.resolve({ data: [] as { matiere_id: string }[] }),
@@ -66,6 +67,9 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
 
   const dossierIds = new Set(availableDossiers.map(d => d.id));
   const qaMatieres = availableMatieres.filter(m => dossierIds.has(m.dossier_id));
+  const qaMatiereIds = new Set(qaMatieres.map(m => m.id));
+  const allCours = (coursRes.data ?? []) as Cours[];
+  const qaCours = allCours.filter(c => c.matiere_id != null && qaMatiereIds.has(c.matiere_id));
 
   return (
     <div>
@@ -76,6 +80,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
         initialThreadId={params.thread}
         qaDossiers={availableDossiers}
         qaMatieres={qaMatieres}
+        qaCours={qaCours}
       />
     </div>
   );

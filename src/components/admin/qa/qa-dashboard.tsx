@@ -2,8 +2,24 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Dossier, Matiere } from "@/types/database";
+import type { Cours, Dossier, Matiere } from "@/types/database";
 import type { QaThread, QaStatus } from "@/types/qa";
+
+function threadMatchesQaTreeSelection(
+  t: QaThread,
+  matiereIds: Set<string>,
+  coursIds: Set<string>
+): boolean {
+  if (matiereIds.size === 0 && coursIds.size === 0) return true;
+  if (!t.matiere_id) return false;
+  if (coursIds.size > 0 && matiereIds.size === 0) {
+    return t.cours_id != null && coursIds.has(t.cours_id);
+  }
+  if (matiereIds.size > 0 && coursIds.size === 0) {
+    return matiereIds.has(t.matiere_id);
+  }
+  return matiereIds.has(t.matiere_id) && (!t.cours_id || coursIds.has(t.cours_id));
+}
 import { QaPedagogieMatiereTreeSidebar } from "./qa-pedagogie-matiere-tree-sidebar";
 import { QaThreadList } from "./qa-thread-list";
 import { QaChatPanel } from "./qa-chat-panel";
@@ -16,6 +32,7 @@ interface QaDashboardProps {
   initialThreadId?: string;
   qaDossiers: Dossier[];
   qaMatieres: Matiere[];
+  qaCours: Cours[];
 }
 
 export function QaDashboard({
@@ -24,9 +41,11 @@ export function QaDashboard({
   initialThreadId,
   qaDossiers,
   qaMatieres,
+  qaCours,
 }: QaDashboardProps) {
   const [threads, setThreads] = useState<QaThread[]>(initialThreads);
   const [selectedMatiereIds, setSelectedMatiereIds] = useState<Set<string>>(new Set());
+  const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<QaThread | null>(
     initialThreadId ? initialThreads.find(t => t.id === initialThreadId) ?? null : null
   );
@@ -43,7 +62,10 @@ export function QaDashboard({
       else n.add(id);
       return n;
     });
-  const selectAllMatieres = () => setSelectedMatiereIds(new Set());
+  const selectAllMatieres = () => {
+    setSelectedMatiereIds(new Set());
+    setSelectedCoursIds(new Set());
+  };
 
   useEffect(() => {
     const channel = supabase
@@ -98,15 +120,23 @@ export function QaDashboard({
     return m;
   }, [threads]);
 
+  const threadCountByCoursId = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const t of threads) {
+      if (!t.cours_id || t.archived_at) continue;
+      m[t.cours_id] = (m[t.cours_id] ?? 0) + 1;
+    }
+    return m;
+  }, [threads]);
+
   const threadsVisible = useMemo(() => {
     if (showArchived) return threads;
     return threads.filter(t => !t.archived_at);
   }, [threads, showArchived]);
 
   const threadsAfterScope = useMemo(() => {
-    if (selectedMatiereIds.size === 0) return threadsVisible;
-    return threadsVisible.filter(t => t.matiere_id != null && selectedMatiereIds.has(t.matiere_id));
-  }, [threadsVisible, selectedMatiereIds]);
+    return threadsVisible.filter(t => threadMatchesQaTreeSelection(t, selectedMatiereIds, selectedCoursIds));
+  }, [threadsVisible, selectedMatiereIds, selectedCoursIds]);
 
   const filtered = threadsAfterScope.filter(t => {
     if (filterStatus !== "all" && t.status !== filterStatus) return false;
@@ -121,13 +151,12 @@ export function QaDashboard({
 
   useEffect(() => {
     if (!selected) return;
-    if (selectedMatiereIds.size === 0) return;
-    const mid = selected.matiere_id;
-    if (!mid || !selectedMatiereIds.has(mid)) {
+    if (selectedMatiereIds.size === 0 && selectedCoursIds.size === 0) return;
+    if (!threadMatchesQaTreeSelection(selected, selectedMatiereIds, selectedCoursIds)) {
       setSelected(null);
       window.history.replaceState(null, "", "/admin/questions-reponses");
     }
-  }, [selectedMatiereIds, selected]);
+  }, [selectedMatiereIds, selectedCoursIds, selected]);
 
   const matieres = Array.from(
     new Map(threadsAfterScope.filter(t => t.matiere).map(t => [t.matiere!.id, t.matiere!])).values()
@@ -190,11 +219,23 @@ export function QaDashboard({
           <QaPedagogieMatiereTreeSidebar
             dossiers={qaDossiers}
             matieres={qaMatieres}
+            cours={qaCours}
             selectedMatiereIds={selectedMatiereIds}
+            selectedCoursIds={selectedCoursIds}
             onToggleMatiere={toggleMatiere}
+            onToggleCours={id =>
+              setSelectedCoursIds(prev => {
+                const n = new Set(prev);
+                if (n.has(id)) n.delete(id);
+                else n.add(id);
+                return n;
+              })
+            }
             onSelectAllMatieres={selectAllMatieres}
             onSetMatiereSelection={setSelectedMatiereIds}
+            onSetCoursSelection={setSelectedCoursIds}
             threadCountByMatiereId={threadCountByMatiereId}
+            threadCountByCoursId={threadCountByCoursId}
           />
         </div>
 
@@ -204,9 +245,13 @@ export function QaDashboard({
           }`}
         >
           <div className="p-3 border-b border-gray-100 space-y-2 shrink-0">
-            {selectedMatiereIds.size > 0 && (
+            {(selectedMatiereIds.size > 0 || selectedCoursIds.size > 0) && (
               <p className="text-[10px] text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
-                Filtre actif : {selectedMatiereIds.size} matière{selectedMatiereIds.size > 1 ? "s" : ""} — la liste ne montre que les questions rattachées à ces matières.
+                Filtre actif : {selectedMatiereIds.size} matière{selectedMatiereIds.size > 1 ? "s" : ""}
+                {selectedCoursIds.size > 0
+                  ? `, ${selectedCoursIds.size} chapitre${selectedCoursIds.size > 1 ? "s" : ""}`
+                  : ""}{" "}
+                — la liste suit la sélection dans l’arborescence (PASS → semestre → matière → chapitre).
               </p>
             )}
             <input
