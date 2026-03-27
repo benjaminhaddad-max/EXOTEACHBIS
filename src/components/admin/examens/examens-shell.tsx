@@ -73,6 +73,7 @@ export function ExamensShell({
   allSeries,
   filieres,
   dossiers,
+  allDossiers,
   groupes,
   matieres,
 }: {
@@ -80,6 +81,7 @@ export function ExamensShell({
   allSeries: Serie[];
   filieres: Filiere[];
   dossiers: Dossier[];
+  allDossiers: Dossier[];
   groupes: Groupe[];
   matieres: Matiere[];
 }) {
@@ -451,6 +453,8 @@ export function ExamensShell({
                 examen={modal.examen}
                 allSeries={seriesList}
                 matieres={matieres}
+                allDossiers={allDossiers}
+                groupes={groupes}
                 composeSeries={composeSeries}
                 onAdd={(s) => handleAddSerie(modal.examen, s)}
                 onRemove={(id) => handleRemoveSerie(modal.examen, id)}
@@ -788,6 +792,8 @@ function ComposeModal({
   examen,
   allSeries,
   matieres,
+  allDossiers,
+  groupes,
   composeSeries,
   onAdd,
   onRemove,
@@ -801,6 +807,8 @@ function ComposeModal({
   examen: ExamenWithSeries;
   allSeries: Serie[];
   matieres: Matiere[];
+  allDossiers: Dossier[];
+  groupes: Groupe[];
   composeSeries: ExamenSerieWithCoeff[];
   onAdd: (s: Serie) => void;
   onRemove: (serieId: string) => void;
@@ -811,90 +819,86 @@ function ComposeModal({
   isPending: boolean;
   showToast: (msg: string, kind: "success" | "error") => void;
 }) {
-  const [creating, setCreating] = useState<string | null>(null); // matiere_id being created
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importingId, setImportingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState<string | null>(null);
+  const [expandedSemesters, setExpandedSemesters] = useState<Set<string>>(new Set());
 
-  // Already added matière IDs (via series matiere_id)
-  const addedMatiereIds = new Set(
-    composeSeries.map(es => es.series?.matiere_id).filter(Boolean) as string[]
-  );
-
-  const handleAddMatiere = async (matiere: Matiere) => {
-    setCreating(matiere.id);
-    try {
-      const serieName = `${examen.name} — ${matiere.name}`;
-      const res = await createSerie({
-        name: serieName,
-        type: "concours_blanc" as SerieType,
-        timed: false,
-        score_definitif: false,
-        visible: true,
-        matiere_id: matiere.id,
-      });
-      if ("error" in res) {
-        showToast(res.error!, "error");
-        return;
-      }
-      const newSerie: Serie = {
-        id: res.id!,
-        name: serieName,
-        type: "concours_blanc",
-        description: null,
-        cours_id: null,
-        matiere_id: matiere.id,
-        timed: false,
-        duration_minutes: null,
-        score_definitif: false,
-        visible: true,
-        annee: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      onSerieCreated(newSerie);
-      showToast(`Épreuve ${matiere.name} ajoutée`, "success");
-    } finally {
-      setCreating(null);
+  // Find target university from exam's groupe_ids
+  const targetUniIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const gid of (examen.groupe_ids ?? [])) {
+      const g = groupes.find(gr => gr.id === gid);
+      if (g?.formation_dossier_id) ids.add(g.formation_dossier_id);
     }
-  };
+    return ids;
+  }, [examen.groupe_ids, groupes]);
 
-  const handleImportWord = async (matiere: Matiere, file: File) => {
-    setImportingId(matiere.id);
+  // Build tree: University → Semesters → Subjects
+  const tree = useMemo(() => {
+    // Get semesters under target universities
+    const semesters = allDossiers
+      .filter(d => d.parent_id && targetUniIds.has(d.parent_id) && (d.dossier_type === "semester" || d.dossier_type === "module" || d.dossier_type === "period"))
+      .sort((a, b) => a.order_index - b.order_index);
+
+    // Get subjects under each semester
+    const semesterMap = new Map<string, Dossier[]>();
+    for (const sem of semesters) {
+      const subjects = allDossiers
+        .filter(d => d.parent_id === sem.id && (d.dossier_type === "subject" || d.dossier_type === "option"))
+        .sort((a, b) => a.order_index - b.order_index);
+      if (subjects.length > 0) semesterMap.set(sem.id, subjects);
+    }
+
+    // Also check for subjects directly under university (no semester level)
+    const directSubjects = allDossiers
+      .filter(d => d.parent_id && targetUniIds.has(d.parent_id) && (d.dossier_type === "subject" || d.dossier_type === "option"))
+      .sort((a, b) => a.order_index - b.order_index);
+
+    return { semesters, semesterMap, directSubjects };
+  }, [allDossiers, targetUniIds]);
+
+  // Track which subject dossier IDs are already added (using serie name matching)
+  const addedSubjectNames = new Set(composeSeries.map(es => es.series?.name).filter(Boolean));
+
+  const handleAddSubject = async (subject: Dossier) => {
+    setCreating(subject.id);
     try {
-      const serieName = `${examen.name} — ${matiere.name}`;
+      const serieName = `${examen.name} — ${subject.name}`;
+      // Find matière in this subject dossier if one exists
+      const matiere = matieres.find(m => m.dossier_id === subject.id);
       const res = await createSerie({
         name: serieName,
         type: "concours_blanc" as SerieType,
         timed: false,
         score_definitif: false,
         visible: true,
-        matiere_id: matiere.id,
+        matiere_id: matiere?.id ?? null,
       });
       if ("error" in res) { showToast(res.error!, "error"); return; }
-      const serieId = res.id!;
-      const formData = new FormData();
-      formData.append("serieId", serieId);
-      formData.append("file", file);
-      const importRes = await fetch("/api/import-serie", { method: "POST", body: formData });
-      const importData = await importRes.json();
-      if (!importRes.ok || importData.error) { showToast(importData.error || "Erreur d'import", "error"); return; }
       const newSerie: Serie = {
-        id: serieId, name: serieName, type: "concours_blanc", description: null,
-        cours_id: null, matiere_id: matiere.id, timed: false, duration_minutes: null,
+        id: res.id!, name: serieName, type: "concours_blanc", description: null,
+        cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null,
         score_definitif: false, visible: true, annee: null,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       };
       onSerieCreated(newSerie);
-      showToast(`${matiere.name} importée`, "success");
+      showToast(`Épreuve ${subject.name} ajoutée`, "success");
     } finally {
-      setImportingId(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setCreating(null);
     }
   };
 
   const exportSerie = (serieId: string, corrections: boolean) => {
     window.open(`/api/export-serie?serieId=${serieId}&corrections=${corrections ? "1" : "0"}`, "_blank");
   };
+
+  const toggleSemester = (id: string) => setExpandedSemesters(prev => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+
+  // Auto-expand all semesters on mount
+  useMemo(() => {
+    setExpandedSemesters(new Set(tree.semesters.map(s => s.id)));
+  }, [tree.semesters]);
 
   return (
     <div className="p-6 space-y-5">
@@ -908,21 +912,19 @@ function ComposeModal({
         <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">
           Épreuves de l&apos;examen ({composeSeries.length})
         </p>
-        <div className="space-y-2 max-h-72 overflow-auto pr-1">
+        <div className="space-y-2 max-h-64 overflow-auto pr-1">
           {composeSeries.length === 0 ? (
-            <div className="text-center py-6 text-white/20">
-              <Layers size={28} className="mx-auto mb-2 opacity-30" />
-              <p className="text-xs">Ajoute des épreuves par matière ci-dessous</p>
+            <div className="text-center py-5 text-white/20">
+              <Layers size={24} className="mx-auto mb-2 opacity-30" />
+              <p className="text-xs">Sélectionne les matières ci-dessous</p>
             </div>
           ) : composeSeries.map((es) => (
             <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 space-y-1.5">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: es.series?.matiere_id ? (matieres.find(m => m.id === es.series?.matiere_id)?.color ?? "#C9A84C") : "#C9A84C" }} />
                 <p className="flex-1 text-xs text-white/80 font-medium line-clamp-1">{es.series?.name ?? "?"}</p>
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-[10px] text-white/40">Coeff.</span>
-                  <input
-                    type="number" min={0.5} max={10} step={0.5} value={es.coefficient}
+                  <input type="number" min={0.5} max={10} step={0.5} value={es.coefficient}
                     onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
                     className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
                   />
@@ -933,7 +935,6 @@ function ComposeModal({
                 </div>
                 <button onClick={() => onRemove(es.series_id)} disabled={isPending} className="text-white/30 hover:text-red-400 transition-colors shrink-0"><ListMinus size={13} /></button>
               </div>
-              {/* Per-serie dates */}
               <div className="flex items-center gap-2">
                 <Calendar size={10} className="text-white/20 shrink-0" />
                 <input type="datetime-local"
@@ -953,46 +954,84 @@ function ComposeModal({
         </div>
       </div>
 
-      {/* Ajouter une épreuve par matière */}
+      {/* Ajouter par matière — arborescence Semestre → UE */}
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">
-          Ajouter une épreuve par matière
+          Ajouter une épreuve
         </p>
-        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-auto pr-1">
-          {matieres.map(m => {
-            const alreadyAdded = addedMatiereIds.has(m.id);
-            const isCreating = creating === m.id;
-            const isImporting = importingId === m.id;
-            return (
-              <div key={m.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all ${
-                alreadyAdded ? "bg-white/[0.02] opacity-40" : "bg-white/5 border border-white/10 hover:border-white/20"
-              }`}>
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
-                <span className="flex-1 text-xs text-white/70 font-medium truncate">{m.name}</span>
-                {alreadyAdded ? (
-                  <Check size={12} className="text-green-400/60 shrink-0" />
-                ) : isCreating || isImporting ? (
-                  <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
-                ) : (
-                  <div className="flex gap-1 shrink-0">
-                    <button
-                      onClick={() => handleAddMatiere(m)}
-                      className="p-1 text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors"
-                      title="Créer épreuve vide"
-                    >
-                      <Plus size={13} />
+        <div className="max-h-56 overflow-auto pr-1 space-y-1">
+          {tree.semesters.length === 0 && tree.directSubjects.length === 0 ? (
+            <p className="text-xs text-white/30 py-4 text-center">Aucune matière trouvée pour cette formation</p>
+          ) : (
+            <>
+              {/* Semesters with subjects */}
+              {tree.semesters.map(sem => {
+                const subjects = tree.semesterMap.get(sem.id) ?? [];
+                if (subjects.length === 0) return null;
+                const isOpen = expandedSemesters.has(sem.id);
+                return (
+                  <div key={sem.id}>
+                    <button onClick={() => toggleSemester(sem.id)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-all text-left">
+                      <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.3)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
+                      <Layers size={10} style={{ color: "#C9A84C" }} />
+                      <span className="text-[11px] font-semibold" style={{ color: "#C9A84C" }}>{sem.name}</span>
+                      <span className="text-[10px] text-white/20 ml-auto">{subjects.length} matière{subjects.length > 1 ? "s" : ""}</span>
                     </button>
-                    <label className="p-1 text-white/30 hover:text-white/60 transition-colors cursor-pointer" title="Importer depuis Word">
-                      <Upload size={12} />
-                      <input ref={fileInputRef} type="file" accept=".docx,.doc" className="hidden"
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportWord(m, f); }}
-                      />
-                    </label>
+                    {isOpen && (
+                      <div className="ml-4 space-y-0.5">
+                        {subjects.map(sub => {
+                          const alreadyAdded = addedSubjectNames.has(`${examen.name} — ${sub.name}`);
+                          const isCreatingThis = creating === sub.id;
+                          return (
+                            <div key={sub.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                              alreadyAdded ? "opacity-40" : "hover:bg-white/[0.04]"
+                            }`}>
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
+                              <span className="flex-1 text-[11px] text-white/70 font-medium truncate">{sub.name}</span>
+                              {alreadyAdded ? (
+                                <Check size={12} className="text-green-400/60 shrink-0" />
+                              ) : isCreatingThis ? (
+                                <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
+                              ) : (
+                                <button onClick={() => handleAddSubject(sub)}
+                                  className="p-1 text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors" title="Ajouter cette épreuve">
+                                  <Plus size={13} />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+              {/* Direct subjects (no semester) */}
+              {tree.directSubjects.map(sub => {
+                const alreadyAdded = addedSubjectNames.has(`${examen.name} — ${sub.name}`);
+                const isCreatingThis = creating === sub.id;
+                return (
+                  <div key={sub.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                    alreadyAdded ? "opacity-40" : "hover:bg-white/[0.04]"
+                  }`}>
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
+                    <span className="flex-1 text-[11px] text-white/70 font-medium truncate">{sub.name}</span>
+                    {alreadyAdded ? (
+                      <Check size={12} className="text-green-400/60 shrink-0" />
+                    ) : isCreatingThis ? (
+                      <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
+                    ) : (
+                      <button onClick={() => handleAddSubject(sub)}
+                        className="p-1 text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors" title="Ajouter cette épreuve">
+                        <Plus size={13} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
       </div>
 

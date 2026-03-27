@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function ExamensAdminPage() {
   const supabase = await createClient();
 
-  const [examensRes, seriesRes, filieresRes, dossiersRes, groupesRes, exGroupesRes, matieresRes] = await Promise.all([
+  const [examensRes, seriesRes, filieresRes, dossiersRes, allDossiersRes, groupesRes, exGroupesRes, matieresRes] = await Promise.all([
     supabase
       .from("examens")
       .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, series:series(*))")
@@ -15,6 +15,7 @@ export default async function ExamensAdminPage() {
     supabase.from("series").select("*").eq("visible", true).order("name"),
     supabase.from("filieres").select("*").order("order_index"),
     supabase.from("dossiers").select("*").eq("visible", true).in("dossier_type", ["offer", "university"]).order("order_index"),
+    supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("groupes").select("*").order("name"),
     supabase.from("examens_groupes").select("*"),
     supabase.from("matieres").select("*").eq("visible", true).order("order_index"),
@@ -57,6 +58,7 @@ export default async function ExamensAdminPage() {
         allSeries={allSeries}
         filieres={filieres}
         dossiers={dossiers}
+        allDossiers={(allDossiersRes.data ?? []) as Dossier[]}
         groupes={groupes}
         matieres={matieres}
       />
