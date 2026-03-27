@@ -132,17 +132,34 @@ export function EleveCoursShell({
   }, [allMatieres]);
 
   const selectDossier = useCallback((dossier: Dossier) => {
-    setSelectedId(dossier.id);
+    let target = dossier;
+
+    // Auto-skip: if a dossier has exactly 1 child folder and no direct content, drill into it
+    while (true) {
+      const children = allDossiers
+        .filter((d) => d.parent_id === target.id)
+        .sort((a, b) => a.order_index - b.order_index);
+      const directMatieres = matiereIdsByDossier.get(target.id) ?? [];
+      const directCours = allCours.filter((c) => c.dossier_id === target.id);
+
+      if (children.length === 1 && directMatieres.length === 0 && directCours.length === 0) {
+        target = children[0];
+      } else {
+        break;
+      }
+    }
+
+    setSelectedId(target.id);
     setActiveTab("cours");
     const childDossiersForSelection = allDossiers
-      .filter((candidate) => candidate.parent_id === dossier.id)
+      .filter((candidate) => candidate.parent_id === target.id)
       .sort((a, b) => a.order_index - b.order_index);
-    const matiereIds = matiereIdsByDossier.get(dossier.id) ?? [];
+    const matiereIds = matiereIdsByDossier.get(target.id) ?? [];
     const matiereIdSet = new Set(matiereIds);
     const uniqueCours = Array.from(
       new Map(
         allCours
-          .filter((cours) => cours.dossier_id === dossier.id || (cours.matiere_id ? matiereIdSet.has(cours.matiere_id) : false))
+          .filter((cours) => cours.dossier_id === target.id || (cours.matiere_id ? matiereIdSet.has(cours.matiere_id) : false))
           .map((cours) => [cours.id, cours])
       ).values()
     );
