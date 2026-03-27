@@ -11,7 +11,7 @@ import {
   UsersRound,
   Megaphone,
   TrendingUp,
-  Bell,
+
   Handshake,
 } from "lucide-react";
 import { SidebarShell } from "./sidebar-shell";
@@ -26,7 +26,7 @@ const studentNavItems = [
   { href: "/progression", label: "Progression", icon: TrendingUp },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/coaching", label: "Coaching", icon: Handshake },
-  { href: "/notifications", label: "Notifications", icon: Bell },
+
 
   { href: "/equipe", label: "Équipe", icon: UsersRound },
   { href: "/profil", label: "Profil", icon: UserCircle },
