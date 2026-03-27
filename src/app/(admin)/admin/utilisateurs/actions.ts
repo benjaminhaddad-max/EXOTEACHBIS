@@ -60,8 +60,25 @@ export async function updateUserAdminProfile(data: {
   if ("error" in adminCheck) return adminCheck;
 
   const admin = createAdminClient();
+  const { data: currentProfile, error: currentProfileError } = await admin
+    .from("profiles")
+    .select("email, first_name, last_name, role")
+    .eq("id", data.userId)
+    .single();
+
+  if (currentProfileError || !currentProfile) {
+    return { error: currentProfileError?.message ?? "Profil introuvable." };
+  }
+
   const normalizedEmail = data.email?.trim().toLowerCase();
   const metadataUpdate: Record<string, string> = {};
+  const nextFirstName = data.first_name?.trim() || null;
+  const nextLastName = data.last_name?.trim() || null;
+  const nextRole = data.role ?? currentProfile.role;
+  const currentEmail = currentProfile.email?.trim().toLowerCase() ?? null;
+  const currentFirstName = currentProfile.first_name ?? null;
+  const currentLastName = currentProfile.last_name ?? null;
+  const currentRole = currentProfile.role;
 
   if (data.first_name !== undefined) {
     metadataUpdate.first_name = data.first_name.trim();
@@ -73,10 +90,16 @@ export async function updateUserAdminProfile(data: {
     metadataUpdate.role = data.role;
   }
 
-  if (normalizedEmail || Object.keys(metadataUpdate).length > 0) {
+  const shouldUpdateAuthEmail = normalizedEmail !== undefined && normalizedEmail !== currentEmail;
+  const shouldUpdateAuthMetadata =
+    nextFirstName !== currentFirstName ||
+    nextLastName !== currentLastName ||
+    nextRole !== currentRole;
+
+  if (shouldUpdateAuthEmail || shouldUpdateAuthMetadata) {
     const { error: authError } = await admin.auth.admin.updateUserById(data.userId, {
-      ...(normalizedEmail ? { email: normalizedEmail, email_confirm: true } : {}),
-      ...(Object.keys(metadataUpdate).length > 0 ? { user_metadata: metadataUpdate } : {}),
+      ...(shouldUpdateAuthEmail ? { email: normalizedEmail, email_confirm: true } : {}),
+      ...(shouldUpdateAuthMetadata ? { user_metadata: metadataUpdate } : {}),
     });
 
     if (authError) {
