@@ -591,6 +591,46 @@ export interface Abonnement {
 }
 
 // =============================================
+// Student revision events
+// =============================================
+
+export type RevisionType =
+  | "apprentissage_fiche"
+  | "revision_fiche"
+  | "qcm_supplementaires"
+  | "annales_matiere"
+  | "annales_chapitre"
+  | "preparation_seance";
+
+export const REVISION_TYPE_META: Record<RevisionType, { label: string; icon: string; color: string }> = {
+  apprentissage_fiche:  { label: "Apprentissage fiche de cours", icon: "BookOpen",    color: "#3B82F6" },
+  revision_fiche:       { label: "Révision fiche de cours",      icon: "RefreshCw",   color: "#8B5CF6" },
+  qcm_supplementaires:  { label: "QCM supplémentaires",          icon: "ListChecks",  color: "#F59E0B" },
+  annales_matiere:      { label: "Annales (matière)",             icon: "FileText",    color: "#EF4444" },
+  annales_chapitre:     { label: "Annales (chapitre)",            icon: "FileStack",   color: "#EC4899" },
+  preparation_seance:   { label: "Préparation séance Diploma",   icon: "GraduationCap", color: "#0EA5E9" },
+};
+
+export interface StudentEvent {
+  id: string;
+  student_id: string;
+  title: string;
+  revision_type: RevisionType;
+  matiere_id: string | null;
+  cours_id: string | null;
+  start_at: string;
+  end_at: string;
+  notes: string | null;
+  completed: boolean;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  matiere?: Matiere | null;
+  cours?: Cours | null;
+}
+
+// =============================================
 // Stats admin
 // =============================================
 
