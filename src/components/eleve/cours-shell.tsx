@@ -271,7 +271,7 @@ export function EleveCoursShell({
                     </div>
                   )}
 
-                  {hasDirectLearningContent && (
+                  {hasDirectLearningContent && childDossiers.length === 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         type="button"
