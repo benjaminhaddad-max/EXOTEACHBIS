@@ -68,17 +68,18 @@ function getDefaultStudentDossier(dossiers: Dossier[]): Dossier | null {
   const roots = dossiers.filter((d) => d.parent_id === null).sort((a, b) => a.order_index - b.order_index);
   if (roots.length !== 1) return roots[0] ?? null;
 
+  // Walk down the tree as long as there is exactly 1 child — skip single-child levels
   let current = roots[0];
-  if (isUniversityLikeDossier(current)) return current;
-
   while (true) {
     const children = dossiers
       .filter((d) => d.parent_id === current.id)
       .sort((a, b) => a.order_index - b.order_index);
 
-    if (children.length !== 1) return current;
-    if (isUniversityLikeDossier(children[0])) return children[0];
-    current = children[0];
+    if (children.length === 1) {
+      current = children[0];
+    } else {
+      return current;
+    }
   }
 }
 
