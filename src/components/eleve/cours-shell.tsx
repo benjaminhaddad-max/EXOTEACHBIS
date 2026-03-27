@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight, ChevronDown, Folder, FolderOpen,
-  Home, BookOpen, GripVertical, Layers, ArrowRight,
+  Home, BookOpen, GripVertical, Layers, ArrowRight, Search,
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
 
@@ -108,6 +108,7 @@ export function EleveCoursShell({
   const [coursList, setCoursList] = useState<Cours[]>([]);
   const [childDossiers, setChildDossiers] = useState<Dossier[]>([]);
   const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
+  const [search, setSearch] = useState("");
 
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -124,6 +125,7 @@ export function EleveCoursShell({
   const tree = buildTree(allDossiers);
   const selectedDossier = allDossiers.find((d) => d.id === selectedId) ?? null;
   const breadcrumb = getBreadcrumb(selectedId, allDossiers);
+  const normalizedSearch = search.trim().toLowerCase();
   const matiereIdsByDossier = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const matiere of allMatieres) {
@@ -163,6 +165,24 @@ export function EleveCoursShell({
     setFlashcardDecks(flashcardDecksForSelection);
   }, [allCours, allDossiers, allFlashcardDecks, matiereIdsByDossier]);
 
+  const filteredChildDossiers = useMemo(() => {
+    if (!normalizedSearch) return childDossiers;
+    return childDossiers.filter((child) => child.name.toLowerCase().includes(normalizedSearch));
+  }, [childDossiers, normalizedSearch]);
+
+  const filteredCoursList = useMemo(() => {
+    if (!normalizedSearch) return coursList;
+    return coursList.filter((cours) => cours.name.toLowerCase().includes(normalizedSearch));
+  }, [coursList, normalizedSearch]);
+
+  const filteredFlashcardDecks = useMemo(() => {
+    if (!normalizedSearch) return flashcardDecks;
+    return flashcardDecks.filter((deck) => {
+      const haystack = `${deck.name} ${deck.description ?? ""} ${deck.matiere?.name ?? ""}`.toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [flashcardDecks, normalizedSearch]);
+
   // Drag to resize
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = true;
@@ -194,15 +214,21 @@ export function EleveCoursShell({
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
+  useEffect(() => {
+    if (selectedId || tree.length !== 1) return;
+    selectDossier(tree[0]);
+  }, [selectedId, selectDossier, tree]);
+
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* LEFT: Resizable tree */}
       <div
-        className="shrink-0 border-r border-gray-200 flex flex-col overflow-hidden"
-        style={{ backgroundColor: "#F7F8FC", width: sidebarWidth }}
+        className="shrink-0 border-r border-[#E6EEF8] flex flex-col overflow-hidden bg-[linear-gradient(180deg,#F8FBFF_0%,#F4F7FB_100%)]"
+        style={{ width: sidebarWidth }}
       >
-        <div className="px-4 py-3 border-b border-gray-100">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Arborescence</p>
+        <div className="px-4 py-4 border-b border-[#EAF0F7]">
+          <p className="text-[11px] font-bold text-[#7B8A9A] uppercase tracking-[0.2em]">Navigation</p>
+          <p className="mt-1 text-xs text-[#9AA8B6]">Choisis un dossier puis explore ses cours.</p>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {tree.map((node) => (
@@ -222,114 +248,127 @@ export function EleveCoursShell({
       </div>
 
       {/* RIGHT: Content */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-white">
+      <div className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,#F9FBFE_0%,#FFFFFF_18%)]">
         {selectedDossier ? (
           <>
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-1 px-5 py-3 border-b border-gray-200 text-xs text-gray-400">
-              <button onClick={() => setSelectedId(null)}><Home size={12} /></button>
-              {breadcrumb.map((d, i) => (
-                <span key={d.id} className="flex items-center gap-1">
-                  <ChevronRight size={11} />
-                  <button
-                    onClick={() => selectDossier(d)}
-                    className={i === breadcrumb.length - 1 ? "font-semibold text-gray-700" : "hover:text-gray-600"}
-                  >
-                    {d.name}
-                  </button>
-                </span>
-              ))}
+            <div className="border-b border-[#E8EDF5] px-5 py-3 text-xs text-[#8C98A8]">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button onClick={() => setSelectedId(null)} className="rounded-full bg-white p-1.5 shadow-sm ring-1 ring-[#E6EDF6]">
+                  <Home size={12} />
+                </button>
+                {breadcrumb.map((d, i) => (
+                  <span key={d.id} className="flex items-center gap-1.5">
+                    <ChevronRight size={11} />
+                    <button
+                      onClick={() => selectDossier(d)}
+                      className={`rounded-full px-2.5 py-1 transition-colors ${
+                        i === breadcrumb.length - 1
+                          ? "bg-[#12314D] text-white"
+                          : "bg-white text-[#5F6F82] ring-1 ring-[#E6EDF6] hover:text-[#12314D]"
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5">
-              <div className="space-y-5">
-                {/* Sous-dossiers — colored icons like admin */}
-                {childDossiers.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Sous-dossiers</p>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {childDossiers.map((child) => (
-                        <button key={child.id} onClick={() => selectDossier(child)}
-                          className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 hover:border-navy/30 hover:shadow-sm transition-all text-left">
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: (child.color || "#6B7280") + "18" }}
-                          >
-                            <Folder size={16} style={{ color: child.color || "#6B7280" }} />
-                          </div>
-                          <span className="text-sm font-medium text-gray-700 truncate">{child.name}</span>
-                        </button>
-                      ))}
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-[#E5EDF7] bg-white/95 p-5 shadow-[0_20px_50px_rgba(18,49,77,0.06)]">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="space-y-3">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-[#EEF6FF] px-3 py-1 text-[11px] font-semibold text-[#2E6FA3]">
+                        <Folder size={13} />
+                        Dossier actif
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-[#12314D]">{selectedDossier.name}</h2>
+                        <p className="mt-1 text-sm text-[#7B8A9A]">
+                          Navigue rapidement avec les bulles ci-dessous ou recherche directement un cours.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-2xl bg-[#F7FAFD] px-4 py-3 ring-1 ring-[#E8EEF6]">
+                        <div className="text-lg font-bold text-[#12314D]">{childDossiers.length}</div>
+                        <div className="text-[11px] text-[#8A98A9]">Sous-dossiers</div>
+                      </div>
+                      <div className="rounded-2xl bg-[#F7FAFD] px-4 py-3 ring-1 ring-[#E8EEF6]">
+                        <div className="text-lg font-bold text-[#12314D]">{coursList.length}</div>
+                        <div className="text-[11px] text-[#8A98A9]">Cours</div>
+                      </div>
+                      <div className="rounded-2xl bg-[#F7FAFD] px-4 py-3 ring-1 ring-[#E8EEF6]">
+                        <div className="text-lg font-bold text-[#12314D]">{flashcardDecks.length}</div>
+                        <div className="text-[11px] text-[#8A98A9]">Flashcards</div>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                {/* Cours — premium navy cards (same as admin) */}
-                {coursList.length > 0 && (
+                  <div className="mt-5 relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9AACBE]" />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Rechercher un cours, un chapitre ou une flashcard..."
+                      className="w-full rounded-2xl border border-[#DCE7F3] bg-[#F8FBFE] py-3 pl-11 pr-4 text-sm text-[#12314D] outline-none transition focus:border-[#4FABDB] focus:bg-white focus:ring-4 focus:ring-[#4FABDB]/10"
+                    />
+                  </div>
+
+                  {filteredChildDossiers.length > 0 && (
+                    <div className="mt-5">
+                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#90A0B2]">Navigation rapide</p>
+                      <div className="flex flex-wrap gap-2.5">
+                        {filteredChildDossiers.map((child) => (
+                          <button
+                            key={child.id}
+                            onClick={() => selectDossier(child)}
+                            className="inline-flex items-center gap-2 rounded-full border border-[#DCE7F3] bg-white px-4 py-2 text-sm font-medium text-[#12314D] transition hover:-translate-y-0.5 hover:border-[#4FABDB]/40 hover:shadow-[0_10px_24px_rgba(18,49,77,0.08)]"
+                          >
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ backgroundColor: child.color || "#8FA2B7" }}
+                            />
+                            {child.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {filteredCoursList.length > 0 && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Cours &amp; Exercices</p>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                      {coursList.map((c) => (
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#90A0B2]">Cours &amp; Exercices</p>
+                      <span className="rounded-full bg-[#EEF6FF] px-3 py-1 text-[11px] font-semibold text-[#2E6FA3]">
+                        {filteredCoursList.length} résultat{filteredCoursList.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {filteredCoursList.map((c) => (
                         <button
                           key={c.id}
                           onClick={() => router.push(`/cours/${c.id}`)}
-                          className="group relative rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_32px_rgba(212,171,80,0.18)] hover:border-[rgba(212,171,80,0.45)] text-left"
-                          style={{
-                            background: "linear-gradient(160deg, #091525 0%, #162d4a 55%, #091525 100%)",
-                            border: "1px solid rgba(212,171,80,0.22)",
-                            boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(212,171,80,0.08)",
-                          }}
+                          className="group rounded-[24px] border border-[#DCE7F3] bg-white p-4 text-left shadow-[0_10px_30px_rgba(18,49,77,0.05)] transition hover:-translate-y-1 hover:border-[#4FABDB]/45 hover:shadow-[0_18px_40px_rgba(18,49,77,0.10)]"
                         >
-                          <div className="relative overflow-hidden" style={{ minHeight: 130 }}>
-                            {/* Shimmer top */}
-                            <div className="absolute top-0 inset-x-0 h-px pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, rgba(212,171,80,0.45), transparent)" }} />
-                            {/* Golden glow */}
-                            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 70% at 50% 30%, rgba(212,171,80,0.07) 0%, transparent 65%)" }} />
-
-                            {/* Badge "Fiche de cours" + dossier name */}
-                            <div className="relative z-10 flex items-center justify-between px-2.5 pt-2.5 pb-1">
-                              <span
-                                className="rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide whitespace-nowrap"
-                                style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}
-                              >
-                                Fiche de cours
-                              </span>
-                              <span className="truncate text-[9px] font-bold whitespace-nowrap tracking-wide" style={{ color: "rgba(212,171,80,0.75)" }}>
-                                {selectedDossier?.name}
-                              </span>
+                          <div className="mb-4 flex items-start justify-between gap-3">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EEF6FF] text-[#2E6FA3]">
+                              <BookOpen size={18} />
                             </div>
-
-                            {/* Center: logo watermark */}
-                            <div className="relative flex items-center justify-center" style={{ height: 48 }}>
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.13 }}>
-                                <BookOpen size={32} className="text-white" />
-                              </div>
-                              <div className="absolute bottom-1 left-3 flex gap-1 pointer-events-none" style={{ opacity: 0.18 }}>
-                                {[0,1,2].map(i => <div key={i} className="h-0.5 w-0.5 rounded-full bg-white" />)}
-                              </div>
-                              <div className="absolute bottom-1 right-3 flex gap-1 pointer-events-none" style={{ opacity: 0.18 }}>
-                                {[0,1,2].map(i => <div key={i} className="h-0.5 w-0.5 rounded-full bg-white" />)}
-                              </div>
-                            </div>
-
-                            {/* Gold separator */}
-                            <div className="mx-2.5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(212,171,80,0.35), transparent)" }} />
-
-                            {/* Title */}
-                            <div className="px-2.5 pt-2 pb-2.5">
-                              <div
-                                className="w-full rounded-xl px-2.5 py-2 text-center"
-                                style={{
-                                  background: "linear-gradient(135deg, rgba(212,171,80,0.13) 0%, rgba(212,171,80,0.05) 100%)",
-                                  border: "1px solid rgba(212,171,80,0.28)",
-                                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-                                }}
-                              >
-                                <p className="text-[12px] font-extrabold text-white leading-snug line-clamp-2 tracking-wide">
-                                  {c.name}
-                                </p>
-                              </div>
-                            </div>
+                            <span className="rounded-full bg-[#F5F8FC] px-2.5 py-1 text-[11px] font-semibold text-[#63758A]">
+                              {selectedDossier.name}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-semibold leading-snug text-[#12314D]">{c.name}</h3>
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <span className="text-xs text-[#8EA0B2]">Cours et exercices associes</span>
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#4FABDB] transition-all group-hover:gap-1.5">
+                              Ouvrir
+                              <ArrowRight size={12} />
+                            </span>
                           </div>
                         </button>
                       ))}
@@ -337,15 +376,15 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {flashcardDecks.length > 0 && (
+                {filteredFlashcardDecks.length > 0 && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Flashcards</p>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#90A0B2]">Flashcards</p>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {flashcardDecks.map((deck) => (
+                      {filteredFlashcardDecks.map((deck) => (
                         <button
                           key={deck.id}
                           onClick={() => router.push(`/cours/flashcards/${deck.id}`)}
-                          className="group rounded-2xl border border-[#D7E4F6] bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#4FABDB]/45 hover:shadow-[0_10px_30px_rgba(18,49,77,0.08)]"
+                          className="group rounded-[24px] border border-[#D7E4F6] bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#4FABDB]/45 hover:shadow-[0_10px_30px_rgba(18,49,77,0.08)]"
                         >
                           <div className="mb-3 flex items-start justify-between gap-3">
                             <div
@@ -361,14 +400,12 @@ export function EleveCoursShell({
                               {deck.nb_cards} carte{deck.nb_cards !== 1 ? "s" : ""}
                             </span>
                           </div>
-
                           <h3 className="text-sm font-semibold text-[#12314D]">{deck.name}</h3>
                           {deck.description && (
                             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#5B6B7D]">
                               {deck.description}
                             </p>
                           )}
-
                           <div className="mt-3 flex items-center justify-between gap-2">
                             <div className="flex min-w-0 flex-wrap gap-2">
                               {deck.matiere && (
@@ -391,10 +428,15 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {childDossiers.length === 0 && coursList.length === 0 && flashcardDecks.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <FolderOpen size={40} className="text-gray-200 mb-3" />
-                    <p className="text-sm text-gray-400">Ce dossier est vide</p>
+                {filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && filteredFlashcardDecks.length === 0 && (
+                  <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
+                    <FolderOpen size={40} className="mb-3 text-[#D0D9E4]" />
+                    <p className="text-sm font-medium text-[#7D8C9E]">
+                      {normalizedSearch ? "Aucun resultat pour cette recherche" : "Ce dossier est vide"}
+                    </p>
+                    <p className="mt-1 text-xs text-[#A2AEBC]">
+                      {normalizedSearch ? "Essaie un autre mot-clé." : "Choisis un autre dossier pour continuer."}
+                    </p>
                   </div>
                 )}
               </div>
@@ -402,9 +444,9 @@ export function EleveCoursShell({
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <FolderOpen size={48} className="text-gray-200 mb-3" />
-            <p className="text-sm font-medium text-gray-400">Sélectionnez un dossier</p>
-            <p className="mt-1 text-xs text-gray-300">pour voir les cours et exercices</p>
+            <FolderOpen size={48} className="mb-3 text-[#D5DDE8]" />
+            <p className="text-sm font-medium text-[#7A8898]">Sélectionnez un dossier</p>
+            <p className="mt-1 text-xs text-[#AAB4C0]">pour voir les cours et exercices</p>
           </div>
         )}
       </div>
