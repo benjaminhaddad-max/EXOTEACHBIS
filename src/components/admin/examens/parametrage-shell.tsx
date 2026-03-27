@@ -64,7 +64,7 @@ export function ParametrageShell({ dossiers, allDossiers, embedded }: { dossiers
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-2">
               <Building2 size={32} style={{ color: "rgba(255,255,255,0.15)" }} className="mx-auto" />
-              <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>Sélectionne une université</p>
+              <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>Sélectionne une formation ou université</p>
               <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>dans le menu à gauche pour configurer son barème et ses coefficients</p>
             </div>
           </div>
@@ -107,28 +107,39 @@ function ParametrageSidebar({ dossiers, selectedId, onSelect }: {
     <div className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full" style={{ width: 260, backgroundColor: "rgba(0,0,0,0.15)" }}>
       <div className="px-4 pt-4 pb-2 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-          Universités
+          Formations &amp; Universités
         </p>
       </div>
 
       <div className="px-3 pb-2 space-y-0.5 flex-1">
         {offers.map(offer => {
           const offerUnis = unisByOffer.get(offer.id) ?? [];
-          if (offerUnis.length === 0) return null;
+          const hasUnis = offerUnis.length > 0;
           const isOpen = expanded.has(offer.id);
+          const isOfferSelected = selectedId === offer.id;
 
           return (
             <div key={offer.id}>
-              <button onClick={() => toggleExpand(offer.id)}
-                className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all text-left"
-                onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
-                onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                <GraduationCap size={11} style={{ color: "#C9A84C" }} />
-                <span className="flex-1 text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>{offer.name}</span>
-                <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
-              </button>
+              <div className="flex items-center gap-0.5">
+                {/* Offer row — clickable to select + toggle expand */}
+                <button
+                  onClick={() => { onSelect(offer.id); if (hasUnis) toggleExpand(offer.id); }}
+                  className="flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all text-left"
+                  style={{
+                    backgroundColor: isOfferSelected ? "rgba(201,168,76,0.12)" : "transparent",
+                    border: isOfferSelected ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
+                  }}
+                  onMouseOver={e => { if (!isOfferSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+                  onMouseOut={e => { if (!isOfferSelected) e.currentTarget.style.backgroundColor = isOfferSelected ? "rgba(201,168,76,0.12)" : "transparent"; }}>
+                  <GraduationCap size={11} style={{ color: "#C9A84C" }} />
+                  <span className="flex-1 text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>{offer.name}</span>
+                  {hasUnis && (
+                    <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
+                  )}
+                </button>
+              </div>
 
-              {isOpen && offerUnis.map(uni => {
+              {hasUnis && isOpen && offerUnis.map(uni => {
                 const isSelected = selectedId === uni.id;
                 return (
                   <button key={uni.id} onClick={() => onSelect(uni.id)}
