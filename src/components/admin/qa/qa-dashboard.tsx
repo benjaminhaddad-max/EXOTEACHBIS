@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Dossier, Groupe } from "@/types/database";
+import type { Dossier, Matiere } from "@/types/database";
 import type { QaThread, QaStatus } from "@/types/qa";
-import { FormationClassesTreeSidebar } from "@/components/admin/formation-classes-tree-sidebar";
+import { QaPedagogieMatiereTreeSidebar } from "./qa-pedagogie-matiere-tree-sidebar";
 import { QaThreadList } from "./qa-thread-list";
 import { QaChatPanel } from "./qa-chat-panel";
 import { QaStatsCards } from "./qa-stats-cards";
@@ -14,19 +14,19 @@ interface QaDashboardProps {
   initialThreads: QaThread[];
   userId: string;
   initialThreadId?: string;
-  qaTreeDossiers: Dossier[];
-  qaGroupes: Groupe[];
+  qaDossiers: Dossier[];
+  qaMatieres: Matiere[];
 }
 
 export function QaDashboard({
   initialThreads,
   userId,
   initialThreadId,
-  qaTreeDossiers,
-  qaGroupes,
+  qaDossiers,
+  qaMatieres,
 }: QaDashboardProps) {
   const [threads, setThreads] = useState<QaThread[]>(initialThreads);
-  const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+  const [selectedMatiereIds, setSelectedMatiereIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<QaThread | null>(
     initialThreadId ? initialThreads.find(t => t.id === initialThreadId) ?? null : null
   );
@@ -35,14 +35,14 @@ export function QaDashboard({
   const [search, setSearch] = useState("");
   const supabase = createClient();
 
-  const toggleGroupe = (id: string) =>
-    setSelectedGroupeIds(prev => {
+  const toggleMatiere = (id: string) =>
+    setSelectedMatiereIds(prev => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
       return n;
     });
-  const selectAllGroupes = () => setSelectedGroupeIds(new Set());
+  const selectAllMatieres = () => setSelectedMatiereIds(new Set());
 
   useEffect(() => {
     const channel = supabase
@@ -73,13 +73,19 @@ export function QaDashboard({
     if (data) setThreads(data as unknown as QaThread[]);
   };
 
+  const threadCountByMatiereId = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const t of threads) {
+      if (!t.matiere_id) continue;
+      m[t.matiere_id] = (m[t.matiere_id] ?? 0) + 1;
+    }
+    return m;
+  }, [threads]);
+
   const threadsAfterScope = useMemo(() => {
-    if (selectedGroupeIds.size === 0) return threads;
-    return threads.filter(t => {
-      const gid = t.student?.groupe_id;
-      return gid != null && selectedGroupeIds.has(gid);
-    });
-  }, [threads, selectedGroupeIds]);
+    if (selectedMatiereIds.size === 0) return threads;
+    return threads.filter(t => t.matiere_id != null && selectedMatiereIds.has(t.matiere_id));
+  }, [threads, selectedMatiereIds]);
 
   const filtered = threadsAfterScope.filter(t => {
     if (filterStatus !== "all" && t.status !== filterStatus) return false;
@@ -94,13 +100,13 @@ export function QaDashboard({
 
   useEffect(() => {
     if (!selected) return;
-    if (selectedGroupeIds.size === 0) return;
-    const gid = selected.student?.groupe_id;
-    if (!gid || !selectedGroupeIds.has(gid)) {
+    if (selectedMatiereIds.size === 0) return;
+    const mid = selected.matiere_id;
+    if (!mid || !selectedMatiereIds.has(mid)) {
       setSelected(null);
       window.history.replaceState(null, "", "/admin/questions-reponses");
     }
-  }, [selectedGroupeIds, selected]);
+  }, [selectedMatiereIds, selected]);
 
   const matieres = Array.from(
     new Map(threadsAfterScope.filter(t => t.matiere).map(t => [t.matiere!.id, t.matiere!])).values()
@@ -121,17 +127,15 @@ export function QaDashboard({
       <QaStatsCards threads={threadsAfterScope} />
 
       <div className="mt-4 flex-1 min-h-0 bg-white rounded-xl border border-gray-200 overflow-hidden flex">
-        <div className="hidden lg:flex shrink-0 h-full min-h-0 border-r border-gray-200">
-          <FormationClassesTreeSidebar
-            dossiers={qaTreeDossiers}
-            groupes={qaGroupes}
-            selectedGroupeIds={selectedGroupeIds}
-            onToggle={toggleGroupe}
-            onSelectAll={selectAllGroupes}
-            onSetSelection={setSelectedGroupeIds}
-            variant="light"
-            allItemsLabel="Toutes les questions"
-            title="Formations & Classes"
+        <div className="hidden lg:flex shrink-0 h-full min-h-0">
+          <QaPedagogieMatiereTreeSidebar
+            dossiers={qaDossiers}
+            matieres={qaMatieres}
+            selectedMatiereIds={selectedMatiereIds}
+            onToggleMatiere={toggleMatiere}
+            onSelectAllMatieres={selectAllMatieres}
+            onSetMatiereSelection={setSelectedMatiereIds}
+            threadCountByMatiereId={threadCountByMatiereId}
           />
         </div>
 
@@ -141,9 +145,9 @@ export function QaDashboard({
           }`}
         >
           <div className="p-3 border-b border-gray-100 space-y-2 shrink-0">
-            {selectedGroupeIds.size > 0 && (
+            {selectedMatiereIds.size > 0 && (
               <p className="text-[10px] text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
-                Filtre actif : {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""} — seules les questions de ces classes sont affichées.
+                Filtre actif : {selectedMatiereIds.size} matière{selectedMatiereIds.size > 1 ? "s" : ""} — la liste ne montre que les questions rattachées à ces matières.
               </p>
             )}
             <input
@@ -204,7 +208,7 @@ export function QaDashboard({
               <Inbox className="w-12 h-12 mb-3 text-gray-200" />
               <p className="text-sm">Sélectionnez une question pour y répondre</p>
               <p className="text-xs text-gray-400 mt-2 max-w-xs text-center hidden lg:block">
-                Utilisez la colonne de gauche pour filtrer par formation, université ou classe.
+                Filtrez par semestre et matière dans la colonne de gauche (même logique que Pédagogie / Exercices).
               </p>
             </div>
           )}

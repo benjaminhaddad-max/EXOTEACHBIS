@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAccessScopeForUser } from "@/lib/access-scope";
 import { QaDashboard } from "@/components/admin/qa/qa-dashboard";
-import type { Dossier, Groupe } from "@/types/database";
+import type { Dossier, Matiere } from "@/types/database";
 import type { QaThread } from "@/types/qa";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
   const scope = await getAccessScopeForUser(supabase as any, user.id);
   const role = profile.role;
 
-  const [threadsRes, dossiersRes, groupesRes] = await Promise.all([
+  const [threadsRes, dossiersRes, matieresRes, profMatieresRes] = await Promise.all([
     supabase
       .from("qa_threads")
       .select(`
@@ -46,21 +46,26 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
       .order("created_at", { ascending: false, referencedTable: "qa_messages" })
       .limit(1, { referencedTable: "qa_messages" }),
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
-    supabase.from("groupes").select("*").order("name"),
+    supabase.from("matieres").select("*").eq("visible", true).order("order_index"),
+    role === "prof"
+      ? supabase.from("prof_matieres").select("matiere_id").eq("prof_id", user.id)
+      : Promise.resolve({ data: [] as { matiere_id: string }[] }),
   ]);
 
   const allDossiers = (dossiersRes.data ?? []) as Dossier[];
-  const allGroupes = (groupesRes.data ?? []) as Groupe[];
+  const allMatieres = (matieresRes.data ?? []) as Matiere[];
 
   const availableDossiers =
     role === "prof" || role === "coach"
       ? allDossiers.filter(d => scope.allowedDossierIds.has(d.id))
       : allDossiers;
-  const qaTreeDossiers = availableDossiers.filter(d => d.dossier_type === "offer" || d.dossier_type === "university");
-  const qaGroupes =
-    role === "prof" || role === "coach"
-      ? allGroupes.filter(g => g.id === profile.groupe_id)
-      : allGroupes;
+
+  const profMatiereIds = new Set((profMatieresRes.data ?? []).map((r: { matiere_id: string }) => r.matiere_id));
+  const availableMatieres =
+    role === "prof" ? allMatieres.filter(m => profMatiereIds.has(m.id)) : allMatieres;
+
+  const dossierIds = new Set(availableDossiers.map(d => d.id));
+  const qaMatieres = availableMatieres.filter(m => dossierIds.has(m.dossier_id));
 
   return (
     <div>
@@ -69,8 +74,8 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
         initialThreads={(threadsRes.data ?? []) as unknown as QaThread[]}
         userId={user.id}
         initialThreadId={params.thread}
-        qaTreeDossiers={qaTreeDossiers}
-        qaGroupes={qaGroupes}
+        qaDossiers={availableDossiers}
+        qaMatieres={qaMatieres}
       />
     </div>
   );
