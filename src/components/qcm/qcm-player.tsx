@@ -577,8 +577,13 @@ function CorrectionProposition({
           >
             {opt.label}
           </span>
-          <div className="min-w-0 flex-1 text-[13px] leading-6 text-gray-800">
-            <MathText text={opt.text} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] leading-6 text-gray-800">
+              <MathText text={opt.text} />
+            </div>
+            {opt.image_url && (
+              <img src={opt.image_url} alt="" className="mt-1 rounded-lg max-h-40 object-contain" />
+            )}
           </div>
         </div>
 
@@ -734,6 +739,12 @@ function ResultsScreen({
                 {/* Expanded correction */}
                 {expanded && (
                   <div className="px-3 pb-3 pt-2 space-y-1 border-t border-gray-100">
+                    {/* Question image if present */}
+                    {q.image_url && (
+                      <div className="pb-2">
+                        <img src={q.image_url} alt="" className="rounded-lg max-h-60 object-contain" />
+                      </div>
+                    )}
                     {opts.map((opt) => (
                       <CorrectionProposition
                         key={opt.id}
