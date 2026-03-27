@@ -647,7 +647,7 @@ function ExamenForm({
           <Users size={11} /> Classes cibles ({formGroupeIds.size})
         </label>
         <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-          {groupes.map(g => {
+          {groupes.filter(g => sidebarGroupeIds.has(g.id) || (examen?.groupe_ids ?? []).includes(g.id)).map(g => {
             const isSelected = formGroupeIds.has(g.id);
             return (
               <button key={g.id} onClick={() => toggleFormGroupe(g.id)}
