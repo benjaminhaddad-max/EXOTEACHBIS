@@ -403,7 +403,6 @@ export function ExamensShell({
         </div>
       )}
       </div>
-      </div>
       )}
     </div>
   );
