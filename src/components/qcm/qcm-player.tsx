@@ -849,16 +849,6 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
   const startGame = async (withTimer: boolean) => {
     setTimed(withTimer);
     setStartTime(new Date());
-    const { data, error } = await supabase
-      .from("serie_attempts")
-      .insert({ user_id: userId, series_id: serie.id, timed: withTimer })
-      .select("id")
-      .single();
-    if (error) {
-      console.error("Failed to create attempt:", error);
-      // Still allow playing even if attempt creation fails
-    }
-    if (data) setAttemptId(data.id);
     setPlayerState("playing");
   };
 
@@ -916,20 +906,47 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
     const nbTotal = questions.length;
     const score = nbTotal > 0 ? (nbCorrectQuestions / nbTotal) * 100 : 0;
 
-    if (attemptId) {
+    let finalAttemptId = attemptId;
+
+    if (!finalAttemptId) {
+      const { data: createdAttempt, error: createAttemptError } = await supabase
+        .from("serie_attempts")
+        .insert({
+          user_id: userId,
+          series_id: serie.id,
+          started_at: startTime?.toISOString() ?? endTime.toISOString(),
+          ended_at: endTime.toISOString(),
+          score: Math.round(score * 100) / 100,
+          nb_correct: nbCorrectQuestions,
+          nb_total: nbTotal,
+          timed,
+          time_spent_s: totalSeconds,
+        })
+        .select("id")
+        .single();
+
+      if (createAttemptError) {
+        console.error("Failed to create completed attempt:", createAttemptError);
+      } else if (createdAttempt?.id) {
+        finalAttemptId = createdAttempt.id;
+        setAttemptId(createdAttempt.id);
+      }
+    } else {
       await supabase.from("serie_attempts").update({
         ended_at: endTime.toISOString(),
         score: Math.round(score * 100) / 100,
         nb_correct: nbCorrectQuestions,
         nb_total: nbTotal,
         time_spent_s: totalSeconds,
-      }).eq("id", attemptId);
+      }).eq("id", finalAttemptId);
+    }
 
+    if (finalAttemptId) {
       // QCM answers
       const qcmRows = details
         .filter((d) => !("textAnswer" in d))
         .map((d) => ({
-          attempt_id: attemptId,
+          attempt_id: finalAttemptId,
           question_id: d.question.id,
           selected_labels: d.selected,
           is_correct: d.correct,
@@ -940,7 +957,7 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
       const textRows = details
         .filter((d) => "textAnswer" in d)
         .map((d: any) => ({
-          attempt_id: attemptId,
+          attempt_id: finalAttemptId,
           question_id: d.question.id,
           answer_text: d.textAnswer,
           is_correct: d.pending ? null : d.correct,
