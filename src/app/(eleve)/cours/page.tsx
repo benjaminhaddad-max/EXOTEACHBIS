@@ -71,6 +71,7 @@ export default async function CoursPage() {
         initialFlashcardDecks={flashcardDecks}
         initialExerciceTree={exercicesData.tree}
         initialExerciceCours={exercicesData.allCours}
+        userId={user!.id}
       />
     </div>
   );

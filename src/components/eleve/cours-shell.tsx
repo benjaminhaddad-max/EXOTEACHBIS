@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
 import { ExercicesShell } from "@/components/eleve/exercices-shell";
+import { MatiereExercicesView } from "@/components/eleve/matiere-exercices-view";
 import type { DossierNode as ExerciceDossierNode, CoursNode as ExerciceCoursNode } from "@/app/(eleve)/exercices/actions";
 
 type FlashcardDeck = {
@@ -90,6 +91,7 @@ export function EleveCoursShell({
   initialFlashcardDecks,
   initialExerciceTree,
   initialExerciceCours,
+  userId,
 }: {
   initialDossiers: Dossier[];
   initialMatieres: Matiere[];
@@ -97,6 +99,7 @@ export function EleveCoursShell({
   initialFlashcardDecks: FlashcardDeck[];
   initialExerciceTree: ExerciceDossierNode[];
   initialExerciceCours: ExerciceCoursNode[];
+  userId: string;
 }) {
   const router = useRouter();
   const [allDossiers] = useState<Dossier[]>(initialDossiers);
@@ -422,18 +425,11 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {activeTab === "exercices" && selectedExerciceRoots.length > 0 && (
-                  <div className="overflow-hidden rounded-[28px] border border-[#E5EDF7] bg-white shadow-[0_20px_50px_rgba(18,49,77,0.06)]">
-                    <ExercicesShell tree={selectedExerciceRoots} allCours={selectedExerciceCours} />
-                  </div>
-                )}
-
-                {activeTab === "exercices" && selectedExerciceRoots.length === 0 && (
-                  <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
-                    <Layers size={40} className="mb-3 text-[#D0D9E4]" />
-                    <p className="text-sm font-medium text-[#7D8C9E]">Aucun exercice disponible à cette échelle</p>
-                    <p className="mt-1 text-xs text-[#A2AEBC]">Descends dans une matière ou un chapitre pour t’entraîner.</p>
-                  </div>
+                {activeTab === "exercices" && selectedDossier && (
+                  <MatiereExercicesView
+                    matiereIds={matiereIdsByDossier.get(selectedDossier.id) ?? []}
+                    coursIds={coursList.map((c) => c.id)}
+                  />
                 )}
 
                 {activeTab === "cours" && filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && filteredFlashcardDecks.length === 0 && (
