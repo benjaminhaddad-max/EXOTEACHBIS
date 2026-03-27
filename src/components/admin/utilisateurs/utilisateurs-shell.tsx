@@ -937,6 +937,7 @@ export function UtilisateursShell({
       )}
       {modal?.type === "edit_user" && (
         <EditUserModal
+          key={modal.user.id}
           user={modal.user}
           groupes={groupes}
           dossiers={initialDossiers}
@@ -3165,14 +3166,21 @@ function EditUserModal({
   const [excludedInheritedAccessIds, setExcludedInheritedAccessIds] = useState<string[]>(excludedAccessIds);
   const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
   const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
+  const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
+  const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
+  const currentExcludedAccessSignature = [...excludedAccessIds].sort().join("|");
 
   useEffect(() => {
     setPersonalAccessIds(directAccessIds);
-  }, [directAccessIds, user.id]);
+  }, [currentDirectAccessSignature, user.id]);
 
   useEffect(() => {
     setExcludedInheritedAccessIds(excludedAccessIds);
-  }, [excludedAccessIds, user.id]);
+  }, [currentExcludedAccessSignature, user.id]);
+
+  useEffect(() => {
+    setMatiereIds(selectedMatiereIds);
+  }, [currentSelectedMatiereSignature, user.id]);
 
   const matieresByDossier = useMemo(() => {
     const map = new Map<string, Matiere[]>();
@@ -3184,11 +3192,11 @@ function EditUserModal({
     return map;
   }, [matieres]);
 
-  const normalizedCurrentMatieres = [...selectedMatiereIds].sort().join("|");
+  const normalizedCurrentMatieres = currentSelectedMatiereSignature;
   const normalizedNextMatieres = [...matiereIds].sort().join("|");
-  const normalizedCurrentDirectAccess = [...directAccessIds].sort().join("|");
+  const normalizedCurrentDirectAccess = currentDirectAccessSignature;
   const normalizedNextDirectAccess = [...personalAccessIds].sort().join("|");
-  const normalizedCurrentExcludedAccess = [...excludedAccessIds].sort().join("|");
+  const normalizedCurrentExcludedAccess = currentExcludedAccessSignature;
   const normalizedNextExcludedAccess = [...excludedInheritedAccessIds].sort().join("|");
   const inheritedAccessIds = groupeId ? (groupeAccessById.get(groupeId) ?? []) : [];
   const inheritedExpandedSet = useMemo(
