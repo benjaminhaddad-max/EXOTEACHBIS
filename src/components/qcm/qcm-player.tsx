@@ -544,86 +544,64 @@ function CorrectionProposition({
   const isCorrect = userAnswer === correctAnswer;
   const notAnswered = userAnswer === null;
 
+  // Compact single-row proposition: icon + label + text + answer badge
   return (
-    <div
-      className="rounded-2xl border p-4 space-y-4"
-      style={{
-        borderColor: notAnswered ? "#E5E7EB" : isCorrect ? "#BBF7D0" : "#FECACA",
-        backgroundColor: notAnswered ? "#F9FAFB" : isCorrect ? "#F0FDF4" : "#FEF2F2",
-      }}
-    >
-      <div className="flex items-start gap-3">
-        {/* Correctness icon */}
+    <div className="space-y-0">
+      <div
+        className="flex items-start gap-2.5 rounded-xl px-3 py-2"
+        style={{
+          backgroundColor: notAnswered ? "#F9FAFB" : isCorrect ? "#F0FDF4" : "#FEF2F2",
+        }}
+      >
+        {/* Status icon */}
         <div
-          className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5"
+          className="shrink-0 w-[18px] h-[18px] rounded-full flex items-center justify-center mt-[3px]"
           style={{
             backgroundColor: notAnswered ? "#9CA3AF" : isCorrect ? "#10B981" : "#EF4444",
           }}
         >
           {notAnswered ? (
-            <span className="text-white text-[9px] font-bold">?</span>
+            <span className="text-white text-[8px] font-bold">?</span>
           ) : isCorrect ? (
-            <Check size={10} className="text-white" strokeWidth={3} />
+            <Check size={9} className="text-white" strokeWidth={3} />
           ) : (
-            <X size={10} className="text-white" strokeWidth={3} />
+            <X size={9} className="text-white" strokeWidth={3} />
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2 flex-wrap">
-            <span
-              className="text-xs font-bold px-2 py-0.5 rounded-full"
-              style={{
-                backgroundColor: "#0e1e35",
-                color: "#C9A84C",
-              }}
-            >
-              {opt.label}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-[15px] font-medium leading-7 text-gray-900">
-                <MathText text={opt.text} />
-              </div>
-            </div>
+        {/* Label + text */}
+        <div className="flex-1 min-w-0 flex items-start gap-2">
+          <span
+            className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded-full mt-[1px]"
+            style={{ backgroundColor: "#0e1e35", color: "#C9A84C" }}
+          >
+            {opt.label}
+          </span>
+          <div className="min-w-0 flex-1 text-[13px] leading-6 text-gray-800">
+            <MathText text={opt.text} />
           </div>
         </div>
+
+        {/* Answer badge — only show when wrong or not answered */}
+        {!isCorrect && (
+          <div className="shrink-0 flex items-center gap-1.5 mt-[2px]">
+            {!notAnswered && (
+              <span className="text-[10px] line-through text-red-400 font-medium">
+                {userAnswer === "vrai" ? "V" : "F"}
+              </span>
+            )}
+            <span className="text-[10px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
+              {correctAnswer === "vrai" ? "V" : "F"}
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div
-          className="rounded-xl border px-3 py-2.5"
-          style={{
-            borderColor: notAnswered ? "#D1D5DB" : isCorrect ? "#BBF7D0" : "#FECACA",
-            backgroundColor: notAnswered ? "#FFFFFF" : isCorrect ? "#ECFDF3" : "#FEF2F2",
-          }}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Ta réponse</p>
-          <p className="mt-1 text-sm font-semibold" style={{ color: notAnswered ? "#6B7280" : isCorrect ? "#15803D" : "#DC2626" }}>
-            {notAnswered ? "Non répondu" : userAnswer === "vrai" ? "VRAI" : "FAUX"}
-          </p>
-        </div>
-
-        <div
-          className="rounded-xl border border-green-200 bg-white px-3 py-2.5"
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Réponse attendue</p>
-          <p className="mt-1 text-sm font-semibold text-green-700">
-            {correctAnswer === "vrai" ? "VRAI" : "FAUX"}
-          </p>
-        </div>
-      </div>
-
-      {/* Justification */}
+      {/* Justification — compact, only if present */}
       {opt.justification && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-3">
-          <div className="flex items-start gap-2">
-            <Lightbulb size={14} className="shrink-0 text-amber-500 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Pourquoi ?</p>
-              <div className="mt-1 text-sm leading-6 text-amber-950/85">
-                <MathText text={opt.justification} />
-              </div>
-            </div>
+        <div className="ml-[30px] mr-3 pl-2.5 border-l-2 border-amber-300 py-1.5 mb-1">
+          <div className="text-xs leading-5 text-amber-900/80">
+            <MathText text={opt.justification} />
           </div>
         </div>
       )}
@@ -755,12 +733,23 @@ function ResultsScreen({
 
                 {/* Expanded correction */}
                 {expanded && (
-                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-gray-100 bg-gradient-to-b from-white to-[#FBFCFF]">
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE7F3] bg-[#F7FBFF] px-3 py-2.5">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6A7D92]">Question sur la correction</p>
-                        <p className="text-xs text-[#7E8FA4]">Demande une explication maintenant que tu vois la bonne réponse.</p>
+                  <div className="px-3 pb-3 pt-2 space-y-1 border-t border-gray-100">
+                    {opts.map((opt) => (
+                      <CorrectionProposition
+                        key={opt.id}
+                        opt={opt}
+                        userAnswer={qA[opt.label] ?? null}
+                      />
+                    ))}
+                    {q.explanation && (
+                      <div className="flex items-start gap-2 rounded-lg bg-blue-50/80 px-3 py-2 mt-1">
+                        <Lightbulb size={13} className="shrink-0 text-blue-600 mt-0.5" />
+                        <div className="text-xs leading-5 text-slate-700">
+                          <MathText text={q.explanation} />
+                        </div>
                       </div>
+                    )}
+                    <div className="flex items-center justify-end pt-1">
                       <AskQuestionFab
                         mini
                         contextType="qcm_question"
@@ -770,32 +759,6 @@ function ResultsScreen({
                         matiereId={serie.matiere_id ?? undefined}
                       />
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Énoncé</p>
-                      <div className="mt-1 text-[15px] leading-7 text-slate-900">
-                        <MathText text={q.text} />
-                      </div>
-                    </div>
-                    {opts.map((opt) => (
-                      <CorrectionProposition
-                        key={opt.id}
-                        opt={opt}
-                        userAnswer={qA[opt.label] ?? null}
-                      />
-                    ))}
-                    {q.explanation && (
-                      <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          <Lightbulb size={15} className="shrink-0 text-blue-600 mt-0.5" />
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Mémo du formateur</p>
-                            <div className="mt-1 text-sm leading-6 text-slate-700">
-                              <MathText text={q.explanation} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -884,7 +847,6 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
       if (q.type === "short_answer") {
         const userText = (textAnswers[q.id] ?? "").trim();
         const correctText = ((q as any).correct_answer ?? "").trim();
-        // Case-insensitive comparison by default (config from parametrage would refine this)
         const isCorrect = userText.toLowerCase() === correctText.toLowerCase();
         if (isCorrect) nbCorrectQuestions++;
         return { question: q, selected: [] as string[], correct: isCorrect, textAnswer: userText };
@@ -892,7 +854,6 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
 
       if (q.type === "redaction") {
         const userText = (textAnswers[q.id] ?? "").trim();
-        // Redaction: never auto-graded, counts as "pending" — doesn't add to nb_correct
         return { question: q, selected: [] as string[], correct: false, textAnswer: userText, pending: true };
       }
 
@@ -908,72 +869,84 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
       return { question: q, selected: selectedLabels, correct: allCorrect };
     });
 
-    // nb_total = all questions; redaction counted separately
     const nbTotal = questions.length;
     const score = nbTotal > 0 ? (nbCorrectQuestions / nbTotal) * 100 : 0;
 
-    let finalAttemptId = attemptId;
+    // Show results IMMEDIATELY — never block the student
+    setResults({ score, nb_correct: nbCorrectQuestions, nb_props_correct: nbPropsCorrect, nb_props_total: nbPropsTotal, details });
+    setSubmitting(false);
+    setPlayerState("results");
 
-    if (!finalAttemptId) {
-      const { data: createdAttempt, error: createAttemptError } = await supabase
-        .from("serie_attempts")
-        .insert({
-          user_id: userId,
-          series_id: serie.id,
-          started_at: startTime?.toISOString() ?? endTime.toISOString(),
+    // Save to DB in the background — fire and forget
+    try {
+      let finalAttemptId = attemptId;
+
+      if (!finalAttemptId) {
+        const { data: createdAttempt, error: createAttemptError } = await supabase
+          .from("serie_attempts")
+          .insert({
+            user_id: userId,
+            series_id: serie.id,
+            started_at: startTime?.toISOString() ?? endTime.toISOString(),
+            ended_at: endTime.toISOString(),
+            score: Math.round(score * 100) / 100,
+            nb_correct: nbCorrectQuestions,
+            nb_total: nbTotal,
+            timed,
+            time_spent_s: totalSeconds,
+          })
+          .select("id")
+          .single();
+
+        if (createAttemptError) {
+          console.error("Failed to create attempt:", createAttemptError);
+          return;
+        }
+        if (createdAttempt?.id) {
+          finalAttemptId = createdAttempt.id;
+          setAttemptId(createdAttempt.id);
+        }
+      } else {
+        const { error } = await supabase.from("serie_attempts").update({
           ended_at: endTime.toISOString(),
           score: Math.round(score * 100) / 100,
           nb_correct: nbCorrectQuestions,
           nb_total: nbTotal,
-          timed,
           time_spent_s: totalSeconds,
-        })
-        .select("id")
-        .single();
-
-      if (createAttemptError) {
-        console.error("Failed to create completed attempt:", createAttemptError);
-      } else if (createdAttempt?.id) {
-        finalAttemptId = createdAttempt.id;
-        setAttemptId(createdAttempt.id);
+        }).eq("id", finalAttemptId);
+        if (error) console.error("Failed to update attempt:", error);
       }
-    } else {
-      await supabase.from("serie_attempts").update({
-        ended_at: endTime.toISOString(),
-        score: Math.round(score * 100) / 100,
-        nb_correct: nbCorrectQuestions,
-        nb_total: nbTotal,
-        time_spent_s: totalSeconds,
-      }).eq("id", finalAttemptId);
+
+      if (finalAttemptId) {
+        const qcmRows = details
+          .filter((d) => !("textAnswer" in d))
+          .map((d) => ({
+            attempt_id: finalAttemptId,
+            question_id: d.question.id,
+            selected_labels: d.selected,
+            is_correct: d.correct,
+          }));
+        if (qcmRows.length > 0) {
+          const { error } = await supabase.from("user_answers").insert(qcmRows);
+          if (error) console.error("Failed to insert user_answers:", error);
+        }
+
+        const textRows = details
+          .filter((d) => "textAnswer" in d)
+          .map((d: any) => ({
+            attempt_id: finalAttemptId,
+            question_id: d.question.id,
+            answer_text: d.textAnswer,
+            is_correct: d.pending ? null : d.correct,
+          }));
+        if (textRows.length > 0) {
+          const { error } = await supabase.from("user_text_answers").insert(textRows);
+          if (error) console.error("Failed to insert user_text_answers:", error);
+        }
+      }
+    } catch (err) {
+      console.error("Background save error:", err);
     }
-
-    if (finalAttemptId) {
-      // QCM answers
-      const qcmRows = details
-        .filter((d) => !("textAnswer" in d))
-        .map((d) => ({
-          attempt_id: finalAttemptId,
-          question_id: d.question.id,
-          selected_labels: d.selected,
-          is_correct: d.correct,
-        }));
-      if (qcmRows.length > 0) await supabase.from("user_answers").insert(qcmRows);
-
-      // Text answers (short_answer + redaction)
-      const textRows = details
-        .filter((d) => "textAnswer" in d)
-        .map((d: any) => ({
-          attempt_id: finalAttemptId,
-          question_id: d.question.id,
-          answer_text: d.textAnswer,
-          is_correct: d.pending ? null : d.correct,
-        }));
-      if (textRows.length > 0) await supabase.from("user_text_answers").insert(textRows);
-    }
-
-    setResults({ score, nb_correct: nbCorrectQuestions, nb_props_correct: nbPropsCorrect, nb_props_total: nbPropsTotal, details });
-    setSubmitting(false);
-    setPlayerState("results");
   }, [submitting, startTime, questions, answers, textAnswers, attemptId, supabase]);
 
   const handleRestart = () => {
