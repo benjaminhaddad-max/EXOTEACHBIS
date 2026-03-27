@@ -45,8 +45,14 @@ export function MatiereExercicesView({
   const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState<SerieType | null>(null);
 
+  // Stabilise array deps to avoid infinite re-fetch
+  const matiereKey = matiereIds.join(",");
+  const coursKey = coursIds.join(",");
+
   useEffect(() => {
+    if (!userId) return;
     async function fetchSeries() {
+      try {
       const supabase = createClient();
       const allSeries: SerieSummary[] = [];
 
@@ -126,9 +132,14 @@ export function MatiereExercicesView({
       if (typesWithSeries.length > 0) setActiveType(typesWithSeries[0]);
 
       setLoading(false);
+      } catch (err) {
+        console.error("Failed to fetch series:", err);
+        setLoading(false);
+      }
     }
     fetchSeries();
-  }, [matiereIds, coursIds, userId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matiereKey, coursKey, userId]);
 
   const seriesByType = useMemo(() => {
     const map = new Map<SerieType, SerieSummary[]>();
