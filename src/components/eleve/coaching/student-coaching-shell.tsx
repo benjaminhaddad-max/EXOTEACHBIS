@@ -5,8 +5,12 @@ import {
   AlertCircle,
   ArrowRight,
   CalendarClock,
+  CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronRight,
   Loader2,
+  LockKeyhole,
   PhoneCall,
   Sparkles,
   UserRound,
@@ -106,6 +110,72 @@ export function StudentCoachingShell({
   const requiredFields = useMemo(() => formFields.filter((field) => field.required), [formFields]);
   const answeredRequiredCount = requiredFields.filter((field) => isFilledAnswer(draft[field.key])).length;
   const completionRatio = requiredFields.length === 0 ? 100 : Math.round((answeredRequiredCount / requiredFields.length) * 100);
+  const onboardingDone = Boolean(form);
+  const bookingDone = Boolean(booking && bookingSlot);
+  const callDone = booking?.status === "completed";
+  const journeySteps = [
+    {
+      id: "coaching-form-step",
+      title: "Formulaire d'onboarding",
+      description: onboardingDone
+        ? "Tes réponses sont enregistrées et restent modifiables."
+        : "Complète ton profil pour donner du contexte au coach.",
+      done: onboardingDone,
+      locked: false,
+    },
+    {
+      id: "coaching-booking-step",
+      title: "Réservation de l'appel",
+      description: bookingDone
+        ? `Appel réservé le ${formatDateTime(bookingSlot?.start_at)}`
+        : onboardingDone
+          ? "Choisis ensuite le créneau qui t'arrange."
+          : "Cette étape se débloque juste après le formulaire.",
+      done: bookingDone,
+      locked: !onboardingDone,
+    },
+    {
+      id: "coaching-call-step",
+      title: "Point avec ton coach",
+      description: callDone
+        ? "Le premier échange a déjà été marqué comme réalisé."
+        : bookingDone
+          ? "Prépare tes questions et tes blocages avant l'appel."
+          : "Viendra après la réservation du créneau.",
+      done: callDone,
+      locked: !bookingDone,
+    },
+  ];
+  const completedJourneyCount = journeySteps.filter((step) => step.done).length;
+  const nextAction = !onboardingDone
+    ? {
+        title: "Complète ton onboarding",
+        body: `${answeredRequiredCount}/${requiredFields.length} questions obligatoires complétées. Plus tu es précis, plus l'appel sera utile.`,
+        cta: "Continuer le formulaire",
+        target: "coaching-form-step",
+      }
+    : !bookingDone
+      ? {
+          title: "Réserve ton créneau d'appel",
+          body: "Ton formulaire est prêt. Il ne reste plus qu'à choisir ton rendez-vous avec un coach de ta classe.",
+          cta: "Voir les créneaux",
+          target: "coaching-booking-step",
+        }
+      : !callDone
+        ? {
+            title: "Prépare ton appel",
+            body: bookingSlot
+              ? `Ton rendez-vous est prévu le ${formatDateTime(bookingSlot.start_at)}. Garde en tête tes questions, tes difficultés et ton organisation actuelle.`
+              : "Ton rendez-vous est réservé.",
+            cta: "Voir mon rendez-vous",
+            target: "coaching-booking-step",
+          }
+        : {
+            title: "Parcours lancé",
+            body: "Ton onboarding et ton premier point coach sont en place. La suite se jouera dans le suivi personnalisé.",
+            cta: "Revoir mon parcours",
+            target: "coaching-form-step",
+          };
 
   if (setupError) {
     return (
@@ -138,53 +208,70 @@ export function StudentCoachingShell({
   }
 
   const handleSubmitForm = () => {
+    setToast(null);
     startTransition(async () => {
-      const response = await submitStudentCoachingForm({
-        form_template_id: formTemplate.id,
-        answers: draft,
-      });
+      try {
+        const response = await submitStudentCoachingForm({
+          form_template_id: formTemplate.id,
+          answers: draft,
+        });
 
-      if (!("success" in response)) {
-        setToast({ kind: "error", message: response.error ?? "Une erreur est survenue." });
-        return;
+        if (!("success" in response)) {
+          setToast({ kind: "error", message: response.error ?? "Une erreur est survenue." });
+          return;
+        }
+
+        const submittedForm = response.form;
+        if (!submittedForm) {
+          setToast({ kind: "error", message: "Formulaire non retourné par le serveur." });
+          return;
+        }
+
+        setForm(submittedForm);
+        setToast({ kind: "success", message: "Formulaire enregistré. Tu peux maintenant réserver ton appel." });
+      } catch (error) {
+        console.error("submit coaching form failed", error);
+        setToast({ kind: "error", message: "Impossible d'enregistrer le formulaire pour le moment." });
       }
-
-      const submittedForm = response.form;
-      if (!submittedForm) {
-        setToast({ kind: "error", message: "Formulaire non retourné par le serveur." });
-        return;
-      }
-
-      setForm(submittedForm);
-      setToast({ kind: "success", message: "Formulaire enregistré. Tu peux maintenant réserver ton appel." });
     });
   };
 
   const handleBookSlot = (slot: CoachingCallSlot) => {
+    setToast(null);
     startTransition(async () => {
-      const response = await bookStudentCoachingCall(slot.id);
-      if (!("success" in response)) {
-        setToast({ kind: "error", message: response.error ?? "Une erreur est survenue." });
-        return;
-      }
+      try {
+        const response = await bookStudentCoachingCall(slot.id);
+        if (!("success" in response)) {
+          setToast({ kind: "error", message: response.error ?? "Une erreur est survenue." });
+          return;
+        }
 
-      const createdBooking = response.booking;
-      if (!createdBooking) {
-        setToast({ kind: "error", message: "Rendez-vous non retourné par le serveur." });
-        return;
-      }
+        const createdBooking = response.booking;
+        if (!createdBooking) {
+          setToast({ kind: "error", message: "Rendez-vous non retourné par le serveur." });
+          return;
+        }
 
-      setBooking(createdBooking);
-      setBookingSlot(slot);
-      setAvailableSlots((current) => current.filter((item) => item.id !== slot.id));
-      setToast({ kind: "success", message: "Ton rendez-vous coaching est réservé." });
+        setBooking(createdBooking);
+        setBookingSlot(slot);
+        setAvailableSlots((current) => current.filter((item) => item.id !== slot.id));
+        setToast({ kind: "success", message: "Ton rendez-vous coaching est réservé." });
+      } catch (error) {
+        console.error("book coaching slot failed", error);
+        setToast({ kind: "error", message: "Impossible de réserver ce créneau pour le moment." });
+      }
     });
   };
 
   const canSubmit = requiredFields.every((field) => isFilledAnswer(draft[field.key]));
+  const scrollToSection = (sectionId: string) => {
+    const node = document.getElementById(sectionId);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8 px-4 pb-12 pt-2">
       {toast && (
         <div
           className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-xl ${
@@ -196,58 +283,155 @@ export function StudentCoachingShell({
         </div>
       )}
 
-      <section className="overflow-hidden rounded-[32px] border border-[#d8dce8] bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,_#0f1e36_0%,_#132a48_48%,_#1e4466_100%)] p-6 text-white shadow-sm">
-        <div className="mx-auto max-w-5xl space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#f1d48b]">
-            <Sparkles className="h-3.5 w-3.5" />
-            Coaching {groupe.name}
+      <section className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+        <div className="overflow-hidden rounded-[32px] border border-[#dfe7f2] bg-[radial-gradient(circle_at_top_right,_rgba(79,171,219,0.16),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(211,171,103,0.16),_transparent_30%),#ffffff] p-7 shadow-[0_24px_60px_rgba(18,49,77,0.08)]">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#c5963d] shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              Coaching {groupe.name}
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-[#f6f9fc] px-3 py-1 text-xs font-medium text-[#5b6f84]">
+              <UserRound className="h-3.5 w-3.5" />
+              {coaches.length} coach{coaches.length > 1 ? "s" : ""} pour ta classe
+            </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+          <div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr,0.85fr]">
             <div className="space-y-4">
-              <h2 className="max-w-2xl text-3xl font-semibold leading-tight">
-                Commence par un vrai onboarding, puis réserve ton appel avec un coach de ta promo.
-              </h2>
-              <p className="max-w-2xl text-sm leading-6 text-white/75">
-                Le but n'est pas de remplir un formulaire “pour remplir un formulaire”. Plus tes réponses sont honnêtes,
-                plus ton appel sera utile.
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#8a98a8]">Ton parcours de départ</p>
+                <h2 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-[#12314d]">
+                  On commence par mieux te connaître, puis on cale ton premier appel coach.
+                </h2>
+              </div>
+              <p className="max-w-2xl text-sm leading-7 text-[#5f7287]">
+                Ici, l’objectif n’est pas de cocher des cases. Plus ton onboarding est honnête et précis, plus le coach
+                peut t’aider dès le premier échange.
               </p>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <SummaryStat
+                  label="Questions obligatoires"
+                  value={`${answeredRequiredCount}/${requiredFields.length}`}
+                  caption={onboardingDone ? "Formulaire enregistré" : `${completionRatio}% complété`}
+                />
+                <SummaryStat
+                  label="Rendez-vous"
+                  value={bookingDone ? "Réservé" : "À planifier"}
+                  caption={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Après le formulaire"}
+                />
+                <SummaryStat
+                  label="Progression coaching"
+                  value={`${completedJourneyCount}/3`}
+                  caption={callDone ? "Parcours lancé" : "Étapes initiales"}
+                />
+              </div>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">Progression</p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-[#f1d48b]" style={{ width: `${completionRatio}%` }} />
+            <div className="rounded-[28px] border border-[#dfe7f2] bg-white/90 p-5 shadow-[0_12px_30px_rgba(18,49,77,0.05)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Prochaine action</p>
+                  <h3 className="mt-2 text-2xl font-semibold text-[#12314d]">{nextAction.title}</h3>
+                </div>
+                <div className="rounded-2xl bg-[#12314d] p-3 text-white shadow-sm">
+                  <ChevronRight className="h-5 w-5" />
+                </div>
               </div>
-              <p className="mt-3 text-sm text-white/80">
-                {answeredRequiredCount}/{requiredFields.length} questions obligatoires complétées
-              </p>
-              <div className="mt-5 space-y-3 text-sm">
-                <StepRow title="1. Formulaire" done={Boolean(form)} />
-                <StepRow title="2. Réservation d'appel" done={Boolean(booking)} />
-                <StepRow title="3. Point avec le coach" done={booking?.status === "completed"} />
+              <p className="mt-3 text-sm leading-6 text-[#5f7287]">{nextAction.body}</p>
+              <button
+                type="button"
+                onClick={() => scrollToSection(nextAction.target)}
+                className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#12314d] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f2940]"
+              >
+                {nextAction.cta}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <div className="rounded-[30px] border border-[#dfe7f2] bg-white p-6 shadow-[0_18px_40px_rgba(18,49,77,0.06)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Parcours coaching</p>
+                <h3 className="mt-2 text-2xl font-semibold text-[#12314d]">Tes next steps</h3>
+              </div>
+              <span className="rounded-full bg-[#eef6ff] px-3 py-1 text-xs font-semibold text-[#2e6fa3]">
+                {completedJourneyCount}/3 terminées
+              </span>
+            </div>
+            <div className="mt-5 space-y-3">
+              {journeySteps.map((step, index) => (
+                <JourneyStep
+                  key={step.id}
+                  index={index + 1}
+                  title={step.title}
+                  description={step.description}
+                  done={step.done}
+                  locked={step.locked}
+                  onClick={() => scrollToSection(step.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[30px] border border-[#1a3554] bg-[linear-gradient(135deg,#10243d_0%,#173a59_100%)] p-6 text-white shadow-[0_20px_45px_rgba(18,49,77,0.2)]">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-white/10 p-3 text-[#f1d48b]">
+                <CalendarClock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Appel coaching</p>
+                <h3 className="mt-1 text-xl font-semibold">
+                  {bookingSlot ? formatDateTime(bookingSlot.start_at) : "Pas encore réservé"}
+                </h3>
               </div>
             </div>
+            <p className="mt-4 text-sm leading-6 text-white/75">
+              {bookingSlot
+                ? `Tu échangeras avec ${getDisplayName(coachesById.get(booking?.coach_id ?? "") ?? null)}. ${
+                    bookingSlot.location ? `Lieu / lien : ${bookingSlot.location}` : "Les modalités sont déjà prévues sur le créneau."
+                  }`
+                : "Ton rendez-vous s'affichera ici dès que tu auras réservé un créneau."}
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-4xl space-y-8">
-        <div className="rounded-[32px] border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[1.12fr,0.88fr] xl:items-start">
+        <section id="coaching-form-step" className="rounded-[32px] border border-[#e1e8f2] bg-white p-8 shadow-[0_20px_55px_rgba(18,49,77,0.06)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Étape 1</p>
-              <h3 className="mt-2 text-3xl font-semibold text-gray-900">{formTemplate.title}</h3>
-              {formTemplate.description && <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">{formTemplate.description}</p>}
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Étape 1</p>
+              <h3 className="mt-2 text-3xl font-semibold text-[#12314d]">{formTemplate.title}</h3>
+              {formTemplate.description && <p className="mt-3 max-w-2xl text-sm leading-7 text-[#62768b]">{formTemplate.description}</p>}
             </div>
-            {form && (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                Déjà enregistré
-              </span>
-            )}
+            <div className="rounded-[24px] border border-[#e3ebf5] bg-[#f8fbfe] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Progression formulaire</p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e6edf5]">
+                <div className="h-full rounded-full bg-[#4fabdb]" style={{ width: `${completionRatio}%` }} />
+              </div>
+              <p className="mt-3 text-sm font-medium text-[#12314d]">
+                {answeredRequiredCount}/{requiredFields.length} obligatoires complétées
+              </p>
+            </div>
           </div>
 
-          <div className="mt-8 space-y-5">
+          {form && (
+            <div className="mt-6 rounded-[24px] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Ton onboarding est déjà enregistré.</p>
+                  <p className="mt-1 text-emerald-800/80">Tu peux encore ajuster tes réponses si quelque chose a changé avant l'appel.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 space-y-4">
             {formFields.map((field, index) => (
               <QuestionBlock
                 key={field.id}
@@ -259,51 +443,42 @@ export function StudentCoachingShell({
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={handleSubmitForm}
-            disabled={isPending || !canSubmit}
-            className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-navy px-5 py-3 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {form ? "Mettre à jour mes réponses" : "Valider mon formulaire"}
-          </button>
-        </div>
-
-        <div className="rounded-[32px] border border-gray-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="mt-8 flex flex-col gap-4 rounded-[28px] border border-[#e7edf5] bg-[#f8fbfe] p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Étape 2</p>
-              <h3 className="mt-2 text-3xl font-semibold text-gray-900">Réserve ton appel</h3>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
+              <p className="text-sm font-semibold text-[#12314d]">Tu peux sauvegarder puis revenir modifier plus tard.</p>
+              <p className="mt-1 text-sm text-[#64788d]">Le coach verra la dernière version de ton formulaire au moment de l'appel.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSubmitForm}
+              disabled={isPending || !canSubmit}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#12314d] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0f2940] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              {form ? "Mettre à jour mes réponses" : "Enregistrer mon onboarding"}
+            </button>
+          </div>
+        </section>
+
+        <aside className="space-y-6 xl:sticky xl:top-6">
+          <section id="coaching-booking-step" className="rounded-[32px] border border-[#e1e8f2] bg-white p-8 shadow-[0_20px_55px_rgba(18,49,77,0.06)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Étape 2</p>
+                <h3 className="mt-2 text-3xl font-semibold text-[#12314d]">Réserve ton appel</h3>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-[#62768b]">
                 Une fois le formulaire envoyé, tu choisis un créneau avec un coach de ta classe.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Coachs disponibles</p>
-              <p className="mt-2 text-sm font-medium text-gray-700">{coaches.length} coach(s) rattaché(s) à {groupe.name}</p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {coaches.map((coach) => (
-              <div key={coach.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-full bg-white p-3 text-navy shadow-sm">
-                    <UserRound className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{getDisplayName(coach)}</p>
-                    <p className="text-sm text-gray-500">{coach.email}</p>
-                  </div>
-                </div>
+                </p>
               </div>
-            ))}
-          </div>
+              <div className="rounded-[24px] border border-[#e3ebf5] bg-[#f8fbfe] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Classe</p>
+                <p className="mt-2 text-sm font-medium text-[#12314d]">{groupe.name}</p>
+              </div>
+            </div>
 
-          <div className="mt-8">
+            <div className="mt-8">
             {booking && bookingSlot ? (
-              <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-900">
+              <div className="rounded-[28px] border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-900">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5" />
                   <p className="font-semibold">Ton rendez-vous est réservé</p>
@@ -314,53 +489,162 @@ export function StudentCoachingShell({
                 {bookingSlot.location && <p className="mt-2">Lieu / lien: {bookingSlot.location}</p>}
               </div>
             ) : !form ? (
-              <div className="rounded-3xl border-2 border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
-                Envoie d'abord ton formulaire pour débloquer les créneaux d'appel.
+              <div className="rounded-[28px] border border-dashed border-[#d8e1ed] bg-[#f8fbfe] p-8 text-center text-sm text-[#64788d]">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#12314d] shadow-sm">
+                  <LockKeyhole className="h-5 w-5" />
+                </div>
+                <p className="mt-4 font-semibold text-[#12314d]">Les créneaux se débloquent juste après le formulaire.</p>
+                <p className="mt-2">Termine d'abord ton onboarding pour afficher les disponibilités des coachs.</p>
               </div>
             ) : availableSlots.length === 0 ? (
-              <div className="rounded-3xl border-2 border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+              <div className="rounded-[28px] border border-dashed border-[#d8e1ed] bg-[#f8fbfe] p-8 text-center text-sm text-[#64788d]">
                 Aucun créneau n'est disponible pour l'instant. Reviens plus tard ou contacte l'équipe.
               </div>
             ) : (
               <div className="space-y-4">
                 {availableSlots.map((slot) => (
-                  <div key={slot.id} className="flex flex-col gap-4 rounded-3xl border border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Créneau disponible</p>
-                      <p className="mt-2 text-lg font-semibold text-gray-900">{formatDateTime(slot.start_at)}</p>
-                      <p className="mt-1 text-sm text-gray-500">
+                  <div key={slot.id} className="rounded-[28px] border border-[#e3ebf5] bg-[#fbfcfe] p-5 transition hover:border-[#c9d9eb] hover:shadow-[0_12px_28px_rgba(18,49,77,0.06)]">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-start gap-4">
+                        <div className="rounded-2xl bg-[#eef6ff] p-3 text-[#2e6fa3]">
+                          <CalendarDays className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Créneau disponible</p>
+                          <p className="mt-2 text-lg font-semibold text-[#12314d]">{formatDateTime(slot.start_at)}</p>
+                          <p className="mt-1 text-sm text-[#62768b]">
                         {getDisplayName(coachesById.get(slot.coach_id) ?? null)}
                         {slot.location ? ` · ${slot.location}` : ""}
-                      </p>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleBookSlot(slot)}
+                        disabled={isPending || !form}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#12314d] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f2940] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
+                        Réserver ce créneau
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleBookSlot(slot)}
-                      disabled={isPending || !form}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
-                      Réserver ce créneau
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </section>
+            </div>
+          </section>
+
+          <section id="coaching-call-step" className="rounded-[32px] border border-[#e1e8f2] bg-white p-8 shadow-[0_20px_55px_rgba(18,49,77,0.06)]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Équipe coaching</p>
+                <h3 className="mt-2 text-2xl font-semibold text-[#12314d]">Tes coachs de promo</h3>
+              </div>
+              <div className="rounded-2xl bg-[#f7fafc] p-3 text-[#12314d] ring-1 ring-[#e5edf6]">
+                <UserRound className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {coaches.length === 0 ? (
+                <div className="rounded-[24px] border border-dashed border-[#d8e1ed] bg-[#f8fbfe] p-6 text-sm text-[#64788d]">
+                  Aucun coach n'est encore rattaché à cette classe.
+                </div>
+              ) : (
+                coaches.map((coach) => (
+                  <div key={coach.id} className="rounded-[24px] border border-[#e6edf5] bg-[#fbfcfe] p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-full bg-white p-3 text-[#12314d] shadow-sm ring-1 ring-[#e8edf5]">
+                        <UserRound className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[#12314d]">{getDisplayName(coach)}</p>
+                        <p className="text-sm text-[#6a7d92]">{coach.email}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }
 
-function StepRow({ title, done }: { title: string; done: boolean }) {
+function SummaryStat({ label, value, caption }: { label: string; value: string; caption: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-      <span className="text-white/85">{title}</span>
-      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${done ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-white/60"}`}>
-        {done ? "OK" : "À faire"}
+    <div className="rounded-[24px] border border-[#e3ebf5] bg-white/85 p-4 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-[#12314d]">{value}</p>
+      <p className="mt-1 text-sm text-[#64788d]">{caption}</p>
+    </div>
+  );
+}
+
+function JourneyStep({
+  index,
+  title,
+  description,
+  done,
+  locked,
+  onClick,
+}: {
+  index: number;
+  title: string;
+  description: string;
+  done: boolean;
+  locked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-start gap-4 rounded-[24px] border border-[#e5edf6] bg-[#fbfcfe] px-4 py-4 text-left transition hover:border-[#ccd9e8] hover:shadow-[0_10px_24px_rgba(18,49,77,0.05)]"
+    >
+      <div
+        className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold ${
+          done ? "bg-emerald-100 text-emerald-700" : locked ? "bg-[#f2f5f8] text-[#95a4b5]" : "bg-[#12314d] text-white"
+        }`}
+      >
+        {done ? <Check className="h-4 w-4" /> : index}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-base font-semibold text-[#12314d]">{title}</p>
+          {locked && <LockKeyhole className="h-3.5 w-3.5 text-[#94a5b6]" />}
+        </div>
+        <p className="mt-1 text-sm leading-6 text-[#64788d]">{description}</p>
+      </div>
+      <span
+        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+          done ? "bg-emerald-100 text-emerald-700" : locked ? "bg-[#eef2f6] text-[#8ea0b3]" : "bg-[#eef6ff] text-[#2e6fa3]"
+        }`}
+      >
+        {done ? "OK" : locked ? "Bientôt" : "À faire"}
       </span>
+    </button>
+  );
+}
+
+function InputShell({
+  children,
+  active = false,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[22px] border bg-white px-4 py-3 transition ${
+        active ? "border-[#4fabdb] shadow-[0_0_0_4px_rgba(79,171,219,0.10)]" : "border-[#dbe5f0] hover:border-[#c8d5e3]"
+      }`}
+    >
+      {children}
     </div>
   );
 }
@@ -381,38 +665,51 @@ function QuestionBlock({
   const currentValue = Array.isArray(value) ? "" : value;
 
   return (
-    <div className="rounded-[28px] border border-gray-200 bg-[#fcfcfb] p-6 shadow-[0_1px_0_rgba(15,30,54,0.04)]">
+    <div className="rounded-[28px] border border-[#e6edf5] bg-[#fcfdff] p-6 shadow-[0_12px_30px_rgba(18,49,77,0.04)]">
       <div className="flex items-start gap-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-navy text-sm font-semibold text-white">
-          {index}
+        <div className="space-y-2">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#12314d] text-sm font-semibold text-white shadow-sm">
+            {index}
+          </div>
+          <span className="block text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0b2]">
+            {field.required ? "Requis" : "Libre"}
+          </span>
         </div>
         <div className="w-full">
-          <div className="flex flex-wrap items-center gap-3">
-            <h4 className="text-lg font-semibold text-gray-900">{field.label}</h4>
-            {field.required && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                Obligatoire
-              </span>
-            )}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="rounded-full bg-[#f3f7fb] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7e8fa4]">
+              Question {index}
+            </span>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              field.required ? "bg-amber-100 text-amber-700" : "bg-[#eef2f6] text-[#7e8fa4]"
+            }`}>
+              {field.required ? "Obligatoire" : "Facultatif"}
+            </span>
           </div>
-          {field.helper_text && <p className="mt-2 text-sm leading-6 text-gray-500">{field.helper_text}</p>}
+          <h4 className="mt-3 text-xl font-semibold leading-snug text-[#12314d]">{field.label}</h4>
+          {field.helper_text && <p className="mt-2 text-sm leading-7 text-[#65788d]">{field.helper_text}</p>}
 
           <div className="mt-5">
             {field.field_type === "select" ? (
-              <select
-                value={currentValue}
-                onChange={(event) => onChange(event.target.value)}
-                className="h-14 w-full rounded-3xl border border-gray-200 bg-white px-5 text-sm text-gray-700 outline-none transition focus:border-navy"
-              >
-                <option value="">Selectionner une reponse</option>
-                {options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <InputShell active={Boolean(currentValue)}>
+                <div className="relative">
+                  <select
+                    value={currentValue}
+                    onChange={(event) => onChange(event.target.value)}
+                    className="h-10 w-full appearance-none bg-transparent pr-10 text-sm text-[#12314d] outline-none"
+                  >
+                    <option value="">Sélectionner une réponse</option>
+                    {options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight className="pointer-events-none absolute right-1 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-[#8ea0b3]" />
+                </div>
+              </InputShell>
             ) : field.field_type === "radio" ? (
-              <div className="flex flex-wrap gap-3">
+              <div className="space-y-3">
                 {options.map((option) => {
                   const selected = currentValue === option;
                   return (
@@ -420,13 +717,20 @@ function QuestionBlock({
                       key={option}
                       type="button"
                       onClick={() => onChange(option)}
-                      className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                      className={`flex w-full items-center gap-3 rounded-[22px] border px-4 py-3.5 text-left text-sm font-medium transition ${
                         selected
-                          ? "border-navy bg-navy text-white shadow-sm"
-                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                          ? "border-[#12314d] bg-[#f6f9fc] text-[#12314d] shadow-sm"
+                          : "border-[#dbe5f0] bg-white text-[#5f7287] hover:border-[#c8d5e3]"
                       }`}
                     >
-                      {option}
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                          selected ? "border-[#12314d] bg-[#12314d]" : "border-[#c7d3df] bg-white"
+                        }`}
+                      >
+                        {selected && <Check className="h-3 w-3 text-white" />}
+                      </span>
+                      <span>{option}</span>
                     </button>
                   );
                 })}
@@ -436,46 +740,53 @@ function QuestionBlock({
                 {options.map((option) => {
                   const selected = selectedValues.includes(option);
                   return (
-                    <label
+                    <button
                       key={option}
-                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                      type="button"
+                      onClick={() => {
+                        if (selected) {
+                          onChange(selectedValues.filter((item) => item !== option));
+                          return;
+                        }
+                        onChange([...selectedValues, option]);
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-[22px] border px-4 py-3.5 text-left text-sm transition ${
                         selected
-                          ? "border-navy bg-navy/5 text-navy"
-                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                          ? "border-[#12314d] bg-[#f6f9fc] text-[#12314d]"
+                          : "border-[#dbe5f0] bg-white text-[#5f7287] hover:border-[#c8d5e3]"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={(event) => {
-                          if (event.target.checked) {
-                            onChange([...selectedValues, option]);
-                            return;
-                          }
-                          onChange(selectedValues.filter((item) => item !== option));
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 text-navy focus:ring-navy"
-                      />
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-md border ${
+                          selected ? "border-[#12314d] bg-[#12314d]" : "border-[#c7d3df] bg-white"
+                        }`}
+                      >
+                        {selected && <Check className="h-3 w-3 text-white" />}
+                      </span>
                       <span>{option}</span>
-                    </label>
+                    </button>
                   );
                 })}
               </div>
             ) : field.field_type === "long_text" ? (
-              <textarea
-                rows={5}
-                value={currentValue}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={field.placeholder ?? ""}
-                className="w-full rounded-3xl border border-gray-200 bg-white px-5 py-4 text-sm leading-6 text-gray-700 outline-none transition focus:border-navy"
-              />
+              <InputShell active={Boolean(currentValue)}>
+                <textarea
+                  rows={5}
+                  value={currentValue}
+                  onChange={(event) => onChange(event.target.value)}
+                  placeholder={field.placeholder ?? ""}
+                  className="w-full resize-y bg-transparent text-sm leading-7 text-[#12314d] outline-none placeholder:text-[#9babbc]"
+                />
+              </InputShell>
             ) : (
-              <input
-                value={currentValue}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={field.placeholder ?? ""}
-                className="h-14 w-full rounded-3xl border border-gray-200 bg-white px-5 text-sm text-gray-700 outline-none transition focus:border-navy"
-              />
+              <InputShell active={Boolean(currentValue)}>
+                <input
+                  value={currentValue}
+                  onChange={(event) => onChange(event.target.value)}
+                  placeholder={field.placeholder ?? ""}
+                  className="h-10 w-full bg-transparent text-sm text-[#12314d] outline-none placeholder:text-[#9babbc]"
+                />
+              </InputShell>
             )}
           </div>
         </div>
