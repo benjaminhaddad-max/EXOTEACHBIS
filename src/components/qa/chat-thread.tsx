@@ -26,29 +26,56 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
   const [threadStatus, setThreadStatus] = useState(thread.status);
   const scrollRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
+  const callStudentThreadApi = useCallback(async (action: string, payload: Record<string, unknown> = {}) => {
+    const response = await fetch("/api/qa/student-thread", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...payload }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data?.error ?? "Erreur inattendue.");
+    }
+
+    return data;
+  }, []);
 
   // Load messages
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from("qa_messages")
-        .select("*")
-        .eq("thread_id", thread.id)
-        .order("created_at", { ascending: true });
+      try {
+        if (viewerRole === "student") {
+          const result = await callStudentThreadApi("get_messages", { threadId: thread.id });
+          setMessages(result.messages ?? []);
+          if (result.threadStatus && result.threadStatus !== threadStatus) {
+            setThreadStatus(result.threadStatus);
+            onStatusChange?.(result.threadStatus);
+          }
+        } else {
+          const { data } = await supabase
+            .from("qa_messages")
+            .select("*")
+            .eq("thread_id", thread.id)
+            .order("created_at", { ascending: true });
 
-      setMessages(data ?? []);
-      setLoading(false);
+          setMessages(data ?? []);
 
-      // Mark messages as read
-      const readCol = viewerRole === "student" ? "read_by_student" : "read_by_prof";
-      await supabase
-        .from("qa_messages")
-        .update({ [readCol]: true })
-        .eq("thread_id", thread.id)
-        .eq(readCol, false);
+          await supabase
+            .from("qa_messages")
+            .update({ read_by_prof: true })
+            .eq("thread_id", thread.id)
+            .eq("read_by_prof", false);
+        }
+      } catch (err) {
+        console.error("Failed to load thread messages:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
-  }, [thread.id, viewerRole]);
+  }, [callStudentThreadApi, onStatusChange, supabase, thread.id, threadStatus, viewerRole]);
 
   // Realtime
   useQaRealtime(thread.id, useCallback((msg: QaMessage) => {
@@ -108,15 +135,28 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       if (!cancelled && !gotResponse) {
         for (let i = 0; i < 15 && !cancelled; i++) {
           await new Promise(r => setTimeout(r, 2000));
-          const { data: aiMsgs } = await supabase
-            .from("qa_messages")
-            .select("*")
-            .eq("thread_id", thread.id)
-            .eq("sender_type", "ai")
-            .order("created_at", { ascending: false })
-            .limit(1);
-          if (!cancelled && aiMsgs && aiMsgs.length > 0) {
-            const aiMsg = aiMsgs[0];
+          let aiMsg: QaMessage | null = null;
+
+          if (viewerRole === "student") {
+            try {
+              const result = await callStudentThreadApi("get_messages", { threadId: thread.id });
+              const aiMsgs = (result.messages ?? []).filter((msg: QaMessage) => msg.sender_type === "ai");
+              aiMsg = aiMsgs[aiMsgs.length - 1] ?? null;
+            } catch (err) {
+              console.error("Fallback API polling failed:", err);
+            }
+          } else {
+            const { data: aiMsgs } = await supabase
+              .from("qa_messages")
+              .select("*")
+              .eq("thread_id", thread.id)
+              .eq("sender_type", "ai")
+              .order("created_at", { ascending: false })
+              .limit(1);
+            aiMsg = aiMsgs?.[0] ?? null;
+          }
+
+          if (!cancelled && aiMsg) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === aiMsg.id)) return prev;
               return [...prev, aiMsg];
@@ -132,7 +172,7 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     })();
 
     return () => { cancelled = true; };
-  }, [threadStatus, messages.length, viewerRole]);
+  }, [callStudentThreadApi, messages.length, onStatusChange, supabase, thread.id, thread.context_label, thread.matiere?.name, threadStatus, viewerRole]);
 
   // Auto-scroll
   useEffect(() => {
@@ -162,36 +202,49 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    // Insert in DB
-    const { data: inserted } = await supabase
-      .from("qa_messages")
-      .insert({
-        thread_id: thread.id,
-        sender_id: viewerId,
-        sender_type: senderType,
-        content_type: "text",
-        content: text,
-        read_by_student: viewerRole === "student",
-        read_by_prof: viewerRole === "prof",
-      })
-      .select()
-      .single();
+    let inserted: QaMessage | null = null;
+
+    try {
+      if (viewerRole === "student") {
+        const result = await callStudentThreadApi("send_text_message", {
+          threadId: thread.id,
+          text,
+        });
+        inserted = (result.message as QaMessage) ?? null;
+        if (result.threadStatus === "ai_pending") {
+          setThreadStatus("ai_pending");
+          onStatusChange?.("ai_pending");
+        }
+      } else {
+        const { data } = await supabase
+          .from("qa_messages")
+          .insert({
+            thread_id: thread.id,
+            sender_id: viewerId,
+            sender_type: senderType,
+            content_type: "text",
+            content: text,
+            read_by_student: false,
+            read_by_prof: true,
+          })
+          .select()
+          .single();
+
+        inserted = data ?? null;
+      }
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setSending(false);
+      return;
+    }
 
     if (inserted) {
-      setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? inserted : m)));
+      setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? inserted as QaMessage : m)));
     }
 
     // If student sends a message, trigger AI response (always, even after resolved/escalated)
     if (viewerRole === "student") {
-      // Reopen thread if it was resolved
-      if (threadStatus === "resolved") {
-        await supabase
-          .from("qa_threads")
-          .update({ status: "ai_pending", resolved_at: null, updated_at: new Date().toISOString() })
-          .eq("id", thread.id);
-        setThreadStatus("ai_pending");
-        onStatusChange?.("ai_pending");
-      }
       setAiThinking(true);
       let gotAiResponse = false;
 
@@ -227,15 +280,28 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       if (!gotAiResponse) {
         for (let attempt = 0; attempt < 15; attempt++) {
           await new Promise(r => setTimeout(r, 2000));
-          const { data: newMsgs } = await supabase
-            .from("qa_messages")
-            .select("*")
-            .eq("thread_id", thread.id)
-            .eq("sender_type", "ai")
-            .order("created_at", { ascending: false })
-            .limit(1);
-          if (newMsgs && newMsgs.length > 0) {
-            const aiMsg = newMsgs[0];
+          let aiMsg: QaMessage | null = null;
+
+          if (viewerRole === "student") {
+            try {
+              const result = await callStudentThreadApi("get_messages", { threadId: thread.id });
+              const aiMsgs = (result.messages ?? []).filter((msg: QaMessage) => msg.sender_type === "ai");
+              aiMsg = aiMsgs[aiMsgs.length - 1] ?? null;
+            } catch (err) {
+              console.error("Fallback API polling failed:", err);
+            }
+          } else {
+            const { data: newMsgs } = await supabase
+              .from("qa_messages")
+              .select("*")
+              .eq("thread_id", thread.id)
+              .eq("sender_type", "ai")
+              .order("created_at", { ascending: false })
+              .limit(1);
+            aiMsg = newMsgs?.[0] ?? null;
+          }
+
+          if (aiMsg) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === aiMsg.id)) return prev;
               return [...prev, aiMsg];
@@ -357,44 +423,67 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
 
   // Accept AI answer
   const handleAcceptAi = async () => {
-    await supabase
-      .from("qa_threads")
-      .update({ status: "resolved", resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", thread.id);
+    if (viewerRole === "student") {
+      try {
+        await callStudentThreadApi("update_thread_status", {
+          threadId: thread.id,
+          status: "resolved",
+        });
+      } catch (err) {
+        console.error("Failed to resolve thread:", err);
+        return;
+      }
+    } else {
+      await supabase
+        .from("qa_threads")
+        .update({ status: "resolved", resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", thread.id);
+    }
     setThreadStatus("resolved");
     onStatusChange?.("resolved");
   };
 
   // Escalate to professor
   const handleEscalate = async () => {
-    await supabase
-      .from("qa_threads")
-      .update({ status: "escalated", updated_at: new Date().toISOString() })
-      .eq("id", thread.id);
-    setThreadStatus("escalated");
-    onStatusChange?.("escalated");
+    if (viewerRole === "student") {
+      try {
+        await callStudentThreadApi("update_thread_status", {
+          threadId: thread.id,
+          status: "escalated",
+        });
+      } catch (err) {
+        console.error("Failed to escalate thread:", err);
+        return;
+      }
+    } else {
+      await supabase
+        .from("qa_threads")
+        .update({ status: "escalated", updated_at: new Date().toISOString() })
+        .eq("id", thread.id);
 
-    // Create notification for professors
-    // This is done server-side or via a function, for now we insert it client-side
-    if (thread.matiere_id) {
-      const { data: profs } = await supabase
-        .from("prof_matieres")
-        .select("prof_id")
-        .eq("matiere_id", thread.matiere_id);
+      if (thread.matiere_id) {
+        const { data: profs } = await supabase
+          .from("prof_matieres")
+          .select("prof_id")
+          .eq("matiere_id", thread.matiere_id);
 
-      if (profs) {
-        const notifs = profs.map((p) => ({
-          user_id: p.prof_id,
-          type: "qa_escalated",
-          title: `Nouvelle question d'un étudiant`,
-          body: thread.title?.slice(0, 100) ?? "Question en attente",
-          link: `/admin/questions-reponses?thread=${thread.id}`,
-        }));
-        if (notifs.length > 0) {
-          await supabase.from("notifications").insert(notifs);
+        if (profs) {
+          const notifs = profs.map((p) => ({
+            user_id: p.prof_id,
+            type: "qa_escalated",
+            title: "Nouvelle question d'un étudiant",
+            body: thread.title?.slice(0, 100) ?? "Question en attente",
+            link: `/admin/questions-reponses?thread=${thread.id}`,
+          }));
+          if (notifs.length > 0) {
+            await supabase.from("notifications").insert(notifs);
+          }
         }
       }
     }
+
+    setThreadStatus("escalated");
+    onStatusChange?.("escalated");
   };
 
   if (loading) {
