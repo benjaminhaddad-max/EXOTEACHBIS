@@ -271,7 +271,7 @@ export function StudentCoachingShell({
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 pb-12 pt-2">
+    <div className="mx-auto max-w-7xl px-4 pb-14 pt-4">
       {toast && (
         <div
           className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-xl ${
@@ -283,83 +283,53 @@ export function StudentCoachingShell({
         </div>
       )}
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
-        <div className="overflow-hidden rounded-[32px] border border-[#dfe7f2] bg-[radial-gradient(circle_at_top_right,_rgba(79,171,219,0.16),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(211,171,103,0.16),_transparent_30%),#ffffff] p-7 shadow-[0_24px_60px_rgba(18,49,77,0.08)]">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#c5963d] shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[320px,minmax(0,1fr)]">
+        <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start">
+          <div className="rounded-[34px] border border-[#17324e] bg-[radial-gradient(circle_at_top_right,_rgba(241,212,139,0.18),_transparent_24%),linear-gradient(160deg,_#0f2239_0%,_#163250_55%,_#1d4365_100%)] p-6 text-white shadow-[0_28px_60px_rgba(18,49,77,0.28)]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f1d48b]">
               <Sparkles className="h-3.5 w-3.5" />
               Coaching {groupe.name}
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-[#f6f9fc] px-3 py-1 text-xs font-medium text-[#5b6f84]">
-              <UserRound className="h-3.5 w-3.5" />
-              {coaches.length} coach{coaches.length > 1 ? "s" : ""} pour ta classe
-            </div>
-          </div>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr,0.85fr]">
-            <div className="space-y-4">
+            <div className="mt-5 space-y-4">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#8a98a8]">Ton parcours de départ</p>
-                <h2 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-[#12314d]">
-                  On commence par mieux te connaître, puis on cale ton premier appel coach.
-                </h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/50">Prochaine action</p>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">{nextAction.title}</h2>
+                <p className="mt-3 text-sm leading-6 text-white/75">{nextAction.body}</p>
               </div>
-              <p className="max-w-2xl text-sm leading-7 text-[#5f7287]">
-                Ici, l’objectif n’est pas de cocher des cases. Plus ton onboarding est honnête et précis, plus le coach
-                peut t’aider dès le premier échange.
-              </p>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <SummaryStat
-                  label="Questions obligatoires"
-                  value={`${answeredRequiredCount}/${requiredFields.length}`}
-                  caption={onboardingDone ? "Formulaire enregistré" : `${completionRatio}% complété`}
-                />
-                <SummaryStat
-                  label="Rendez-vous"
-                  value={bookingDone ? "Réservé" : "À planifier"}
-                  caption={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Après le formulaire"}
-                />
-                <SummaryStat
-                  label="Progression coaching"
-                  value={`${completedJourneyCount}/3`}
-                  caption={callDone ? "Parcours lancé" : "Étapes initiales"}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-[#dfe7f2] bg-white/90 p-5 shadow-[0_12px_30px_rgba(18,49,77,0.05)]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Prochaine action</p>
-                  <h3 className="mt-2 text-2xl font-semibold text-[#12314d]">{nextAction.title}</h3>
-                </div>
-                <div className="rounded-2xl bg-[#12314d] p-3 text-white shadow-sm">
-                  <ChevronRight className="h-5 w-5" />
-                </div>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-[#5f7287]">{nextAction.body}</p>
               <button
                 type="button"
                 onClick={() => scrollToSection(nextAction.target)}
-                className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#12314d] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0f2940]"
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-[#12314d] transition hover:bg-[#f7fbff]"
               >
                 {nextAction.cta}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-          </div>
-        </div>
 
-        <div className="space-y-5">
-          <div className="rounded-[30px] border border-[#dfe7f2] bg-white p-6 shadow-[0_18px_40px_rgba(18,49,77,0.06)]">
+            <div className="mt-6 grid gap-3">
+              <SidebarMetric
+                label="Formulaire"
+                value={`${answeredRequiredCount}/${requiredFields.length}`}
+                detail={onboardingDone ? "Enregistré" : `${completionRatio}% complété`}
+              />
+              <SidebarMetric
+                label="Rendez-vous"
+                value={bookingDone ? "Réservé" : "À planifier"}
+                detail={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Débloqué après l'onboarding"}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-[#e3ebf5] bg-white p-5 shadow-[0_16px_35px_rgba(18,49,77,0.06)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Parcours coaching</p>
-                <h3 className="mt-2 text-2xl font-semibold text-[#12314d]">Tes next steps</h3>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Parcours</p>
+                <h3 className="mt-2 text-xl font-semibold text-[#12314d]">Tes étapes</h3>
               </div>
-              <span className="rounded-full bg-[#eef6ff] px-3 py-1 text-xs font-semibold text-[#2e6fa3]">
-                {completedJourneyCount}/3 terminées
+              <span className="rounded-full bg-[#eef6ff] px-3 py-1 text-[11px] font-semibold text-[#2e6fa3]">
+                {completedJourneyCount}/3
               </span>
             </div>
             <div className="mt-5 space-y-3">
@@ -377,38 +347,79 @@ export function StudentCoachingShell({
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-[#1a3554] bg-[linear-gradient(135deg,#10243d_0%,#173a59_100%)] p-6 text-white shadow-[0_20px_45px_rgba(18,49,77,0.2)]">
+          <div className="rounded-[28px] border border-[#e3ebf5] bg-white p-5 shadow-[0_16px_35px_rgba(18,49,77,0.06)]">
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-white/10 p-3 text-[#f1d48b]">
+              <div className="rounded-2xl bg-[#eef6ff] p-3 text-[#2e6fa3]">
                 <CalendarClock className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Appel coaching</p>
-                <h3 className="mt-1 text-xl font-semibold">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Appel coaching</p>
+                <h3 className="mt-1 text-lg font-semibold text-[#12314d]">
                   {bookingSlot ? formatDateTime(bookingSlot.start_at) : "Pas encore réservé"}
                 </h3>
               </div>
             </div>
-            <p className="mt-4 text-sm leading-6 text-white/75">
+            <p className="mt-4 text-sm leading-6 text-[#64788d]">
               {bookingSlot
-                ? `Tu échangeras avec ${getDisplayName(coachesById.get(booking?.coach_id ?? "") ?? null)}. ${
-                    bookingSlot.location ? `Lieu / lien : ${bookingSlot.location}` : "Les modalités sont déjà prévues sur le créneau."
+                ? `Avec ${getDisplayName(coachesById.get(booking?.coach_id ?? "") ?? null)}${
+                    bookingSlot.location ? ` · ${bookingSlot.location}` : ""
                   }`
-                : "Ton rendez-vous s'affichera ici dès que tu auras réservé un créneau."}
+                : "Ton créneau apparaîtra ici dès qu'il sera réservé."}
             </p>
           </div>
-        </div>
-      </section>
+        </aside>
 
-      <div className="grid gap-6 xl:grid-cols-[1.12fr,0.88fr] xl:items-start">
-        <section id="coaching-form-step" className="rounded-[32px] border border-[#e1e8f2] bg-white p-8 shadow-[0_20px_55px_rgba(18,49,77,0.06)]">
+        <main className="space-y-6">
+          <section className="rounded-[34px] border border-[#e2e9f3] bg-[radial-gradient(circle_at_top_left,_rgba(79,171,219,0.14),_transparent_24%),linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)] p-8 shadow-[0_24px_60px_rgba(18,49,77,0.08)]">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#c5963d] shadow-sm">
+                <Sparkles className="h-3.5 w-3.5" />
+                Coaching {groupe.name}
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#e3ebf5] bg-[#f6f9fc] px-3 py-1 text-xs font-medium text-[#5b6f84]">
+                <UserRound className="h-3.5 w-3.5" />
+                {coaches.length} coach{coaches.length > 1 ? "s" : ""} pour ta classe
+              </div>
+            </div>
+
+            <div className="mt-6 max-w-3xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#8a98a8]">Onboarding élève</p>
+              <h1 className="mt-3 text-4xl font-semibold leading-tight text-[#12314d]">
+                Remplis ton profil une bonne fois, puis passe directement à la réservation.
+              </h1>
+              <p className="mt-4 text-sm leading-7 text-[#5f7287]">
+                Cette page doit t’aider à avancer sans hésiter: d’abord ton formulaire, ensuite le créneau, puis ton
+                premier échange avec un coach de ta promo.
+              </p>
+            </div>
+
+            <div className="mt-7 grid gap-3 md:grid-cols-3">
+              <SummaryStat
+                label="Questions obligatoires"
+                value={`${answeredRequiredCount}/${requiredFields.length}`}
+                caption={onboardingDone ? "Onboarding enregistré" : `${completionRatio}% complété`}
+              />
+              <SummaryStat
+                label="Rendez-vous"
+                value={bookingDone ? "Réservé" : "À planifier"}
+                caption={bookingSlot ? formatDateTime(bookingSlot.start_at) : "Juste après le formulaire"}
+              />
+              <SummaryStat
+                label="Progression"
+                value={`${completedJourneyCount}/3`}
+                caption={callDone ? "Parcours lancé" : "Étapes initiales"}
+              />
+            </div>
+          </section>
+
+          <section id="coaching-form-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-8 shadow-[0_24px_60px_rgba(18,49,77,0.07)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Étape 1</p>
-              <h3 className="mt-2 text-3xl font-semibold text-[#12314d]">{formTemplate.title}</h3>
+              <h3 className="mt-2 text-3xl font-semibold text-[#12314d]">Formulaire d'onboarding</h3>
               {formTemplate.description && <p className="mt-3 max-w-2xl text-sm leading-7 text-[#62768b]">{formTemplate.description}</p>}
             </div>
-            <div className="rounded-[24px] border border-[#e3ebf5] bg-[#f8fbfe] px-4 py-3">
+            <div className="rounded-[24px] border border-[#e3ebf5] bg-[#f8fbfe] px-4 py-3 shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Progression formulaire</p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e6edf5]">
                 <div className="h-full rounded-full bg-[#4fabdb]" style={{ width: `${completionRatio}%` }} />
@@ -458,10 +469,9 @@ export function StudentCoachingShell({
               {form ? "Mettre à jour mes réponses" : "Enregistrer mon onboarding"}
             </button>
           </div>
-        </section>
+          </section>
 
-        <aside className="space-y-6 xl:sticky xl:top-6">
-          <section id="coaching-booking-step" className="rounded-[32px] border border-[#e1e8f2] bg-white p-8 shadow-[0_20px_55px_rgba(18,49,77,0.06)]">
+          <section id="coaching-booking-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-8 shadow-[0_24px_60px_rgba(18,49,77,0.07)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Étape 2</p>
@@ -533,10 +543,10 @@ export function StudentCoachingShell({
                 ))}
               </div>
             )}
-            </div>
+          </div>
           </section>
 
-          <section id="coaching-call-step" className="rounded-[32px] border border-[#e1e8f2] bg-white p-8 shadow-[0_20px_55px_rgba(18,49,77,0.06)]">
+          <section id="coaching-call-step" className="rounded-[34px] border border-[#e2e9f3] bg-white p-8 shadow-[0_24px_60px_rgba(18,49,77,0.07)]">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#8a98a8]">Équipe coaching</p>
@@ -569,8 +579,18 @@ export function StudentCoachingShell({
               )}
             </div>
           </section>
-        </aside>
+        </main>
       </div>
+    </div>
+  );
+}
+
+function SidebarMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-white/6 px-4 py-4 backdrop-blur-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      <p className="mt-1 text-sm text-white/65">{detail}</p>
     </div>
   );
 }

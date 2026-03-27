@@ -40,8 +40,32 @@ export async function getStudentMatieresCours() {
     return c.matiere_id ? accessibleMatiereIds.has(c.matiere_id) : false;
   });
 
-  const matiereIdsWithCours = new Set(cours.map((c) => c.matiere_id).filter(Boolean) as string[]);
+  // Build matiere → dossier lookup so we can link cours to matieres via shared dossier_id
+  const matiereDossierIds = new Set(accessibleMatieres.map((m) => m.dossier_id));
+  const dossierIdToMatiereId = new Map<string, string>();
+  for (const m of accessibleMatieres) {
+    dossierIdToMatiereId.set(m.dossier_id, m.id);
+  }
+
+  // A matiere has content if any cours links to it via matiere_id OR shares the same dossier_id
+  const matiereIdsWithCours = new Set<string>();
+  for (const c of cours) {
+    if (c.matiere_id) matiereIdsWithCours.add(c.matiere_id);
+    if (c.dossier_id) {
+      const mid = dossierIdToMatiereId.get(c.dossier_id);
+      if (mid) matiereIdsWithCours.add(mid);
+    }
+  }
   const matieres = accessibleMatieres.filter((m) => matiereIdsWithCours.has(m.id));
+
+  // Normalize cours: ensure matiere_id is set (resolve from dossier if needed)
+  const coursWithMatiere = cours.map((c) => {
+    let mid = c.matiere_id;
+    if (!mid && c.dossier_id) {
+      mid = dossierIdToMatiereId.get(c.dossier_id) ?? null;
+    }
+    return { id: c.id, name: c.name, matiere_id: mid, dossier_id: c.dossier_id };
+  });
 
   return {
     matieres: matieres.map((m) => ({
@@ -50,12 +74,7 @@ export async function getStudentMatieresCours() {
       color: m.color,
       dossier_id: m.dossier_id,
     })),
-    cours: cours.map((c) => ({
-      id: c.id,
-      name: c.name,
-      matiere_id: c.matiere_id,
-      dossier_id: c.dossier_id,
-    })),
+    cours: coursWithMatiere,
   };
 }
 
