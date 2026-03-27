@@ -9,7 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/hooks/use-user";
 
-type SerieType = "annales" | "qcm_supplementaires" | "concours_blanc" | "revision";
+type SerieType = "annales" | "qcm_supplementaires" | "concours_blanc" | "revision" | "entrainement";
 
 type SerieSummary = {
   id: string;
@@ -27,9 +27,10 @@ const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; col
   qcm_supplementaires: { label: "QCM supplémentaires", icon: <PlusCircle size={18} />, color: "#14b8a6", bgLight: "rgba(20,184,166,0.08)", bgAccent: "rgba(20,184,166,0.15)" },
   concours_blanc:      { label: "Concours blanc",      icon: <Trophy size={18} />,     color: "#ef4444", bgLight: "rgba(239,68,68,0.08)",  bgAccent: "rgba(239,68,68,0.15)" },
   revision:            { label: "Révision",            icon: <BookMarked size={18} />, color: "#8b5cf6", bgLight: "rgba(139,92,246,0.08)", bgAccent: "rgba(139,92,246,0.15)" },
+  entrainement:        { label: "Entraînement",        icon: <Layers size={18} />,     color: "#4FABDB", bgLight: "rgba(79,171,219,0.08)", bgAccent: "rgba(79,171,219,0.15)" },
 };
 
-const TYPES: SerieType[] = ["annales", "qcm_supplementaires", "concours_blanc", "revision"];
+const TYPES: SerieType[] = ["annales", "qcm_supplementaires", "concours_blanc", "revision", "entrainement"];
 
 export function MatiereExercicesView({
   matiereIds,
@@ -50,96 +51,103 @@ export function MatiereExercicesView({
   const coursKey = coursIds.join(",");
 
   useEffect(() => {
-    if (!userId) return;
+    let cancelled = false;
     async function fetchSeries() {
       try {
-      const supabase = createClient();
-      const allSeries: SerieSummary[] = [];
+        const supabase = createClient();
+        const allSeries: SerieSummary[] = [];
 
-      // Fetch series by matiere_id
-      if (matiereIds.length > 0) {
-        const { data } = await supabase
-          .from("series")
-          .select("id, name, type, timed, duration_minutes, annee")
-          .in("matiere_id", matiereIds)
-          .eq("visible", true)
-          .order("created_at", { ascending: false });
-        if (data) allSeries.push(...data.map((s) => ({ ...s, nb_questions: 0, last_score: null })));
-      }
+        // Fetch series by matiere_id
+        if (matiereIds.length > 0) {
+          const { data, error } = await supabase
+            .from("series")
+            .select("id, name, type, timed, duration_minutes, annee")
+            .in("matiere_id", matiereIds)
+            .eq("visible", true)
+            .order("created_at", { ascending: false });
+          if (error) console.error("series by matiere error:", error);
+          if (data) allSeries.push(...data.map((s) => ({ ...s, nb_questions: 0, last_score: null })));
+        }
 
-      // Fetch series by cours_id
-      if (coursIds.length > 0) {
-        const { data } = await supabase
-          .from("series")
-          .select("id, name, type, timed, duration_minutes, annee")
-          .in("cours_id", coursIds)
-          .eq("visible", true)
-          .order("created_at", { ascending: false });
-        if (data) {
-          const existingIds = new Set(allSeries.map((s) => s.id));
-          for (const s of data) {
-            if (!existingIds.has(s.id)) {
-              allSeries.push({ ...s, nb_questions: 0, last_score: null });
+        // Fetch series by cours_id
+        if (coursIds.length > 0) {
+          const { data, error } = await supabase
+            .from("series")
+            .select("id, name, type, timed, duration_minutes, annee")
+            .in("cours_id", coursIds)
+            .eq("visible", true)
+            .order("created_at", { ascending: false });
+          if (error) console.error("series by cours error:", error);
+          if (data) {
+            const existingIds = new Set(allSeries.map((s) => s.id));
+            for (const s of data) {
+              if (!existingIds.has(s.id)) {
+                allSeries.push({ ...s, nb_questions: 0, last_score: null });
+              }
             }
           }
         }
-      }
 
-      // Fetch question counts
-      if (allSeries.length > 0) {
-        const serieIds = allSeries.map((s) => s.id);
-        const { data: counts } = await supabase
-          .from("series_questions")
-          .select("series_id")
-          .in("series_id", serieIds);
-        if (counts) {
-          const countMap = new Map<string, number>();
-          for (const row of counts) {
-            countMap.set(row.series_id, (countMap.get(row.series_id) ?? 0) + 1);
-          }
-          for (const s of allSeries) {
-            s.nb_questions = countMap.get(s.id) ?? 0;
-          }
-        }
-
-        // Fetch last attempts for the user
-        const { data: attempts } = await supabase
-          .from("serie_attempts")
-          .select("series_id, score")
-          .eq("user_id", userId)
-          .in("series_id", serieIds)
-          .order("ended_at", { ascending: false });
-        if (attempts) {
-          const scoreMap = new Map<string, number>();
-          for (const a of attempts) {
-            if (!scoreMap.has(a.series_id) && a.score != null) {
-              scoreMap.set(a.series_id, a.score);
+        // Fetch question counts
+        if (allSeries.length > 0) {
+          const serieIds = allSeries.map((s) => s.id);
+          const { data: counts } = await supabase
+            .from("series_questions")
+            .select("series_id")
+            .in("series_id", serieIds);
+          if (counts) {
+            const countMap = new Map<string, number>();
+            for (const row of counts) {
+              countMap.set(row.series_id, (countMap.get(row.series_id) ?? 0) + 1);
+            }
+            for (const s of allSeries) {
+              s.nb_questions = countMap.get(s.id) ?? 0;
             }
           }
-          for (const s of allSeries) {
-            s.last_score = scoreMap.get(s.id) ?? null;
+
+          // Fetch last attempts (optional — skip if no userId)
+          if (userId) {
+            const { data: attempts } = await supabase
+              .from("serie_attempts")
+              .select("series_id, score")
+              .eq("user_id", userId)
+              .in("series_id", serieIds)
+              .order("ended_at", { ascending: false });
+            if (attempts) {
+              const scoreMap = new Map<string, number>();
+              for (const a of attempts) {
+                if (!scoreMap.has(a.series_id) && a.score != null) {
+                  scoreMap.set(a.series_id, a.score);
+                }
+              }
+              for (const s of allSeries) {
+                s.last_score = scoreMap.get(s.id) ?? null;
+              }
+            }
           }
         }
-      }
 
-      // Filter to valid types only, exclude series with 0 questions
-      const validTypes = new Set(TYPES as string[]);
-      const filtered = allSeries.filter((s) => validTypes.has(s.type) && s.nb_questions > 0);
-      setSeries(filtered);
+        if (cancelled) return;
 
-      // Auto-select first type that has series
-      const typesWithSeries = TYPES.filter((t) => filtered.some((s) => s.type === t));
-      if (typesWithSeries.length > 0) setActiveType(typesWithSeries[0]);
+        // Include entrainement type too, and show all series (even with 0 questions for now)
+        const validTypes = new Set([...TYPES, "entrainement"] as string[]);
+        const filtered = allSeries.filter((s) => validTypes.has(s.type));
+        setSeries(filtered);
 
-      setLoading(false);
+        const typesWithSeries = TYPES.filter((t) => filtered.some((s) => s.type === t));
+        if (typesWithSeries.length > 0) setActiveType(typesWithSeries[0]);
+        else if (filtered.length > 0) setActiveType(null); // will show all
+
+        setLoading(false);
       } catch (err) {
         console.error("Failed to fetch series:", err);
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     fetchSeries();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matiereKey, coursKey, userId]);
+  }, [matiereKey, coursKey]);
 
   const seriesByType = useMemo(() => {
     const map = new Map<SerieType, SerieSummary[]>();
