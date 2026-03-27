@@ -17,18 +17,16 @@ function nameLooksLikePassLasLsps(name: string): boolean {
  * En base ils sont souvent en `generic` ou `module`, pas seulement `subject` / `option`.
  */
 export function isUniversityFiliereFolder(c: Dossier): boolean {
-  if (c.dossier_type === "semester" || c.dossier_type === "period") return false;
+  // Ne pas exclure par dossier_type : en base PASS/LAS sont parfois typés "semester" ou "generic"
   return nameLooksLikePassLasLsps(c.name);
 }
 
 function isPassOnlyFiliereName(d: Dossier): boolean {
-  if (d.dossier_type === "semester" || d.dossier_type === "period") return false;
   const n = d.name.trim().toUpperCase();
   return n === "PASS" || n.startsWith("PASS ");
 }
 
 function isLasOnlyFiliereName(d: Dossier): boolean {
-  if (d.dossier_type === "semester" || d.dossier_type === "period") return false;
   const n = d.name.trim().toUpperCase();
   return n === "LAS" || n.startsWith("LAS ");
 }
