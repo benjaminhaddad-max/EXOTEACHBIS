@@ -588,10 +588,12 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
   const handleOpen = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
+      const POPUP_W = 256;
       if (placement === "right") {
-        setPopupPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+        setPopupPos({ top: r.bottom + 6, right: Math.max(4, window.innerWidth - r.right) });
       } else {
-        setPopupPos({ top: r.bottom + 6, left: r.left });
+        const left = Math.max(4, Math.min(r.left, window.innerWidth - POPUP_W - 4));
+        setPopupPos({ top: r.bottom + 6, left });
       }
     }
     setOpen(o => !o);
