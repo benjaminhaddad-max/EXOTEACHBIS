@@ -434,7 +434,7 @@ export function EleveCoursShell({
                           <h3 className="text-base font-semibold leading-snug text-[#12314D]">{c.name}</h3>
                           <div className="mt-4 flex items-center justify-between gap-3">
                             <span className="text-xs text-[#8EA0B2]">Cours et exercices associes</span>
-                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#2E6FA3] transition-all duration-200 group-hover:border-[#4FABDB]/40 group-hover:bg-[#EEF8FF] group-hover:text-[#12314D] group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.18)]">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#2E6FA3] transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-[#4FABDB]/40 group-hover:bg-[#EEF8FF] group-hover:text-[#12314D] group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.18)] group-active:scale-[0.97]">
                               <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Ouvrir</span>
                               <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
                             </span>
@@ -486,7 +486,7 @@ export function EleveCoursShell({
                                 </span>
                               )}
                             </div>
-                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#2E6FA3] transition-all duration-200 group-hover:border-[#4FABDB]/40 group-hover:bg-[#EEF8FF] group-hover:text-[#12314D] group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.18)]">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#2E6FA3] transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-[#4FABDB]/40 group-hover:bg-[#EEF8FF] group-hover:text-[#12314D] group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.18)] group-active:scale-[0.97]">
                               <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Réviser</span>
                               <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
                             </span>
