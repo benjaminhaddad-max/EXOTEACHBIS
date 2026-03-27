@@ -4,14 +4,32 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight, ChevronDown, Folder, FolderOpen,
-  Home, BookOpen, Loader2, GripVertical,
+  Home, BookOpen, Loader2, GripVertical, Layers, ArrowRight,
 } from "lucide-react";
 import type { Dossier, Cours } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 
 type DossierNode = Dossier & { children: DossierNode[] };
 
-interface CacheEntry { cours: Cours[]; children: Dossier[] }
+type FlashcardDeck = {
+  id: string;
+  name: string;
+  description: string | null;
+  matiere_id: string | null;
+  cours_id: string | null;
+  visible: boolean;
+  nb_cards: number;
+  matiere?: {
+    name: string;
+    color: string;
+  } | null;
+};
+
+interface CacheEntry {
+  cours: Cours[];
+  children: Dossier[];
+  flashcardDecks: FlashcardDeck[];
+}
 
 function buildTree(flat: Dossier[], parentId: string | null = null): DossierNode[] {
   return flat
@@ -83,6 +101,7 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [coursList, setCoursList] = useState<Cours[]>([]);
   const [childDossiers, setChildDossiers] = useState<Dossier[]>([]);
+  const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Resizable sidebar
@@ -139,11 +158,43 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
     const allCours = [...(cours ?? []), ...matiereCours];
     const uniqueCours = Array.from(new Map(allCours.map(c => [c.id, c])).values());
 
+    const coursIds = uniqueCours.map((cours) => cours.id);
+    const deckConditions: string[] = [];
+    if (matIds.length > 0) deckConditions.push(`matiere_id.in.(${matIds.join(",")})`);
+    if (coursIds.length > 0) deckConditions.push(`cours_id.in.(${coursIds.join(",")})`);
+
+    let flashcardDecks: FlashcardDeck[] = [];
+    if (deckConditions.length > 0) {
+      const { data: decks, error: decksError } = await supabase
+        .from("flashcard_decks")
+        .select("id, name, description, matiere_id, cours_id, visible, matiere:matieres(name, color), flashcards(id)")
+        .eq("visible", true)
+        .or(deckConditions.join(","))
+        .order("created_at", { ascending: false });
+
+      if (decksError) {
+        console.error("Error fetching flashcard decks:", decksError);
+      } else {
+        flashcardDecks = ((decks ?? []) as Array<FlashcardDeck & { flashcards?: { id: string }[] }>)
+          .map((deck) => ({
+            id: deck.id,
+            name: deck.name,
+            description: deck.description,
+            matiere_id: deck.matiere_id,
+            cours_id: deck.cours_id,
+            visible: deck.visible,
+            matiere: deck.matiere ?? null,
+            nb_cards: deck.flashcards?.length ?? 0,
+          }));
+      }
+    }
+
     const entry: CacheEntry = {
       cours: uniqueCours,
       children: allDossiers
         .filter((d) => d.parent_id === dossier.id)
         .sort((a, b) => a.order_index - b.order_index),
+      flashcardDecks,
     };
     cache.current.set(dossier.id, entry);
     return entry;
@@ -165,12 +216,14 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
       const entry = cache.current.get(dossier.id)!;
       setCoursList(entry.cours);
       setChildDossiers(entry.children);
+      setFlashcardDecks(entry.flashcardDecks);
     } else {
       setLoading(true);
       try {
         const entry = await fetchDossier(dossier);
         setCoursList(entry.cours);
         setChildDossiers(entry.children);
+        setFlashcardDecks(entry.flashcardDecks);
       } catch (err) {
         console.error("Failed to load dossier:", err);
         setCoursList([]);
@@ -179,6 +232,7 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
             .filter((d) => d.parent_id === dossier.id)
             .sort((a, b) => a.order_index - b.order_index)
         );
+        setFlashcardDecks([]);
       } finally {
         setLoading(false);
       }
@@ -365,7 +419,61 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
                     </div>
                   )}
 
-                  {childDossiers.length === 0 && coursList.length === 0 && (
+                  {flashcardDecks.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Flashcards</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {flashcardDecks.map((deck) => (
+                          <button
+                            key={deck.id}
+                            onClick={() => router.push(`/cours/flashcards/${deck.id}`)}
+                            className="group rounded-2xl border border-[#D7E4F6] bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#4FABDB]/45 hover:shadow-[0_10px_30px_rgba(18,49,77,0.08)]"
+                          >
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div
+                                className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                                style={{
+                                  backgroundColor: deck.matiere?.color ? `${deck.matiere.color}18` : "rgba(79,171,219,0.12)",
+                                  color: deck.matiere?.color ?? "#4FABDB",
+                                }}
+                              >
+                                <Layers size={20} />
+                              </div>
+                              <span className="rounded-full bg-[#F4F8FC] px-2.5 py-1 text-[11px] font-semibold text-[#12314D]">
+                                {deck.nb_cards} carte{deck.nb_cards !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+
+                            <h3 className="text-sm font-semibold text-[#12314D]">{deck.name}</h3>
+                            {deck.description && (
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#5B6B7D]">
+                                {deck.description}
+                              </p>
+                            )}
+
+                            <div className="mt-3 flex items-center justify-between gap-2">
+                              <div className="flex min-w-0 flex-wrap gap-2">
+                                {deck.matiere && (
+                                  <span
+                                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+                                    style={{ backgroundColor: deck.matiere.color }}
+                                  >
+                                    {deck.matiere.name}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#4FABDB] transition-all group-hover:gap-1.5">
+                                Réviser
+                                <ArrowRight size={12} />
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {childDossiers.length === 0 && coursList.length === 0 && flashcardDecks.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
                       <FolderOpen size={40} className="text-gray-200 mb-3" />
                       <p className="text-sm text-gray-400">Ce dossier est vide</p>

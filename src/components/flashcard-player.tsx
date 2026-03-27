@@ -31,7 +31,7 @@ export function FlashcardPlayer({ deck, cards }: { deck: Deck; cards: Card[] }) 
         <Layers size={48} className="text-gray-300 mb-4" />
         <h2 className="text-lg font-semibold text-gray-700 mb-2">Deck vide</h2>
         <p className="text-gray-500 mb-6">Ce deck ne contient pas encore de cartes.</p>
-        <Link href="/flashcards" className="text-indigo-600 hover:underline text-sm">← Retour aux decks</Link>
+        <Link href="/cours" className="text-indigo-600 hover:underline text-sm">← Retour aux decks</Link>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export function FlashcardPlayer({ deck, cards }: { deck: Deck; cards: Card[] }) 
             >
               <RefreshCw size={16} /> Recommencer
             </button>
-            <Link href="/flashcards" className="flex items-center justify-center gap-2 w-full px-4 py-3 border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50">
+            <Link href="/cours" className="flex items-center justify-center gap-2 w-full px-4 py-3 border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50">
               ← Retour aux decks
             </Link>
           </div>
@@ -116,7 +116,7 @@ export function FlashcardPlayer({ deck, cards }: { deck: Deck; cards: Card[] }) 
     <div className="min-h-screen flex flex-col p-4 sm:p-6 max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <Link href="/flashcards" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
+        <Link href="/cours" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
           <ArrowLeft size={16} /> Retour
         </Link>
         <div className="text-center">
