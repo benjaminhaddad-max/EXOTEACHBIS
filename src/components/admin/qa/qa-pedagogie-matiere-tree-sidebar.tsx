@@ -137,7 +137,7 @@ function DossierBranch({
   const hasScope = sm.length > 0;
   const allOn = hasScope && sm.every(id => selectedMatiereIds.has(id));
   const someOn = sm.some(id => selectedMatiereIds.has(id));
-  const hasBranch = children.length > 0 || mats.length > 0;
+  const hasBranch = children.length > 0;
 
   return (
     <div>
@@ -175,16 +175,6 @@ function DossierBranch({
 
       {expanded && hasBranch && (
         <div>
-          {mats.map(m => (
-            <MatiereBranch
-              key={m.id}
-              matiere={m}
-              depth={depth + 1}
-              selectedMatiereIds={selectedMatiereIds}
-              onToggleMatiere={onToggleMatiere}
-              threadCountByMatiereId={threadCountByMatiereId}
-            />
-          ))}
           {children.map(ch => (
             <DossierBranch
               key={ch.id}
