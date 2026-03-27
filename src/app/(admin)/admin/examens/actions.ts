@@ -253,3 +253,67 @@ export async function getExamenResults(examen_id: string) {
     error: resultsRes.error?.message || serieResultsRes.error?.message || examenRes.error?.message,
   };
 }
+
+// --- Paramétrage par université (barème QCM + coefficients matières) ---
+
+export async function getUniversityGradingScale(university_dossier_id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("university_grading_scales")
+    .select("*")
+    .eq("university_dossier_id", university_dossier_id)
+    .order("nb_errors");
+  if (error) return { error: error.message };
+  return { data: data ?? [] };
+}
+
+export async function upsertUniversityGradingScale(
+  university_dossier_id: string,
+  scales: { nb_errors: number; points: number }[],
+) {
+  const supabase = await createClient();
+  const { error: delErr } = await supabase
+    .from("university_grading_scales")
+    .delete()
+    .eq("university_dossier_id", university_dossier_id);
+  if (delErr) return { error: delErr.message };
+  if (scales.length > 0) {
+    const { error: insErr } = await supabase.from("university_grading_scales").insert(
+      scales.map((s) => ({
+        university_dossier_id,
+        nb_errors: s.nb_errors,
+        points: s.points,
+      })),
+    );
+    if (insErr) return { error: insErr.message };
+  }
+  revalidatePath(PATH);
+  revalidatePath("/admin/examens/parametrage");
+  return { success: true };
+}
+
+export async function getUniversityCoefficients(university_dossier_id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("university_matiere_coefficients")
+    .select("*")
+    .eq("university_dossier_id", university_dossier_id);
+  if (error) return { error: error.message };
+  return { data: data ?? [] };
+}
+
+export async function upsertUniversityCoefficient(
+  university_dossier_id: string,
+  subject_dossier_id: string,
+  coefficient: number,
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("university_matiere_coefficients").upsert(
+    { university_dossier_id, subject_dossier_id, coefficient },
+    { onConflict: "university_dossier_id,subject_dossier_id" },
+  );
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  revalidatePath("/admin/examens/parametrage");
+  return { success: true };
+}
