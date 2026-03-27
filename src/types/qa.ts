@@ -53,6 +53,8 @@ export interface QaThread {
   status: QaStatus;
   assigned_prof_id: string | null;
   resolved_at: string | null;
+  /** Si non null, conversation archivée (hors liste élève et liste admin par défaut). */
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
   // Relations (joined)

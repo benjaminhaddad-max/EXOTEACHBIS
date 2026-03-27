@@ -33,6 +33,7 @@ export function QaDashboard({
   const [filterStatus, setFilterStatus] = useState<QaStatus | "all">("all");
   const [filterMatiere, setFilterMatiere] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const supabase = createClient();
 
   const toggleMatiere = (id: string) =>
@@ -70,22 +71,42 @@ export function QaDashboard({
       .order("created_at", { ascending: false, referencedTable: "qa_messages" })
       .limit(1, { referencedTable: "qa_messages" });
 
-    if (data) setThreads(data as unknown as QaThread[]);
+    if (data) {
+      const list = data as unknown as QaThread[];
+      setThreads(list);
+      setSelected(cur => {
+        if (!cur) return null;
+        const u = list.find(t => t.id === cur.id);
+        if (!u) return null;
+        if (
+          u.updated_at === cur.updated_at &&
+          u.status === cur.status &&
+          (u.archived_at ?? null) === (cur.archived_at ?? null)
+        )
+          return cur;
+        return u;
+      });
+    }
   };
 
   const threadCountByMatiereId = useMemo(() => {
     const m: Record<string, number> = {};
     for (const t of threads) {
-      if (!t.matiere_id) continue;
+      if (!t.matiere_id || t.archived_at) continue;
       m[t.matiere_id] = (m[t.matiere_id] ?? 0) + 1;
     }
     return m;
   }, [threads]);
 
+  const threadsVisible = useMemo(() => {
+    if (showArchived) return threads;
+    return threads.filter(t => !t.archived_at);
+  }, [threads, showArchived]);
+
   const threadsAfterScope = useMemo(() => {
-    if (selectedMatiereIds.size === 0) return threads;
-    return threads.filter(t => t.matiere_id != null && selectedMatiereIds.has(t.matiere_id));
-  }, [threads, selectedMatiereIds]);
+    if (selectedMatiereIds.size === 0) return threadsVisible;
+    return threadsVisible.filter(t => t.matiere_id != null && selectedMatiereIds.has(t.matiere_id));
+  }, [threadsVisible, selectedMatiereIds]);
 
   const filtered = threadsAfterScope.filter(t => {
     if (filterStatus !== "all" && t.status !== filterStatus) return false;
@@ -120,6 +141,44 @@ export function QaDashboard({
   const handleBack = () => {
     setSelected(null);
     window.history.replaceState(null, "", "/admin/questions-reponses");
+  };
+
+  const handleArchiveThread = async (threadId: string) => {
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("qa_threads").update({ archived_at: now, updated_at: now }).eq("id", threadId);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    await refreshThreads();
+    if (!showArchived && selected?.id === threadId) {
+      setSelected(null);
+      window.history.replaceState(null, "", "/admin/questions-reponses");
+    }
+  };
+
+  const handleUnarchiveThread = async (threadId: string) => {
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("qa_threads").update({ archived_at: null, updated_at: now }).eq("id", threadId);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    await refreshThreads();
+  };
+
+  const handleDeleteThread = async (threadId: string) => {
+    if (!confirm("Supprimer définitivement cette conversation ? Tous les messages seront effacés.")) return;
+    const { error } = await supabase.from("qa_threads").delete().eq("id", threadId);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    await refreshThreads();
+    if (selected?.id === threadId) {
+      setSelected(null);
+      window.history.replaceState(null, "", "/admin/questions-reponses");
+    }
   };
 
   return (
@@ -158,6 +217,15 @@ export function QaDashboard({
               className="w-full px-3 py-2 text-sm rounded-lg bg-gray-50 border border-gray-100
                 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
+            <label className="flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={e => setShowArchived(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-100"
+              />
+              Afficher les archivées
+            </label>
             <div className="flex gap-2">
               <select
                 value={filterStatus}
@@ -185,7 +253,14 @@ export function QaDashboard({
             </div>
           </div>
 
-          <QaThreadList threads={filtered} selectedId={selected?.id} onSelect={handleThreadSelect} />
+          <QaThreadList
+            threads={filtered}
+            selectedId={selected?.id}
+            onSelect={handleThreadSelect}
+            onArchiveThread={handleArchiveThread}
+            onDeleteThread={handleDeleteThread}
+            showArchived={showArchived}
+          />
         </div>
 
         <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${!selected ? "hidden lg:flex" : "flex"}`}>
@@ -201,7 +276,14 @@ export function QaDashboard({
                     : "Étudiant"}
                 </span>
               </div>
-              <QaChatPanel thread={selected} userId={userId} onResolve={() => refreshThreads()} />
+              <QaChatPanel
+                thread={selected}
+                userId={userId}
+                onResolve={() => refreshThreads()}
+                onArchiveThread={handleArchiveThread}
+                onUnarchiveThread={handleUnarchiveThread}
+                onDeleteThread={handleDeleteThread}
+              />
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
