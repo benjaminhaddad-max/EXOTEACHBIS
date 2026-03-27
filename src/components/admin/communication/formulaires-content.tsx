@@ -166,6 +166,10 @@ export function FormulairesShellContent({
           selectedTemplateId={selectedTemplateId}
           showToast={showToast}
           sidebarGroupeIds={selectedGroupeIds}
+          onSaved={() => {
+            setSelectedTemplateId(null);
+            setActiveView("list");
+          }}
         />
       )}
 

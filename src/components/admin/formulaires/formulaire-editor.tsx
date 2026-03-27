@@ -85,6 +85,7 @@ export function FormulaireEditor({
   selectedTemplateId: externalSelectedId,
   showToast,
   sidebarGroupeIds,
+  onSaved,
 }: {
   initialTemplates: FormTemplate[];
   initialFields: FormField[];
@@ -95,6 +96,7 @@ export function FormulaireEditor({
   selectedTemplateId: string | null;
   showToast: (msg: string, kind: "success" | "error") => void;
   sidebarGroupeIds?: Set<string>;
+  onSaved?: (templateId: string) => void;
 }) {
   const [templates, setTemplates] = useState(sortTemplates(initialTemplates));
   const [fields, setFields] = useState(initialFields);
@@ -160,6 +162,7 @@ export function FormulaireEditor({
     setTemplates(cur => sortTemplates([...cur.filter(t => t.id !== res.template!.id), res.template!]));
     setSelectedTemplateId(res.template!.id);
     showToast("Formulaire enregistré", "success");
+    onSaved?.(res.template!.id);
   });
 
   const handleAddField = (type: FormFieldType) => {

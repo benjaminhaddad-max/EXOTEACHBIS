@@ -1,20 +1,18 @@
 "use client";
 
-import { useState, useTransition, useRef, useMemo } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2,
-  Calendar, Clock, Eye, EyeOff, ListPlus, ListMinus, Layers,
-  BarChart3, ChevronRight, Settings2, Upload, Download, FileText,
+  Calendar, Clock, Eye, EyeOff, Layers,
+  BarChart3, Settings2,
   GraduationCap, Building2, ChevronDown, Users,
 } from "lucide-react";
-import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/types/database";
+import type { Serie, Filiere, Dossier, Groupe, Matiere } from "@/types/database";
 import {
   createExamen, updateExamen, deleteExamen,
-  addSerieToExamen, removeSerieFromExamen,
-  updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility,
+  toggleResultsVisibility,
   setExamenGroupes,
 } from "@/app/(admin)/admin/examens/actions";
-import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -45,7 +43,6 @@ export type ExamenWithSeries = {
 type Modal =
   | { type: "create" }
   | { type: "edit"; examen: ExamenWithSeries }
-  | { type: "compose"; examen: ExamenWithSeries }
   | null;
 
 type Toast = { message: string; kind: "success" | "error" } | null;
@@ -92,8 +89,6 @@ export function ExamensShell({
   const [isPending, startTransition] = useTransition();
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
 
-  const [composeSeries, setComposeSeries] = useState<ExamenSerieWithCoeff[]>([]);
-
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind });
     setTimeout(() => setToast(null), 3500);
@@ -117,12 +112,6 @@ export function ExamensShell({
     for (const g of groupes) m.set(g.id, g);
     return m;
   }, [groupes]);
-
-  const refreshSeries = async () => {
-    const supabase = createClient();
-    const { data } = await supabase.from("series").select("*").eq("visible", true).order("name");
-    if (data) setSeriesList(data as Serie[]);
-  };
 
   const refreshExamens = async () => {
     const supabase = createClient();
@@ -155,11 +144,6 @@ export function ExamensShell({
     }
   };
 
-  const openCompose = (examen: ExamenWithSeries) => {
-    setComposeSeries(examen.examen_series ?? []);
-    setModal({ type: "compose", examen });
-  };
-
   const handleDeleteExamen = (id: string) => {
     if (!confirm("Supprimer cet examen ?")) return;
     startTransition(async () => {
@@ -167,34 +151,6 @@ export function ExamensShell({
       if ("error" in res) { showToast(res.error!, "error"); return; }
       setExamens((prev) => prev.filter((e) => e.id !== id));
       showToast("Examen supprimé", "success");
-    });
-  };
-
-  const handleAddSerie = (examen: ExamenWithSeries, serie: Serie) => {
-    startTransition(async () => {
-      const res = await addSerieToExamen(examen.id, serie.id, composeSeries.length, 1);
-      if ("error" in res) { showToast(res.error!, "error"); return; }
-      setComposeSeries((prev) => [...prev, { series_id: serie.id, order_index: prev.length, coefficient: 1, series: serie }]);
-      showToast("Série ajoutée", "success");
-    });
-  };
-
-  const handleRemoveSerie = (examen: ExamenWithSeries, serieId: string) => {
-    startTransition(async () => {
-      const res = await removeSerieFromExamen(examen.id, serieId);
-      if ("error" in res) { showToast(res.error!, "error"); return; }
-      setComposeSeries((prev) => prev.filter((s) => s.series_id !== serieId));
-      showToast("Série retirée", "success");
-    });
-  };
-
-  const handleCoeffChange = (examen: ExamenWithSeries, serieId: string, coeff: number) => {
-    startTransition(async () => {
-      const res = await updateSerieCoefficient(examen.id, serieId, coeff);
-      if ("error" in res) { showToast(res.error!, "error"); return; }
-      setComposeSeries((prev) =>
-        prev.map((s) => s.series_id === serieId ? { ...s, coefficient: coeff } : s)
-      );
     });
   };
 
@@ -208,15 +164,6 @@ export function ExamensShell({
     });
   };
 
-  const handleSerieScheduleChange = (examen: ExamenWithSeries, serieId: string, debut_at: string | null, fin_at: string | null) => {
-    startTransition(async () => {
-      const res = await updateSerieSchedule(examen.id, serieId, debut_at, fin_at);
-      if ("error" in res) { showToast(res.error!, "error"); return; }
-      setComposeSeries((prev) =>
-        prev.map((s) => s.series_id === serieId ? { ...s, debut_at, fin_at } : s)
-      );
-    });
-  };
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -295,7 +242,7 @@ export function ExamensShell({
                 const nbSeries = e.series?.length ?? 0;
                 const targetGroupes = (e.groupe_ids ?? []).map(gid => groupeMap.get(gid)).filter(Boolean) as Groupe[];
                 return (
-                  <div key={e.id} className="bg-white/5 border border-white/10 rounded-xl p-5">
+                  <Link key={e.id} href={`/admin/examens/${e.id}`} className="block bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/[0.07] transition-colors cursor-pointer">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -366,9 +313,9 @@ export function ExamensShell({
                           </div>
                         )}
                       </div>
-                      <div className="flex gap-1 shrink-0">
+                      <div className="flex gap-1 shrink-0" onClick={(ev) => ev.preventDefault()}>
                         <button
-                          onClick={() => handleToggleResults(e)}
+                          onClick={(ev) => { ev.preventDefault(); handleToggleResults(e); }}
                           className={`flex items-center gap-1 p-2 rounded-lg transition-colors text-xs ${
                             e.results_visible
                               ? "bg-green-500/10 text-green-400 hover:bg-green-500/20"
@@ -378,33 +325,21 @@ export function ExamensShell({
                         >
                           {e.results_visible ? <Eye size={13} /> : <EyeOff size={13} />}
                         </button>
-                        <Link
-                          href={`/admin/examens/${e.id}/resultats`}
-                          className="flex items-center gap-1 p-2 hover:bg-[#C9A84C]/10 rounded-lg text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors text-xs"
-                        >
-                          <BarChart3 size={13} />
-                        </Link>
                         <button
-                          onClick={() => openCompose(e)}
-                          className="flex items-center gap-1 p-2 hover:bg-[#C9A84C]/10 rounded-lg text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors text-xs"
-                        >
-                          <ListPlus size={13} /> Séries
-                        </button>
-                        <button
-                          onClick={() => setModal({ type: "edit", examen: e })}
+                          onClick={(ev) => { ev.preventDefault(); setModal({ type: "edit", examen: e }); }}
                           className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
                         >
                           <Pencil size={13} />
                         </button>
                         <button
-                          onClick={() => handleDeleteExamen(e.id)}
+                          onClick={(ev) => { ev.preventDefault(); handleDeleteExamen(e.id); }}
                           className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors"
                         >
                           <Trash2 size={13} />
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -446,27 +381,6 @@ export function ExamensShell({
                 }}
                 onClose={() => setModal(null)}
                 isPending={isPending}
-              />
-            )}
-            {modal.type === "compose" && (
-              <ComposeModal
-                examen={modal.examen}
-                allSeries={seriesList}
-                matieres={matieres}
-                allDossiers={allDossiers}
-                groupes={groupes}
-                composeSeries={composeSeries}
-                onAdd={(s) => handleAddSerie(modal.examen, s)}
-                onRemove={(id) => handleRemoveSerie(modal.examen, id)}
-                onCoeffChange={(serieId, coeff) => handleCoeffChange(modal.examen, serieId, coeff)}
-                onScheduleChange={(serieId, debut_at, fin_at) => handleSerieScheduleChange(modal.examen, serieId, debut_at, fin_at)}
-                onSerieCreated={async (newSerie) => {
-                  await refreshSeries();
-                  handleAddSerie(modal.examen, newSerie);
-                }}
-                onClose={() => { setModal(null); refreshExamens(); }}
-                isPending={isPending}
-                showToast={showToast}
               />
             )}
           </div>
@@ -776,270 +690,4 @@ function ExamenForm({
   );
 }
 
-// =============================================
-// COMPOSE MODAL (with coefficients + create + import/export)
-// =============================================
-
-const SERIE_TYPES: { value: SerieType; label: string }[] = [
-  { value: "concours_blanc", label: "Concours blanc" },
-  { value: "revision", label: "Révision" },
-  { value: "annales", label: "Annales" },
-  { value: "entrainement", label: "Entraînement" },
-  { value: "qcm_supplementaires", label: "QCM supplémentaires" },
-];
-
-function ComposeModal({
-  examen,
-  allSeries,
-  matieres,
-  allDossiers,
-  groupes,
-  composeSeries,
-  onAdd,
-  onRemove,
-  onCoeffChange,
-  onScheduleChange,
-  onSerieCreated,
-  onClose,
-  isPending,
-  showToast,
-}: {
-  examen: ExamenWithSeries;
-  allSeries: Serie[];
-  matieres: Matiere[];
-  allDossiers: Dossier[];
-  groupes: Groupe[];
-  composeSeries: ExamenSerieWithCoeff[];
-  onAdd: (s: Serie) => void;
-  onRemove: (serieId: string) => void;
-  onCoeffChange: (serieId: string, coeff: number) => void;
-  onScheduleChange: (serieId: string, debut_at: string | null, fin_at: string | null) => void;
-  onSerieCreated: (s: Serie) => void;
-  onClose: () => void;
-  isPending: boolean;
-  showToast: (msg: string, kind: "success" | "error") => void;
-}) {
-  const [creating, setCreating] = useState<string | null>(null);
-  const [expandedSemesters, setExpandedSemesters] = useState<Set<string>>(new Set());
-
-  // Find target university from exam's groupe_ids
-  const targetUniIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const gid of (examen.groupe_ids ?? [])) {
-      const g = groupes.find(gr => gr.id === gid);
-      if (g?.formation_dossier_id) ids.add(g.formation_dossier_id);
-    }
-    return ids;
-  }, [examen.groupe_ids, groupes]);
-
-  // Build tree: University → Semesters → Subjects
-  const tree = useMemo(() => {
-    // Get semesters under target universities
-    const semesters = allDossiers
-      .filter(d => d.parent_id && targetUniIds.has(d.parent_id) && (d.dossier_type === "semester" || d.dossier_type === "module" || d.dossier_type === "period"))
-      .sort((a, b) => a.order_index - b.order_index);
-
-    // Get subjects under each semester
-    const semesterMap = new Map<string, Dossier[]>();
-    for (const sem of semesters) {
-      const subjects = allDossiers
-        .filter(d => d.parent_id === sem.id && (d.dossier_type === "subject" || d.dossier_type === "option"))
-        .sort((a, b) => a.order_index - b.order_index);
-      if (subjects.length > 0) semesterMap.set(sem.id, subjects);
-    }
-
-    // Also check for subjects directly under university (no semester level)
-    const directSubjects = allDossiers
-      .filter(d => d.parent_id && targetUniIds.has(d.parent_id) && (d.dossier_type === "subject" || d.dossier_type === "option"))
-      .sort((a, b) => a.order_index - b.order_index);
-
-    return { semesters, semesterMap, directSubjects };
-  }, [allDossiers, targetUniIds]);
-
-  // Track which subject dossier IDs are already added (using serie name matching)
-  const addedSubjectNames = new Set(composeSeries.map(es => es.series?.name).filter(Boolean));
-
-  const handleAddSubject = async (subject: Dossier) => {
-    setCreating(subject.id);
-    try {
-      const serieName = `${examen.name} — ${subject.name}`;
-      // Find matière in this subject dossier if one exists
-      const matiere = matieres.find(m => m.dossier_id === subject.id);
-      const res = await createSerie({
-        name: serieName,
-        type: "concours_blanc" as SerieType,
-        timed: false,
-        score_definitif: false,
-        visible: true,
-        matiere_id: matiere?.id ?? null,
-      });
-      if ("error" in res) { showToast(res.error!, "error"); return; }
-      const newSerie: Serie = {
-        id: res.id!, name: serieName, type: "concours_blanc", description: null,
-        cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null,
-        score_definitif: false, visible: true, annee: null,
-        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      };
-      onSerieCreated(newSerie);
-      showToast(`Épreuve ${subject.name} ajoutée`, "success");
-    } finally {
-      setCreating(null);
-    }
-  };
-
-  const exportSerie = (serieId: string, corrections: boolean) => {
-    window.open(`/api/export-serie?serieId=${serieId}&corrections=${corrections ? "1" : "0"}`, "_blank");
-  };
-
-  const toggleSemester = (id: string) => setExpandedSemesters(prev => {
-    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
-  });
-
-  // Auto-expand all semesters on mount
-  useMemo(() => {
-    setExpandedSemesters(new Set(tree.semesters.map(s => s.id)));
-  }, [tree.semesters]);
-
-  return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-white">Épreuves — {examen.name}</h2>
-        <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18} /></button>
-      </div>
-
-      {/* Épreuves dans l'examen */}
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">
-          Épreuves de l&apos;examen ({composeSeries.length})
-        </p>
-        <div className="space-y-2 max-h-64 overflow-auto pr-1">
-          {composeSeries.length === 0 ? (
-            <div className="text-center py-5 text-white/20">
-              <Layers size={24} className="mx-auto mb-2 opacity-30" />
-              <p className="text-xs">Sélectionne les matières ci-dessous</p>
-            </div>
-          ) : composeSeries.map((es) => (
-            <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <p className="flex-1 text-xs text-white/80 font-medium line-clamp-1">{es.series?.name ?? "?"}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[10px] text-white/40">Coeff.</span>
-                  <input type="number" min={0.5} max={10} step={0.5} value={es.coefficient}
-                    onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
-                    className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
-                  />
-                </div>
-                <div className="flex gap-0.5 shrink-0">
-                  <button onClick={() => exportSerie(es.series_id, false)} title="Export sujet" className="p-1 text-white/20 hover:text-white/60 transition-colors"><FileText size={11} /></button>
-                  <button onClick={() => exportSerie(es.series_id, true)} title="Export correction" className="p-1 text-white/20 hover:text-green-400/60 transition-colors"><Download size={11} /></button>
-                </div>
-                <button onClick={() => onRemove(es.series_id)} disabled={isPending} className="text-white/30 hover:text-red-400 transition-colors shrink-0"><ListMinus size={13} /></button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar size={10} className="text-white/20 shrink-0" />
-                <input type="datetime-local"
-                  value={es.debut_at ? new Date(es.debut_at).toISOString().slice(0, 16) : ""}
-                  onChange={(e) => onScheduleChange(es.series_id, e.target.value ? new Date(e.target.value).toISOString() : null, es.fin_at ?? null)}
-                  className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20"
-                />
-                <span className="text-[10px] text-white/20">→</span>
-                <input type="datetime-local"
-                  value={es.fin_at ? new Date(es.fin_at).toISOString().slice(0, 16) : ""}
-                  onChange={(e) => onScheduleChange(es.series_id, es.debut_at ?? null, e.target.value ? new Date(e.target.value).toISOString() : null)}
-                  className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Ajouter par matière — arborescence Semestre → UE */}
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">
-          Ajouter une épreuve
-        </p>
-        <div className="max-h-56 overflow-auto pr-1 space-y-1">
-          {tree.semesters.length === 0 && tree.directSubjects.length === 0 ? (
-            <p className="text-xs text-white/30 py-4 text-center">Aucune matière trouvée pour cette formation</p>
-          ) : (
-            <>
-              {/* Semesters with subjects */}
-              {tree.semesters.map(sem => {
-                const subjects = tree.semesterMap.get(sem.id) ?? [];
-                if (subjects.length === 0) return null;
-                const isOpen = expandedSemesters.has(sem.id);
-                return (
-                  <div key={sem.id}>
-                    <button onClick={() => toggleSemester(sem.id)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-all text-left">
-                      <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.3)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
-                      <Layers size={10} style={{ color: "#C9A84C" }} />
-                      <span className="text-[11px] font-semibold" style={{ color: "#C9A84C" }}>{sem.name}</span>
-                      <span className="text-[10px] text-white/20 ml-auto">{subjects.length} matière{subjects.length > 1 ? "s" : ""}</span>
-                    </button>
-                    {isOpen && (
-                      <div className="ml-4 space-y-0.5">
-                        {subjects.map(sub => {
-                          const alreadyAdded = addedSubjectNames.has(`${examen.name} — ${sub.name}`);
-                          const isCreatingThis = creating === sub.id;
-                          return (
-                            <div key={sub.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-                              alreadyAdded ? "opacity-40" : "hover:bg-white/[0.04]"
-                            }`}>
-                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
-                              <span className="flex-1 text-[11px] text-white/70 font-medium truncate">{sub.name}</span>
-                              {alreadyAdded ? (
-                                <Check size={12} className="text-green-400/60 shrink-0" />
-                              ) : isCreatingThis ? (
-                                <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
-                              ) : (
-                                <button onClick={() => handleAddSubject(sub)}
-                                  className="p-1 text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors" title="Ajouter cette épreuve">
-                                  <Plus size={13} />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {/* Direct subjects (no semester) */}
-              {tree.directSubjects.map(sub => {
-                const alreadyAdded = addedSubjectNames.has(`${examen.name} — ${sub.name}`);
-                const isCreatingThis = creating === sub.id;
-                return (
-                  <div key={sub.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-                    alreadyAdded ? "opacity-40" : "hover:bg-white/[0.04]"
-                  }`}>
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
-                    <span className="flex-1 text-[11px] text-white/70 font-medium truncate">{sub.name}</span>
-                    {alreadyAdded ? (
-                      <Check size={12} className="text-green-400/60 shrink-0" />
-                    ) : isCreatingThis ? (
-                      <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
-                    ) : (
-                      <button onClick={() => handleAddSubject(sub)}
-                        className="p-1 text-[#C9A84C]/60 hover:text-[#C9A84C] transition-colors" title="Ajouter cette épreuve">
-                        <Plus size={13} />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="flex justify-end pt-2">
-        <button onClick={onClose} className="px-4 py-2 bg-[#C9A84C] text-[#0e1e35] text-sm font-semibold rounded-lg hover:bg-[#A8892E] transition-colors">
-          Fermer
-        </button>
-      </div>
-    </div>
-  );
-}
+// ComposeModal removed — editing now done on /admin/examens/[examenId]
