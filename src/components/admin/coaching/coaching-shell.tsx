@@ -24,8 +24,13 @@ import {
   createCoachCallSlot,
   saveStudentPointAProfile,
   updateBookingStatus,
+  assignCoachToGroupe,
+  removeCoachFromGroupe,
+  assignCoachToBooking,
 } from "@/app/(admin)/admin/coaching/actions";
+import { CoachAvailability } from "./coach-availability";
 import type {
+  CoachGroupeAssignment,
   CoachingCallBooking,
   CoachingCallBookingStatus,
   CoachingCallSlot,
@@ -74,6 +79,7 @@ type CoachingShellProps = {
   initialPointAProfiles: CoachingStudentProfile[];
   formTemplate: FormTemplate | null;
   formFields: FormField[];
+  coachAssignments?: CoachGroupeAssignment[];
   setupError?: string | null;
 };
 
@@ -150,6 +156,7 @@ export function CoachingShell({
   initialPointAProfiles,
   formTemplate,
   formFields,
+  coachAssignments = [],
   setupError,
 }: CoachingShellProps) {
   const [intakeForms] = useState(initialIntakeForms);
@@ -400,11 +407,62 @@ export function CoachingShell({
     );
   }
 
-  if (isCoach && !currentProfile.groupe_id) {
+  if (isCoach && groupes.length === 0) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-        Ton profil coach n'est relié à aucune classe. Attribue-lui un `groupe_id` pour voir les élèves et proposer des
-        créneaux.
+        Ton profil coach n&apos;est relié à aucune classe. Un admin doit t&apos;assigner à une ou plusieurs classes.
+      </div>
+    );
+  }
+
+  // ─── Coach-specific dashboard ───────────────────────────────────────────────
+  if (isCoach) {
+    const coachBookings = bookings.filter((b) => b.coach_id === currentProfile.id || slots.some((s) => s.id === b.slot_id && s.coach_id === currentProfile.id));
+    const upcomingBookings = coachBookings.filter((b) => b.status === "booked");
+
+    return (
+      <div className="space-y-6">
+        {toast && (
+          <div className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-lg ${toast.kind === "success" ? "bg-emerald-600" : "bg-red-600"}`}>
+            {toast.kind === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {toast.message}
+          </div>
+        )}
+
+        {/* Coach header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-[#12314d]">Bonjour {currentProfile.first_name ?? "Coach"}</h2>
+            <p className="text-sm text-[#7d8c9e]">
+              {groupes.map((g) => g.name).join(", ")} · {upcomingBookings.length} RDV à venir
+            </p>
+          </div>
+          <a
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5edf6] px-3 py-2 text-xs font-medium text-[#5d7085] hover:bg-[#f8fbfe]"
+          >
+            <UserRound className="h-3.5 w-3.5" />
+            Vue élève
+          </a>
+        </div>
+
+        {/* Tabs */}
+        <CoachDashboardTabs
+          slots={slots}
+          bookings={bookings}
+          students={students}
+          groupes={groupes}
+          coaches={coaches}
+          coachId={currentProfile.id}
+          intakeForms={intakeForms}
+          formFields={formFields}
+          formsByStudentId={formsByStudentId}
+          bookingsByStudentId={bookingsByStudentId}
+          pointAByStudentId={pointAByStudentId}
+          pointAProfiles={pointAProfiles}
+          coachesById={coachesById}
+          groupsById={groupsById}
+        />
       </div>
     );
   }
@@ -951,5 +1009,156 @@ function SelectField({
         ))}
       </select>
     </label>
+  );
+}
+
+// ─── Coach Dashboard Tabs ───────────────────────────────────────────────────
+function CoachDashboardTabs({
+  slots,
+  bookings,
+  students,
+  groupes,
+  coaches,
+  coachId,
+  intakeForms,
+  formFields,
+  formsByStudentId,
+  bookingsByStudentId,
+  pointAByStudentId,
+  pointAProfiles,
+  coachesById,
+  groupsById,
+}: {
+  slots: CoachingCallSlot[];
+  bookings: CoachingCallBooking[];
+  students: Profile[];
+  groupes: Groupe[];
+  coaches: Profile[];
+  coachId: string;
+  intakeForms: CoachingIntakeForm[];
+  formFields: FormField[];
+  formsByStudentId: Map<string, CoachingIntakeForm>;
+  bookingsByStudentId: Map<string, CoachingCallBooking>;
+  pointAByStudentId: Map<string, CoachingStudentProfile>;
+  pointAProfiles: CoachingStudentProfile[];
+  coachesById: Map<string, Profile>;
+  groupsById: Map<string, Groupe>;
+}) {
+  const [tab, setTab] = useState<"planning" | "eleves" | "rdv">("planning");
+
+  const coachBookings = useMemo(
+    () => bookings.filter((b) => b.coach_id === coachId).sort((a, b) => new Date(b.booked_at).getTime() - new Date(a.booked_at).getTime()),
+    [bookings, coachId]
+  );
+
+  const tabs = [
+    { key: "planning" as const, label: "Planning", count: slots.filter((s) => s.coach_id === coachId && new Date(s.start_at) >= new Date()).length },
+    { key: "eleves" as const, label: "Élèves", count: students.length },
+    { key: "rdv" as const, label: "Rendez-vous", count: coachBookings.filter((b) => b.status === "booked").length },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-lg border border-[#e5edf6] bg-[#f8fbfe] p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold transition ${
+              tab === t.key ? "bg-white text-[#12314d] shadow-sm" : "text-[#7d8c9e] hover:text-[#12314d]"
+            }`}
+          >
+            {t.label}
+            {t.count > 0 && (
+              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${tab === t.key ? "bg-[#12314d] text-white" : "bg-[#e5edf6] text-[#5d7085]"}`}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "planning" && (
+        <CoachAvailability
+          coachId={coachId}
+          slots={slots.filter((s) => s.coach_id === coachId)}
+          bookings={bookings}
+          groupes={groupes}
+        />
+      )}
+
+      {tab === "eleves" && (
+        <div className="space-y-2">
+          {students.length === 0 ? (
+            <p className="py-8 text-center text-sm text-[#7d8c9e]">Aucun élève dans tes classes.</p>
+          ) : (
+            students.map((student) => {
+              const form = formsByStudentId.get(student.id);
+              const booking = bookingsByStudentId.get(student.id);
+              const groupe = student.groupe_id ? groupsById.get(student.groupe_id) : null;
+              return (
+                <div key={student.id} className="flex items-center justify-between rounded-xl border border-[#e5edf6] bg-white px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#12314d] text-[10px] font-bold text-white">
+                      {(student.first_name?.[0] ?? "").toUpperCase()}{(student.last_name?.[0] ?? "").toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#12314d]">{getDisplayName(student)}</p>
+                      <p className="text-xs text-[#7d8c9e]">{groupe?.name ?? "—"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {form ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Formulaire ✓</span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Pas de formulaire</span>
+                    )}
+                    {booking ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BOOKING_STATUS_STYLES[booking.status as CoachingCallBookingStatus] ?? "bg-gray-100 text-gray-600"}`}>
+                        {BOOKING_STATUS_LABELS[booking.status as CoachingCallBookingStatus] ?? booking.status}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">Pas de RDV</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {tab === "rdv" && (
+        <div className="space-y-2">
+          {coachBookings.length === 0 ? (
+            <p className="py-8 text-center text-sm text-[#7d8c9e]">Aucun rendez-vous pour l&apos;instant.</p>
+          ) : (
+            coachBookings.map((booking) => {
+              const slot = slots.find((s) => s.id === booking.slot_id);
+              const student = students.find((s) => s.id === booking.student_id);
+              return (
+                <div key={booking.id} className="flex items-center justify-between rounded-xl border border-[#e5edf6] bg-white px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <CalendarClock className="h-4 w-4 text-[#5d7085]" />
+                    <div>
+                      <p className="text-sm font-medium text-[#12314d]">
+                        {slot ? formatDateTime(slot.start_at) : "Date inconnue"}
+                      </p>
+                      <p className="text-xs text-[#7d8c9e]">
+                        {student ? getDisplayName(student) : "Élève inconnu"}
+                        {slot?.location ? ` · ${slot.location}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BOOKING_STATUS_STYLES[booking.status as CoachingCallBookingStatus] ?? "bg-gray-100 text-gray-600"}`}>
+                    {BOOKING_STATUS_LABELS[booking.status as CoachingCallBookingStatus] ?? booking.status}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
   );
 }

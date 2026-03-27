@@ -1,0 +1,341 @@
+"use client";
+
+import { useState, useTransition, useMemo } from "react";
+import {
+  CalendarDays,
+  Clock,
+  MapPin,
+  Plus,
+  Trash2,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Repeat,
+} from "lucide-react";
+import {
+  createCoachCallSlot,
+  deleteCoachCallSlot,
+} from "@/app/(admin)/admin/coaching/actions";
+import type { CoachingCallSlot, CoachingCallBooking, Groupe } from "@/types/database";
+
+type Props = {
+  coachId: string;
+  slots: CoachingCallSlot[];
+  bookings: CoachingCallBooking[];
+  groupes: Groupe[];
+};
+
+function getWeekStart(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatWeekRange(start: Date) {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const sMonth = start.toLocaleDateString("fr-FR", { month: "short" });
+  const eMonth = end.toLocaleDateString("fr-FR", { month: "short" });
+  if (sMonth === eMonth) {
+    return `${start.getDate()} – ${end.getDate()} ${sMonth}`;
+  }
+  return `${start.getDate()} ${sMonth} – ${end.getDate()} ${eMonth}`;
+}
+
+export function CoachAvailability({ coachId, slots, bookings, groupes }: Props) {
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [showForm, setShowForm] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  // Form state
+  const [formDate, setFormDate] = useState("");
+  const [formStartTime, setFormStartTime] = useState("09:00");
+  const [formEndTime, setFormEndTime] = useState("09:30");
+  const [formLocation, setFormLocation] = useState("");
+  const [formGroupeId, setFormGroupeId] = useState(groupes[0]?.id ?? "");
+  const [formRepeatWeeks, setFormRepeatWeeks] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const bookedSlotIds = useMemo(
+    () => new Set(bookings.filter((b) => b.status !== "cancelled").map((b) => b.slot_id)),
+    [bookings]
+  );
+
+  // Filter slots for current week
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  const weekSlots = useMemo(
+    () =>
+      slots
+        .filter((s) => {
+          const d = new Date(s.start_at);
+          return d >= weekStart && d < weekEnd;
+        })
+        .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()),
+    [slots, weekStart, weekEnd]
+  );
+
+  // Group by day
+  const slotsByDay = useMemo(() => {
+    const map = new Map<string, CoachingCallSlot[]>();
+    for (const slot of weekSlots) {
+      const day = new Date(slot.start_at).toISOString().slice(0, 10);
+      const arr = map.get(day) ?? [];
+      arr.push(slot);
+      map.set(day, arr);
+    }
+    return map;
+  }, [weekSlots]);
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  const handleCreate = () => {
+    if (!formDate || !formGroupeId) return;
+    setError(null);
+
+    startTransition(async () => {
+      const weeksToCreate = formRepeatWeeks > 0 ? formRepeatWeeks + 1 : 1;
+      let lastError: string | null = null;
+
+      for (let w = 0; w < weeksToCreate; w++) {
+        const baseDate = new Date(formDate);
+        baseDate.setDate(baseDate.getDate() + w * 7);
+        const dateStr = baseDate.toISOString().slice(0, 10);
+
+        const startAt = new Date(`${dateStr}T${formStartTime}:00`);
+        const endAt = new Date(`${dateStr}T${formEndTime}:00`);
+
+        const res = await createCoachCallSlot({
+          coach_id: coachId,
+          groupe_id: formGroupeId,
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          location: formLocation || undefined,
+        });
+
+        if ("error" in res) {
+          lastError = res.error ?? "Erreur";
+        }
+      }
+
+      if (lastError) {
+        setError(lastError);
+      } else {
+        setShowForm(false);
+        setFormRepeatWeeks(0);
+      }
+    });
+  };
+
+  const handleDelete = (slotId: string) => {
+    startTransition(async () => {
+      const res = await deleteCoachCallSlot(slotId);
+      if ("error" in res) {
+        setError(res.error ?? "Erreur");
+      }
+    });
+  };
+
+  const prevWeek = () => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() - 7);
+    setWeekStart(d);
+  };
+
+  const nextWeek = () => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + 7);
+    setWeekStart(d);
+  };
+
+  const thisWeek = () => setWeekStart(getWeekStart(new Date()));
+
+  return (
+    <div className="space-y-4">
+      {/* Week nav */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button onClick={prevWeek} className="rounded-lg border border-[#e5edf6] p-1.5 hover:bg-[#f8fbfe]">
+            <ChevronLeft className="h-4 w-4 text-[#5d7085]" />
+          </button>
+          <button onClick={thisWeek} className="rounded-lg border border-[#e5edf6] px-2.5 py-1 text-xs font-medium text-[#5d7085] hover:bg-[#f8fbfe]">
+            Auj.
+          </button>
+          <button onClick={nextWeek} className="rounded-lg border border-[#e5edf6] p-1.5 hover:bg-[#f8fbfe]">
+            <ChevronRight className="h-4 w-4 text-[#5d7085]" />
+          </button>
+          <span className="ml-2 text-sm font-semibold text-[#12314d]">{formatWeekRange(weekStart)}</span>
+        </div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#12314d] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0f2940]"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter un créneau
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showForm && (
+        <div className="rounded-xl border border-[#e5edf6] bg-[#f8fbfe] p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Date</label>
+              <input
+                type="date"
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Début</label>
+              <input
+                type="time"
+                value={formStartTime}
+                onChange={(e) => setFormStartTime(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Fin</label>
+              <input
+                type="time"
+                value={formEndTime}
+                onChange={(e) => setFormEndTime(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Lieu / Lien</label>
+              <input
+                type="text"
+                value={formLocation}
+                onChange={(e) => setFormLocation(e.target.value)}
+                placeholder="Zoom, salle..."
+                className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Classe</label>
+              <select
+                value={formGroupeId}
+                onChange={(e) => setFormGroupeId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+              >
+                {groupes.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">
+                <Repeat className="inline h-3 w-3 mr-1" />Répéter
+              </label>
+              <select
+                value={formRepeatWeeks}
+                onChange={(e) => setFormRepeatWeeks(Number(e.target.value))}
+                className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+              >
+                <option value={0}>Pas de répétition</option>
+                <option value={1}>2 semaines</option>
+                <option value={2}>3 semaines</option>
+                <option value={3}>4 semaines</option>
+                <option value={7}>8 semaines</option>
+              </select>
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={handleCreate}
+              disabled={isPending || !formDate || !formGroupeId}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#12314d] px-4 py-2 text-xs font-semibold text-white hover:bg-[#0f2940] disabled:opacity-50"
+            >
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              Créer {formRepeatWeeks > 0 ? `(${formRepeatWeeks + 1} semaines)` : ""}
+            </button>
+            <button onClick={() => setShowForm(false)} className="rounded-lg border border-[#dbe5f0] px-3 py-2 text-xs text-[#5d7085] hover:bg-white">
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Week grid */}
+      <div className="space-y-1">
+        {weekDays.map((day) => {
+          const key = day.toISOString().slice(0, 10);
+          const daySlots = slotsByDay.get(key) ?? [];
+          const isToday = key === new Date().toISOString().slice(0, 10);
+          const isPast = day < new Date(new Date().toISOString().slice(0, 10));
+
+          return (
+            <div key={key} className={`rounded-lg border px-3 py-2 ${isToday ? "border-[#4fabdb]/40 bg-[#f2f9fe]" : "border-[#e5edf6] bg-white"} ${isPast ? "opacity-50" : ""}`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-semibold ${isToday ? "text-[#4fabdb]" : "text-[#5d7085]"}`}>
+                  {formatDate(day)}
+                </span>
+                {daySlots.length > 0 && (
+                  <span className="rounded-full bg-[#eef6ff] px-2 py-0.5 text-[10px] font-bold text-[#2e6fa3]">
+                    {daySlots.length} créneau{daySlots.length > 1 ? "x" : ""}
+                  </span>
+                )}
+              </div>
+              {daySlots.length > 0 && (
+                <div className="mt-1.5 space-y-1">
+                  {daySlots.map((slot) => {
+                    const isBooked = bookedSlotIds.has(slot.id);
+                    const groupe = groupes.find((g) => g.id === slot.groupe_id);
+                    return (
+                      <div key={slot.id} className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-xs ${isBooked ? "bg-emerald-50 text-emerald-800" : "bg-[#f8fbfe] text-[#12314d]"}`}>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3 w-3 text-[#8a98a8]" />
+                          <span className="font-medium">{formatTime(slot.start_at)} – {formatTime(slot.end_at)}</span>
+                          {groupe && <span className="text-[10px] text-[#8a98a8]">· {groupe.name}</span>}
+                          {slot.location && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-[#8a98a8]">
+                              <MapPin className="h-2.5 w-2.5" />{slot.location}
+                            </span>
+                          )}
+                          {isBooked && <span className="rounded-full bg-emerald-200 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">Réservé</span>}
+                        </div>
+                        {!isBooked && !isPast && (
+                          <button
+                            onClick={() => handleDelete(slot.id)}
+                            disabled={isPending}
+                            className="rounded p-1 text-[#b0b8c4] hover:bg-red-50 hover:text-red-500"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
