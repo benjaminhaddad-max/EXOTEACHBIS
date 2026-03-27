@@ -349,8 +349,6 @@ export function EleveCoursShell({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredChildDossiers.map((child) => {
                       const itemCount = childMatiereCount.get(child.id) ?? 0;
-                      const childMatIds = matiereIdsByDossier.get(child.id) ?? [];
-                      const isMatiere = childMatIds.length > 0 || allCours.some((c) => c.dossier_id === child.id);
                       return (
                         <div
                           key={child.id}
@@ -362,24 +360,22 @@ export function EleveCoursShell({
                               <div className="h-3 w-3 rounded-full" style={{ backgroundColor: child.color || "#4FABDB" }} />
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {isMatiere && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const mat = allMatieres.find((m) => m.dossier_id === child.id);
-                                    setQaDrawer({
-                                      contextType: "matiere",
-                                      dossierId: child.id,
-                                      matiereId: mat?.id,
-                                      contextLabel: child.name,
-                                    });
-                                  }}
-                                  title="Poser une question"
-                                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8A98A9] opacity-0 transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB] group-hover:opacity-100"
-                                >
-                                  <MessageCircleQuestion size={16} />
-                                </button>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const mat = allMatieres.find((m) => m.dossier_id === child.id);
+                                  setQaDrawer({
+                                    contextType: "matiere",
+                                    dossierId: child.id,
+                                    matiereId: mat?.id,
+                                    contextLabel: child.name,
+                                  });
+                                }}
+                                title="Poser une question"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#B0BACA] transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB]"
+                              >
+                                <MessageCircleQuestion size={16} />
+                              </button>
                               <ArrowRight size={16} className="mt-0.5 shrink-0 text-[#C0C8D4] transition-all duration-200 group-hover:translate-x-1 group-hover:text-[#4FABDB]" />
                             </div>
                           </div>
@@ -422,7 +418,7 @@ export function EleveCoursShell({
                                 });
                               }}
                               title="Poser une question"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8A98A9] opacity-0 transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB] group-hover:opacity-100"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#B0BACA] transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB]"
                             >
                               <MessageCircleQuestion size={16} />
                             </button>
