@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen, PlusCircle, Trophy, BookMarked, Layers,
-  ArrowRight, Clock, Loader2,
+  ArrowRight, Clock,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useUser } from "@/hooks/use-user";
 
 type SerieType = "annales" | "qcm_supplementaires" | "concours_blanc" | "revision" | "entrainement";
 
@@ -18,6 +16,8 @@ export type SerieSummaryForStudent = {
   timed: boolean;
   duration_minutes: number | null;
   annee: string | null;
+  matiere_id?: string | null;
+  cours_id?: string | null;
   nb_questions: number;
   last_score: number | null;
 };
@@ -32,88 +32,9 @@ const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; col
 
 const TYPES: SerieType[] = ["annales", "qcm_supplementaires", "concours_blanc", "revision", "entrainement"];
 
-export function MatiereExercicesView({
-  matiereIds,
-  coursIds,
-}: {
-  matiereIds: string[];
-  coursIds: string[];
-}) {
-  const { user } = useUser();
-  const userId = user?.id ?? "";
+export function MatiereExercicesView({ series }: { series: SerieSummaryForStudent[] }) {
   const router = useRouter();
-  const [series, setSeries] = useState<SerieSummaryForStudent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeType, setActiveType] = useState<SerieType | null>(null);
-
-  useEffect(() => {
-    if (!userId || (matiereIds.length === 0 && coursIds.length === 0)) {
-      setSeries([]);
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-
-    (async () => {
-      const supabase = createClient();
-
-      const filters: string[] = [];
-      if (matiereIds.length > 0) filters.push(`matiere_id.in.(${matiereIds.join(",")})`);
-      if (coursIds.length > 0) filters.push(`cours_id.in.(${coursIds.join(",")})`);
-
-      const { data: seriesData } = await supabase
-        .from("series")
-        .select("id, name, type, timed, duration_minutes, annee, visible, questions(id)")
-        .eq("visible", true)
-        .or(filters.join(","));
-
-      if (cancelled) return;
-
-      const seriesWithCount = (seriesData ?? [])
-        .map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          type: s.type,
-          timed: s.timed,
-          duration_minutes: s.duration_minutes,
-          annee: s.annee,
-          nb_questions: s.questions?.length ?? 0,
-        }))
-        .filter((s: any) => s.nb_questions > 0);
-
-      const serieIds = seriesWithCount.map((s: any) => s.id);
-      let scoreMap = new Map<string, number>();
-
-      if (serieIds.length > 0 && userId) {
-        const { data: attempts } = await supabase
-          .from("serie_attempts")
-          .select("serie_id, score")
-          .eq("user_id", userId)
-          .in("serie_id", serieIds)
-          .order("created_at", { ascending: false });
-
-        if (!cancelled && attempts) {
-          for (const a of attempts) {
-            if (!scoreMap.has(a.serie_id)) scoreMap.set(a.serie_id, a.score);
-          }
-        }
-      }
-
-      if (cancelled) return;
-
-      setSeries(
-        seriesWithCount.map((s: any) => ({
-          ...s,
-          last_score: scoreMap.get(s.id) ?? null,
-        })),
-      );
-      setLoading(false);
-    })();
-
-    return () => { cancelled = true; };
-  }, [matiereIds, coursIds, userId]);
 
   const seriesByType = useMemo(() => {
     const map = new Map<SerieType, SerieSummaryForStudent[]>();
@@ -126,14 +47,6 @@ export function MatiereExercicesView({
   const typesWithContent = TYPES.filter((t) => (seriesByType.get(t) ?? []).length > 0);
   const effectiveType = activeType && typesWithContent.includes(activeType) ? activeType : typesWithContent[0] ?? null;
   const activeSeries = effectiveType ? (seriesByType.get(effectiveType) ?? []) : series;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 size={24} className="animate-spin text-[#C9A84C]" />
-      </div>
-    );
-  }
 
   if (series.length === 0) {
     return (
@@ -199,19 +112,13 @@ export function MatiereExercicesView({
                       <span className="font-medium" style={{ color: config.color }}>{serie.nb_questions} questions</span>
                     )}
                     {serie.timed && serie.duration_minutes && (
-                      <span className="flex items-center gap-1">
-                        <Clock size={11} />
-                        {serie.duration_minutes} min
-                      </span>
+                      <span className="flex items-center gap-1"><Clock size={11} />{serie.duration_minutes} min</span>
                     )}
                     {serie.annee && (
-                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: config.bgAccent, color: config.color }}>
-                        {serie.annee}
-                      </span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: config.bgAccent, color: config.color }}>{serie.annee}</span>
                     )}
                   </div>
                 </div>
-
                 <div className="shrink-0">
                   {serie.last_score != null ? (
                     <div className="flex flex-col items-center">

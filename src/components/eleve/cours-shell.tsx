@@ -427,12 +427,14 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {activeTab === "exercices" && selectedDossier && (
-                  <MatiereExercicesView
-                    matiereIds={matiereIdsByDossier.get(selectedDossier.id) ?? []}
-                    coursIds={coursList.map((c) => c.id)}
-                  />
-                )}
+                {activeTab === "exercices" && selectedDossier && (() => {
+                  const mIds = new Set(matiereIdsByDossier.get(selectedDossier.id) ?? []);
+                  const cIds = new Set(coursList.map((c) => c.id));
+                  const filtered = initialSeries.filter((s) =>
+                    (s.matiere_id && mIds.has(s.matiere_id)) || (s.cours_id && cIds.has(s.cours_id))
+                  );
+                  return <MatiereExercicesView series={filtered} />;
+                })()}
 
                 {activeTab === "cours" && filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && filteredFlashcardDecks.length === 0 && (
                   <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
