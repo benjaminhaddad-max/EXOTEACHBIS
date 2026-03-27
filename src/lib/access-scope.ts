@@ -54,6 +54,25 @@ export function expandDossierTree(
   return visited;
 }
 
+export function includeDossierAncestors(
+  dossiers: Pick<Dossier, "id" | "parent_id">[],
+  allowedIds: Set<string>
+) {
+  const parentById = new Map(dossiers.map((d) => [d.id, d.parent_id]));
+  const withAncestors = new Set(allowedIds);
+
+  for (const id of allowedIds) {
+    let currentId = parentById.get(id) ?? null;
+    while (currentId) {
+      if (withAncestors.has(currentId)) break;
+      withAncestors.add(currentId);
+      currentId = parentById.get(currentId) ?? null;
+    }
+  }
+
+  return withAncestors;
+}
+
 function getInheritedFormationDossierId(
   groupeId: string | null | undefined,
   groupes: GroupeAccessRow[]
@@ -171,10 +190,12 @@ export async function getAccessScopeForUser(
     allowedDossierIds.add(id);
   });
 
+  const allowedWithAncestors = includeDossierAncestors(dossiers, allowedDossierIds);
+
   return {
     profile: typedProfile,
     unrestricted: false,
-    allowedDossierIds,
+    allowedDossierIds: allowedWithAncestors,
   };
 }
 
