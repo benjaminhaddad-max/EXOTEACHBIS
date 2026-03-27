@@ -29,7 +29,7 @@ import {
   assignCoachToBooking,
 } from "@/app/(admin)/admin/coaching/actions";
 import { CoachAvailability } from "./coach-availability";
-import { CoachingSidebar } from "./coaching-sidebar";
+import CoachingSidebar from "./coaching-sidebar";
 import { CoachingWeekView } from "./coaching-week-view";
 import CoachingRdvView from "./coaching-rdv-view";
 import type {
@@ -74,6 +74,7 @@ type PointADraft = {
 
 type CoachingShellProps = {
   currentProfile: Profile;
+  dossiers?: Dossier[];
   groupes: Groupe[];
   students: Profile[];
   coaches: Profile[];
@@ -151,6 +152,7 @@ function initialPointADraft(profile?: CoachingStudentProfile | null): PointADraf
 
 export function CoachingShell({
   currentProfile,
+  dossiers = [],
   groupes,
   students,
   coaches,
@@ -471,18 +473,79 @@ export function CoachingShell({
     );
   }
 
-  // ─── Admin tabbed view ────────────────────────────────────────────────────
-  const [adminTab, setAdminTab] = useState<"coachs" | "planning" | "eleves" | "rdv">("coachs");
+  // ─── Admin sidebar + main layout ────────────────────────────────────────────
+  const [adminView, setAdminView] = useState<"planning" | "rdv">("planning");
+  const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const d = new Date();
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
 
-  const adminTabs = [
-    { key: "coachs" as const, label: "Coachs", count: coaches.length },
-    { key: "planning" as const, label: "Planning", count: slots.filter((s) => new Date(s.start_at) >= new Date()).length },
-    { key: "eleves" as const, label: "Élèves", count: students.length },
-    { key: "rdv" as const, label: "Rendez-vous", count: bookings.filter((b) => b.status === "booked").length },
-  ];
+  const toggleGroupe = (id: string) => {
+    setSelectedGroupeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Filter data by selected groupes
+  const filteredSlots = useMemo(() => {
+    if (selectedGroupeIds.size === 0) return slots;
+    return slots.filter((s) => selectedGroupeIds.has(s.groupe_id));
+  }, [slots, selectedGroupeIds]);
+
+  const filteredBookings = useMemo(() => {
+    if (selectedGroupeIds.size === 0) return bookings;
+    return bookings.filter((b) => selectedGroupeIds.has(b.groupe_id));
+  }, [bookings, selectedGroupeIds]);
+
+  const handleAdminAssignCoach = (coachId: string, groupeId: string) => {
+    startTransition(async () => {
+      const res = await assignCoachToGroupe({ coach_id: coachId, groupe_id: groupeId });
+      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
+      else setToast({ kind: "success", message: "Coach assigné" });
+    });
+  };
+
+  const handleAdminRemoveCoach = (coachId: string, groupeId: string) => {
+    startTransition(async () => {
+      const res = await removeCoachFromGroupe({ coach_id: coachId, groupe_id: groupeId });
+      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
+      else setToast({ kind: "success", message: "Coach retiré" });
+    });
+  };
+
+  const handleAdminCreateSlot = (data: { coach_id: string; groupe_id: string; start_at: string; end_at: string; location?: string }) => {
+    startTransition(async () => {
+      const res = await createCoachCallSlot(data);
+      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
+      else setToast({ kind: "success", message: "Créneau créé" });
+    });
+  };
+
+  const handleAdminBookingStatus = (bookingId: string, status: CoachingCallBookingStatus) => {
+    startTransition(async () => {
+      const res = await updateBookingStatus({ bookingId, status });
+      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
+      else setToast({ kind: "success", message: "Statut mis à jour" });
+    });
+  };
+
+  const handleAdminAssignBookingCoach = (bookingId: string, coachId: string) => {
+    startTransition(async () => {
+      const res = await assignCoachToBooking({ booking_id: bookingId, coach_id: coachId });
+      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
+      else setToast({ kind: "success", message: "Coach réassigné" });
+    });
+  };
 
   return (
-    <div className="space-y-5">
+    <div className="flex gap-0 -mx-4 sm:-mx-6 xl:-mx-8 -mt-5" style={{ height: "calc(100vh - 80px)" }}>
       {toast && (
         <div className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-lg ${toast.kind === "success" ? "bg-emerald-600" : "bg-red-600"}`}>
           {toast.kind === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
@@ -490,311 +553,48 @@ export function CoachingShell({
         </div>
       )}
 
-      {/* Stats row */}
-      <div className="grid grid-cols-4 gap-3">
-        {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{stat.label}</p>
-            <p className="mt-1 text-2xl font-bold text-[#12314d]">{stat.value}</p>
-            <p className="text-xs text-gray-500">{stat.hint}</p>
-          </div>
-        ))}
+      {/* Sidebar */}
+      <CoachingSidebar
+        dossiers={dossiers}
+        groupes={groupes}
+        coaches={coaches}
+        coachAssignments={coachAssignments}
+        selectedGroupeIds={selectedGroupeIds}
+        onToggleGroupe={toggleGroupe}
+        view={adminView}
+        onViewChange={setAdminView}
+        onAssignCoach={handleAdminAssignCoach}
+        onRemoveCoach={handleAdminRemoveCoach}
+      />
+
+      {/* Main content */}
+      <div className="flex-1 overflow-y-auto bg-[#f5f6fa] p-5">
+
+        {adminView === "planning" && (
+          <CoachingWeekView
+            slots={filteredSlots}
+            bookings={filteredBookings}
+            students={students}
+            coaches={coaches}
+            groupes={groupes}
+            weekStart={weekStart}
+            onWeekChange={setWeekStart}
+            onCreateSlot={handleAdminCreateSlot}
+          />
+        )}
+
+        {adminView === "rdv" && (
+          <CoachingRdvView
+            bookings={filteredBookings}
+            slots={slots}
+            students={students}
+            coaches={coaches}
+            groupes={groupes}
+            onStatusChange={handleAdminBookingStatus}
+            onAssignCoach={handleAdminAssignBookingCoach}
+          />
+        )}
       </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
-        {adminTabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setAdminTab(t.key)}
-            className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-              adminTab === t.key ? "bg-white text-[#12314d] shadow-sm" : "text-gray-500 hover:text-[#12314d]"
-            }`}
-          >
-            {t.label}
-            {t.count > 0 && (
-              <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${adminTab === t.key ? "bg-[#12314d] text-white" : "bg-gray-200 text-gray-600"}`}>
-                {t.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab: Coachs ── */}
-      {adminTab === "coachs" && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h3 className="text-base font-semibold text-[#12314d]">Gestion des coachs</h3>
-            <p className="text-xs text-gray-500">Assigne des coachs à des classes. Un coach peut gérer plusieurs classes.</p>
-
-            <div className="mt-4 space-y-3">
-              {coaches.length === 0 ? (
-                <p className="py-6 text-center text-sm text-gray-400">Aucun coach (rôle = coach) dans la base.</p>
-              ) : (
-                coaches.map((coach) => {
-                  const assigned = coachAssignments.filter((a) => a.coach_id === coach.id);
-                  const assignedIds = new Set(assigned.map((a) => a.groupe_id));
-                  const unassigned = groupes.filter((g) => !assignedIds.has(g.id));
-                  return (
-                    <div key={coach.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#12314d] text-[10px] font-bold text-white">
-                            {(coach.first_name?.[0] ?? "").toUpperCase()}{(coach.last_name?.[0] ?? "").toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-[#12314d]">{getDisplayName(coach)}</p>
-                            <p className="text-xs text-gray-500">{coach.email}</p>
-                          </div>
-                        </div>
-                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
-                          {assigned.length} classe{assigned.length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      {/* Assigned groups */}
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {assigned.map((a) => {
-                          const g = groupsById.get(a.groupe_id);
-                          return (
-                            <span key={a.id} className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-                              {g?.name ?? "?"}
-                              <button
-                                onClick={() => { startTransition(async () => { const res = await removeCoachFromGroupe({ coach_id: coach.id, groupe_id: a.groupe_id }); if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" }); else setToast({ kind: "success", message: "Coach retiré" }); }); }}
-                                className="ml-0.5 text-emerald-500 hover:text-red-500"
-                              >×</button>
-                            </span>
-                          );
-                        })}
-                        {/* Add group dropdown */}
-                        {unassigned.length > 0 && (
-                          <select
-                            value=""
-                            onChange={(e) => {
-                              if (!e.target.value) return;
-                              const gId = e.target.value;
-                              startTransition(async () => {
-                                const res = await assignCoachToGroupe({ coach_id: coach.id, groupe_id: gId });
-                                if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
-                                else setToast({ kind: "success", message: "Coach assigné" });
-                              });
-                              e.target.value = "";
-                            }}
-                            className="rounded-md border border-dashed border-gray-300 bg-white px-2 py-1 text-[10px] text-gray-500"
-                          >
-                            <option value="">+ Ajouter classe</option>
-                            {unassigned.map((g) => (
-                              <option key={g.id} value={g.id}>{g.name}</option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Tab: Planning ── */}
-      {adminTab === "planning" && (
-        <div className="space-y-4">
-          {/* Slot creation form */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h3 className="text-base font-semibold text-[#12314d]">Créer un créneau</h3>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <select value={slotDraft.coachId} onChange={(e) => setSlotDraft((c) => ({ ...c, coachId: e.target.value }))} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                <option value="">Coach</option>
-                {coaches.map((c) => <option key={c.id} value={c.id}>{getDisplayName(c)}</option>)}
-              </select>
-              <select value={slotDraft.groupeId} onChange={(e) => setSlotDraft((c) => ({ ...c, groupeId: e.target.value }))} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                <option value="">Classe</option>
-                {groupes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
-              <input type="datetime-local" value={toLocalDateTimeInput(slotDraft.startAt)} onChange={(e) => setSlotDraft((c) => ({ ...c, startAt: fromLocalDateTimeInput(e.target.value) }))} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-              <input type="datetime-local" value={toLocalDateTimeInput(slotDraft.endAt)} onChange={(e) => setSlotDraft((c) => ({ ...c, endAt: fromLocalDateTimeInput(e.target.value) }))} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-              <button onClick={handleCreateSlot} disabled={isPending || !slotDraft.startAt || !slotDraft.endAt || !slotDraft.coachId || !slotDraft.groupeId} className="rounded-lg bg-[#12314d] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                {isPending ? "..." : "+ Ajouter"}
-              </button>
-            </div>
-          </div>
-          {/* Schedule */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h3 className="text-base font-semibold text-[#12314d]">Calendrier</h3>
-            <div className="mt-3 space-y-2">
-              {scheduleDays.length === 0 ? (
-                <p className="py-6 text-center text-sm text-gray-400">Aucun créneau.</p>
-              ) : (
-                scheduleDays.map(([day, daySlots]) => (
-                  <div key={day} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-xs font-semibold capitalize text-gray-700">{formatDayLabel(day)}</p>
-                    <div className="mt-2 space-y-1">
-                      {daySlots.map((slot) => {
-                        const booking = bookingsBySlotId.get(slot.id) ?? null;
-                        const student = booking ? students.find((s) => s.id === booking.student_id) : null;
-                        const coach = coachesById.get(slot.coach_id);
-                        const groupe = groupsById.get(slot.groupe_id);
-                        return (
-                          <div key={slot.id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-[#12314d]">{formatDateTime(slot.start_at)}</span>
-                              <span className="text-gray-400">{coach ? getDisplayName(coach) : "?"}</span>
-                              {groupe && <span className="text-gray-400">· {groupe.name}</span>}
-                              {student && <span className="text-blue-600">→ {getDisplayName(student)}</span>}
-                            </div>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${booking ? BOOKING_STATUS_STYLES[booking.status] : "bg-emerald-100 text-emerald-700"}`}>
-                              {booking ? BOOKING_STATUS_LABELS[booking.status] : "Libre"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Tab: Élèves ── */}
-      {adminTab === "eleves" && (
-        <div className="grid gap-5 xl:grid-cols-[340px,1fr]">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <label className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
-              <Search className="h-4 w-4 text-gray-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher..." className="w-full bg-transparent text-sm outline-none" />
-            </label>
-            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
-              <option value="all">Toutes les classes</option>
-              {groupes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-            <div className="mt-3 max-h-[60vh] space-y-1.5 overflow-y-auto">
-              {filteredStudents.map((student) => {
-                const form = formsByStudentId.get(student.id);
-                const booking = bookingsByStudentId.get(student.id);
-                const isSelected = student.id === selectedStudentId;
-                return (
-                  <button key={student.id} onClick={() => setSelectedStudentId(student.id)} className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${isSelected ? "border-[#12314d] bg-[#12314d]/5" : "border-gray-100 hover:border-gray-300"}`}>
-                    <p className="text-sm font-medium text-[#12314d]">{getDisplayName(student)}</p>
-                    <div className="mt-1 flex gap-1">
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${form ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{form ? "Form ✓" : "Form ✗"}</span>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${booking ? BOOKING_STATUS_STYLES[booking.status] : "bg-gray-100 text-gray-500"}`}>{booking ? BOOKING_STATUS_LABELS[booking.status] : "Pas de RDV"}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            {!selectedStudent ? (
-              <p className="py-10 text-center text-sm text-gray-400">Sélectionne un élève.</p>
-            ) : (
-              <div className="space-y-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-semibold text-[#12314d]">{getDisplayName(selectedStudent)}</h2>
-                    <p className="text-xs text-gray-500">{selectedStudent.email}{selectedStudent.groupe_id ? ` · ${groupsById.get(selectedStudent.groupe_id)?.name}` : ""}</p>
-                  </div>
-                  {selectedPointA && (
-                    <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-800">{selectedPointA.confidence_score}/100</span>
-                  )}
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <SummaryCard icon={<ClipboardList className="h-4 w-4 text-[#12314d]" />} title="Formulaire" value={selectedForm ? "Rempli" : "En attente"} subtitle={selectedForm ? `Le ${formatDateTime(selectedForm.submitted_at)}` : "Pas encore répondu"} />
-                  <SummaryCard icon={<PhoneCall className="h-4 w-4 text-[#12314d]" />} title="RDV" value={selectedBooking ? BOOKING_STATUS_LABELS[selectedBooking.status] : "À réserver"} subtitle={selectedBookingSlot ? formatDateTime(selectedBookingSlot.start_at) : "—"} />
-                  <SummaryCard icon={<ShieldCheck className="h-4 w-4 text-[#12314d]" />} title="Point A" value={selectedPointA ? `${selectedPointA.confidence_score}/100` : "À valider"} subtitle={selectedPointA ? "Staff uniquement" : "Après l'appel"} />
-                </div>
-
-                {/* Form answers */}
-                {selectedForm && (
-                  <div className="rounded-xl border border-gray-200 p-4">
-                    <h3 className="text-sm font-semibold text-[#12314d]">Formulaire élève</h3>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      {formFields.length > 0
-                        ? formFields.map((field) => <AnswerField key={field.id} label={field.label} value={selectedAnswers[field.key]} className={field.width === "full" ? "md:col-span-2" : ""} />)
-                        : Object.entries(selectedAnswers).map(([key, value]) => <AnswerField key={key} label={key} value={value} />)}
-                    </div>
-                  </div>
-                )}
-
-                {/* Booking status */}
-                {selectedBooking && (
-                  <div className="rounded-xl border border-gray-200 p-4">
-                    <h3 className="text-sm font-semibold text-[#12314d]">Rendez-vous</h3>
-                    <p className="mt-1 text-xs text-gray-500">{formatDateTime(selectedBookingSlot?.start_at)} · {getDisplayName(coachesById.get(selectedBooking.coach_id) ?? null)}</p>
-                    <div className="mt-3 flex gap-1.5">
-                      {(["booked", "completed", "cancelled", "no_show"] as CoachingCallBookingStatus[]).map((status) => (
-                        <button key={status} onClick={() => handleBookingStatusUpdate(status)} disabled={isPending} className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${selectedBooking.status === status ? "bg-[#12314d] text-white" : "border border-gray-200 text-gray-600 hover:border-gray-400"}`}>
-                          {BOOKING_STATUS_LABELS[status]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Point A */}
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-[#12314d]">Évaluation coach</h3>
-                    <span className="text-lg font-bold text-[#12314d]">{computedInternalScore}/100</span>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <SelectField label="Mentalité" value={pointADraft.mentality} options={COACHING_MENTALITY_OPTIONS} onChange={(v) => setPointADraft((c) => ({ ...c, mentality: v as CoachingMentality }))} />
-                    <SelectField label="Niveau lycée" value={pointADraft.schoolLevel} options={COACHING_SCHOOL_LEVEL_OPTIONS} onChange={(v) => setPointADraft((c) => ({ ...c, schoolLevel: v as CoachingSchoolLevel }))} />
-                    <SelectField label="Capacité travail" value={pointADraft.workCapacity} options={COACHING_WORK_CAPACITY_OPTIONS} onChange={(v) => setPointADraft((c) => ({ ...c, workCapacity: v as CoachingWorkCapacity }))} />
-                    <SelectField label="Méthode" value={pointADraft.methodLevel} options={COACHING_METHOD_OPTIONS} onChange={(v) => setPointADraft((c) => ({ ...c, methodLevel: v as CoachingMethodLevel }))} />
-                  </div>
-                  <textarea rows={4} value={pointADraft.coachReport} onChange={(e) => setPointADraft((c) => ({ ...c, coachReport: e.target.value }))} placeholder="Rapport coach..." className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none" />
-                  <button onClick={handleSavePointA} disabled={isPending || !selectedForm} className="mt-3 rounded-lg bg-[#12314d] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                    {isPending ? "..." : "Enregistrer le point A"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Tab: RDV ── */}
-      {adminTab === "rdv" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h3 className="text-base font-semibold text-[#12314d]">Tous les rendez-vous</h3>
-          <div className="mt-3 space-y-1.5">
-            {bookings.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-400">Aucun rendez-vous.</p>
-            ) : (
-              bookings.map((booking) => {
-                const slot = slots.find((s) => s.id === booking.slot_id);
-                const student = students.find((s) => s.id === booking.student_id);
-                const coach = coachesById.get(booking.coach_id);
-                return (
-                  <div key={booking.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <CalendarClock className="h-4 w-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-[#12314d]">{slot ? formatDateTime(slot.start_at) : "?"}</p>
-                        <p className="text-xs text-gray-500">
-                          {student ? getDisplayName(student) : "?"} → {coach ? getDisplayName(coach) : "Pas de coach"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BOOKING_STATUS_STYLES[booking.status]}`}>
-                        {BOOKING_STATUS_LABELS[booking.status]}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
