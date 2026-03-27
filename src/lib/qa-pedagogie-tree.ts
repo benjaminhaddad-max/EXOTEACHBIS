@@ -34,6 +34,29 @@ function isLasOnlyFiliereName(d: Dossier): boolean {
 }
 
 /**
+ * Nœud « offre » en pratique : souvent `generic` en base alors que le nom est « PREPA PASS ».
+ * Sans ça, aucun reparentage ni aplatissement ne s’exécute.
+ */
+function isOfferLikeDossier(d: Dossier): boolean {
+  if (d.dossier_type === "offer") return true;
+  const n = d.name.trim().toUpperCase();
+  if (n.includes("PREPA PASS") || n.includes("PREPA LAS")) return true;
+  if (/^PREPA\s+/i.test(d.name.trim())) return true;
+  return false;
+}
+
+function findOfferLikeAncestor(uni: Dossier, byId: Map<string, Dossier>): Dossier | null {
+  let id: string | null = uni.parent_id;
+  while (id) {
+    const p = byId.get(id);
+    if (!p) break;
+    if (isOfferLikeDossier(p)) return p;
+    id = p.parent_id;
+  }
+  return null;
+}
+
+/**
  * Filière portée par le nom de l’offre (PREPA PASS / PREPA LAS) : on n’affiche plus PASS/LAS sous l’université.
  */
 function inferOfferFormationTrack(offerName: string): "pass" | "las" | null {
@@ -169,7 +192,10 @@ function isUniversityLikeParent(d: Dossier): boolean {
   if (d.dossier_type === "university") return true;
   if (d.dossier_type === "generic") {
     const n = d.name.toLowerCase();
-    return n.includes("universit");
+    if (n.includes("universit") || n.includes("faculté") || n.includes("faculte")) return true;
+    // Souvent typé generic sans le mot « université » (ex. Sorbonne Paris-Nord)
+    if (/\bsorbonne\b/.test(n)) return true;
+    if (/\bparis[\s-]nord\b/.test(n) || /\bparis[\s-]cit[eé]\b/.test(n)) return true;
   }
   return false;
 }
@@ -233,6 +259,7 @@ function flattenFiliereForOfferTrack(
 
 /** Carte parent → enfants avec regroupement offre → université → (sans PASS/LAS redondants) → semestres. */
 export function buildQaPedagogieChildrenMap(dossiers: Dossier[]): Map<string | null, Dossier[]> {
+  const byId = new Map(dossiers.map(d => [d.id, d]));
   const m = new Map<string | null, Dossier[]>();
   for (const d of dossiers) {
     const p = d.parent_id;
@@ -243,7 +270,7 @@ export function buildQaPedagogieChildrenMap(dossiers: Dossier[]): Map<string | n
 
   // 1) Semestres / mineures au même niveau que les universités sous l’offre → sous chaque université concernée
   for (const offer of dossiers) {
-    if (offer.dossier_type !== "offer") continue;
+    if (!isOfferLikeDossier(offer)) continue;
     const raw = m.get(offer.id);
     if (!raw?.length) continue;
 
@@ -273,9 +300,9 @@ export function buildQaPedagogieChildrenMap(dossiers: Dossier[]): Map<string | n
   // 3) PREPA PASS / PREPA LAS : plus de ligne PASS+LAS sous l’université (la filière est déjà dans le nom de l’offre)
   for (const uni of dossiers) {
     if (!isUniversityLikeParent(uni)) continue;
-    const parent = dossiers.find(p => p.id === uni.parent_id);
-    if (!parent || parent.dossier_type !== "offer") continue;
-    const track = inferOfferFormationTrack(parent.name);
+    const offerLike = findOfferLikeAncestor(uni, byId);
+    if (!offerLike) continue;
+    const track = inferOfferFormationTrack(offerLike.name);
     if (!track) continue;
 
     const ch = m.get(uni.id);
