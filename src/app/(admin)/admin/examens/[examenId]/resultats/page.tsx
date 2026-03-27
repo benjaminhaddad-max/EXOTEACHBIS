@@ -10,7 +10,7 @@ export default async function ResultatsPage({ params }: { params: Promise<{ exam
 
   const { data: examen } = await supabase
     .from("examens")
-    .select("*, examens_series(series_id, order_index, coefficient, series:series(id, name, matiere_id, matiere:matieres(id, name)))")
+    .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, series:series(id, name, matiere_id, matiere:matieres(id, name)))")
     .eq("id", examenId)
     .single();
 

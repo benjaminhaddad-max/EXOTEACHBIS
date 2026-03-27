@@ -39,7 +39,7 @@ export default async function ExamensElevePage() {
   const [examensRes, exGroupesRes] = await Promise.all([
     supabase
       .from("examens")
-      .select("*, examens_series(order_index, coefficient, series:series(id, name, timed, duration_minutes, type))")
+      .select("*, examens_series(order_index, coefficient, debut_at, fin_at, series:series(id, name, timed, duration_minutes, type))")
       .eq("visible", true)
       .order("debut_at", { ascending: false }),
     supabase.from("examens_groupes").select("*"),
@@ -58,7 +58,7 @@ export default async function ExamensElevePage() {
       .sort((a: any, b: any) => a.order_index - b.order_index),
     series: (e.examens_series ?? [])
       .sort((a: any, b: any) => a.order_index - b.order_index)
-      .map((es: any) => ({ ...es.series, coefficient: es.coefficient }))
+      .map((es: any) => ({ ...es.series, coefficient: es.coefficient, serie_debut_at: es.debut_at, serie_fin_at: es.fin_at }))
       .filter(Boolean),
     examens_series: undefined,
     groupe_ids: examenGroupesMap[e.id] ?? [],
@@ -178,6 +178,13 @@ export default async function ExamensElevePage() {
                       const coeff = serie.coefficient ?? 1;
                       const hasScore = best && best.nb_total > 0;
                       const score20 = hasScore ? (best.nb_correct / best.nb_total) * notationSur : null;
+                      // Per-serie status (uses serie dates if available, else exam dates)
+                      const serieDebut = serie.serie_debut_at || e.debut_at;
+                      const serieFin = serie.serie_fin_at || e.fin_at;
+                      const serieStatus = getStatus(serieDebut, serieFin);
+                      const serieIsActive = serieStatus === "active";
+                      const serieIsEnded = serieStatus === "ended";
+                      const hasOwnDates = !!serie.serie_debut_at;
 
                       return (
                         <div key={serie.id} className="flex items-center justify-between gap-3 bg-white rounded-lg border border-gray-200 px-4 py-3">
@@ -190,10 +197,19 @@ export default async function ExamensElevePage() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className="text-xs text-gray-400">
                                 {serie.timed ? `${serie.duration_minutes}min chrono` : "Libre"}
                               </span>
+                              {hasOwnDates && (
+                                <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                                  <Calendar className="h-2.5 w-2.5" />
+                                  {new Date(serie.serie_debut_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                                  {" "}
+                                  {new Date(serie.serie_debut_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                  {serie.serie_fin_at && <>–{new Date(serie.serie_fin_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</>}
+                                </span>
+                              )}
                               {isEnded && e.results_visible && score20 !== null && (
                                 <span className={cn(
                                   "text-xs font-semibold flex items-center gap-0.5",
@@ -214,7 +230,7 @@ export default async function ExamensElevePage() {
                               )}
                             </div>
                           </div>
-                          {isActive ? (
+                          {serieIsActive ? (
                             <Link
                               href={`/serie/${serie.id}`}
                               className="shrink-0 flex items-center gap-1 px-3 py-1.5 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy-light transition-colors"
@@ -222,7 +238,7 @@ export default async function ExamensElevePage() {
                               {best ? "Refaire" : "Commencer"}
                               <ChevronRight className="h-3 w-3" />
                             </Link>
-                          ) : isEnded ? (
+                          ) : serieIsEnded ? (
                             best ? (
                               <Link
                                 href={`/serie/${serie.id}`}
@@ -233,12 +249,12 @@ export default async function ExamensElevePage() {
                               </Link>
                             ) : (
                               <span className="shrink-0 flex items-center gap-1 text-xs text-gray-400">
-                                <Lock className="h-3 w-3" /> Termine
+                                <Lock className="h-3 w-3" /> Terminé
                               </span>
                             )
                           ) : (
                             <span className="shrink-0 flex items-center gap-1 text-xs text-gray-400">
-                              <Lock className="h-3 w-3" /> A venir
+                              <Lock className="h-3 w-3" /> À venir
                             </span>
                           )}
                         </div>

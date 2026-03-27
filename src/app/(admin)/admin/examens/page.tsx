@@ -10,7 +10,7 @@ export default async function ExamensAdminPage() {
   const [examensRes, seriesRes, filieresRes, dossiersRes, groupesRes, exGroupesRes] = await Promise.all([
     supabase
       .from("examens")
-      .select("*, examens_series(series_id, order_index, coefficient, series:series(*))")
+      .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, series:series(*))")
       .order("debut_at", { ascending: false }),
     supabase.from("series").select("*").eq("visible", true).order("name"),
     supabase.from("filieres").select("*").order("order_index"),

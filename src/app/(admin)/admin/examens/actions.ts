@@ -74,12 +74,31 @@ export async function addSerieToExamen(
   examen_id: string,
   series_id: string,
   order_index: number,
-  coefficient: number = 1
+  coefficient: number = 1,
+  debut_at?: string,
+  fin_at?: string
 ) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("examens_series")
-    .insert({ examen_id, series_id, order_index, coefficient });
+    .insert({ examen_id, series_id, order_index, coefficient, debut_at: debut_at ?? null, fin_at: fin_at ?? null });
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function updateSerieSchedule(
+  examen_id: string,
+  series_id: string,
+  debut_at: string | null,
+  fin_at: string | null
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("examens_series")
+    .update({ debut_at, fin_at })
+    .eq("examen_id", examen_id)
+    .eq("series_id", series_id);
   if (error) return { error: error.message };
   revalidatePath(PATH);
   return { success: true };
@@ -222,7 +241,7 @@ export async function getExamenResults(examen_id: string) {
       .eq("examen_id", examen_id),
     supabase
       .from("examens")
-      .select("*, examens_series(series_id, order_index, coefficient, series:series(id, name, matiere_id, matiere:matieres(id, name)))")
+      .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, series:series(id, name, matiere_id, matiere:matieres(id, name)))")
       .eq("id", examen_id)
       .single(),
   ]);

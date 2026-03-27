@@ -11,7 +11,7 @@ import type { Serie, Filiere, SerieType, Dossier, Groupe } from "@/types/databas
 import {
   createExamen, updateExamen, deleteExamen,
   addSerieToExamen, removeSerieFromExamen,
-  updateSerieCoefficient, toggleResultsVisibility,
+  updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility,
   setExamenGroupes,
 } from "@/app/(admin)/admin/examens/actions";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
@@ -22,6 +22,8 @@ export type ExamenSerieWithCoeff = {
   series_id: string;
   order_index: number;
   coefficient: number;
+  debut_at?: string | null;
+  fin_at?: string | null;
   series?: Serie;
 };
 
@@ -123,7 +125,7 @@ export function ExamensShell({
     const [examensRes, exGroupesRes] = await Promise.all([
       supabase
         .from("examens")
-        .select("*, examens_series(series_id, order_index, coefficient, series:series(*))")
+        .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, series:series(*))")
         .order("debut_at", { ascending: false }),
       supabase.from("examens_groupes").select("*"),
     ]);
@@ -199,6 +201,16 @@ export function ExamensShell({
       if ("error" in res) { showToast(res.error!, "error"); return; }
       setExamens((prev) => prev.map((e) => e.id === examen.id ? { ...e, results_visible: newVal } : e));
       showToast(newVal ? "Résultats rendus visibles" : "Résultats masqués", "success");
+    });
+  };
+
+  const handleSerieScheduleChange = (examen: ExamenWithSeries, serieId: string, debut_at: string | null, fin_at: string | null) => {
+    startTransition(async () => {
+      const res = await updateSerieSchedule(examen.id, serieId, debut_at, fin_at);
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      setComposeSeries((prev) =>
+        prev.map((s) => s.series_id === serieId ? { ...s, debut_at, fin_at } : s)
+      );
     });
   };
 
@@ -330,6 +342,25 @@ export function ExamensShell({
                             ))}
                           </div>
                         )}
+                        {/* Planning des épreuves */}
+                        {(e.examen_series ?? []).some(es => es.debut_at) && (
+                          <div className="mt-3 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1.5 flex items-center gap-1"><Calendar size={9} /> Planning</p>
+                            <div className="space-y-1">
+                              {e.examen_series!.filter(es => es.debut_at).sort((a, b) => new Date(a.debut_at!).getTime() - new Date(b.debut_at!).getTime()).map(es => (
+                                <div key={es.series_id} className="flex items-center gap-2 text-[10px]">
+                                  <span className="text-white/30 w-28 shrink-0">
+                                    {new Date(es.debut_at!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                                    {" · "}
+                                    {new Date(es.debut_at!).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                    {es.fin_at && <>–{new Date(es.fin_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</>}
+                                  </span>
+                                  <span className="text-white/60 font-medium truncate">{es.series?.name ?? "—"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-1 shrink-0">
                         <button
@@ -421,6 +452,7 @@ export function ExamensShell({
                 onAdd={(s) => handleAddSerie(modal.examen, s)}
                 onRemove={(id) => handleRemoveSerie(modal.examen, id)}
                 onCoeffChange={(serieId, coeff) => handleCoeffChange(modal.examen, serieId, coeff)}
+                onScheduleChange={(serieId, debut_at, fin_at) => handleSerieScheduleChange(modal.examen, serieId, debut_at, fin_at)}
                 onSerieCreated={async (newSerie) => {
                   await refreshSeries();
                   handleAddSerie(modal.examen, newSerie);
@@ -756,6 +788,7 @@ function ComposeModal({
   onAdd,
   onRemove,
   onCoeffChange,
+  onScheduleChange,
   onSerieCreated,
   onClose,
   isPending,
@@ -767,6 +800,7 @@ function ComposeModal({
   onAdd: (s: Serie) => void;
   onRemove: (serieId: string) => void;
   onCoeffChange: (serieId: string, coeff: number) => void;
+  onScheduleChange: (serieId: string, debut_at: string | null, fin_at: string | null) => void;
   onSerieCreated: (s: Serie) => void;
   onClose: () => void;
   isPending: boolean;
@@ -993,43 +1027,46 @@ function ComposeModal({
             {composeSeries.length === 0 ? (
               <p className="text-xs text-white/30 py-4 text-center">Aucune série</p>
             ) : composeSeries.map((es) => (
-              <div key={es.series_id} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
-                <p className="flex-1 text-xs text-white/80 line-clamp-1">{es.series?.name ?? "?"}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[10px] text-white/40">Coeff.</span>
+              <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <p className="flex-1 text-xs text-white/80 line-clamp-1">{es.series?.name ?? "?"}</p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[10px] text-white/40">Coeff.</span>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={10}
+                      step={0.5}
+                      value={es.coefficient}
+                      onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
+                      className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
+                    />
+                  </div>
+                  <div className="flex gap-0.5 shrink-0">
+                    <button onClick={() => exportSerie(es.series_id, false)} title="Export sujet" className="p-1 text-white/20 hover:text-white/60 transition-colors"><FileText size={11} /></button>
+                    <button onClick={() => exportSerie(es.series_id, true)} title="Export correction" className="p-1 text-white/20 hover:text-green-400/60 transition-colors"><Download size={11} /></button>
+                  </div>
+                  <button onClick={() => onRemove(es.series_id)} disabled={isPending} className="text-white/30 hover:text-red-400 transition-colors shrink-0"><ListMinus size={13} /></button>
+                </div>
+                {/* Per-serie dates */}
+                <div className="flex items-center gap-2">
+                  <Calendar size={10} className="text-white/20 shrink-0" />
                   <input
-                    type="number"
-                    min={0.5}
-                    max={10}
-                    step={0.5}
-                    value={es.coefficient}
-                    onChange={(e) => onCoeffChange(es.series_id, Number(e.target.value) || 1)}
-                    className="w-14 px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-xs text-[#C9A84C] text-center focus:outline-none focus:border-[#C9A84C]/50"
+                    type="datetime-local"
+                    value={es.debut_at ? new Date(es.debut_at).toISOString().slice(0, 16) : ""}
+                    onChange={(e) => onScheduleChange(es.series_id, e.target.value ? new Date(e.target.value).toISOString() : null, es.fin_at ?? null)}
+                    placeholder="Début épreuve"
+                    className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20 placeholder:text-white/20"
+                  />
+                  <span className="text-[10px] text-white/20">→</span>
+                  <input
+                    type="datetime-local"
+                    value={es.fin_at ? new Date(es.fin_at).toISOString().slice(0, 16) : ""}
+                    onChange={(e) => onScheduleChange(es.series_id, es.debut_at ?? null, e.target.value ? new Date(e.target.value).toISOString() : null)}
+                    placeholder="Fin épreuve"
+                    className="flex-1 px-2 py-1 bg-white/[0.03] border border-white/5 rounded text-[10px] text-white/50 focus:outline-none focus:border-white/20 placeholder:text-white/20"
                   />
                 </div>
-                <div className="flex gap-0.5 shrink-0">
-                  <button
-                    onClick={() => exportSerie(es.series_id, false)}
-                    title="Export sujet"
-                    className="p-1 text-white/20 hover:text-white/60 transition-colors"
-                  >
-                    <FileText size={11} />
-                  </button>
-                  <button
-                    onClick={() => exportSerie(es.series_id, true)}
-                    title="Export correction"
-                    className="p-1 text-white/20 hover:text-green-400/60 transition-colors"
-                  >
-                    <Download size={11} />
-                  </button>
-                </div>
-                <button
-                  onClick={() => onRemove(es.series_id)}
-                  disabled={isPending}
-                  className="text-white/30 hover:text-red-400 transition-colors shrink-0"
-                >
-                  <ListMinus size={13} />
-                </button>
               </div>
             ))}
           </div>
