@@ -309,15 +309,19 @@ export function buildQaPedagogieChildrenMap(dossiers: Dossier[]): Map<string | n
     }
   }
 
-  // 3) PREPA PASS / PREPA LAS : plus de ligne PASS+LAS sous l’université (la filière est déjà dans le nom de l’offre)
+  // 3) Toujours aplatir les dossiers PASS/LAS/LSPS sous une université :
+  //    on inline leurs enfants directement sous l’université et on retire ces nœuds intermédiaires.
   for (const uni of dossiers) {
     if (!isUniversityLikeParent(uni)) continue;
-    const track = inferPassLasTrackFromAncestors(uni, byId);
-    if (!track) continue;
-
     const ch = m.get(uni.id);
     if (!ch?.length) continue;
-    m.set(uni.id, flattenFiliereForOfferTrack(ch, track, m));
+
+    const filieres = ch.filter(isUniversityFiliereFolder);
+    if (filieres.length === 0) continue;
+
+    const withoutFilieres = ch.filter(c => !isUniversityFiliereFolder(c));
+    const filiereChildren = filieres.flatMap(f => m.get(f.id) ?? []);
+    m.set(uni.id, mergeUniqueById(withoutFilieres, filiereChildren));
   }
 
   return m;
