@@ -45,26 +45,38 @@ function isOfferLikeDossier(d: Dossier): boolean {
   return false;
 }
 
-function findOfferLikeAncestor(uni: Dossier, byId: Map<string, Dossier>): Dossier | null {
-  let id: string | null = uni.parent_id;
-  while (id) {
-    const p = byId.get(id);
-    if (!p) break;
-    if (isOfferLikeDossier(p)) return p;
-    id = p.parent_id;
-  }
-  return null;
+function foldAccents(s: string): string {
+  return s.normalize("NFD").replace(/\p{M}/gu, "");
 }
 
 /**
  * Filière portée par le nom de l’offre (PREPA PASS / PREPA LAS) : on n’affiche plus PASS/LAS sous l’université.
  */
 function inferOfferFormationTrack(offerName: string): "pass" | "las" | null {
-  const n = offerName.trim().toUpperCase();
+  const n = foldAccents(offerName.trim())
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
   if (n.includes("PREPA LAS")) return "las";
   if (n.includes("PREPA PASS")) return "pass";
   if (/\bLAS\b/.test(n) && !/\bPASS\b/.test(n)) return "las";
   if (/\bPASS\b/.test(n) && !/\bLAS\b/.test(n)) return "pass";
+  return null;
+}
+
+/**
+ * Remonte toute la chaîne des parents : un dossier `offer` sans nom utile ne doit pas bloquer
+ * (ex. offre racine vide → enfant « PREPA PASS »). Sinon PASS/LAS ne sont jamais aplatis.
+ */
+function inferPassLasTrackFromAncestors(uni: Dossier, byId: Map<string, Dossier>): "pass" | "las" | null {
+  let id: string | null = uni.parent_id;
+  while (id) {
+    const p = byId.get(id);
+    if (!p) break;
+    const t = inferOfferFormationTrack(p.name);
+    if (t) return t;
+    id = p.parent_id;
+  }
   return null;
 }
 
@@ -300,9 +312,7 @@ export function buildQaPedagogieChildrenMap(dossiers: Dossier[]): Map<string | n
   // 3) PREPA PASS / PREPA LAS : plus de ligne PASS+LAS sous l’université (la filière est déjà dans le nom de l’offre)
   for (const uni of dossiers) {
     if (!isUniversityLikeParent(uni)) continue;
-    const offerLike = findOfferLikeAncestor(uni, byId);
-    if (!offerLike) continue;
-    const track = inferOfferFormationTrack(offerLike.name);
+    const track = inferPassLasTrackFromAncestors(uni, byId);
     if (!track) continue;
 
     const ch = m.get(uni.id);
