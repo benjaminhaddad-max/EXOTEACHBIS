@@ -445,14 +445,6 @@ function PlayingScreen({
                           En cours
                         </span>
                       )}
-                      <AskQuestionFab
-                        mini
-                        contextType="qcm_question"
-                        questionId={q.id}
-                        serieId={serie.id}
-                        coursId={serie.cours_id ?? undefined}
-                        matiereId={serie.matiere_id ?? undefined}
-                      />
                     </div>
                   </div>
 
@@ -764,6 +756,20 @@ function ResultsScreen({
                 {/* Expanded correction */}
                 {expanded && (
                   <div className="px-4 pb-4 pt-3 space-y-3 border-t border-gray-100 bg-gradient-to-b from-white to-[#FBFCFF]">
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE7F3] bg-[#F7FBFF] px-3 py-2.5">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6A7D92]">Question sur la correction</p>
+                        <p className="text-xs text-[#7E8FA4]">Demande une explication maintenant que tu vois la bonne réponse.</p>
+                      </div>
+                      <AskQuestionFab
+                        mini
+                        contextType="qcm_question"
+                        questionId={q.id}
+                        serieId={serie.id}
+                        coursId={serie.cours_id ?? undefined}
+                        matiereId={serie.matiere_id ?? undefined}
+                      />
+                    </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Énoncé</p>
                       <div className="mt-1 text-[15px] leading-7 text-slate-900">
