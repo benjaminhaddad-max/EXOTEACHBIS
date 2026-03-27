@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Sparkles, Loader2, Check, AlertCircle, X, ChevronRight,
   Plus, Eye, EyeOff, BookOpen, Layers, PlusCircle, Trophy, BookMarked,
@@ -706,6 +707,16 @@ export function DossierExercicesView({
   }, [dossierId, refreshKey]); // eslint-disable-line
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Auto-open a serie if ?serie=X is in the URL
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const serieId = searchParams.get("serie");
+    if (serieId && series.length > 0 && !composeSerie) {
+      const found = series.find(s => s.id === serieId);
+      if (found) setComposeSerie(found);
+    }
+  }, [searchParams, series]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showToast = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
 

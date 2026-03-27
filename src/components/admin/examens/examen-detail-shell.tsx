@@ -315,7 +315,10 @@ export function ExamenDetailShell({
                   <button onClick={() => exportSerie(es.series_id, true)} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-green-400/80 hover:bg-green-500/10 transition-colors">
                     <Download size={10} /> Correction
                   </button>
-                  <Link href={`/admin/exercices?serie=${es.series_id}`} className="flex items-center gap-1 px-2 py-1 bg-[#C9A84C]/10 rounded-lg text-[10px] text-[#C9A84C]/70 hover:text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors ml-auto">
+                  <Link
+                    href={`/admin/pedagogie?dossier=${es.series?.matiere_id ? (matieres.find(m => m.id === es.series?.matiere_id)?.dossier_id ?? "") : ""}&serie=${es.series_id}`}
+                    className="flex items-center gap-1 px-2 py-1 bg-[#C9A84C]/10 rounded-lg text-[10px] text-[#C9A84C]/70 hover:text-[#C9A84C] hover:bg-[#C9A84C]/20 transition-colors ml-auto"
+                  >
                     Éditer QCM →
                   </Link>
                 </div>
