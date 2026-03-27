@@ -4,11 +4,12 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight, FolderOpen,
-  Home, BookOpen, Layers, ArrowRight, Search, GraduationCap,
+  Home, BookOpen, Layers, ArrowRight, Search, GraduationCap, MessageCircleQuestion,
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
 import { ExercicesShell } from "@/components/eleve/exercices-shell";
 import { MatiereExercicesView, type SerieSummaryForStudent } from "@/components/eleve/matiere-exercices-view";
+import { AskQuestionDrawer } from "@/components/qa/ask-question-drawer";
 import type { DossierNode as ExerciceDossierNode, CoursNode as ExerciceCoursNode } from "@/app/(eleve)/exercices/actions";
 
 type FlashcardDeck = {
@@ -115,6 +116,13 @@ export function EleveCoursShell({
   const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"cours" | "exercices">("cours");
+  const [qaDrawer, setQaDrawer] = useState<{
+    contextType: "matiere" | "cours";
+    dossierId?: string;
+    matiereId?: string;
+    coursId?: string;
+    contextLabel?: string;
+  } | null>(null);
   const rootDossiers = useMemo(
     () => allDossiers.filter((d) => d.parent_id === null).sort((a, b) => a.order_index - b.order_index),
     [allDossiers]
@@ -341,17 +349,39 @@ export function EleveCoursShell({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredChildDossiers.map((child) => {
                       const itemCount = childMatiereCount.get(child.id) ?? 0;
+                      const childMatIds = matiereIdsByDossier.get(child.id) ?? [];
+                      const isMatiere = childMatIds.length > 0 || allCours.some((c) => c.dossier_id === child.id);
                       return (
-                        <button
+                        <div
                           key={child.id}
                           onClick={() => selectDossier(child)}
-                          className="group relative overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(14,30,53,0.10)] hover:border-[#4FABDB]/30"
+                          className="group relative cursor-pointer overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-5 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(14,30,53,0.10)] hover:border-[#4FABDB]/30"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${child.color || "#4FABDB"}15` }}>
                               <div className="h-3 w-3 rounded-full" style={{ backgroundColor: child.color || "#4FABDB" }} />
                             </div>
-                            <ArrowRight size={16} className="mt-2 shrink-0 text-[#C0C8D4] transition-all duration-200 group-hover:translate-x-1 group-hover:text-[#4FABDB]" />
+                            <div className="flex items-center gap-1.5">
+                              {isMatiere && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const mat = allMatieres.find((m) => m.dossier_id === child.id);
+                                    setQaDrawer({
+                                      contextType: "matiere",
+                                      dossierId: child.id,
+                                      matiereId: mat?.id,
+                                      contextLabel: child.name,
+                                    });
+                                  }}
+                                  title="Poser une question"
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8A98A9] opacity-0 transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB] group-hover:opacity-100"
+                                >
+                                  <MessageCircleQuestion size={16} />
+                                </button>
+                              )}
+                              <ArrowRight size={16} className="mt-0.5 shrink-0 text-[#C0C8D4] transition-all duration-200 group-hover:translate-x-1 group-hover:text-[#4FABDB]" />
+                            </div>
                           </div>
                           <h3 className="mt-3 text-[15px] font-semibold text-[#0e1e35]">{child.name}</h3>
                           {child.description && (
@@ -360,7 +390,7 @@ export function EleveCoursShell({
                           {itemCount > 0 && (
                             <p className="mt-2 text-[11px] font-medium text-[#4FABDB]">{itemCount} {itemCount > 1 ? "matières" : "matière"}</p>
                           )}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -370,13 +400,32 @@ export function EleveCoursShell({
                   <div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {filteredCoursList.map((c) => (
-                        <button
+                        <div
                           key={c.id}
                           onClick={() => router.push(`/cours/${c.id}`)}
-                          className="group rounded-[24px] border border-[#DCE7F3] bg-white p-4 text-left shadow-[0_10px_30px_rgba(18,49,77,0.05)] transition hover:-translate-y-1 hover:border-[#4FABDB]/45 hover:shadow-[0_18px_40px_rgba(18,49,77,0.10)]"
+                          className="group cursor-pointer rounded-[24px] border border-[#DCE7F3] bg-white p-4 text-left shadow-[0_10px_30px_rgba(18,49,77,0.05)] transition hover:-translate-y-1 hover:border-[#4FABDB]/45 hover:shadow-[0_18px_40px_rgba(18,49,77,0.10)]"
                         >
-                          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#4FABDB]/10 text-[#4FABDB]">
-                            <BookOpen size={18} />
+                          <div className="mb-3 flex items-center justify-between">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#4FABDB]/10 text-[#4FABDB]">
+                              <BookOpen size={18} />
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const mat = allMatieres.find((m) => m.id === c.matiere_id) ?? allMatieres.find((m) => m.dossier_id === c.dossier_id);
+                                setQaDrawer({
+                                  contextType: "cours",
+                                  dossierId: c.dossier_id ?? undefined,
+                                  matiereId: mat?.id ?? c.matiere_id ?? undefined,
+                                  coursId: c.id,
+                                  contextLabel: c.name,
+                                });
+                              }}
+                              title="Poser une question"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#8A98A9] opacity-0 transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB] group-hover:opacity-100"
+                            >
+                              <MessageCircleQuestion size={16} />
+                            </button>
                           </div>
                           <h3 className="text-[15px] font-semibold leading-snug text-[#0e1e35]">{c.name}</h3>
                           <div className="mt-3 flex items-center justify-end">
@@ -385,7 +434,7 @@ export function EleveCoursShell({
                               <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
                             </span>
                           </div>
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -492,6 +541,17 @@ export function EleveCoursShell({
           </div>
         )}
       </div>
+
+      {qaDrawer && (
+        <AskQuestionDrawer
+          contextType={qaDrawer.contextType}
+          dossierId={qaDrawer.dossierId}
+          matiereId={qaDrawer.matiereId}
+          coursId={qaDrawer.coursId}
+          contextLabel={qaDrawer.contextLabel}
+          onClose={() => setQaDrawer(null)}
+        />
+      )}
     </div>
   );
 }

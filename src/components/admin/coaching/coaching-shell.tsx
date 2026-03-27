@@ -29,6 +29,9 @@ import {
   assignCoachToBooking,
 } from "@/app/(admin)/admin/coaching/actions";
 import { CoachAvailability } from "./coach-availability";
+import { CoachingSidebar } from "./coaching-sidebar";
+import { CoachingWeekView } from "./coaching-week-view";
+import CoachingRdvView from "./coaching-rdv-view";
 import type {
   CoachGroupeAssignment,
   CoachingCallBooking,
@@ -40,6 +43,7 @@ import type {
   CoachingSchoolLevel,
   CoachingStudentProfile,
   CoachingWorkCapacity,
+  Dossier,
   FormField,
   FormTemplate,
   Groupe,

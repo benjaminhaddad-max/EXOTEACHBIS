@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ClipboardList, CheckCircle, Clock, Play } from "lucide-react";
+import { ClipboardList, CheckCircle, Clock, Play, MessageCircleQuestion } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AskQuestionDrawer } from "@/components/qa/ask-question-drawer";
 
 interface SerieItem {
   id: string;
@@ -15,6 +17,13 @@ interface SerieItem {
 
 interface SeriesListProps {
   series: SerieItem[];
+  onAskQuestion?: () => void;
+  qaContext?: {
+    coursId: string;
+    matiereId?: string;
+    dossierId?: string;
+    contextLabel?: string;
+  };
 }
 
 const typeLabel: Record<string, string> = {
@@ -33,12 +42,29 @@ const typeColor: Record<string, string> = {
   qcm_supplementaires: "bg-teal-100 text-teal-700",
 };
 
-export function SeriesList({ series }: SeriesListProps) {
+export function SeriesList({ series, onAskQuestion, qaContext }: SeriesListProps) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleAsk = onAskQuestion ?? (qaContext ? () => setDrawerOpen(true) : undefined);
+
   return (
+    <>
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-gray-100 bg-navy px-4 py-3">
-        <ClipboardList className="h-4 w-4 text-gold" />
-        <h3 className="text-sm font-semibold text-white">Séries d'exercices</h3>
+      <div className="flex items-center justify-between border-b border-gray-100 bg-navy px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-gold" />
+          <h3 className="text-sm font-semibold text-white">Séries d&apos;exercices</h3>
+        </div>
+        {handleAsk && (
+          <button
+            onClick={handleAsk}
+            title="Poser une question"
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <MessageCircleQuestion size={14} />
+            <span className="hidden sm:inline">Question</span>
+          </button>
+        )}
       </div>
 
       <div className="divide-y divide-gray-100">
@@ -102,5 +128,17 @@ export function SeriesList({ series }: SeriesListProps) {
         })}
       </div>
     </div>
+
+    {drawerOpen && qaContext && (
+      <AskQuestionDrawer
+        contextType="cours"
+        coursId={qaContext.coursId}
+        matiereId={qaContext.matiereId}
+        dossierId={qaContext.dossierId}
+        contextLabel={qaContext.contextLabel}
+        onClose={() => setDrawerOpen(false)}
+      />
+    )}
+    </>
   );
 }

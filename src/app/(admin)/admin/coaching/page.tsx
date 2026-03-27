@@ -9,6 +9,7 @@ import type {
   CoachingCallSlot,
   CoachingIntakeForm,
   CoachingStudentProfile,
+  Dossier,
   FormField,
   FormTemplate,
   Groupe,
@@ -42,6 +43,7 @@ export default async function CoachingPage() {
   const isCoach = currentProfile.role === "coach";
 
   const emptyData = {
+    dossiers: [] as Dossier[],
     groupes: [] as Groupe[],
     students: [] as Profile[],
     coaches: [] as Profile[],
@@ -109,8 +111,9 @@ export default async function CoachingPage() {
         : admin.from("coaching_student_profiles").select("*").order("reviewed_at", { ascending: false, nullsFirst: false });
 
     const assignmentsQuery = admin.from("coach_groupe_assignments").select("*").order("created_at");
+    const dossiersQuery = admin.from("dossiers").select("*").order("order_index");
 
-    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes] = await Promise.all([
+    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes, dossiersRes] = await Promise.all([
       groupesQuery,
       studentsQuery,
       coachesQuery,
@@ -120,6 +123,7 @@ export default async function CoachingPage() {
       pointAProfilesQuery,
       admin.from("form_templates").select("*").eq("slug", "coaching_onboarding").eq("is_active", true).maybeSingle(),
       assignmentsQuery,
+      dossiersQuery,
     ]);
 
     setupError =
@@ -148,6 +152,7 @@ export default async function CoachingPage() {
     }
 
     data = {
+      dossiers: (dossiersRes.data ?? []) as Dossier[],
       groupes: (groupesRes.data ?? []) as Groupe[],
       students: (studentsRes.data ?? []) as Profile[],
       coaches: (coachesRes.data ?? []) as Profile[],
@@ -166,6 +171,7 @@ export default async function CoachingPage() {
       <Header title="Coaching" />
       <CoachingShell
         currentProfile={currentProfile as Profile}
+        dossiers={data.dossiers}
         groupes={data.groupes}
         students={data.students}
         coaches={data.coaches}

@@ -116,7 +116,15 @@ export default async function CoursDetailPage({ params }: Props) {
 
           {/* ── COLONNE DROITE : Séries + Révisions ── */}
           <div className="lg:col-span-2 space-y-4">
-            <SeriesList series={seriesEnrichies} />
+            <SeriesList
+              series={seriesEnrichies}
+              qaContext={{
+                coursId: cours.id,
+                matiereId: matiere?.id,
+                dossierId: breadcrumbDossier?.id,
+                contextLabel: cours.name,
+              }}
+            />
           </div>
         </div>
       </div>
