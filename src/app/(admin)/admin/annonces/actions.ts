@@ -4,8 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getAccessScopeForUser } from "@/lib/access-scope";
 import { revalidatePath } from "next/cache";
 import type { UserRole } from "@/types/database";
+import type { AnnonceAttachment } from "@/lib/annonce-attachments";
 
-const PATHS = ["/admin/annonces", "/annonces"];
+const PATHS = ["/admin/annonces", "/admin/communication", "/annonces"];
+
+export type Attachment = AnnonceAttachment;
 
 type AnnonceInput = {
   title: string;
@@ -14,6 +17,7 @@ type AnnonceInput = {
   dossier_id?: string | null;
   matiere_id?: string | null;
   pinned?: boolean;
+  attachments?: AnnonceAttachment[];
 };
 
 type NormalizedAnnonceTarget = {
@@ -110,6 +114,7 @@ export async function createAnnonce(data: AnnonceInput) {
     pinned: data.pinned ?? false,
     type: "annonce",
     author_id: actor.user.id,
+    attachments: data.attachments ?? [],
   });
 
   if (error) return { error: error.message };
@@ -150,6 +155,7 @@ export async function updateAnnonce(
       dossier_id: target.dossier_id,
       matiere_id: target.matiere_id,
       pinned: data.pinned ?? false,
+      attachments: data.attachments ?? [],
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)

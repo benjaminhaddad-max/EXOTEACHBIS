@@ -1,19 +1,22 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect } from "react";
+import { useState, useTransition, useMemo, useEffect, useRef } from "react";
 import {
   Megaphone, Pencil, Trash2, Pin, X, Check, AlertCircle, Loader2, Users, FolderTree, BookOpen,
-  Save, ArrowLeft,
+  Save, ArrowLeft, Paperclip, FileText,
 } from "lucide-react";
 import { getDossierPathLabel } from "@/lib/pedagogie-structure";
 import type { Dossier, Groupe, Matiere, Profile } from "@/types/database";
 import type { SidebarFilter } from "@/components/admin/formulaires/formulaires-sidebar";
 import { createAnnonce, updateAnnonce, deleteAnnonce, togglePin } from "@/app/(admin)/admin/annonces/actions";
+import type { Attachment } from "@/app/(admin)/admin/annonces/actions";
+import { AnnonceAttachmentsPreview } from "@/components/annonce-attachments-preview";
 
 type Annonce = {
   id: string; title: string | null; content: string;
   groupe_id: string | null; dossier_id: string | null; matiere_id: string | null;
   pinned: boolean; created_at: string;
+  attachments?: Attachment[];
   author: { first_name: string | null; last_name: string | null } | null;
   groupe?: { name: string; color: string } | null;
   dossier?: { id: string; name: string; color: string; parent_id: string | null } | null;
@@ -22,8 +25,6 @@ type Annonce = {
 
 type View = "list" | "create" | "edit";
 type Toast = { message: string; kind: "success" | "error" } | null;
-
-const F = "w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25";
 
 export function AnnoncesTab({
   initialAnnonces, groupes, dossiers, matieres, currentProfile, sidebarFilter, selectedGroupeIds, triggerCreate, onCreateHandled,
@@ -93,27 +94,26 @@ export function AnnoncesTab({
     });
   };
 
-  // Submit handler for create/edit
-  const handleSubmit = (data: { title: string; content: string; pinned: boolean }) => {
+  const handleSubmit = (data: { title: string; content: string; pinned: boolean; attachments: Attachment[] }) => {
     const targetIds = selectedGroupeIds && selectedGroupeIds.size > 0 ? [...selectedGroupeIds] : [null];
 
     startTransition(async () => {
       if (editingAnnonce) {
-        // Edit: single update
         const res = await updateAnnonce(editingAnnonce.id, {
           title: data.title, content: data.content, pinned: data.pinned,
           groupe_id: editingAnnonce.groupe_id, dossier_id: editingAnnonce.dossier_id, matiere_id: editingAnnonce.matiere_id,
+          attachments: data.attachments,
         });
         if ("error" in res) { showToast(res.error!, "error"); return; }
         await refresh(); setView("list"); setEditingAnnonce(null);
         showToast("Annonce modifiée", "success");
       } else {
-        // Create: batch per selected class (or global if none)
         let errored = false;
         for (const gid of targetIds) {
           const res = await createAnnonce({
             title: data.title, content: data.content, pinned: data.pinned,
             groupe_id: gid, dossier_id: null, matiere_id: null,
+            attachments: data.attachments,
           });
           if ("error" in res) { showToast(res.error!, "error"); errored = true; break; }
         }
@@ -178,6 +178,7 @@ export function AnnoncesTab({
                         </div>
                         <h3 className="text-sm font-semibold text-white">{a.title ?? "(sans titre)"}</h3>
                         <p className="text-xs mt-1 line-clamp-2" style={{ color: "rgba(255,255,255,0.5)" }}>{a.content}</p>
+                        <AnnonceAttachmentsPreview attachments={a.attachments} variant="dark" />
                         <p className="text-[10px] mt-2" style={{ color: "rgba(255,255,255,0.25)" }}>{authorName} · {new Date(a.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}</p>
                       </div>
                       <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -217,25 +218,59 @@ function AnnonceEditor({ annonce, selectedGroupeIds, groupes, isPending, onBack,
   groupes: Groupe[];
   isPending: boolean;
   onBack: () => void;
-  onSubmit: (data: { title: string; content: string; pinned: boolean }) => void;
+  onSubmit: (data: { title: string; content: string; pinned: boolean; attachments: Attachment[] }) => void;
 }) {
   const [title, setTitle] = useState(annonce?.title ?? "");
   const [content, setContent] = useState(annonce?.content ?? "");
   const [pinned, setPinned] = useState(annonce?.pinned ?? false);
+  const [attachments, setAttachments] = useState<Attachment[]>(annonce?.attachments ?? []);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isCreate = !annonce;
   const hasTargets = selectedGroupeIds && selectedGroupeIds.size > 0;
   const targetNames = hasTargets ? [...selectedGroupeIds!].map(id => groupes.find(g => g.id === id)?.name ?? "?") : [];
 
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload-attachment", { method: "POST", body: fd });
+        const json = await res.json();
+        if (json.error) {
+          setUploadError(json.error);
+          continue;
+        }
+        setAttachments(prev => [...prev, { url: json.url, name: json.name, type: json.type, size: json.size }]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  };
+
   return (
     <div className="space-y-5">
-      {/* Back button */}
       <button onClick={onBack} className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: "rgba(255,255,255,0.4)" }}
         onMouseOver={e => (e.currentTarget.style.color = "white")} onMouseOut={e => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}>
         <ArrowLeft size={12} /> Retour aux annonces
       </button>
 
-      {/* Target summary banner */}
       {isCreate && hasTargets && (
         <div className="p-4 rounded-xl" style={{ backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)" }}>
           <div className="flex items-center gap-2">
@@ -256,7 +291,6 @@ function AnnonceEditor({ annonce, selectedGroupeIds, groupes, isPending, onBack,
         </div>
       )}
 
-      {/* Editor */}
       <div className="p-5 rounded-2xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
         <input
           value={title}
@@ -274,17 +308,77 @@ function AnnonceEditor({ annonce, selectedGroupeIds, groupes, isPending, onBack,
           className="w-full bg-transparent text-sm text-white/70 outline-none resize-none placeholder:text-white/20 leading-relaxed"
         />
 
+        {/* Attachments zone */}
+        {attachments.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.3)" }}>
+              Pièces jointes ({attachments.length})
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((att, i) => (
+                <div key={i} className="relative group/att">
+                  {att.type === "image" ? (
+                    <div className="relative rounded-lg overflow-hidden border border-white/10">
+                      <img src={att.url} alt={att.name} className="h-24 w-auto max-w-[180px] object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/att:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-[9px] text-white/70 px-1 truncate max-w-[160px]">{att.name}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                      style={{ backgroundColor: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                      <FileText size={14} style={{ color: "#F87171" }} />
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium text-white/80 truncate max-w-[150px]">{att.name}</p>
+                        <p className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>{formatSize(att.size)}</p>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeAttachment(i)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                    style={{ backgroundColor: "#EF4444", color: "white" }}>
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload bar + actions */}
         <div className="flex items-center justify-between mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "rgba(255,255,255,0.6)" }}>
-            <input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} className="rounded" style={{ accentColor: "#C9A84C" }} />
-            Épingler en haut
-          </label>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: "rgba(255,255,255,0.6)" }}>
+              <input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} className="rounded" style={{ accentColor: "#C9A84C" }} />
+              Épingler en haut
+            </label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+              className="hidden"
+              onChange={e => handleFileUpload(e.target.files)}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+              style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}
+              onMouseOver={e => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "white"; }}
+              onMouseOut={e => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "rgba(255,255,255,0.5)"; }}>
+              {uploading ? <Loader2 size={11} className="animate-spin" /> : <Paperclip size={11} />}
+              {uploading ? "Upload…" : "Joindre fichier"}
+            </button>
+          </div>
 
           <div className="flex items-center gap-2">
             <button onClick={onBack} className="px-3 py-1.5 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>Annuler</button>
             <button
-              onClick={() => onSubmit({ title: title.trim(), content: content.trim(), pinned })}
-              disabled={isPending || !title.trim() || !content.trim()}
+              onClick={() => onSubmit({ title: title.trim(), content: content.trim(), pinned, attachments })}
+              disabled={isPending || uploading || !title.trim() || !content.trim()}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
               style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
             >
@@ -298,6 +392,11 @@ function AnnonceEditor({ annonce, selectedGroupeIds, groupes, isPending, onBack,
             </button>
           </div>
         </div>
+        {uploadError && (
+          <p className="text-[11px] mt-2" style={{ color: "#F87171" }}>
+            {uploadError}
+          </p>
+        )}
       </div>
     </div>
   );

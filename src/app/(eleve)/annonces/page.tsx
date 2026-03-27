@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { canAccessDossier, getAccessScopeForUser } from "@/lib/access-scope";
 import { getDossierPathLabel } from "@/lib/pedagogie-structure";
 import { Header } from "@/components/header";
+import { AnnonceAttachmentsPreview } from "@/components/annonce-attachments-preview";
 import { Megaphone, Pin, Users, FolderTree, BookOpen } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -112,6 +113,7 @@ export default async function AnnoncesElevePage() {
 
                   <h2 className="text-base font-bold text-gray-900 mb-2">{a.title ?? "(sans titre)"}</h2>
                   <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{a.content}</p>
+                  <AnnonceAttachmentsPreview attachments={a.attachments} variant="light" />
 
                   <div className="mt-4 flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">

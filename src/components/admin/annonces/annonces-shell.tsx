@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import {
   Megaphone, Plus, Pencil, Trash2, Pin, X, Check, AlertCircle, Loader2, Users, FolderTree, BookOpen,
+  Paperclip, FileText,
 } from "lucide-react";
 import { getDossierPathLabel } from "@/lib/pedagogie-structure";
 import type { Dossier, Groupe, Matiere, Profile } from "@/types/database";
 import { createAnnonce, updateAnnonce, deleteAnnonce, togglePin } from "@/app/(admin)/admin/annonces/actions";
+import type { Attachment } from "@/app/(admin)/admin/annonces/actions";
+import { AnnonceAttachmentsPreview } from "@/components/annonce-attachments-preview";
+import { parseAnnonceAttachments } from "@/lib/annonce-attachments";
 
 type Annonce = {
   id: string;
@@ -17,6 +21,7 @@ type Annonce = {
   matiere_id: string | null;
   pinned: boolean;
   created_at: string;
+  attachments?: unknown;
   author: { first_name: string | null; last_name: string | null } | null;
   groupe?: { name: string; color: string } | null;
   dossier?: { id: string; name: string; color: string; parent_id: string | null } | null;
@@ -183,6 +188,7 @@ export function AnnoncesShell({
                     </div>
                     <h3 className="font-semibold text-gray-900 text-base">{a.title ?? "(sans titre)"}</h3>
                     <p className="text-sm text-gray-500 mt-1.5 line-clamp-3 whitespace-pre-line">{a.content}</p>
+                    <AnnonceAttachmentsPreview attachments={a.attachments} variant="light" />
                     <p className="text-xs text-gray-400 mt-2">
                       Publié par {authorName} · {new Date(a.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
@@ -253,6 +259,7 @@ function AnnonceForm({ annonce, groupes, dossiers, matieres, isPending, onClose,
     dossier_id: string | null;
     matiere_id: string | null;
     pinned: boolean;
+    attachments: Attachment[];
   }) => void;
 }) {
   const [title, setTitle] = useState(annonce?.title ?? "");
@@ -264,6 +271,47 @@ function AnnonceForm({ annonce, groupes, dossiers, matieres, isPending, onClose,
   const [dossierId, setDossierId] = useState(annonce?.dossier_id ?? "");
   const [matiereId, setMatiereId] = useState(annonce?.matiere_id ?? "");
   const [pinned, setPinned] = useState(annonce?.pinned ?? false);
+  const [attachments, setAttachments] = useState<Attachment[]>(() =>
+    annonce ? parseAnnonceAttachments(annonce.attachments) : [],
+  );
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload-attachment", { method: "POST", body: fd });
+        const json = await res.json();
+        if (json.error) {
+          setUploadError(json.error);
+          continue;
+        }
+        setAttachments((prev) => [
+          ...prev,
+          { url: json.url, name: json.name, type: json.type, size: json.size },
+        ]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  };
 
   return (
     <div className="p-6 space-y-4">
@@ -286,6 +334,60 @@ function AnnonceForm({ annonce, groupes, dossiers, matieres, isPending, onClose,
           placeholder="Rédigez votre annonce..."
           className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-indigo-400 resize-none" />
       </div>
+
+      {attachments.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-500">Pièces jointes ({attachments.length})</p>
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((att, i) => (
+              <div key={`${att.url}-${i}`} className="relative group/att">
+                {att.type === "image" ? (
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                    <img src={att.url} alt={att.name} className="h-20 w-auto max-w-[160px] object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-red-100 bg-red-50">
+                    <FileText size={14} className="text-red-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate max-w-[140px]">{att.name}</p>
+                      <p className="text-[10px] text-gray-500">{formatSize(att.size)}</p>
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-red-500 text-white opacity-0 group-hover/att:opacity-100 transition-opacity shadow"
+                  aria-label="Retirer la pièce jointe"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+          className="hidden"
+          onChange={(e) => handleFileUpload(e.target.files)}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {uploading ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+          {uploading ? "Envoi…" : "Joindre images ou PDF"}
+        </button>
+      </div>
+      {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
 
       <div>
         <label className="text-xs text-gray-500 mb-1.5 block">Destinataires</label>
@@ -354,9 +456,11 @@ function AnnonceForm({ annonce, groupes, dossiers, matieres, isPending, onClose,
             dossier_id: audienceType === "dossier" ? dossierId || null : null,
             matiere_id: audienceType === "matiere" ? matiereId || null : null,
             pinned,
+            attachments,
           })}
           disabled={
             isPending ||
+            uploading ||
             !title.trim() ||
             !content.trim() ||
             (audienceType === "groupe" && !groupeId) ||
