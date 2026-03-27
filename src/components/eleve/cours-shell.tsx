@@ -146,8 +146,9 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
       .eq("dossier_id", dossier.id).eq("visible", true);
 
     let matiereCours: Cours[] = [];
+    let matiereIds: string[] = [];
     if (matieres && matieres.length > 0) {
-      const matiereIds = matieres.map((m: any) => m.id);
+      matiereIds = matieres.map((m: any) => m.id);
       const { data: mc } = await supabase
         .from("cours").select("*")
         .in("matiere_id", matiereIds).eq("visible", true).order("order_index");
@@ -160,7 +161,7 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
 
     const coursIds = uniqueCours.map((cours) => cours.id);
     const deckConditions: string[] = [];
-    if (matIds.length > 0) deckConditions.push(`matiere_id.in.(${matIds.join(",")})`);
+    if (matiereIds.length > 0) deckConditions.push(`matiere_id.in.(${matiereIds.join(",")})`);
     if (coursIds.length > 0) deckConditions.push(`cours_id.in.(${coursIds.join(",")})`);
 
     let flashcardDecks: FlashcardDeck[] = [];
@@ -175,7 +176,7 @@ export function EleveCoursShell({ initialDossiers }: { initialDossiers: Dossier[
       if (decksError) {
         console.error("Error fetching flashcard decks:", decksError);
       } else {
-        flashcardDecks = ((decks ?? []) as Array<FlashcardDeck & { flashcards?: { id: string }[] }>)
+        flashcardDecks = ((decks ?? []) as unknown as Array<FlashcardDeck & { flashcards?: { id: string }[] }>)
           .map((deck) => ({
             id: deck.id,
             name: deck.name,
