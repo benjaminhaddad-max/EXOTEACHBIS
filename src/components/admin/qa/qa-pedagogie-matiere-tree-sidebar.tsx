@@ -76,17 +76,17 @@ function typeStyle(type: DossierType): {
   }
 }
 
-function DossierTypeIcon({ type, className }: { type: DossierType; className?: string }) {
+function DossierTypeIcon({ type, className, style }: { type: DossierType; className?: string; style?: React.CSSProperties }) {
   const cn = className ?? "w-3 h-3 shrink-0";
   switch (type) {
-    case "offer":      return <GraduationCap className={cn} />;
-    case "university": return <Building2 className={cn} />;
+    case "offer":      return <GraduationCap className={cn} style={style} />;
+    case "university": return <Building2 className={cn} style={style} />;
     case "semester":
-    case "period":     return <Calendar className={cn} />;
-    case "subject":    return <BookOpen className={cn} />;
+    case "period":     return <Calendar className={cn} style={style} />;
+    case "subject":    return <BookOpen className={cn} style={style} />;
     case "option":
-    case "module":     return <Layers className={cn} />;
-    default:           return <Folder className={cn} />;
+    case "module":     return <Layers className={cn} style={style} />;
+    default:           return <Folder className={cn} style={style} />;
   }
 }
 
