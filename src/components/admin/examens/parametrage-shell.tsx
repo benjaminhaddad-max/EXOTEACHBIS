@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  ArrowLeft, Check, Loader2, Plus, Trash2, Save,
+  ArrowLeft, Check, Loader2, Plus, Save,
   GraduationCap, Building2, ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
@@ -154,52 +154,94 @@ function ParametrageSidebar({ dossiers, selectedId, onSelect }: {
 
 // ─── Grading Scale Section ───────────────────────────────────────────────────
 
-const DEFAULT_SCALES: ScaleRow[] = [
-  { nb_errors: 0, points: 1 },
-  { nb_errors: 1, points: -0.25 },
-  { nb_errors: 2, points: -0.5 },
-  { nb_errors: 3, points: -1 },
-];
+// penalties[i] = points perdus pour la (i+1)ème erreur
+const DEFAULT_PENALTIES: number[] = [0.5, 0.5];
+
+function ordinal(n: number): string {
+  if (n === 1) return "1ère";
+  return `${n}ème`;
+}
+
+/** Convert flat DB rows to an array of per-error penalties.
+ *  DB format: nb_errors=N, points=score_at_N_errors (positive, decreasing).
+ *  penalty[i] = score[i-1] - score[i], score[-1] = 1.
+ */
+function dbRowsToPenalties(rows: ScaleRow[]): number[] {
+  const sorted = [...rows].filter(r => r.nb_errors > 0).sort((a, b) => a.nb_errors - b.nb_errors);
+  if (sorted.length === 0) return DEFAULT_PENALTIES;
+  const penalties: number[] = [];
+  let prev = 1;
+  for (const r of sorted) {
+    const score = r.points; // positive score at this error count
+    penalties.push(+(prev - score).toFixed(4));
+    prev = score;
+  }
+  return penalties;
+}
+
+/** Convert penalties array back to DB rows format. */
+function penaltiesToDbRows(penalties: number[]): ScaleRow[] {
+  const rows: ScaleRow[] = [];
+  let score = 1;
+  for (let i = 0; i < penalties.length; i++) {
+    score = score - penalties[i];
+    rows.push({ nb_errors: i + 1, points: +score.toFixed(4) });
+  }
+  return rows;
+}
 
 function GradingScaleSection({ universityId, universityName, showToast }: {
   universityId: string; universityName: string; showToast: (msg: string, kind: "success" | "error") => void;
 }) {
-  const [scales, setScales] = useState<ScaleRow[]>(DEFAULT_SCALES);
+  const [penalties, setPenalties] = useState<number[]>(DEFAULT_PENALTIES);
+  const [fixedIfEmpty, setFixedIfEmpty] = useState(false);
+  const [fixedScore, setFixedScore] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Load scales when university changes
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     getUniversityGradingScale(universityId).then(res => {
       if (cancelled) return;
       if (res.data && res.data.length > 0) {
-        setScales(res.data.map((r: any) => ({ nb_errors: r.nb_errors, points: Number(r.points) })));
+        const rawRows: ScaleRow[] = res.data.map((r: any) => ({ nb_errors: r.nb_errors, points: Number(r.points) }));
+        setPenalties(dbRowsToPenalties(rawRows));
       } else {
-        setScales(DEFAULT_SCALES);
+        setPenalties(DEFAULT_PENALTIES);
       }
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [universityId]);
 
-  const updateRow = (idx: number, field: "nb_errors" | "points", value: number) => {
-    setScales(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  // Cumulative totals: total[i] = score after (i+1) errors
+  const totals = useMemo(() => {
+    const t: number[] = [];
+    let score = 1;
+    for (const p of penalties) {
+      score = score - p;
+      t.push(Math.max(0, +score.toFixed(4)));
+    }
+    return t;
+  }, [penalties]);
+
+  const updatePenalty = (idx: number, value: number) => {
+    setPenalties(prev => prev.map((p, i) => i === idx ? value : p));
   };
 
-  const addRow = () => {
-    const maxErrors = scales.length > 0 ? Math.max(...scales.map(s => s.nb_errors)) + 1 : 0;
-    setScales(prev => [...prev, { nb_errors: maxErrors, points: 0 }]);
+  const addError = () => {
+    setPenalties(prev => [...prev, 0.5]);
   };
 
-  const removeRow = (idx: number) => {
-    setScales(prev => prev.filter((_, i) => i !== idx));
+  const removeError = () => {
+    if (penalties.length > 1) setPenalties(prev => prev.slice(0, -1));
   };
 
   const handleSave = async () => {
     setSaving(true);
-    const res = await upsertUniversityGradingScale(universityId, scales);
+    const dbRows = penaltiesToDbRows(penalties);
+    const res = await upsertUniversityGradingScale(universityId, dbRows);
     setSaving(false);
     if (res.error) showToast("Erreur : " + res.error, "error");
     else showToast("Barème enregistré", "success");
@@ -211,15 +253,9 @@ function GradingScaleSection({ universityId, universityName, showToast }: {
         <div>
           <h2 className="text-sm font-semibold text-white">Notation QCM</h2>
           <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Score par question selon le nb d&apos;erreurs. Valeurs négatives = pénalité. — {universityName}
+            Pénalités par erreur — {universityName}
           </p>
         </div>
-        <button onClick={handleSave} disabled={saving || loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-          style={{ backgroundColor: "#C9A84C", color: "#0e1e35", opacity: saving || loading ? 0.5 : 1 }}>
-          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-          Enregistrer
-        </button>
       </div>
 
       {loading ? (
@@ -228,53 +264,87 @@ function GradingScaleSection({ universityId, universityName, showToast }: {
           <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>Chargement…</span>
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden border border-white/10">
-          <table className="w-full">
-            <thead>
-              <tr style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
-                <th className="text-[10px] font-semibold uppercase tracking-wider text-left px-4 py-2.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-                  Nb erreurs
-                </th>
-                <th className="text-[10px] font-semibold uppercase tracking-wider text-left px-4 py-2.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-                  Score (négatif = pénalité)
-                </th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {scales.sort((a, b) => a.nb_errors - b.nb_errors).map((row, idx) => (
-                <tr key={idx} className="border-t border-white/5" style={{ backgroundColor: idx % 2 === 0 ? "transparent" : "rgba(0,0,0,0.08)" }}>
-                  <td className="px-4 py-2">
-                    <input type="number" min={0} step={1}
-                      value={row.nb_errors}
-                      onChange={e => updateRow(idx, "nb_errors", parseInt(e.target.value) || 0)}
-                      className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <input type="number" step={0.05}
-                      value={row.points}
-                      onChange={e => updateRow(idx, "points", parseFloat(e.target.value) ?? 0)}
+        <div className="space-y-4">
+          {/* Condition box */}
+          <div className="rounded-xl border border-white/10 px-5 py-4 text-xs leading-relaxed" style={{ backgroundColor: "rgba(0,0,0,0.15)", color: "rgba(255,255,255,0.55)" }}>
+            Si une réponse <span className="font-bold" style={{ color: "#4ade80" }}>VRAIE</span> n&apos;est pas cochée
+            <span className="mx-2 opacity-40">ou</span>
+            si une réponse <span className="font-bold" style={{ color: "#f87171" }}>FAUSSE</span> est cochée
+          </div>
+
+          {/* Table */}
+          <div className="rounded-xl overflow-hidden border border-white/10">
+            <div style={{ backgroundColor: "rgba(0,0,0,0.2)" }} className="grid grid-cols-3 px-5 py-2.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Erreur</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Points perdus</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-right" style={{ color: "rgba(255,255,255,0.4)" }}>Total</span>
+            </div>
+
+            <div className="divide-y divide-white/5">
+              {penalties.map((penalty, idx) => (
+                <div key={idx} className="grid grid-cols-3 items-center px-5 py-3"
+                  style={{ backgroundColor: idx % 2 === 0 ? "transparent" : "rgba(0,0,0,0.06)" }}>
+                  <span className="text-sm font-semibold text-white/80">
+                    {ordinal(idx + 1)} erreur&nbsp;:
+                  </span>
+                  <div>
+                    <input
+                      type="number" min={0} step={0.25}
+                      value={penalty}
+                      onChange={e => updatePenalty(idx, parseFloat(e.target.value) || 0)}
                       className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
                     />
-                  </td>
-                  <td className="px-2 py-2 text-center">
-                    <button onClick={() => removeRow(idx)}
-                      className="p-1 rounded hover:bg-red-500/10 transition-colors"
-                      style={{ color: "rgba(239,68,68,0.5)" }}>
-                      <Trash2 size={12} />
-                    </button>
-                  </td>
-                </tr>
+                  </div>
+                  <span className="text-sm font-semibold text-right" style={{ color: totals[idx] > 0 ? "#C9A84C" : "rgba(255,255,255,0.3)" }}>
+                    {totals[idx].toFixed(2)}<span className="text-xs font-normal opacity-50">/ 1</span>
+                  </span>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
 
-          <div className="px-4 py-2 border-t border-white/5">
-            <button onClick={addRow}
-              className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
-              style={{ color: "rgba(255,255,255,0.4)" }}>
-              <Plus size={10} /> Ajouter une ligne
+            {/* Add / Remove buttons */}
+            <div className="flex items-center gap-3 px-5 py-3 border-t border-white/5">
+              <button onClick={addError}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-white/5"
+                style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.12)" }}>
+                <Plus size={11} /> Ajouter une erreur
+              </button>
+              <button onClick={removeError} disabled={penalties.length <= 1}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-white/5 disabled:opacity-30"
+                style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.12)" }}>
+                <span className="text-base leading-none" style={{ marginTop: -1 }}>—</span> Enlever une erreur
+              </button>
+            </div>
+          </div>
+
+          {/* Note fixe si rien coché */}
+          <div className="flex items-center gap-3 px-1">
+            <button
+              onClick={() => setFixedIfEmpty(v => !v)}
+              className="flex items-center gap-2 text-xs font-medium transition-colors"
+              style={{ color: fixedIfEmpty ? "#C9A84C" : "rgba(255,255,255,0.4)" }}>
+              <span className="flex items-center justify-center w-4 h-4 rounded border shrink-0 transition-colors"
+                style={{ borderColor: fixedIfEmpty ? "#C9A84C" : "rgba(255,255,255,0.2)", backgroundColor: fixedIfEmpty ? "rgba(201,168,76,0.2)" : "transparent" }}>
+                {fixedIfEmpty && <Check size={10} style={{ color: "#C9A84C" }} />}
+              </span>
+              Note fixe si rien n&apos;est coché
+            </button>
+            {fixedIfEmpty && (
+              <input type="number" min={0} max={1} step={0.25}
+                value={fixedScore}
+                onChange={e => setFixedScore(parseFloat(e.target.value) || 0)}
+                className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
+              />
+            )}
+          </div>
+
+          {/* Save button */}
+          <div className="pt-2">
+            <button onClick={handleSave} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={{ backgroundColor: "#C9A84C", color: "#0e1e35", opacity: saving ? 0.6 : 1 }}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Mettre à jour
             </button>
           </div>
         </div>
