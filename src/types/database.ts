@@ -121,7 +121,7 @@ export interface Ressource {
 // Exercices QCM
 // =============================================
 
-export type QuestionType = "qcm_unique" | "qcm_multiple";
+export type QuestionType = "qcm_unique" | "qcm_multiple" | "short_answer" | "redaction";
 
 export interface Question {
   id: string;
@@ -132,6 +132,7 @@ export interface Question {
   type: QuestionType;
   tags: string[];
   difficulty: number;
+  correct_answer?: string | null; // for short_answer questions
   created_at: string;
   updated_at: string;
   // Relations
@@ -145,6 +146,44 @@ export interface Option {
   text: string;
   is_correct: boolean;
   order_index: number;
+}
+
+// Réponse écrite d'un étudiant (short_answer ou redaction)
+export interface UserTextAnswer {
+  id: string;
+  attempt_id: string;
+  question_id: string;
+  answer_text: string | null;
+  is_correct: boolean | null; // null = pas encore corrigé (redaction)
+  time_spent_s: number | null;
+  created_at: string;
+  // Relations
+  question?: Question;
+  correction?: RedactionCorrection;
+}
+
+// Correction manuelle d'une rédaction par le prof
+export interface RedactionCorrection {
+  id: string;
+  user_text_answer_id: string;
+  corrected_by: string | null;
+  score_percent: number | null; // 0-100
+  comment: string | null;
+  corrected_at: string;
+}
+
+// Config de notation réponse courte par université
+export interface UniversityShortAnswerConfig {
+  university_dossier_id: string;
+  points_correct: number;
+  points_incorrect: number;
+  case_sensitive: boolean;
+}
+
+// Config de notation rédaction par université
+export interface UniversityRedactionConfig {
+  university_dossier_id: string;
+  max_points: number;
 }
 
 export type SerieType = "entrainement" | "concours_blanc" | "revision" | "annales" | "qcm_supplementaires";

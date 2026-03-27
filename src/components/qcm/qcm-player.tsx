@@ -240,15 +240,25 @@ function PropositionRow({
 
 // ─── Playing Screen ───────────────────────────────────────────────────────
 
+// Labels for question types
+const Q_TYPE_LABELS: Record<string, string> = {
+  qcm_unique: "QCM",
+  qcm_multiple: "QCM",
+  short_answer: "Réponse courte",
+  redaction: "Rédaction",
+};
+
 function PlayingScreen({
   questions,
   serie,
   timed,
   timeLeft,
   answers,
+  textAnswers,
   currentIndex,
   submitting,
   onToggle,
+  onTextAnswer,
   onNavigate,
   onSubmit,
 }: {
@@ -257,9 +267,11 @@ function PlayingScreen({
   timed: boolean;
   timeLeft: number;
   answers: Record<string, Record<string, "vrai" | "faux">>;
+  textAnswers: Record<string, string>;
   currentIndex: number;
   submitting: boolean;
   onToggle: (questionId: string, label: string, value: "vrai" | "faux") => void;
+  onTextAnswer: (questionId: string, text: string) => void;
   onNavigate: (idx: number) => void;
   onSubmit: () => void;
 }) {
@@ -271,6 +283,9 @@ function PlayingScreen({
   };
 
   const getStatus = (q: QuestionWithOptions): "complete" | "partial" | "none" => {
+    if (q.type === "short_answer" || q.type === "redaction") {
+      return textAnswers[q.id]?.trim() ? "complete" : "none";
+    }
     const qA = answers[q.id] ?? {};
     const opts = q.options ?? [];
     const answered = Object.keys(qA).length;
@@ -410,7 +425,7 @@ function PlayingScreen({
                     >
                       {i + 1}
                     </div>
-                    <span className="text-sm font-bold text-gray-800">QCM {i + 1}</span>
+                    <span className="text-sm font-bold text-gray-800">{Q_TYPE_LABELS[q.type] ?? "QCM"} {i + 1}</span>
                     {(serie as any).cours?.name && (
                       <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">
                         {(serie as any).cours.name}
@@ -453,17 +468,53 @@ function PlayingScreen({
                     </div>
                   </div>
 
-                  {/* Options */}
-                  <div className="px-5 pb-5 space-y-2">
-                    {opts.map((opt) => (
-                      <PropositionRow
-                        key={opt.id}
-                        option={opt}
-                        answer={qA[opt.label] ?? null}
-                        onToggle={(label, value) => value !== null && onToggle(q.id, label, value)}
-                        disabled={submitting}
-                      />
-                    ))}
+                  {/* Answer area — depends on question type */}
+                  <div className="px-5 pb-5">
+                    {(q.type === "qcm_unique" || q.type === "qcm_multiple" || !q.type) && (
+                      <div className="space-y-2">
+                        {opts.map((opt) => (
+                          <PropositionRow
+                            key={opt.id}
+                            option={opt}
+                            answer={qA[opt.label] ?? null}
+                            onToggle={(label, value) => value !== null && onToggle(q.id, label, value)}
+                            disabled={submitting}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {q.type === "short_answer" && (
+                      <div>
+                        <p className="text-xs text-gray-400 mb-2">Tapez votre réponse (mot, nombre, formule…)</p>
+                        <input
+                          type="text"
+                          value={textAnswers[q.id] ?? ""}
+                          onChange={(e) => onTextAnswer(q.id, e.target.value)}
+                          disabled={submitting}
+                          maxLength={200}
+                          placeholder="Votre réponse..."
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-200 transition-all disabled:opacity-50"
+                        />
+                      </div>
+                    )}
+
+                    {q.type === "redaction" && (
+                      <div>
+                        <p className="text-xs text-gray-400 mb-2">Rédigez votre réponse — sera corrigée par le professeur</p>
+                        <textarea
+                          value={textAnswers[q.id] ?? ""}
+                          onChange={(e) => onTextAnswer(q.id, e.target.value)}
+                          disabled={submitting}
+                          rows={6}
+                          placeholder="Votre réponse..."
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-200 transition-all disabled:opacity-50 resize-y"
+                        />
+                        <p className="text-[10px] text-gray-300 mt-1 text-right">
+                          {(textAnswers[q.id] ?? "").length} caractères
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -747,8 +798,10 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
   const [playerState, setPlayerState] = useState<PlayerState>("setup");
   const [timed, setTimed] = useState(false);
   const [timeLeft, setTimeLeft] = useState((serie.duration_minutes ?? 20) * 60);
-  // answers: Record<questionId, Record<label, "vrai" | "faux">>
+  // answers: Record<questionId, Record<label, "vrai" | "faux">> — for QCM
   const [answers, setAnswers] = useState<Record<string, Record<string, "vrai" | "faux">>>({});
+  // textAnswers: Record<questionId, string> — for short_answer and redaction
+  const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -789,6 +842,10 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
     }));
   };
 
+  const handleTextAnswer = (questionId: string, text: string) => {
+    setTextAnswers((prev) => ({ ...prev, [questionId]: text }));
+  };
+
   const handleSubmit = useCallback(async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -796,12 +853,27 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
     const endTime = new Date();
     const totalSeconds = startTime ? Math.round((endTime.getTime() - startTime.getTime()) / 1000) : 0;
 
-    // Compute results
     let nbCorrectQuestions = 0;
     let nbPropsCorrect = 0;
     let nbPropsTotal = 0;
 
     const details = questions.map((q) => {
+      if (q.type === "short_answer") {
+        const userText = (textAnswers[q.id] ?? "").trim();
+        const correctText = ((q as any).correct_answer ?? "").trim();
+        // Case-insensitive comparison by default (config from parametrage would refine this)
+        const isCorrect = userText.toLowerCase() === correctText.toLowerCase();
+        if (isCorrect) nbCorrectQuestions++;
+        return { question: q, selected: [] as string[], correct: isCorrect, textAnswer: userText };
+      }
+
+      if (q.type === "redaction") {
+        const userText = (textAnswers[q.id] ?? "").trim();
+        // Redaction: never auto-graded, counts as "pending" — doesn't add to nb_correct
+        return { question: q, selected: [] as string[], correct: false, textAnswer: userText, pending: true };
+      }
+
+      // QCM
       const opts = (q.options ?? []).sort((a, b) => a.order_index - b.order_index);
       const qA = answers[q.id] ?? {};
       const propsCorrect = opts.filter((o) => (qA[o.label] === "vrai") === o.is_correct).length;
@@ -809,44 +881,55 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
       if (allCorrect) nbCorrectQuestions++;
       nbPropsCorrect += propsCorrect;
       nbPropsTotal += opts.length;
-
-      // selected_labels = labels marked as VRAI (backward compat)
       const selectedLabels = opts.filter((o) => qA[o.label] === "vrai").map((o) => o.label);
-
       return { question: q, selected: selectedLabels, correct: allCorrect };
     });
 
-    const score = questions.length > 0 ? (nbCorrectQuestions / questions.length) * 100 : 0;
+    // nb_total = all questions; redaction counted separately
+    const nbTotal = questions.length;
+    const score = nbTotal > 0 ? (nbCorrectQuestions / nbTotal) * 100 : 0;
 
-    // Save to DB
     if (attemptId) {
       await supabase.from("serie_attempts").update({
         ended_at: endTime.toISOString(),
         score: Math.round(score * 100) / 100,
         nb_correct: nbCorrectQuestions,
-        nb_total: questions.length,
+        nb_total: nbTotal,
         time_spent_s: totalSeconds,
       }).eq("id", attemptId);
 
-      const answerRows = details.map((d) => ({
-        attempt_id: attemptId,
-        question_id: d.question.id,
-        selected_labels: d.selected,
-        is_correct: d.correct,
-      }));
-      if (answerRows.length > 0) {
-        await supabase.from("user_answers").insert(answerRows);
-      }
+      // QCM answers
+      const qcmRows = details
+        .filter((d) => !("textAnswer" in d))
+        .map((d) => ({
+          attempt_id: attemptId,
+          question_id: d.question.id,
+          selected_labels: d.selected,
+          is_correct: d.correct,
+        }));
+      if (qcmRows.length > 0) await supabase.from("user_answers").insert(qcmRows);
+
+      // Text answers (short_answer + redaction)
+      const textRows = details
+        .filter((d) => "textAnswer" in d)
+        .map((d: any) => ({
+          attempt_id: attemptId,
+          question_id: d.question.id,
+          answer_text: d.textAnswer,
+          is_correct: d.pending ? null : d.correct,
+        }));
+      if (textRows.length > 0) await supabase.from("user_text_answers").insert(textRows);
     }
 
     setResults({ score, nb_correct: nbCorrectQuestions, nb_props_correct: nbPropsCorrect, nb_props_total: nbPropsTotal, details });
     setSubmitting(false);
     setPlayerState("results");
-  }, [submitting, startTime, questions, answers, attemptId, supabase]);
+  }, [submitting, startTime, questions, answers, textAnswers, attemptId, supabase]);
 
   const handleRestart = () => {
     setPlayerState("setup");
     setAnswers({});
+    setTextAnswers({});
     setCurrentIndex(0);
     setStartTime(null);
     setAttemptId(null);
@@ -871,9 +954,11 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
         timed={timed}
         timeLeft={timeLeft}
         answers={answers}
+        textAnswers={textAnswers}
         currentIndex={currentIndex}
         submitting={submitting}
         onToggle={handleToggle}
+        onTextAnswer={handleTextAnswer}
         onNavigate={setCurrentIndex}
         onSubmit={handleSubmit}
       />

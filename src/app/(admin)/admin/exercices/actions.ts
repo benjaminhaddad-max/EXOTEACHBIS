@@ -12,12 +12,13 @@ const PATH = "/admin/exercices";
 export async function createQuestion(data: {
   text: string;
   explanation?: string;
-  type: "qcm_unique" | "qcm_multiple";
+  type: "qcm_unique" | "qcm_multiple" | "short_answer" | "redaction";
   tags?: string[];
   difficulty: number;
   matiere_id?: string | null;
   cours_id?: string | null;
   image_url?: string | null;
+  correct_answer?: string | null;
   options: { label: string; text: string; is_correct: boolean; justification?: string; image_url?: string | null }[];
 }) {
   const supabase = await createClient();
@@ -32,6 +33,7 @@ export async function createQuestion(data: {
     cours_id: data.cours_id || null,
   };
   if (data.image_url !== undefined) insertData.image_url = data.image_url || null;
+  if (data.correct_answer !== undefined) insertData.correct_answer = data.correct_answer || null;
 
   const { data: question, error } = await supabase
     .from("questions")
@@ -41,18 +43,22 @@ export async function createQuestion(data: {
 
   if (error) return { error: error.message };
 
-  const options = data.options.map((opt: any, i: number) => ({
-    question_id: question.id,
-    label: opt.label,
-    text: opt.text,
-    is_correct: opt.is_correct,
-    order_index: i,
-    justification: opt.justification || null,
-    ...(opt.image_url !== undefined ? { image_url: opt.image_url || null } : {}),
-  }));
-
-  const { error: optError } = await supabase.from("options").insert(options);
-  if (optError) return { error: optError.message };
+  // Only insert options for QCM types
+  if (data.type === "qcm_unique" || data.type === "qcm_multiple") {
+    const options = data.options.map((opt: any, i: number) => ({
+      question_id: question.id,
+      label: opt.label,
+      text: opt.text,
+      is_correct: opt.is_correct,
+      order_index: i,
+      justification: opt.justification || null,
+      ...(opt.image_url !== undefined ? { image_url: opt.image_url || null } : {}),
+    }));
+    if (options.length > 0) {
+      const { error: optError } = await supabase.from("options").insert(options);
+      if (optError) return { error: optError.message };
+    }
+  }
 
   revalidatePath(PATH);
   return { success: true, id: question.id };
@@ -63,12 +69,13 @@ export async function updateQuestion(
   data: {
     text: string;
     explanation?: string;
-    type: "qcm_unique" | "qcm_multiple";
+    type: "qcm_unique" | "qcm_multiple" | "short_answer" | "redaction";
     tags?: string[];
     difficulty: number;
     matiere_id?: string | null;
     cours_id?: string | null;
     image_url?: string | null;
+    correct_answer?: string | null;
     options: { label: string; text: string; is_correct: boolean; justification?: string; image_url?: string | null }[];
   }
 ) {
@@ -85,26 +92,29 @@ export async function updateQuestion(
     updated_at: new Date().toISOString(),
   };
   if (data.image_url !== undefined) updateData.image_url = data.image_url || null;
+  if (data.correct_answer !== undefined) updateData.correct_answer = data.correct_answer || null;
 
   const { error } = await supabase.from("questions").update(updateData).eq("id", id);
-
   if (error) return { error: error.message };
 
-  // Replace options
+  // Replace options only for QCM types; clear for others
   await supabase.from("options").delete().eq("question_id", id);
 
-  const options = data.options.map((opt: any, i: number) => ({
-    question_id: id,
-    label: opt.label,
-    text: opt.text,
-    is_correct: opt.is_correct,
-    order_index: i,
-    justification: opt.justification || null,
-    ...(opt.image_url !== undefined ? { image_url: opt.image_url || null } : {}),
-  }));
-
-  const { error: optError } = await supabase.from("options").insert(options);
-  if (optError) return { error: optError.message };
+  if (data.type === "qcm_unique" || data.type === "qcm_multiple") {
+    const options = data.options.map((opt: any, i: number) => ({
+      question_id: id,
+      label: opt.label,
+      text: opt.text,
+      is_correct: opt.is_correct,
+      order_index: i,
+      justification: opt.justification || null,
+      ...(opt.image_url !== undefined ? { image_url: opt.image_url || null } : {}),
+    }));
+    if (options.length > 0) {
+      const { error: optError } = await supabase.from("options").insert(options);
+      if (optError) return { error: optError.message };
+    }
+  }
 
   revalidatePath(PATH);
   return { success: true };

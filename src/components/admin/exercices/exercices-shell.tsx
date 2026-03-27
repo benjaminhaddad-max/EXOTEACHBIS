@@ -254,6 +254,13 @@ function SerieCard({
 
 // ─── Question Form (modal) ─────────────────────────────────────────────────
 
+const QUESTION_TYPE_LABELS: Record<string, string> = {
+  qcm_unique: "QCM — Réponse unique",
+  qcm_multiple: "QCM — Réponses multiples",
+  short_answer: "Réponse courte",
+  redaction: "Rédaction",
+};
+
 function QuestionForm({
   initial, coursId, cours, onSave, onClose,
 }: {
@@ -262,9 +269,12 @@ function QuestionForm({
 }) {
   const [text, setText] = useState(initial?.text ?? "");
   const [explanation, setExplanation] = useState(initial?.explanation ?? "");
-  const [type, setType] = useState<"qcm_unique" | "qcm_multiple">(initial?.type ?? "qcm_unique");
+  const [type, setType] = useState<"qcm_unique" | "qcm_multiple" | "short_answer" | "redaction">(
+    initial?.type ?? "qcm_unique"
+  );
   const [difficulty, setDifficulty] = useState(initial?.difficulty ?? 2);
   const [selectedCoursId, setSelectedCoursId] = useState(initial?.cours_id ?? coursId ?? "");
+  const [correctAnswer, setCorrectAnswer] = useState((initial as any)?.correct_answer ?? "");
   const [options, setOptions] = useState<{ label: string; text: string; is_correct: boolean; justification: string }[]>(
     initial?.options?.sort((a, b) => a.order_index - b.order_index).map((o) => ({
       label: o.label, text: o.text, is_correct: o.is_correct, justification: (o as any).justification ?? ""
@@ -273,6 +283,8 @@ function QuestionForm({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const isQcm = type === "qcm_unique" || type === "qcm_multiple";
 
   const updateOption = (i: number, field: string, value: string | boolean) =>
     setOptions((prev) => prev.map((o, idx) => idx === i ? { ...o, [field]: value } : o));
@@ -283,9 +295,15 @@ function QuestionForm({
     e.preventDefault();
     setError("");
     if (!text.trim()) { setError("Le texte est requis"); return; }
-    if (options.some((o) => !o.text.trim())) { setError("Toutes les propositions doivent avoir un texte"); return; }
+    if (isQcm && options.some((o) => !o.text.trim())) { setError("Toutes les propositions doivent avoir un texte"); return; }
+    if (type === "short_answer" && !correctAnswer.trim()) { setError("La réponse correcte est requise"); return; }
     setSaving(true);
-    await onSave({ text, explanation, type: "qcm_multiple", difficulty, cours_id: selectedCoursId || null, matiere_id: null, options });
+    await onSave({
+      text, explanation, type, difficulty,
+      cours_id: selectedCoursId || null, matiere_id: null,
+      correct_answer: type === "short_answer" ? correctAnswer.trim() : null,
+      options: isQcm ? options : [],
+    });
     setSaving(false);
   };
 
@@ -294,11 +312,8 @@ function QuestionForm({
       {/* Cours */}
       <div>
         <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Cours associé</label>
-        <select
-          value={selectedCoursId}
-          onChange={(e) => setSelectedCoursId(e.target.value)}
-          className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#C9A84C]/50"
-        >
+        <select value={selectedCoursId} onChange={(e) => setSelectedCoursId(e.target.value)}
+          className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#C9A84C]/50">
           <option value="">— Sans cours —</option>
           {cours.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
@@ -306,12 +321,12 @@ function QuestionForm({
 
       {/* Type */}
       <div>
-        <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Type</label>
-        <div className="flex gap-2">
-          {(["qcm_unique", "qcm_multiple"] as const).map((t) => (
+        <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Type de question</label>
+        <div className="grid grid-cols-2 gap-2">
+          {(["qcm_unique", "qcm_multiple", "short_answer", "redaction"] as const).map((t) => (
             <button key={t} type="button" onClick={() => setType(t)}
-              className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${type === t ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/10 text-white/50 hover:border-white/20"}`}>
-              {t === "qcm_unique" ? "Réponse unique" : "Réponses multiples"}
+              className={`py-2 rounded-lg text-xs font-semibold border transition-colors text-center ${type === t ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/10 text-white/50 hover:border-white/20"}`}>
+              {QUESTION_TYPE_LABELS[t]}
             </button>
           ))}
         </div>
@@ -320,54 +335,68 @@ function QuestionForm({
       {/* Text */}
       <div>
         <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Question *</label>
-        <textarea
-          value={text} onChange={(e) => setText(e.target.value)} rows={3}
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
           className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#C9A84C]/50 resize-none"
-          placeholder="Énoncé de la question..."
-        />
+          placeholder="Énoncé de la question..." />
       </div>
 
-      {/* Options — format PASS/LAS : V/F + justification par proposition */}
-      <div>
-        <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">
-          Propositions A–E (VRAI / FAUX)
-        </label>
-        <div className="space-y-3">
-          {options.map((opt, i) => (
-            <div key={opt.label} className={`rounded-xl border transition-colors ${opt.is_correct ? "border-green-500/30 bg-green-500/8" : "border-white/10 bg-white/4"}`}>
-              {/* Label + texte + VRAI/FAUX */}
-              <div className="flex items-start gap-2 px-3 pt-3 pb-2">
-                <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 ${opt.is_correct ? "bg-green-500 text-white" : "bg-white/10 text-white/50"}`}>
-                  {opt.label}
-                </span>
-                <input
-                  value={opt.text} onChange={(e) => updateOption(i, "text", e.target.value)}
-                  className="flex-1 bg-transparent text-sm text-white placeholder-white/30 focus:outline-none"
-                  placeholder={`Proposition ${opt.label}...`}
-                />
-                <div className="flex gap-1.5 shrink-0">
-                  <button type="button" onClick={() => setCorrect(i, true)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${opt.is_correct ? "bg-green-500 border-green-500 text-white" : "border-white/20 text-white/40 hover:border-green-400 hover:text-green-400"}`}>
-                    VRAI
-                  </button>
-                  <button type="button" onClick={() => setCorrect(i, false)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${!opt.is_correct ? "bg-red-500 border-red-500 text-white" : "border-white/20 text-white/40 hover:border-red-400 hover:text-red-400"}`}>
-                    FAUX
-                  </button>
+      {/* QCM options */}
+      {isQcm && (
+        <div>
+          <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">
+            Propositions A–E (VRAI / FAUX)
+          </label>
+          <div className="space-y-3">
+            {options.map((opt, i) => (
+              <div key={opt.label} className={`rounded-xl border transition-colors ${opt.is_correct ? "border-green-500/30 bg-green-500/8" : "border-white/10 bg-white/4"}`}>
+                <div className="flex items-start gap-2 px-3 pt-3 pb-2">
+                  <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 ${opt.is_correct ? "bg-green-500 text-white" : "bg-white/10 text-white/50"}`}>
+                    {opt.label}
+                  </span>
+                  <input value={opt.text} onChange={(e) => updateOption(i, "text", e.target.value)}
+                    className="flex-1 bg-transparent text-sm text-white placeholder-white/30 focus:outline-none"
+                    placeholder={`Proposition ${opt.label}...`} />
+                  <div className="flex gap-1.5 shrink-0">
+                    <button type="button" onClick={() => setCorrect(i, true)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${opt.is_correct ? "bg-green-500 border-green-500 text-white" : "border-white/20 text-white/40 hover:border-green-400 hover:text-green-400"}`}>
+                      VRAI
+                    </button>
+                    <button type="button" onClick={() => setCorrect(i, false)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${!opt.is_correct ? "bg-red-500 border-red-500 text-white" : "border-white/20 text-white/40 hover:border-red-400 hover:text-red-400"}`}>
+                      FAUX
+                    </button>
+                  </div>
+                </div>
+                <div className="px-3 pb-3">
+                  <input value={opt.justification} onChange={(e) => updateOption(i, "justification", e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/60 placeholder-white/20 focus:outline-none focus:border-white/20"
+                    placeholder={`Justification ${opt.label} (optionnelle)...`} />
                 </div>
               </div>
-              {/* Justification */}
-              <div className="px-3 pb-3">
-                <input
-                  value={opt.justification} onChange={(e) => updateOption(i, "justification", e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/60 placeholder-white/20 focus:outline-none focus:border-white/20"
-                  placeholder={`Justification ${opt.label} (optionnelle)...`}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Short answer — correct answer field */}
+      {type === "short_answer" && (
+        <div>
+          <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Réponse correcte *</label>
+          <input value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)}
+            className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#C9A84C]/50"
+            placeholder="Ex : Mitose, 6,02×10²³, Myocarde..." />
+          <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
+            La réponse sera comparée automatiquement (sensibilité à la casse configurable dans Paramétrage)
+          </p>
+        </div>
+      )}
+
+      {/* Redaction — info */}
+      {type === "redaction" && (
+        <div className="rounded-xl border border-white/10 px-4 py-3 text-xs" style={{ backgroundColor: "rgba(0,0,0,0.15)", color: "rgba(255,255,255,0.45)" }}>
+          La rédaction sera corrigée manuellement par le professeur. Aucune réponse correcte prédéfinie.
+        </div>
+      )}
 
       {/* Difficulty */}
       <div>
@@ -384,12 +413,12 @@ function QuestionForm({
 
       {/* Explanation */}
       <div>
-        <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Explication (optionnelle)</label>
-        <textarea
-          value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={2}
+        <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">
+          {type === "redaction" ? "Corrigé type (visible après correction)" : "Explication (optionnelle)"}
+        </label>
+        <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={2}
           className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#C9A84C]/50 resize-none"
-          placeholder="Explication affichée après réponse..."
-        />
+          placeholder={type === "redaction" ? "Éléments de corrigé attendus..." : "Explication affichée après réponse..."} />
       </div>
 
       {error && <p className="text-red-400 text-xs flex items-center gap-1"><AlertCircle size={12} />{error}</p>}

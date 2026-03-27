@@ -317,3 +317,76 @@ export async function upsertUniversityCoefficient(
   revalidatePath("/admin/examens/parametrage");
   return { success: true };
 }
+
+// --- Config réponse courte par université ---
+
+export async function getShortAnswerConfig(university_dossier_id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("university_short_answer_config")
+    .select("*")
+    .eq("university_dossier_id", university_dossier_id)
+    .single();
+  if (error && error.code !== "PGRST116") return { error: error.message };
+  return { data: data ?? null };
+}
+
+export async function upsertShortAnswerConfig(
+  university_dossier_id: string,
+  config: { points_correct: number; points_incorrect: number; case_sensitive: boolean },
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("university_short_answer_config").upsert(
+    { university_dossier_id, ...config, updated_at: new Date().toISOString() },
+    { onConflict: "university_dossier_id" },
+  );
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+// --- Config rédaction par université ---
+
+export async function getRedactionConfig(university_dossier_id: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("university_redaction_config")
+    .select("*")
+    .eq("university_dossier_id", university_dossier_id)
+    .single();
+  if (error && error.code !== "PGRST116") return { error: error.message };
+  return { data: data ?? null };
+}
+
+export async function upsertRedactionConfig(
+  university_dossier_id: string,
+  config: { max_points: number },
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("university_redaction_config").upsert(
+    { university_dossier_id, ...config, updated_at: new Date().toISOString() },
+    { onConflict: "university_dossier_id" },
+  );
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+// --- Correction manuelle des rédactions ---
+
+export async function submitRedactionCorrection(
+  user_text_answer_id: string,
+  score_percent: number,
+  comment: string,
+  corrected_by: string,
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("redaction_corrections").upsert(
+    { user_text_answer_id, score_percent, comment, corrected_by, corrected_at: new Date().toISOString() },
+    { onConflict: "user_text_answer_id" },
+  );
+  if (error) return { error: error.message };
+  await supabase
+    .from("user_text_answers")
+    .update({ is_correct: score_percent >= 50 })
+    .eq("id", user_text_answer_id);
+  return { success: true };
+}

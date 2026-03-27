@@ -12,15 +12,21 @@ import {
   upsertUniversityGradingScale,
   getUniversityCoefficients,
   upsertUniversityCoefficient,
+  getShortAnswerConfig,
+  upsertShortAnswerConfig,
+  getRedactionConfig,
+  upsertRedactionConfig,
 } from "@/app/(admin)/admin/examens/actions";
 
 type Toast = { message: string; kind: "success" | "error" } | null;
 type ScaleRow = { nb_errors: number; points: number };
 type CoeffRow = { subject_dossier_id: string; name: string; semester: string; coefficient: number };
+type NotationType = "qcm" | "short_answer" | "redaction";
 
 export function ParametrageShell({ dossiers, allDossiers, embedded }: { dossiers: Dossier[]; allDossiers: Dossier[]; embedded?: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
+  const [notationType, setNotationType] = useState<NotationType>("qcm");
 
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -69,18 +75,56 @@ export function ParametrageShell({ dossiers, allDossiers, embedded }: { dossiers
             </div>
           </div>
         ) : (
-          <div className="p-6 space-y-8">
-            <GradingScaleSection
-              universityId={selectedUni.id}
-              universityName={selectedUni.name}
-              showToast={showToast}
-            />
-            <CoefficientsSection
-              universityId={selectedUni.id}
-              allDossiers={allDossiers}
-              showToast={showToast}
-            />
-          </div>
+          <>
+            {/* Type de notation tabs */}
+            <div className="flex items-center gap-1 px-6 pt-5 pb-0 shrink-0 border-b border-white/10">
+              {([
+                { key: "qcm", label: "QCM" },
+                { key: "short_answer", label: "Réponse courte" },
+                { key: "redaction", label: "Rédaction" },
+              ] as { key: NotationType; label: string }[]).map(({ key, label }) => (
+                <button key={key} onClick={() => setNotationType(key)}
+                  className="relative px-4 py-2.5 text-xs font-semibold transition-colors rounded-t-lg"
+                  style={{ color: notationType === key ? "#C9A84C" : "rgba(255,255,255,0.35)" }}>
+                  {label}
+                  {notationType === key && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: "#C9A84C" }} />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-6 space-y-8 overflow-y-auto flex-1">
+              {notationType === "qcm" && (
+                <>
+                  <GradingScaleSection
+                    universityId={selectedUni.id}
+                    universityName={selectedUni.name}
+                    showToast={showToast}
+                  />
+                  <CoefficientsSection
+                    universityId={selectedUni.id}
+                    allDossiers={allDossiers}
+                    showToast={showToast}
+                  />
+                </>
+              )}
+              {notationType === "short_answer" && (
+                <ShortAnswerSection
+                  universityId={selectedUni.id}
+                  universityName={selectedUni.name}
+                  showToast={showToast}
+                />
+              )}
+              {notationType === "redaction" && (
+                <RedactionSection
+                  universityId={selectedUni.id}
+                  universityName={selectedUni.name}
+                  showToast={showToast}
+                />
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -475,6 +519,190 @@ function CoefficientsSection({ universityId, allDossiers, showToast }: {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Short Answer Section ─────────────────────────────────────────────────────
+
+function ShortAnswerSection({ universityId, universityName, showToast }: {
+  universityId: string; universityName: string; showToast: (msg: string, kind: "success" | "error") => void;
+}) {
+  const [pointsCorrect, setPointsCorrect] = useState(1);
+  const [pointsIncorrect, setPointsIncorrect] = useState(0);
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getShortAnswerConfig(universityId).then(res => {
+      if (cancelled) return;
+      if (res.data) {
+        setPointsCorrect(Number(res.data.points_correct));
+        setPointsIncorrect(Number(res.data.points_incorrect));
+        setCaseSensitive(Boolean(res.data.case_sensitive));
+      } else {
+        setPointsCorrect(1); setPointsIncorrect(0); setCaseSensitive(false);
+      }
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [universityId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const res = await upsertShortAnswerConfig(universityId, { points_correct: pointsCorrect, points_incorrect: pointsIncorrect, case_sensitive: caseSensitive });
+    setSaving(false);
+    if (res.error) showToast("Erreur : " + res.error, "error");
+    else showToast("Config enregistrée", "success");
+  };
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-sm font-semibold text-white">Réponse courte</h2>
+        <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+          Questions à réponse textuelle courte (mot, nombre, formule) — {universityName}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-white/10 px-5 py-4 mb-5 text-xs leading-relaxed" style={{ backgroundColor: "rgba(0,0,0,0.15)", color: "rgba(255,255,255,0.55)" }}>
+        La réponse de l&apos;étudiant est comparée automatiquement à la réponse correcte définie dans l&apos;éditeur de question.
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-8 justify-center">
+          <Loader2 size={16} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-white/10 overflow-hidden">
+            <div style={{ backgroundColor: "rgba(0,0,0,0.2)" }} className="px-5 py-2.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Notation</span>
+            </div>
+            <div className="divide-y divide-white/5">
+              <div className="flex items-center justify-between px-5 py-3">
+                <span className="text-sm font-semibold text-white/80">Réponse correcte</span>
+                <div className="flex items-center gap-2">
+                  <input type="number" step={0.25} min={0} max={1} value={pointsCorrect}
+                    onChange={e => setPointsCorrect(parseFloat(e.target.value) || 0)}
+                    className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50" />
+                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>pt</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between px-5 py-3">
+                <span className="text-sm font-semibold text-white/80">Réponse incorrecte</span>
+                <div className="flex items-center gap-2">
+                  <input type="number" step={0.25} value={pointsIncorrect}
+                    onChange={e => setPointsIncorrect(parseFloat(e.target.value) || 0)}
+                    className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50" />
+                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>pt</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button onClick={() => setCaseSensitive(v => !v)}
+            className="flex items-center gap-2 text-xs font-medium transition-colors"
+            style={{ color: caseSensitive ? "#C9A84C" : "rgba(255,255,255,0.4)" }}>
+            <span className="flex items-center justify-center w-4 h-4 rounded border shrink-0"
+              style={{ borderColor: caseSensitive ? "#C9A84C" : "rgba(255,255,255,0.2)", backgroundColor: caseSensitive ? "rgba(201,168,76,0.2)" : "transparent" }}>
+              {caseSensitive && <Check size={10} style={{ color: "#C9A84C" }} />}
+            </span>
+            Sensible à la casse (majuscules/minuscules comptent)
+          </button>
+
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold"
+            style={{ backgroundColor: "#C9A84C", color: "#0e1e35", opacity: saving ? 0.6 : 1 }}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Mettre à jour
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Redaction Section ────────────────────────────────────────────────────────
+
+function RedactionSection({ universityId, universityName, showToast }: {
+  universityId: string; universityName: string; showToast: (msg: string, kind: "success" | "error") => void;
+}) {
+  const [maxPoints, setMaxPoints] = useState(20);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getRedactionConfig(universityId).then(res => {
+      if (cancelled) return;
+      if (res.data) setMaxPoints(Number(res.data.max_points));
+      else setMaxPoints(20);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [universityId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const res = await upsertRedactionConfig(universityId, { max_points: maxPoints });
+    setSaving(false);
+    if (res.error) showToast("Erreur : " + res.error, "error");
+    else showToast("Config enregistrée", "success");
+  };
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="text-sm font-semibold text-white">Rédaction</h2>
+        <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+          Questions à réponse longue corrigées manuellement — {universityName}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-white/10 px-5 py-4 mb-5 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+        <p className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.6)" }}>Comment ça marche</p>
+        <ul className="text-xs space-y-1.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+          <li>• L&apos;étudiant rédige sa réponse dans une zone de texte libre</li>
+          <li>• Le professeur reçoit les copies à corriger dans l&apos;interface de correction</li>
+          <li>• Le prof attribue une note et peut laisser un commentaire</li>
+          <li>• La note est visible par l&apos;étudiant après correction</li>
+        </ul>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-8 justify-center">
+          <Loader2 size={16} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-white/10 overflow-hidden">
+            <div style={{ backgroundColor: "rgba(0,0,0,0.2)" }} className="px-5 py-2.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Barème</span>
+            </div>
+            <div className="flex items-center justify-between px-5 py-3">
+              <span className="text-sm font-semibold text-white/80">Note maximale par défaut</span>
+              <div className="flex items-center gap-2">
+                <input type="number" min={1} max={100} step={1} value={maxPoints}
+                  onChange={e => setMaxPoints(parseInt(e.target.value) || 20)}
+                  className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50" />
+                <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>pts</span>
+              </div>
+            </div>
+          </div>
+
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold"
+            style={{ backgroundColor: "#C9A84C", color: "#0e1e35", opacity: saving ? 0.6 : 1 }}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Mettre à jour
+          </button>
         </div>
       )}
     </div>
