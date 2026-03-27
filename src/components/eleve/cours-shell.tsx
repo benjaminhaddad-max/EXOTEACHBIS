@@ -238,30 +238,6 @@ export function EleveCoursShell({
       <div className="flex flex-1 flex-col overflow-hidden bg-[#F4F6FA]">
         {selectedDossier ? (
           <>
-            {/* Breadcrumb */}
-            <div className="border-b border-[#E2E8F0] bg-white px-6 py-3 text-xs text-[#8C98A8]">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button onClick={() => setSelectedId(null)} className="rounded-full bg-[#F4F6FA] p-1.5 transition hover:bg-[#E2E8F0]">
-                  <Home size={12} />
-                </button>
-                {breadcrumb.map((d, i) => (
-                  <span key={d.id} className="flex items-center gap-1.5">
-                    <ChevronRight size={11} className="text-[#C0C8D4]" />
-                    <button
-                      onClick={() => selectDossier(d)}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                        i === breadcrumb.length - 1
-                          ? "bg-[#0e1e35] text-white"
-                          : "text-[#5F6F82] hover:text-[#0e1e35]"
-                      }`}
-                    >
-                      {d.name}
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
             <div className="flex-1 overflow-y-auto">
               <div className="mx-auto max-w-5xl px-6 py-6 space-y-6">
                 {/* Hero header */}
@@ -271,6 +247,25 @@ export function EleveCoursShell({
                   <div className="pointer-events-none absolute -left-10 -bottom-16 h-48 w-48 rounded-full bg-[#C9A84C]/10 blur-3xl" />
                   <div className="relative flex items-center justify-between gap-6">
                     <div>
+                      {/* Breadcrumb path inside hero */}
+                      {breadcrumb.length > 1 && (
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-white/40">
+                          <button onClick={() => setSelectedId(null)} className="rounded-full p-1 transition hover:bg-white/10">
+                            <Home size={11} className="text-white/40" />
+                          </button>
+                          {breadcrumb.slice(0, -1).map((d) => (
+                            <span key={d.id} className="flex items-center gap-1.5">
+                              <ChevronRight size={10} className="text-white/20" />
+                              <button
+                                onClick={() => selectDossier(d)}
+                                className="text-white/50 hover:text-white/80 transition-colors"
+                              >
+                                {d.name}
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <h2 className="text-2xl font-bold tracking-tight text-white">{selectedDossier.name}</h2>
                       {selectedDossier.description && (
                         <p className="mt-1.5 text-sm text-white/60">{selectedDossier.description}</p>
