@@ -10,7 +10,7 @@ import Link from "next/link";
 import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/types/database";
 import {
   addSerieToExamen, removeSerieFromExamen,
-  updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility,
+  updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility, updateSerieGroupes,
 } from "@/app/(admin)/admin/examens/actions";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +22,7 @@ type ExamenSerieWithCoeff = {
   coefficient: number;
   debut_at?: string | null;
   fin_at?: string | null;
+  groupe_ids?: string[] | null;
   series?: Serie;
 };
 
@@ -43,7 +44,7 @@ type ExamenData = {
 type AttemptType = {
   id: string; user_id: string; series_id: string; score: number | null;
   nb_correct: number; nb_total: number; ended_at: string;
-  user?: { id: string; first_name: string | null; last_name: string | null; email: string; filiere_id: string | null; filiere?: { id: string; name: string; code: string; color: string } | null };
+  user?: { id: string; first_name: string | null; last_name: string | null; email: string; filiere_id: string | null; groupe_id: string | null; filiere?: { id: string; name: string; code: string; color: string } | null };
 };
 
 type Toast = { message: string; kind: "success" | "error" } | null;
@@ -151,6 +152,14 @@ export function ExamenDetailShell({
     });
   };
 
+  const handleGroupesChange = (serieId: string, groupe_ids: string[] | null) => {
+    startTransition(async () => {
+      const res = await updateSerieGroupes(initialExamen.id, serieId, groupe_ids);
+      if ("error" in res) { showToast(res.error!, "error"); return; }
+      setEpreuves(prev => prev.map(s => s.series_id === serieId ? { ...s, groupe_ids } : s));
+    });
+  };
+
   const handleToggleResults = () => {
     startTransition(async () => {
       const newVal = !resultsVisible;
@@ -192,7 +201,7 @@ export function ExamenDetailShell({
     for (const a of attempts) {
       if (!a.user || a.score == null) continue;
       if (!byUser.has(a.user.id)) {
-        byUser.set(a.user.id, { userId: a.user.id, name: [a.user.first_name, a.user.last_name].filter(Boolean).join(" ") || a.user.email, email: a.user.email, filiere: a.user.filiere ?? null, serieScores: {}, weightedTotal: 0, totalCoeff: 0, moyenne20: 0 });
+        byUser.set(a.user.id, { userId: a.user.id, name: [a.user.first_name, a.user.last_name].filter(Boolean).join(" ") || a.user.email, email: a.user.email, filiere: a.user.filiere ?? null, groupeId: a.user.groupe_id ?? null, serieScores: {}, weightedTotal: 0, totalCoeff: 0, moyenne20: 0 });
       }
       const row = byUser.get(a.user.id)!;
       const existing = row.serieScores[a.series_id];
@@ -203,6 +212,8 @@ export function ExamenDetailShell({
     for (const row of byUser.values()) {
       let ws = 0, tc = 0;
       for (const es of epreuves) {
+        // Skip this épreuve if it doesn't target the student's classe
+        if (es.groupe_ids !== null && es.groupe_ids !== undefined && es.groupe_ids.length > 0 && row.groupeId && !es.groupe_ids.includes(row.groupeId)) continue;
         const s = row.serieScores[es.series_id];
         if (s) { const s20 = s.nb_total > 0 ? (s.nb_correct / s.nb_total) * notationSur : 0; ws += s20 * es.coefficient; tc += es.coefficient; }
       }
@@ -307,6 +318,40 @@ export function ExamenDetailShell({
                     />
                   </div>
                 </div>
+
+                {/* Classes cibles */}
+                {(initialExamen.groupe_ids?.length ?? 0) > 1 && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-semibold uppercase tracking-widest text-white/25">Classes cibles</p>
+                    <div className="flex flex-wrap gap-1">
+                      {groupes
+                        .filter(g => initialExamen.groupe_ids?.includes(g.id))
+                        .map(g => {
+                          const active = !es.groupe_ids || es.groupe_ids.includes(g.id);
+                          return (
+                            <button
+                              key={g.id}
+                              onClick={() => {
+                                const current = es.groupe_ids ?? initialExamen.groupe_ids ?? [];
+                                let next: string[] | null;
+                                if (active) {
+                                  const after = current.filter(id => id !== g.id);
+                                  next = after.length === 0 ? [] : after;
+                                } else {
+                                  const after = [...current, g.id];
+                                  next = after.length === (initialExamen.groupe_ids?.length ?? 0) ? null : after;
+                                }
+                                handleGroupesChange(es.series_id, next);
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${active ? "bg-[#C9A84C]/15 border-[#C9A84C]/40 text-[#C9A84C]" : "bg-white/5 border-white/10 text-white/25 hover:text-white/50"}`}
+                            >
+                              {g.name}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center gap-1.5">

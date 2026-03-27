@@ -120,6 +120,22 @@ export async function updateSerieCoefficient(
   return { success: true };
 }
 
+export async function updateSerieGroupes(
+  examen_id: string,
+  series_id: string,
+  groupe_ids: string[] | null
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("examens_series")
+    .update({ groupe_ids })
+    .eq("examen_id", examen_id)
+    .eq("series_id", series_id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function removeSerieFromExamen(examen_id: string, series_id: string) {
   const supabase = await createClient();
   const { error } = await supabase
