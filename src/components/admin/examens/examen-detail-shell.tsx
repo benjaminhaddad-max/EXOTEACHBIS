@@ -314,6 +314,7 @@ export function ExamenDetailShell({
                     <DateTimePicker
                       value={es.fin_at ?? null}
                       placeholder="Fin..."
+                      placement="right"
                       onChange={(v) => handleScheduleChange(es.series_id, es.debut_at ?? null, v)}
                     />
                   </div>
@@ -564,10 +565,11 @@ export function ExamenDetailShell({
 const MONTHS_FR = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
 const DAYS_FR = ["L", "M", "M", "J", "V", "S", "D"];
 
-export function DateTimePicker({ value, onChange, placeholder }: {
+export function DateTimePicker({ value, onChange, placeholder, placement = "left" }: {
   value: string | null;
   onChange: (v: string | null) => void;
   placeholder: string;
+  placement?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -631,7 +633,7 @@ export function DateTimePicker({ value, onChange, placeholder }: {
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full mt-1.5 left-0 rounded-2xl border border-white/12 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0a1828", minWidth: 248 }}>
+        <div className={`absolute z-50 top-full mt-1.5 ${placement === "right" ? "right-0" : "left-0"} rounded-2xl border border-white/12 shadow-2xl overflow-hidden`} style={{ backgroundColor: "#0a1828", minWidth: 248 }}>
           {/* Month nav */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
             <button onClick={prevMonth} className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white/10 text-white/50 hover:text-white transition-colors text-sm">‹</button>
