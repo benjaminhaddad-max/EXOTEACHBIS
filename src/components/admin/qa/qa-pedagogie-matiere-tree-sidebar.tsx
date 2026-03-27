@@ -316,6 +316,9 @@ export function QaPedagogieMatiereTreeSidebar({
   const matieresByDossier = useMemo(() => {
     const map = new Map<string, Matiere[]>();
     for (const mat of matieres) {
+      // Exclure les matières fantômes nommées PASS / LAS / LSPS (erreurs de saisie en base)
+      const n = mat.name.trim().toUpperCase();
+      if (n === "PASS" || n === "LAS" || n === "LSPS" || n.startsWith("PASS ") || n.startsWith("LAS ") || n.startsWith("LSPS ")) continue;
       if (!map.has(mat.dossier_id)) map.set(mat.dossier_id, []);
       map.get(mat.dossier_id)!.push(mat);
     }
