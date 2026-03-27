@@ -314,7 +314,6 @@ export function EleveCoursShell({
                         disabled={selectedExerciceRoots.length === 0}
                       >
                         Exercices
-                        {exerciceQuestionCount > 0 ? ` · ${exerciceQuestionCount}` : ""}
                       </button>
                     </div>
                   )}
