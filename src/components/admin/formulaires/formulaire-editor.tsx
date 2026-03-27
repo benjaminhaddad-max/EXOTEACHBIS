@@ -211,77 +211,78 @@ export function FormulaireEditor({
   };
 
   return (
-    <div className="space-y-5">
-      {/* ── Metadata + Targeting ── */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr),320px]">
-        {/* Left: Template info */}
-        <div className="p-5 rounded-2xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <input
-            value={templateDraft.title}
-            onChange={e => setTemplateDraft(d => ({ ...d, title: e.target.value }))}
-            placeholder="Titre du formulaire"
-            className="w-full bg-transparent text-xl font-bold text-white outline-none placeholder:text-white/20 mb-3"
-          />
-          <textarea
-            rows={2}
-            value={templateDraft.description}
-            onChange={e => setTemplateDraft(d => ({ ...d, description: e.target.value }))}
-            placeholder="Description du formulaire..."
-            className="w-full bg-transparent text-sm text-white/60 outline-none resize-none placeholder:text-white/20 mb-3"
-          />
-          <div className="flex flex-wrap items-center gap-2 text-[10px]">
-            <span className="px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>{selectedFields.length} question(s)</span>
-            <span className="px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "#34D399" }}>{selectedFields.filter(f => f.required).length} obligatoire(s)</span>
-            <span className="px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(167,139,250,0.12)", color: "#A78BFA" }}>{templateResponses.length} réponse(s)</span>
+    <div className="space-y-4">
+      {/* ── En-tête unique : infos + actions + ciblage (compact) ── */}
+      <div className="p-4 rounded-2xl" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <input
+              value={templateDraft.title}
+              onChange={e => setTemplateDraft(d => ({ ...d, title: e.target.value }))}
+              placeholder="Titre du formulaire"
+              className="w-full bg-transparent text-lg font-bold text-white outline-none placeholder:text-white/20"
+            />
+            <textarea
+              rows={1}
+              value={templateDraft.description}
+              onChange={e => setTemplateDraft(d => ({ ...d, description: e.target.value }))}
+              placeholder="Description courte…"
+              className="w-full bg-transparent text-xs text-white/55 outline-none resize-y min-h-[2.25rem] max-h-24 placeholder:text-white/20 leading-relaxed"
+            />
           </div>
-
-          <div className="flex items-center gap-3 mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-            <div className="flex items-center gap-2">
-              <select value={templateDraft.context === "generic" || FORM_CONTEXT_OPTIONS.some(o => o.value === templateDraft.context) ? templateDraft.context : "autre"} onChange={e => setTemplateDraft(d => ({ ...d, context: e.target.value }))} className={F + " max-w-[160px]"}>
-                {FORM_CONTEXT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-white/60 ml-auto">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 sm:justify-end">
+            <label className="flex items-center gap-1.5 text-[11px] text-white/55 cursor-pointer whitespace-nowrap">
               <input type="checkbox" checked={templateDraft.is_active} onChange={e => setTemplateDraft(d => ({ ...d, is_active: e.target.checked }))} className="rounded" style={{ accentColor: "#34D399" }} />
               Actif
             </label>
-            <button onClick={() => setShowPreview(p => !p)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}>
+            <button type="button" onClick={() => setShowPreview(p => !p)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors" style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.65)" }}>
               {showPreview ? <EyeOff size={12} /> : <Eye size={12} />}
               {showPreview ? "Masquer" : "Aperçu"}
             </button>
-            <button onClick={handleSaveTemplate} disabled={isPending || !templateDraft.title.trim()} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
+            <button type="button" onClick={handleSaveTemplate} disabled={isPending || !templateDraft.title.trim()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold disabled:opacity-50" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
               {isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
               Enregistrer
             </button>
           </div>
         </div>
 
-        {/* Right: Target summary from sidebar */}
-        <div className="p-4 rounded-2xl space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#C9A84C" }}>Destinataires</p>
-          {sidebarGroupeIds && sidebarGroupeIds.size > 0 ? (
-            <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)" }}>
-              <p className="text-xs font-semibold" style={{ color: "#34D399" }}>
-                {sidebarGroupeIds.size} classe{sidebarGroupeIds.size > 1 ? "s" : ""} ciblée{sidebarGroupeIds.size > 1 ? "s" : ""}
-              </p>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {[...sidebarGroupeIds].map(gid => {
-                  const g = initialGroupes.find(g => g.id === gid);
-                  return g ? (
-                    <span key={gid} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: g.color + "20", color: g.color }}>
-                      {g.name}
-                    </span>
-                  ) : null;
-                })}
-              </div>
-              <p className="text-[9px] mt-2" style={{ color: "rgba(52,211,153,0.5)" }}>Définis depuis la sidebar à gauche</p>
-            </div>
-          ) : (
-            <div className="p-3 rounded-xl" style={{ backgroundColor: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.15)" }}>
-              <p className="text-xs font-semibold" style={{ color: "#C9A84C" }}>Global (tous les élèves)</p>
-              <p className="text-[9px] mt-1" style={{ color: "rgba(201,168,76,0.5)" }}>Coche des classes dans la sidebar pour cibler</p>
-            </div>
-          )}
+        <div className="mt-3 pt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>{selectedFields.length} q.</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "#34D399" }}>{selectedFields.filter(f => f.required).length} obl.</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold" style={{ backgroundColor: "rgba(167,139,250,0.12)", color: "#A78BFA" }}>{templateResponses.length} rép.</span>
+          </div>
+          <select
+            value={templateDraft.context === "generic" || FORM_CONTEXT_OPTIONS.some(o => o.value === templateDraft.context) ? templateDraft.context : "autre"}
+            onChange={e => setTemplateDraft(d => ({ ...d, context: e.target.value }))}
+            className={F + " !py-1.5 !text-[11px] max-w-[140px] sm:max-w-[160px]"}
+          >
+            {FORM_CONTEXT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <span className="hidden sm:inline w-px h-4 shrink-0 self-center" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} aria-hidden />
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1 sm:flex-initial">
+            <span className="text-[9px] font-semibold uppercase tracking-wider shrink-0" style={{ color: "#C9A84C" }}>Destinataires</span>
+            {sidebarGroupeIds && sidebarGroupeIds.size > 0 ? (
+              <>
+                <span className="text-[10px] text-white/35 shrink-0">·</span>
+                <div className="flex flex-wrap gap-1 min-w-0">
+                  {[...sidebarGroupeIds].map(gid => {
+                    const g = initialGroupes.find(x => x.id === gid);
+                    return g ? (
+                      <span key={gid} className="inline-flex text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: g.color + "22", color: g.color }}>
+                        {g.name}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+                <span className="text-[9px] text-white/25 hidden md:inline truncate">— sidebar</span>
+              </>
+            ) : (
+              <span className="text-[10px] text-white/45 truncate">
+                Global (tous) — coche des classes dans la sidebar pour cibler
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
