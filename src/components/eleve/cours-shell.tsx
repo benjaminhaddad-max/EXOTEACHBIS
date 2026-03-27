@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronRight, ChevronDown, Folder, FolderOpen,
-  Home, BookOpen, GripVertical, Layers, ArrowRight, Search,
+  ChevronRight, Folder, FolderOpen,
+  Home, BookOpen, Layers, ArrowRight, Search,
 } from "lucide-react";
 import type { Dossier, Cours, Matiere } from "@/types/database";
 import { ExercicesShell } from "@/components/eleve/exercices-shell";
 import type { DossierNode as ExerciceDossierNode, CoursNode as ExerciceCoursNode } from "@/app/(eleve)/exercices/actions";
-
-type DossierNode = Dossier & { children: DossierNode[] };
 
 type FlashcardDeck = {
   id: string;
@@ -25,13 +23,6 @@ type FlashcardDeck = {
     color: string;
   } | null;
 };
-
-function buildTree(flat: Dossier[], parentId: string | null = null): DossierNode[] {
-  return flat
-    .filter((d) => d.parent_id === parentId)
-    .sort((a, b) => a.order_index - b.order_index)
-    .map((d) => ({ ...d, children: buildTree(flat, d.id) }));
-}
 
 function getBreadcrumb(id: string | null, allDossiers: Dossier[]): Dossier[] {
   if (!id) return [];
@@ -59,54 +50,7 @@ function collectExerciceCoursIds(nodes: ExerciceDossierNode[]): string[] {
   return ids;
 }
 
-// ─── Tree node ────────────────────────────────────────────────────────────────
-function TreeNode({
-  node, depth, selectedId, expandedIds, onSelect, onToggle, onPrefetch,
-}: {
-  node: DossierNode; depth: number; selectedId: string | null;
-  expandedIds: Set<string>;
-  onSelect: (d: Dossier) => void;
-  onToggle: (id: string) => void;
-  onPrefetch: (d: Dossier) => void;
-}) {
-  const isExpanded = expandedIds.has(node.id);
-  const isSelected = selectedId === node.id;
-  const hasChildren = node.children.length > 0;
-
-  return (
-    <div>
-      <div
-        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors select-none ${
-          isSelected ? "bg-navy/10 text-navy" : "hover:bg-gray-100 text-gray-600"
-        }`}
-        style={{ paddingLeft: `${8 + depth * 16}px` }}
-        onMouseEnter={() => onPrefetch(node)}
-        onClick={() => { onSelect(node); if (hasChildren) onToggle(node.id); }}
-      >
-        {hasChildren ? (
-          <span className="w-4 h-4 flex items-center justify-center shrink-0 text-gray-400">
-            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </span>
-        ) : <span className="w-4 shrink-0" />}
-        {isExpanded
-          ? <FolderOpen size={14} className="shrink-0" style={{ color: node.color || "#6B7280" }} />
-          : <Folder size={14} className="shrink-0" style={{ color: node.color || "#9CA3AF" }} />}
-        <span className="text-xs font-medium" style={{ wordBreak: "break-word", whiteSpace: "normal", lineHeight: 1.3 }}>
-          {node.name}
-        </span>
-      </div>
-      {isExpanded && node.children.map((child) => (
-        <TreeNode key={child.id} node={child} depth={depth + 1} selectedId={selectedId}
-          expandedIds={expandedIds} onSelect={onSelect} onToggle={onToggle} onPrefetch={onPrefetch} />
-      ))}
-    </div>
-  );
-}
-
 // ─── Main shell ───────────────────────────────────────────────────────────────
-const MIN_WIDTH = 160;
-const MAX_WIDTH = 480;
-const DEFAULT_WIDTH = 256;
 
 export function EleveCoursShell({
   initialDossiers,
@@ -129,26 +73,15 @@ export function EleveCoursShell({
   const [allCours] = useState<Cours[]>(initialCours);
   const [allFlashcardDecks] = useState<FlashcardDeck[]>(initialFlashcardDecks);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [coursList, setCoursList] = useState<Cours[]>([]);
   const [childDossiers, setChildDossiers] = useState<Dossier[]>([]);
   const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"cours" | "exercices">("cours");
-
-  // Resizable sidebar
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("cours-sidebar-width");
-      return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
-    }
-    return DEFAULT_WIDTH;
-  });
-  const isDragging = useRef(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
-
-  const tree = buildTree(allDossiers);
+  const rootDossiers = useMemo(
+    () => allDossiers.filter((d) => d.parent_id === null).sort((a, b) => a.order_index - b.order_index),
+    [allDossiers]
+  );
   const selectedDossier = allDossiers.find((d) => d.id === selectedId) ?? null;
   const breadcrumb = getBreadcrumb(selectedId, allDossiers);
   const normalizedSearch = search.trim().toLowerCase();
@@ -162,11 +95,8 @@ export function EleveCoursShell({
     return map;
   }, [allMatieres]);
 
-  const toggleExpanded = (id: string) =>
-    setExpandedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selectDossier = useCallback((dossier: Dossier) => {
     setSelectedId(dossier.id);
-    setExpandedIds((prev) => new Set([...prev, dossier.id]));
     const childDossiersForSelection = allDossiers
       .filter((candidate) => candidate.parent_id === dossier.id)
       .sort((a, b) => a.order_index - b.order_index);
@@ -231,71 +161,13 @@ export function EleveCoursShell({
     return allCours.some((cours) => cours.dossier_id === selectedDossier.id);
   }, [allCours, matiereIdsByDossier, selectedDossier]);
 
-  // Drag to resize
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    isDragging.current = true;
-    startX.current = e.clientX;
-    startWidth.current = sidebarWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, [sidebarWidth]);
-
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      const delta = e.clientX - startX.current;
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta));
-      setSidebarWidth(next);
-    };
-    const onUp = () => {
-      if (!isDragging.current) return;
-      isDragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      setSidebarWidth((w) => {
-        localStorage.setItem("cours-sidebar-width", String(w));
-        return w;
-      });
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, []);
-
-  useEffect(() => {
-    if (selectedId || tree.length !== 1) return;
-    selectDossier(tree[0]);
-  }, [selectedId, selectDossier, tree]);
+    if (selectedId || rootDossiers.length !== 1) return;
+    selectDossier(rootDossiers[0]);
+  }, [selectedId, selectDossier, rootDossiers]);
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* LEFT: Resizable tree */}
-      <div
-        className="shrink-0 border-r border-[#E6EEF8] flex flex-col overflow-hidden bg-[linear-gradient(180deg,#F8FBFF_0%,#F4F7FB_100%)]"
-        style={{ width: sidebarWidth }}
-      >
-        <div className="px-4 py-4 border-b border-[#EAF0F7]">
-          <p className="text-[11px] font-bold text-[#7B8A9A] uppercase tracking-[0.2em]">Navigation</p>
-          <p className="mt-1 text-xs text-[#9AA8B6]">Choisis un dossier puis explore ses cours.</p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          {tree.map((node) => (
-            <TreeNode key={node.id} node={node} depth={0} selectedId={selectedId}
-              expandedIds={expandedIds} onSelect={selectDossier} onToggle={toggleExpanded}
-              onPrefetch={() => {}} />
-          ))}
-        </div>
-      </div>
-
-      {/* DRAG HANDLE */}
-      <div
-        className="w-1 shrink-0 cursor-col-resize hover:bg-navy/20 active:bg-navy/40 transition-colors flex items-center justify-center group relative"
-        onMouseDown={onMouseDown}
-      >
-        <GripVertical size={12} className="text-gray-300 group-hover:text-gray-400 absolute" />
-      </div>
-
-      {/* RIGHT: Content */}
       <div className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,#F9FBFE_0%,#FFFFFF_18%)]">
         {selectedDossier ? (
           <>
@@ -532,10 +404,28 @@ export function EleveCoursShell({
             </div>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
             <FolderOpen size={48} className="mb-3 text-[#D5DDE8]" />
-            <p className="text-sm font-medium text-[#7A8898]">Sélectionnez un dossier</p>
-            <p className="mt-1 text-xs text-[#AAB4C0]">pour voir les cours et exercices</p>
+            <p className="text-sm font-medium text-[#7A8898]">Choisis une formation</p>
+            <p className="mt-1 text-xs text-[#AAB4C0]">La navigation se fait ensuite directement avec les bulles.</p>
+            {rootDossiers.length > 0 && (
+              <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+                {rootDossiers.map((dossier) => (
+                  <button
+                    key={dossier.id}
+                    type="button"
+                    onClick={() => selectDossier(dossier)}
+                    className="inline-flex items-center gap-2 rounded-full border border-[#DCE7F3] bg-white px-4 py-2 text-sm font-medium text-[#12314D] transition hover:-translate-y-0.5 hover:border-[#4FABDB]/40 hover:shadow-[0_10px_24px_rgba(18,49,77,0.08)]"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: dossier.color || "#8FA2B7" }}
+                    />
+                    {dossier.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
