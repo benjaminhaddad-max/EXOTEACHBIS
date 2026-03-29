@@ -1,7 +1,6 @@
 "use client";
 
 import { useUser } from "@/hooks/use-user";
-import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -17,7 +16,6 @@ import {
   Handshake,
   BookOpen,
   Eye,
-  ArrowLeft,
 } from "lucide-react";
 import { SidebarShell } from "./sidebar-shell";
 import { SidebarItem } from "./sidebar-item";
@@ -41,20 +39,8 @@ const coachNavItems = [
 
 export function AdminSidebar() {
   const { profile } = useUser();
-  const pathname = usePathname();
-
-  // On /admin/coaching, admins see the coach sidebar (immersive coach view)
-  const isCoachingPage = pathname === "/admin/coaching";
-  const isCoachRole = profile?.role === "coach";
-
-  const showCoachSidebar = isCoachRole || isCoachingPage;
-
-  const navItems = showCoachSidebar
-    ? [
-        ...coachNavItems,
-        // Admins get a "back to admin" link
-        ...(!isCoachRole ? [{ href: "/admin/dashboard", label: "Retour admin", icon: ArrowLeft }] : []),
-      ]
+  const navItems = profile?.role === "coach"
+    ? coachNavItems
     : profile?.role === "prof"
       ? adminNavItems.filter((item) => item.href === "/admin/communication" || item.href === "/admin/coaching")
       : adminNavItems;
