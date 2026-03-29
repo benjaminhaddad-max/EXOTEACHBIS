@@ -10,7 +10,7 @@ import Link from "next/link";
 import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/types/database";
 import {
   addSerieToExamen, removeSerieFromExamen,
-  updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility, updateSerieGroupes,
+  updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility, updateSerieGroupes, ensureSubjectMatiere,
 } from "@/app/(admin)/admin/examens/actions";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -122,7 +122,12 @@ export function ExamenDetailShell({
     setCreating(subject.id);
     try {
       const serieName = `${initialExamen.name} — ${subject.name}`;
-      const matiere = matieres.find(m => m.dossier_id === subject.id);
+      let matiere = matieres.find(m => m.dossier_id === subject.id);
+      if (!matiere) {
+        const matiereRes = await ensureSubjectMatiere(subject.id);
+        if ("error" in matiereRes) { showToast(matiereRes.error!, "error"); return; }
+        matiere = (matiereRes as any).data ?? null;
+      }
       const res = await createSerie({ name: serieName, type: "concours_blanc" as SerieType, timed: false, score_definitif: false, visible: true, matiere_id: matiere?.id ?? null });
       if ("error" in res) { showToast(res.error!, "error"); return; }
       const addRes = await addSerieToExamen(initialExamen.id, res.id!, epreuves.length, 1);
@@ -180,7 +185,12 @@ export function ExamenDetailShell({
     setCreating(subject.id);
     try {
       const serieName = `${initialExamen.name} — ${subject.name}`;
-      const matiere = matieres.find(m => m.dossier_id === subject.id);
+      let matiere = matieres.find(m => m.dossier_id === subject.id);
+      if (!matiere) {
+        const matiereRes = await ensureSubjectMatiere(subject.id);
+        if ("error" in matiereRes) { showToast(matiereRes.error!, "error"); return; }
+        matiere = (matiereRes as any).data ?? null;
+      }
       const res = await createSerie({ name: serieName, type: "concours_blanc" as SerieType, timed: false, score_definitif: false, visible: true, matiere_id: matiere?.id ?? null });
       if ("error" in res) { showToast(res.error!, "error"); return; }
       const addRes = await addSerieToExamen(initialExamen.id, res.id!, epreuves.length, 1);

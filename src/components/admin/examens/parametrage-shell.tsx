@@ -11,6 +11,7 @@ import {
   getUniversityGradingScale,
   upsertUniversityGradingScale,
   getUniversityCoefficients,
+  ensureUniversityMatiereCoverage,
   getUniversityFiliereCoefficients,
   upsertUniversityCoefficient,
   getShortAnswerConfig,
@@ -477,7 +478,7 @@ function CoefficientsSection({ universityId, allDossiers, showToast }: {
     const res = await upsertUniversityCoefficient(universityId, subjectId, value);
     setSavingId(null);
     if (res.error) showToast("Erreur : " + res.error, "error");
-  }, [universityId, showToast]);
+  }, [universityId]);
 
   const allSubjects = subjectsBySemester.flatMap(g => g.subjects);
 
@@ -560,6 +561,7 @@ function FiliereCoefficientsSection({
   showToast: (msg: string, kind: "success" | "error") => void;
 }) {
   const [selectedFiliereId, setSelectedFiliereId] = useState<string>(filieres[0]?.id ?? "");
+  const [matiereRows, setMatiereRows] = useState<Matiere[]>(matieres);
   const [coeffs, setCoeffs] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -580,7 +582,7 @@ function FiliereCoefficientsSection({
     const subjects = allDossiers.filter(
       (d) => d.parent_id && semesterIds.has(d.parent_id) && d.dossier_type === "subject"
     );
-    const matiereByDossierId = new Map(matieres.map((matiere) => [matiere.dossier_id, matiere]));
+    const matiereByDossierId = new Map(matiereRows.map((matiere) => [matiere.dossier_id, matiere]));
 
     return semesters
       .sort((a, b) => a.order_index - b.order_index)
@@ -596,26 +598,37 @@ function FiliereCoefficientsSection({
           .filter(({ matiere }) => Boolean(matiere)),
       }))
       .filter((group) => group.subjects.length > 0);
-  }, [universityId, allDossiers, matieres]);
-
-  const matiereIds = useMemo(
-    () =>
-      subjectsBySemester.flatMap(({ subjects }) =>
-        subjects.map(({ matiere }) => matiere?.id).filter(Boolean) as string[]
-      ),
-    [subjectsBySemester]
-  );
+  }, [universityId, allDossiers, matiereRows]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
 
-    getUniversityFiliereCoefficients(matiereIds).then((res) => {
+    ensureUniversityMatiereCoverage(universityId).then(async (coverageRes) => {
       if (cancelled) return;
 
+      if (coverageRes.error) {
+        showToast("Erreur : " + coverageRes.error, "error");
+        setLoading(false);
+        return;
+      }
+
+      const nextMatieres = (coverageRes.data ?? []) as Matiere[];
+      setMatiereRows(nextMatieres);
+
+      const matiereIds = nextMatieres.map((matiere) => matiere.id);
+      const coeffRes = await getUniversityFiliereCoefficients(matiereIds);
+      if (cancelled) return;
+
+      if (coeffRes.error) {
+        showToast("Erreur : " + coeffRes.error, "error");
+        setLoading(false);
+        return;
+      }
+
       const map: Record<string, number> = {};
-      if (res.data) {
-        for (const row of res.data as Array<{ matiere_id: string; filiere_id: string; coefficient: number }>) {
+      if (coeffRes.data) {
+        for (const row of coeffRes.data as Array<{ matiere_id: string; filiere_id: string; coefficient: number }>) {
           map[`${row.matiere_id}:${row.filiere_id}`] = Number(row.coefficient);
         }
       }
@@ -627,7 +640,7 @@ function FiliereCoefficientsSection({
     return () => {
       cancelled = true;
     };
-  }, [matiereIds]);
+  }, [universityId]);
 
   const activeFiliere = filieres.find((filiere) => filiere.id === selectedFiliereId) ?? null;
 

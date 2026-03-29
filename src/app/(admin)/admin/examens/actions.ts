@@ -221,6 +221,154 @@ export async function getUniversityFiliereCoefficients(matiere_ids: string[]) {
   return { data: data ?? [] };
 }
 
+export async function ensureSubjectMatiere(subject_dossier_id: string) {
+  const supabase = await createClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("matieres")
+    .select("*")
+    .eq("dossier_id", subject_dossier_id)
+    .maybeSingle();
+
+  if (existingError) return { error: existingError.message };
+  if (existing) return { data: existing };
+
+  const { data: subject, error: subjectError } = await supabase
+    .from("dossiers")
+    .select("id, name, description, color, icon_url, order_index, visible")
+    .eq("id", subject_dossier_id)
+    .eq("dossier_type", "subject")
+    .single();
+
+  if (subjectError) return { error: subjectError.message };
+
+  const { data: created, error: insertError } = await supabase
+    .from("matieres")
+    .insert({
+      dossier_id: subject.id,
+      name: subject.name,
+      description: subject.description ?? null,
+      color: subject.color ?? "#3B82F6",
+      icon_url: subject.icon_url ?? null,
+      order_index: subject.order_index ?? 0,
+      visible: subject.visible ?? true,
+    })
+    .select("*")
+    .single();
+
+  if (insertError) return { error: insertError.message };
+
+  revalidatePath(PATH);
+  revalidatePath("/admin/examens/parametrage");
+  return { data: created };
+}
+
+export async function ensureUniversityMatiereCoverage(university_dossier_id: string) {
+  const supabase = await createClient();
+
+  const { data: semesters, error: semestersError } = await supabase
+    .from("dossiers")
+    .select("id")
+    .eq("parent_id", university_dossier_id)
+    .eq("visible", true)
+    .in("dossier_type", ["semester", "module", "period"]);
+
+  if (semestersError) return { error: semestersError.message };
+
+  const semesterIds = (semesters ?? []).map((semester) => semester.id);
+  if (semesterIds.length === 0) return { data: [] };
+
+  const { data: subjects, error: subjectsError } = await supabase
+    .from("dossiers")
+    .select("id, name, description, color, icon_url, order_index, visible")
+    .in("parent_id", semesterIds)
+    .eq("dossier_type", "subject")
+    .eq("visible", true)
+    .order("order_index");
+
+  if (subjectsError) return { error: subjectsError.message };
+
+  const subjectIds = (subjects ?? []).map((subject) => subject.id);
+  if (subjectIds.length === 0) return { data: [] };
+
+  const { data: existingMatieres, error: matieresError } = await supabase
+    .from("matieres")
+    .select("*")
+    .in("dossier_id", subjectIds);
+
+  if (matieresError) return { error: matieresError.message };
+
+  const existingByDossierId = new Map((existingMatieres ?? []).map((matiere) => [matiere.dossier_id, matiere]));
+  const missingSubjects = (subjects ?? []).filter((subject) => !existingByDossierId.has(subject.id));
+
+  if (missingSubjects.length > 0) {
+    const { error: insertError } = await supabase.from("matieres").insert(
+      missingSubjects.map((subject) => ({
+        dossier_id: subject.id,
+        name: subject.name,
+        description: subject.description ?? null,
+        color: subject.color ?? "#3B82F6",
+        icon_url: subject.icon_url ?? null,
+        order_index: subject.order_index ?? 0,
+        visible: subject.visible ?? true,
+      }))
+    );
+
+    if (insertError) return { error: insertError.message };
+  }
+
+  const { data: refreshedMatieres, error: refreshedError } = await supabase
+    .from("matieres")
+    .select("*")
+    .in("dossier_id", subjectIds);
+
+  if (refreshedError) return { error: refreshedError.message };
+
+  const matiereBySubjectId = new Map((refreshedMatieres ?? []).map((matiere) => [matiere.dossier_id, matiere]));
+
+  const { data: examenSeriesRows, error: examenSeriesError } = await supabase
+    .from("examens_series")
+    .select("series_id, series:series(id, name, matiere_id)");
+
+  if (examenSeriesError) return { error: examenSeriesError.message };
+
+  const updates = (examenSeriesRows ?? [])
+    .map((row: any) => row.series)
+    .filter(Boolean)
+    .filter((series: any) => !series.matiere_id)
+    .map((series: any) => {
+      const matchedSubject = (subjects ?? []).find((subject) =>
+        series.name === subject.name ||
+        series.name.endsWith(`— ${subject.name}`) ||
+        series.name.endsWith(`- ${subject.name}`)
+      );
+
+      if (!matchedSubject) return null;
+
+      const matiere = matiereBySubjectId.get(matchedSubject.id);
+      if (!matiere) return null;
+
+      return { seriesId: series.id, matiereId: matiere.id };
+    })
+    .filter(Boolean) as Array<{ seriesId: string; matiereId: string }>;
+
+  for (const update of updates) {
+    const { error: updateError } = await supabase
+      .from("series")
+      .update({ matiere_id: update.matiereId })
+      .eq("id", update.seriesId);
+
+    if (updateError) return { error: updateError.message };
+  }
+
+  revalidatePath(PATH);
+  revalidatePath("/admin/examens/parametrage");
+  revalidatePath("/admin/examens/[examenId]");
+  revalidatePath("/admin/examens/[examenId]/resultats");
+  revalidatePath("/examens");
+  return { data: refreshedMatieres ?? [] };
+}
+
 export async function upsertMatiereCoefficient(
   matiere_id: string,
   filiere_id: string,
