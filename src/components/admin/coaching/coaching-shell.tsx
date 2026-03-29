@@ -630,7 +630,6 @@ export function CoachingShell({
     { key: "rdv_requests", label: "Demandes RDV", icon: <PhoneCall className="w-3.5 h-3.5" /> },
     { key: "videos", label: "Vidéos", icon: <ClipboardList className="w-3.5 h-3.5" /> },
     { key: "planning", label: "Planning", icon: <CalendarClock className="w-3.5 h-3.5" /> },
-    { key: "rdv", label: "RDV (créneaux)", icon: <CalendarClock className="w-3.5 h-3.5" /> },
   ];
 
   return (
