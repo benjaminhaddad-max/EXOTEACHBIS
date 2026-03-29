@@ -38,10 +38,16 @@ const coachNavItems = [
 ];
 
 export function AdminSidebar() {
-  const { profile } = useUser();
-  const navItems = profile?.role === "coach"
+  const { profile, loading } = useUser();
+
+  // Don't render nav items until profile is loaded to avoid flashing wrong sidebar
+  if (loading || !profile) {
+    return <SidebarShell>{null}</SidebarShell>;
+  }
+
+  const navItems = profile.role === "coach"
     ? coachNavItems
-    : profile?.role === "prof"
+    : profile.role === "prof"
       ? adminNavItems.filter((item) => item.href === "/admin/communication" || item.href === "/admin/coaching")
       : adminNavItems;
 

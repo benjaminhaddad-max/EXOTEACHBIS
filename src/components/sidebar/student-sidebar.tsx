@@ -36,8 +36,13 @@ const coachNavItems = [
 ];
 
 export function StudentSidebar() {
-  const { profile } = useUser();
-  const navItems = profile?.role === "coach" ? coachNavItems : studentNavItems;
+  const { profile, loading } = useUser();
+
+  if (loading || !profile) {
+    return <SidebarShell>{null}</SidebarShell>;
+  }
+
+  const navItems = profile.role === "coach" ? coachNavItems : studentNavItems;
 
   return (
     <SidebarShell>
