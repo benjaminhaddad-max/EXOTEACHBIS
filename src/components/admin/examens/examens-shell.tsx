@@ -377,9 +377,8 @@ export function ExamensShell({
                         {(e.examen_series?.length ?? 0) > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-3">
                             {e.examen_series!.map((es) => (
-                              <span key={es.series_id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 border border-white/10 rounded-md text-xs text-white/60">
+                              <span key={es.series_id} className="inline-flex items-center px-2 py-0.5 bg-white/5 border border-white/10 rounded-md text-xs text-white/60">
                                 {getSerieDisplayName(es.series, matiereMap)}
-                                <span className="text-[10px] text-[#C9A84C] font-semibold">×{es.coefficient}</span>
                               </span>
                             ))}
                           </div>
