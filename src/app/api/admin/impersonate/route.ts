@@ -17,14 +17,43 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (profile?.role !== "superadmin") {
-      return NextResponse.json({ error: "Réservé aux super admins" }, { status: 403 });
+    const callerRole = profile?.role;
+    if (callerRole !== "superadmin" && callerRole !== "coach") {
+      return NextResponse.json({ error: "Accès non autorisé" }, { status: 403 });
     }
 
     // 2. Récupérer l'email du user cible
     const { userId } = await req.json();
     if (!userId) {
       return NextResponse.json({ error: "userId requis" }, { status: 400 });
+    }
+
+    // Pour les coaches : vérifier que l'élève est dans un de leurs groupes
+    if (callerRole === "coach") {
+      const { data: coachGroupes } = await supabase
+        .from("coach_groupe_assignments")
+        .select("groupe_id")
+        .eq("coach_id", user.id);
+
+      const coachGroupeIds = (coachGroupes ?? []).map((g) => g.groupe_id);
+
+      if (coachGroupeIds.length === 0) {
+        return NextResponse.json({ error: "Aucun groupe assigné" }, { status: 403 });
+      }
+
+      const { data: targetProfile } = await supabase
+        .from("profiles")
+        .select("role, groupe_id")
+        .eq("id", userId)
+        .single();
+
+      if (!targetProfile || targetProfile.role !== "eleve") {
+        return NextResponse.json({ error: "Seuls les élèves peuvent être impersonnés" }, { status: 403 });
+      }
+
+      if (!targetProfile.groupe_id || !coachGroupeIds.includes(targetProfile.groupe_id)) {
+        return NextResponse.json({ error: "Cet élève n'est pas dans vos classes" }, { status: 403 });
+      }
     }
 
     const { data: target } = await supabase

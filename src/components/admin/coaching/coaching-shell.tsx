@@ -6,8 +6,13 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  Clock,
   Loader2,
+  Monitor,
+  Phone,
   PhoneCall,
+  MessageSquare as ChatIcon,
+  MapPin,
   Search,
   ShieldCheck,
   UserRound,
@@ -96,6 +101,27 @@ type CoachingShellProps = {
   coachingVideos?: CoachingVideo[];
   recurringAvailability?: CoachRecurringAvailability[];
   setupError?: string | null;
+};
+
+const SLOT_TYPE_ICONS: Record<string, typeof Monitor> = {
+  rdv_physique: MapPin,
+  rdv_visio: Monitor,
+  rdv_tel: Phone,
+  chat: ChatIcon,
+};
+
+const SLOT_TYPE_LABELS: Record<string, string> = {
+  rdv_physique: "Présentiel",
+  rdv_visio: "Visio",
+  rdv_tel: "Téléphone",
+  chat: "Chat",
+};
+
+const SLOT_TYPE_COLORS: Record<string, string> = {
+  rdv_physique: "text-blue-600 bg-blue-50",
+  rdv_visio: "text-purple-600 bg-purple-50",
+  rdv_tel: "text-green-600 bg-green-50",
+  chat: "text-amber-600 bg-amber-50",
 };
 
 const BOOKING_STATUS_LABELS: Record<CoachingCallBookingStatus, string> = {
@@ -458,13 +484,20 @@ export function CoachingShell({
             </p>
           </div>
           <a
-            href="/dashboard"
+            href="/vue-eleve"
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#e5edf6] px-3 py-2 text-xs font-medium text-[#5d7085] hover:bg-[#f8fbfe]"
           >
             <UserRound className="h-3.5 w-3.5" />
             Vue élève
           </a>
         </div>
+
+        {/* Weekly schedule overview */}
+        <CoachWeeklyOverview
+          slots={slots.filter((s) => s.coach_id === currentProfile.id)}
+          bookings={coachBookings}
+          students={students}
+        />
 
         {/* Tabs */}
         <CoachDashboardTabs
@@ -800,6 +833,135 @@ function SelectField({
         ))}
       </select>
     </label>
+  );
+}
+
+// ─── Coach Weekly Overview ──────────────────────────────────────────────────
+function CoachWeeklyOverview({
+  slots,
+  bookings,
+  students,
+}: {
+  slots: CoachingCallSlot[];
+  bookings: CoachingCallBooking[];
+  students: Profile[];
+}) {
+  const studentsById = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
+  const bookedSlotIds = useMemo(
+    () => new Map(bookings.filter((b) => b.status === "booked").map((b) => [b.slot_id, b])),
+    [bookings]
+  );
+
+  // Build 7 days starting from today
+  const days = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, []);
+
+  const slotsByDay = useMemo(() => {
+    const map = new Map<string, (CoachingCallSlot & { booking?: CoachingCallBooking })[]>();
+    for (const day of days) {
+      map.set(day.toISOString().slice(0, 10), []);
+    }
+    for (const slot of slots) {
+      const key = new Date(slot.start_at).toISOString().slice(0, 10);
+      const arr = map.get(key);
+      if (arr) {
+        arr.push({ ...slot, booking: bookedSlotIds.get(slot.id) });
+      }
+    }
+    // Sort each day
+    for (const arr of map.values()) {
+      arr.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+    }
+    return map;
+  }, [slots, days, bookedSlotIds]);
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="rounded-xl border border-[#e5edf6] bg-white overflow-hidden">
+      <div className="px-4 py-3 border-b border-[#e5edf6] bg-[#f8fbfe]">
+        <h3 className="text-xs font-semibold text-[#12314d] flex items-center gap-1.5">
+          <CalendarClock className="h-3.5 w-3.5 text-[#5d7085]" />
+          Ma semaine
+        </h3>
+      </div>
+      <div className="grid grid-cols-7 divide-x divide-[#e5edf6]">
+        {days.map((day) => {
+          const key = day.toISOString().slice(0, 10);
+          const daySlots = slotsByDay.get(key) ?? [];
+          const isToday = key === todayKey;
+          const bookedCount = daySlots.filter((s) => s.booking).length;
+
+          return (
+            <div key={key} className={`min-h-[120px] ${isToday ? "bg-blue-50/40" : ""}`}>
+              {/* Day header */}
+              <div className={`px-2 py-1.5 text-center border-b border-[#e5edf6] ${isToday ? "bg-[#12314d]" : "bg-[#f8fbfe]"}`}>
+                <p className={`text-[10px] font-bold uppercase ${isToday ? "text-white/70" : "text-[#8a98a8]"}`}>
+                  {day.toLocaleDateString("fr-FR", { weekday: "short" })}
+                </p>
+                <p className={`text-sm font-semibold ${isToday ? "text-white" : "text-[#12314d]"}`}>
+                  {day.getDate()}
+                </p>
+              </div>
+
+              {/* Slots */}
+              <div className="p-1.5 space-y-1">
+                {daySlots.length === 0 && (
+                  <p className="text-[9px] text-[#b0b8c4] text-center py-3">—</p>
+                )}
+                {daySlots.map((slot) => {
+                  const student = slot.booking ? studentsById.get(slot.booking.student_id) : null;
+                  const SlotIcon = SLOT_TYPE_ICONS[slot.slot_type] ?? Clock;
+                  const colorClass = SLOT_TYPE_COLORS[slot.slot_type] ?? "text-gray-600 bg-gray-50";
+                  const startTime = new Date(slot.start_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+                  return (
+                    <div
+                      key={slot.id}
+                      className={`rounded-lg px-1.5 py-1 text-[10px] ${
+                        slot.booking
+                          ? "bg-[#12314d] text-white"
+                          : "border border-dashed border-[#d0d8e2] text-[#8a98a8]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5 shrink-0 opacity-70" />
+                        <span className="font-medium">{startTime}</span>
+                      </div>
+                      {slot.booking && student && (
+                        <p className="truncate mt-0.5 font-medium opacity-90">
+                          {student.first_name ?? ""} {(student.last_name ?? "")[0]?.toUpperCase() ?? ""}.
+                        </p>
+                      )}
+                      <div className="flex items-center gap-0.5 mt-0.5">
+                        <SlotIcon className="h-2.5 w-2.5 opacity-60" />
+                        <span className="opacity-70">{SLOT_TYPE_LABELS[slot.slot_type] ?? slot.slot_type}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer with count */}
+              {bookedCount > 0 && (
+                <div className="px-1.5 pb-1.5">
+                  <span className="block text-center text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-full py-0.5">
+                    {bookedCount} RDV
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

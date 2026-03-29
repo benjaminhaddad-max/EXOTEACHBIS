@@ -35,7 +35,7 @@ const coachNavItems = [
   { href: "/admin/coaching", label: "Coaching", icon: Handshake },
   { href: "/admin/communication", label: "Communication", icon: MessageSquare },
   { href: "/cours", label: "Cours & Exercices", icon: BookOpen },
-  { href: "/dashboard", label: "Vue élève", icon: Eye },
+  { href: "/vue-eleve", label: "Vue élève", icon: Eye },
 ];
 
 export function StudentSidebar() {
