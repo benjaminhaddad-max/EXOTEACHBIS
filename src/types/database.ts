@@ -567,6 +567,8 @@ export interface CoachingStudentProfile {
   confidence_score: number | null;
   niveau_initial: CoachingNiveauInitial | null;
   mental_initial: CoachingMentalInitial | null;
+  niveau_progressif: CoachingNiveauInitial | null;
+  mental_progressif: CoachingMentalInitial | null;
   coach_report: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;

@@ -10,6 +10,7 @@ import type {
   GroupeDossierAcces,
   ProfileDossierAcces,
   ProfileDossierAccesExclusion,
+  CoachingStudentProfile,
 } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function UtilisateursPage() {
     adminSettingsRes,
     coursRes,
     groupeCoursAccesRes,
+    coachingProfilesRes,
   ] = await Promise.all([
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     supabase.from("groupes").select("*").order("name"),
@@ -43,6 +45,7 @@ export default async function UtilisateursPage() {
     supabase.from("admin_settings").select("key, value"),
     supabase.from("cours").select("id, name, dossier_id, matiere_id, order_index, visible").order("order_index"),
     supabase.from("groupe_cours_acces").select("groupe_id, cours_id"),
+    supabase.from("coaching_student_profiles").select("student_id, niveau_initial, mental_initial, niveau_progressif, mental_progressif"),
   ]);
 
   const adminSettings = parsePedagogieAdminSettings((adminSettingsRes.data ?? []) as { key: string; value: unknown }[]);
@@ -63,6 +66,7 @@ export default async function UtilisateursPage() {
         initialDossierNamePresets={adminSettings.dossierNamePresets}
         initialCours={(coursRes.data ?? []) as { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[]}
         initialGroupeCoursAcces={(groupeCoursAccesRes.data ?? []) as { groupe_id: string; cours_id: string }[]}
+        initialCoachingProfiles={(coachingProfilesRes.data ?? []) as { student_id: string; niveau_initial: string | null; mental_initial: string | null; niveau_progressif: string | null; mental_progressif: string | null }[]}
       />
     </div>
   );

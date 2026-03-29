@@ -68,6 +68,10 @@ type AdminUserChanges = {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
+  niveau_initial?: string | null;
+  mental_initial?: string | null;
+  niveau_progressif?: string | null;
+  mental_progressif?: string | null;
 };
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -199,6 +203,7 @@ export function UtilisateursShell({
   initialDossierNamePresets,
   initialCours = [],
   initialGroupeCoursAcces = [],
+  initialCoachingProfiles = [],
 }: {
   initialUsers: Profile[];
   initialGroupes: Groupe[];
@@ -213,6 +218,7 @@ export function UtilisateursShell({
   initialDossierNamePresets: DossierNamePreset[];
   initialCours?: { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[];
   initialGroupeCoursAcces?: { groupe_id: string; cours_id: string }[];
+  initialCoachingProfiles?: { student_id: string; niveau_initial: string | null; mental_initial: string | null; niveau_progressif: string | null; mental_progressif: string | null }[];
 }) {
   const [view, setView] = useState<"comptes" | "groupe" | "administration" | "dossier_summary">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
@@ -220,6 +226,7 @@ export function UtilisateursShell({
   const [users, setUsers] = useState<Profile[]>(initialUsers);
   const [groupes, setGroupes] = useState<Groupe[]>(initialGroupes);
   const [profMatieres, setProfMatieres] = useState<ProfMatiereAssignment[]>(initialProfMatieres);
+  const coachingProfileMap = useMemo(() => new Map(initialCoachingProfiles.map(p => [p.student_id, p])), [initialCoachingProfiles]);
   const [groupeDossierAcces, setGroupeDossierAcces] = useState<GroupeDossierAcces[]>(initialGroupeDossierAcces);
   const [groupeCoursAcces, setGroupeCoursAcces] = useState<{ groupe_id: string; cours_id: string }[]>(initialGroupeCoursAcces);
   const [profileDossierAcces, setProfileDossierAcces] = useState<ProfileDossierAcces[]>(initialProfileDossierAcces);
@@ -967,6 +974,7 @@ export function UtilisateursShell({
           directAccessIds={profileAccessById.get(modal.user.id) ?? (modal.user.access_dossier_id ? [modal.user.access_dossier_id] : [])}
           excludedAccessIds={profileAccessExclusionsById.get(modal.user.id) ?? []}
           groupeAccessById={groupeAccessById}
+          coachingProfile={coachingProfileMap.get(modal.user.id) ?? null}
           isPending={savingUser || isPending}
           onSave={handleSaveUser}
           onClose={() => setModal(null)}
@@ -3315,7 +3323,7 @@ function CreateUserModal({
 // ─── EditUserModal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
-  user, groupes, dossiers, dossierTree, matieres, filieres, cours, selectedMatiereIds, directAccessIds, excludedAccessIds, groupeAccessById, isPending, onSave, onClose,
+  user, groupes, dossiers, dossierTree, matieres, filieres, cours, selectedMatiereIds, directAccessIds, excludedAccessIds, groupeAccessById, coachingProfile, isPending, onSave, onClose,
 }: {
   user: Profile;
   groupes: Groupe[];
@@ -3328,6 +3336,7 @@ function EditUserModal({
   directAccessIds: string[];
   excludedAccessIds: string[];
   groupeAccessById: Map<string, string[]>;
+  coachingProfile: { student_id: string; niveau_initial: string | null; mental_initial: string | null; niveau_progressif: string | null; mental_progressif: string | null } | null;
   isPending: boolean;
   onSave: (userId: string, changes: AdminUserChanges) => void;
   onClose: () => void;
@@ -3337,6 +3346,10 @@ function EditUserModal({
   const [email, setEmail] = useState(user.email ?? "");
   const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState(user.role);
+  const [niveauInitial, setNiveauInitial] = useState(coachingProfile?.niveau_initial ?? "");
+  const [mentalInitial, setMentalInitial] = useState(coachingProfile?.mental_initial ?? "");
+  const [niveauProgressif, setNiveauProgressif] = useState(coachingProfile?.niveau_progressif ?? "");
+  const [mentalProgressif, setMentalProgressif] = useState(coachingProfile?.mental_progressif ?? "");
   const [groupeId, setGroupeId] = useState<string | null>(user.groupe_id);
   // Cascade state for class selector
   const [selOfferForUser, setSelOfferForUser] = useState(() => {
@@ -3422,7 +3435,11 @@ function EditUserModal({
     filiereId !== user.filiere_id ||
     normalizedCurrentDirectAccess !== normalizedNextDirectAccess ||
     normalizedCurrentExcludedAccess !== normalizedNextExcludedAccess ||
-    normalizedCurrentMatieres !== normalizedNextMatieres;
+    normalizedCurrentMatieres !== normalizedNextMatieres ||
+    niveauInitial !== (coachingProfile?.niveau_initial ?? "") ||
+    mentalInitial !== (coachingProfile?.mental_initial ?? "") ||
+    niveauProgressif !== (coachingProfile?.niveau_progressif ?? "") ||
+    mentalProgressif !== (coachingProfile?.mental_progressif ?? "");
 
   const toggleMatiere = (matiereId: string) => {
     setMatiereIds((prev) =>
@@ -3769,6 +3786,54 @@ function EditUserModal({
             );
           })()}
 
+          {/* Statut Initial & Progressif — only for students */}
+          {(role === "eleve") && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Statut Initial</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Niveau</span>
+                    <div className="flex gap-1.5">
+                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
+                        <button key={o.v} onClick={() => setNiveauInitial(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${niveauInitial === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Mental</span>
+                    <div className="flex gap-1.5">
+                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
+                        <button key={o.v} onClick={() => setMentalInitial(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${mentalInitial === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Statut Progressif</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Niveau</span>
+                    <div className="flex gap-1.5">
+                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
+                        <button key={o.v} onClick={() => setNiveauProgressif(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${niveauProgressif === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Mental</span>
+                    <div className="flex gap-1.5">
+                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
+                        <button key={o.v} onClick={() => setMentalProgressif(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${mentalProgressif === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {role === "prof" && (
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Matières enseignées</label>
@@ -3839,6 +3904,10 @@ function EditUserModal({
                 access_dossier_ids: personalAccessIds,
                 excluded_access_dossier_ids: excludedInheritedAccessIds,
                 matiere_ids: matiereIds,
+                niveau_initial: niveauInitial || null,
+                mental_initial: mentalInitial || null,
+                niveau_progressif: niveauProgressif || null,
+                mental_progressif: mentalProgressif || null,
               })}
               disabled={!hasChanges || isPending || !email.trim()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"

@@ -54,6 +54,10 @@ export async function updateUserAdminProfile(data: {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
+  niveau_initial?: string | null;
+  mental_initial?: string | null;
+  niveau_progressif?: string | null;
+  mental_progressif?: string | null;
 }) {
   try {
   const adminCheck = await ensureAdminAccess();
@@ -228,6 +232,36 @@ export async function updateUserAdminProfile(data: {
         if (insertError) {
           return { error: insertError.message };
         }
+      }
+    }
+  }
+
+  // Handle coaching statut fields (niveau/mental initial + progressif)
+  const hasCoachingFields = data.niveau_initial !== undefined || data.mental_initial !== undefined || data.niveau_progressif !== undefined || data.mental_progressif !== undefined;
+  if (hasCoachingFields) {
+    const { data: existingProfile } = await admin
+      .from("coaching_student_profiles")
+      .select("id")
+      .eq("student_id", data.userId)
+      .maybeSingle();
+
+    const coachingUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.niveau_initial !== undefined) coachingUpdate.niveau_initial = data.niveau_initial;
+    if (data.mental_initial !== undefined) coachingUpdate.mental_initial = data.mental_initial;
+    if (data.niveau_progressif !== undefined) coachingUpdate.niveau_progressif = data.niveau_progressif;
+    if (data.mental_progressif !== undefined) coachingUpdate.mental_progressif = data.mental_progressif;
+
+    if (existingProfile) {
+      await admin.from("coaching_student_profiles").update(coachingUpdate).eq("student_id", data.userId);
+    } else {
+      // Get groupe_id for the student
+      const groupeId = data.groupe_id !== undefined ? data.groupe_id : (await admin.from("profiles").select("groupe_id").eq("id", data.userId).single()).data?.groupe_id;
+      if (groupeId) {
+        await admin.from("coaching_student_profiles").insert({
+          student_id: data.userId,
+          groupe_id: groupeId,
+          ...coachingUpdate,
+        });
       }
     }
   }
