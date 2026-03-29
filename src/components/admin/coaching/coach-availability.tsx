@@ -16,6 +16,7 @@ import {
   createCoachCallSlot,
   deleteCoachCallSlot,
   saveCoachRecurringAvailability,
+  generateSlotsFromRecurring,
 } from "@/app/(admin)/admin/coaching/actions";
 import type { CoachingCallSlot, CoachingCallBooking, CoachRecurringAvailability, CoachSlotType, Groupe } from "@/types/database";
 
@@ -77,6 +78,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
   const [recTypes, setRecTypes] = useState<Set<CoachSlotType>>(new Set(["rdv_visio"]));
   const toggleRecType = (t: CoachSlotType) => setRecTypes(prev => { const next = new Set(prev); if (next.has(t)) next.delete(t); else next.add(t); return next; });
   const [recToast, setRecToast] = useState<string | null>(null);
+  const [genWeeks, setGenWeeks] = useState(4);
 
   // Form state
   const [formDate, setFormDate] = useState("");
@@ -294,7 +296,72 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
             {recurring.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">Aucune disponibilité récurrente configurée</p>}
           </div>
 
-          {/* Spacing */}
+          {/* Generate slots from recurring */}
+          {recurring.length > 0 && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
+              <div>
+                <h4 className="text-xs font-semibold text-[#12314d]">Générer les créneaux</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Crée les créneaux réservables à partir de tes disponibilités récurrentes.
+                </p>
+              </div>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Durée</label>
+                  <select
+                    value={genWeeks}
+                    onChange={(e) => setGenWeeks(Number(e.target.value))}
+                    className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white"
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
+                      <option key={w} value={w}>{w} semaines</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Classe</label>
+                  <select
+                    value={formGroupeId}
+                    onChange={(e) => setFormGroupeId(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white"
+                  >
+                    {groupes.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!formGroupeId) return;
+                    startTransition(async () => {
+                      const now = new Date();
+                      const day = now.getDay();
+                      const weekStart = new Date(now);
+                      weekStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+                      weekStart.setHours(0, 0, 0, 0);
+                      const res = await generateSlotsFromRecurring({
+                        coach_id: coachId,
+                        week_start: weekStart.toISOString(),
+                        groupe_id: formGroupeId,
+                        num_weeks: genWeeks,
+                      });
+                      if ("error" in res && res.error) {
+                        setRecToast("Erreur: " + res.error);
+                      } else {
+                        setRecToast(`${(res as any).count ?? 0} créneaux générés sur ${genWeeks} semaines`);
+                      }
+                      setTimeout(() => setRecToast(null), 4000);
+                    });
+                  }}
+                  disabled={isPending || !formGroupeId}
+                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarDays className="h-3.5 w-3.5" />}
+                  Générer les créneaux
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

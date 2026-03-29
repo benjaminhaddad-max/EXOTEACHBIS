@@ -64,13 +64,13 @@ interface CoursDetailShellProps {
 type SidebarTab = "series" | "flashcards";
 type SerieFilter = "all" | "qcm_supplementaires" | "annales" | "concours_blanc" | "entrainement";
 
-const SERIE_FILTERS: { key: SerieFilter; label: string; activeClass: string }[] = [
-  { key: "all", label: "Tout", activeClass: "bg-white/15 text-white" },
-  { key: "qcm_supplementaires", label: "QCM sup.", activeClass: "bg-teal-500/20 text-teal-300" },
-  { key: "annales", label: "Annales", activeClass: "bg-amber-500/20 text-amber-300" },
-  { key: "concours_blanc", label: "Concours", activeClass: "bg-orange-500/20 text-orange-300" },
-  { key: "entrainement", label: "Entraînement", activeClass: "bg-blue-500/20 text-blue-300" },
-];
+const SERIE_TYPE_STYLE: Record<string, { label: string; active: string; icon: string }> = {
+  qcm_supplementaires: { label: "QCM supplémentaires", active: "bg-teal-500/20 text-teal-300 ring-1 ring-teal-400/30", icon: "🧪" },
+  annales:             { label: "Annales classées corrigées", active: "bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/30", icon: "📋" },
+  concours_blanc:      { label: "Concours blancs", active: "bg-orange-500/20 text-orange-300 ring-1 ring-orange-400/30", icon: "🏆" },
+  entrainement:        { label: "Entraînement", active: "bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30", icon: "💪" },
+  revision:            { label: "Révision", active: "bg-purple-500/20 text-purple-300 ring-1 ring-purple-400/30", icon: "📖" },
+};
 
 const TYPE_LABEL: Record<string, string> = {
   entrainement: "Entraînement",
@@ -108,7 +108,6 @@ export function CoursDetailShell({
   flashcardDecks = [],
 }: CoursDetailShellProps) {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("series");
-  const [serieFilter, setSerieFilter] = useState<SerieFilter>("all");
   const [qaOpen, setQaOpen] = useState(false);
 
   const allSeries = useMemo(() => {
@@ -121,11 +120,6 @@ export function CoursDetailShell({
     }
     return merged;
   }, [directSeries, matiereSeries]);
-
-  const filteredSeries = useMemo(() => {
-    if (serieFilter === "all") return allSeries;
-    return allSeries.filter((s) => s.type === serieFilter);
-  }, [allSeries, serieFilter]);
 
   const serieTypeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -282,100 +276,97 @@ export function CoursDetailShell({
         {/* Sidebar content */}
         <div className="flex-1 overflow-y-auto p-3">
           {sidebarTab === "series" ? (
-            <div className="space-y-2.5">
-              {/* Filters */}
-              <div className="flex flex-wrap gap-1.5">
-                {SERIE_FILTERS.map((f) => {
-                  const count = f.key === "all" ? allSeries.length : (serieTypeCounts[f.key] ?? 0);
-                  if (f.key !== "all" && count === 0) return null;
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => setSerieFilter(f.key)}
-                      className={cn(
-                        "rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all",
-                        serieFilter === f.key
-                          ? f.activeClass
-                          : "bg-white/6 text-white/35 hover:bg-white/10 hover:text-white/55"
-                      )}
-                    >
-                      {f.label} {count}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Series list */}
-              {filteredSeries.length === 0 ? (
+            <div className="space-y-4">
+              {/* Grouped by type */}
+              {allSeries.length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed border-white/8 p-6 text-center">
                   <ClipboardList size={20} className="mx-auto text-white/15 mb-2" />
                   <p className="text-xs text-white/30">Aucune série disponible</p>
                 </div>
               ) : (
-                filteredSeries.map((serie) => {
-                  const done = serie.last_attempt?.ended_at != null;
-                  const score = serie.last_attempt?.score;
-                  const isFromMatiere = !directSeries.some((ds) => ds.id === serie.id);
-                  const displayCount = isFromMatiere ? (serie.nb_questions_for_cours ?? serie.nb_questions) : serie.nb_questions;
+                Object.entries(serieTypeCounts)
+                  .sort(([a], [b]) => {
+                    const order = ["qcm_supplementaires", "annales", "concours_blanc", "entrainement", "revision"];
+                    return order.indexOf(a) - order.indexOf(b);
+                  })
+                  .map(([type, count]) => {
+                    const style = SERIE_TYPE_STYLE[type];
+                    if (!style || count === 0) return null;
+                    const seriesOfType = allSeries.filter((s) => s.type === type);
 
-                  return (
-                    <Link
-                      key={serie.id}
-                      href={`/serie/${serie.id}`}
-                      className="block rounded-xl border border-white/8 bg-white/[0.03] p-3 transition-all hover:bg-white/[0.06] hover:border-white/15 group"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold text-white/85 truncate group-hover:text-white transition-colors">
-                            {serie.name}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <span className={cn(
-                              "rounded-full px-2 py-0.5 text-[9px] font-bold",
-                              TYPE_PILL[serie.type] ?? "bg-white/10 text-white/40"
-                            )}>
-                              {TYPE_LABEL[serie.type] ?? serie.type}
-                            </span>
-                            {isFromMatiere && (
-                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-300">
-                                Matière
-                              </span>
-                            )}
-                            <span className="text-[10px] text-white/30">
-                              {displayCount} Q
-                              {serie.timed && " · ⏱"}
-                            </span>
-                          </div>
+                    return (
+                      <div key={type}>
+                        {/* Section header */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm">{style.icon}</span>
+                          <span className="text-[11px] font-bold text-white/60 uppercase tracking-wider">{style.label}</span>
+                          <span className="text-[10px] text-white/25 font-semibold">{count}</span>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                          {done && score != null && (
-                            <span className={cn(
-                              "text-xs font-bold",
-                              score >= 70 ? "text-green-400" : score >= 50 ? "text-orange-400" : "text-red-400"
-                            )}>
-                              {Math.round(score)}%
-                            </span>
-                          )}
-                          <div className={cn(
-                            "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors",
-                            done
-                              ? "bg-white/10 text-white/60 group-hover:bg-white/15"
-                              : "bg-[#4FABDB]/20 text-[#4FABDB] group-hover:bg-[#4FABDB]/30"
-                          )}>
-                            {done ? <CheckCircle size={10} /> : <Play size={10} />}
-                            {done ? "Refaire" : "Go"}
-                          </div>
+
+                        {/* Series cards */}
+                        <div className="space-y-1.5">
+                          {seriesOfType.map((serie) => {
+                            const done = serie.last_attempt?.ended_at != null;
+                            const score = serie.last_attempt?.score;
+                            const isFromMatiere = !directSeries.some((ds) => ds.id === serie.id);
+                            const displayCount = isFromMatiere ? (serie.nb_questions_for_cours ?? serie.nb_questions) : serie.nb_questions;
+
+                            return (
+                              <Link
+                                key={serie.id}
+                                href={`/serie/${serie.id}`}
+                                className="block rounded-xl border border-white/8 bg-white/[0.03] p-3 transition-all hover:bg-white/[0.06] hover:border-white/15 group"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-semibold text-white/85 truncate group-hover:text-white transition-colors">
+                                      {serie.name}
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2">
+                                      {isFromMatiere && (
+                                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-300">
+                                          Matière
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] text-white/30">
+                                        {displayCount} question{displayCount !== 1 ? "s" : ""}
+                                        {serie.timed && " · ⏱"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {done && score != null && (
+                                      <span className={cn(
+                                        "text-xs font-bold",
+                                        score >= 70 ? "text-green-400" : score >= 50 ? "text-orange-400" : "text-red-400"
+                                      )}>
+                                        {Math.round(score)}%
+                                      </span>
+                                    )}
+                                    <div className={cn(
+                                      "flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-colors",
+                                      done
+                                        ? "bg-white/10 text-white/60 group-hover:bg-white/15"
+                                        : "bg-[#4FABDB]/20 text-[#4FABDB] group-hover:bg-[#4FABDB]/30"
+                                    )}>
+                                      {done ? <CheckCircle size={10} /> : <Play size={10} />}
+                                      {done ? "Refaire" : "Go"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </Link>
+                            );
+                          })}
                         </div>
                       </div>
-                    </Link>
-                  );
-                })
+                    );
+                  })
               )}
 
               {/* Q&A button */}
               <button
                 onClick={() => setQaOpen(true)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 py-2.5 text-xs font-semibold text-white/35 hover:text-white/60 hover:border-white/25 transition-colors mt-2"
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 py-2.5 text-xs font-semibold text-white/35 hover:text-white/60 hover:border-white/25 transition-colors"
               >
                 <MessageCircleQuestion size={13} />
                 Poser une question sur ce chapitre

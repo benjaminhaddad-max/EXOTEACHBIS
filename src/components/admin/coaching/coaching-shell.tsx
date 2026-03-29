@@ -497,6 +497,7 @@ export function CoachingShell({
           slots={slots.filter((s) => s.coach_id === currentProfile.id)}
           bookings={coachBookings}
           students={students}
+          recurringAvailability={(recurringAvailability ?? []).filter((r) => r.coach_id === currentProfile.id)}
         />
 
         {/* Tabs */}
@@ -841,10 +842,12 @@ function CoachWeeklyOverview({
   slots,
   bookings,
   students,
+  recurringAvailability = [],
 }: {
   slots: CoachingCallSlot[];
   bookings: CoachingCallBooking[];
   students: Profile[];
+  recurringAvailability?: CoachRecurringAvailability[];
 }) {
   const studentsById = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   const bookedSlotIds = useMemo(
@@ -863,6 +866,23 @@ function CoachWeeklyOverview({
     });
   }, []);
 
+  // Map JS getDay() (0=Sun) to our day_of_week (0=Mon)
+  function jsDayToRecurringDay(jsDay: number) {
+    return jsDay === 0 ? 6 : jsDay - 1;
+  }
+
+  // Group recurring availability by day_of_week
+  const recurringByDay = useMemo(() => {
+    const map = new Map<number, CoachRecurringAvailability[]>();
+    for (const r of recurringAvailability) {
+      if (!r.is_active) continue;
+      const arr = map.get(r.day_of_week) ?? [];
+      arr.push(r);
+      map.set(r.day_of_week, arr);
+    }
+    return map;
+  }, [recurringAvailability]);
+
   const slotsByDay = useMemo(() => {
     const map = new Map<string, (CoachingCallSlot & { booking?: CoachingCallBooking })[]>();
     for (const day of days) {
@@ -875,7 +895,6 @@ function CoachWeeklyOverview({
         arr.push({ ...slot, booking: bookedSlotIds.get(slot.id) });
       }
     }
-    // Sort each day
     for (const arr of map.values()) {
       arr.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
     }
@@ -896,8 +915,11 @@ function CoachWeeklyOverview({
         {days.map((day) => {
           const key = day.toISOString().slice(0, 10);
           const daySlots = slotsByDay.get(key) ?? [];
+          const recDay = jsDayToRecurringDay(day.getDay());
+          const dayRecurring = recurringByDay.get(recDay) ?? [];
           const isToday = key === todayKey;
           const bookedCount = daySlots.filter((s) => s.booking).length;
+          const hasContent = daySlots.length > 0 || dayRecurring.length > 0;
 
           return (
             <div key={key} className={`min-h-[120px] ${isToday ? "bg-blue-50/40" : ""}`}>
@@ -911,15 +933,11 @@ function CoachWeeklyOverview({
                 </p>
               </div>
 
-              {/* Slots */}
               <div className="p-1.5 space-y-1">
-                {daySlots.length === 0 && (
-                  <p className="text-[9px] text-[#b0b8c4] text-center py-3">—</p>
-                )}
+                {/* Actual slots (booked or available) */}
                 {daySlots.map((slot) => {
                   const student = slot.booking ? studentsById.get(slot.booking.student_id) : null;
                   const SlotIcon = SLOT_TYPE_ICONS[slot.slot_type] ?? Clock;
-                  const colorClass = SLOT_TYPE_COLORS[slot.slot_type] ?? "text-gray-600 bg-gray-50";
                   const startTime = new Date(slot.start_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
                   return (
@@ -947,6 +965,28 @@ function CoachWeeklyOverview({
                     </div>
                   );
                 })}
+
+                {/* Recurring availability (when no actual slots exist for this day) */}
+                {daySlots.length === 0 && dayRecurring.map((r) => {
+                  const SlotIcon = SLOT_TYPE_ICONS[r.slot_type] ?? Clock;
+                  const colorClass = SLOT_TYPE_COLORS[r.slot_type] ?? "text-gray-600 bg-gray-50";
+                  return (
+                    <div key={r.id} className={`rounded-lg px-1.5 py-1 text-[10px] ${colorClass}`}>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5 shrink-0 opacity-70" />
+                        <span className="font-medium">{r.start_time.slice(0, 5)}–{r.end_time.slice(0, 5)}</span>
+                      </div>
+                      <div className="flex items-center gap-0.5 mt-0.5">
+                        <SlotIcon className="h-2.5 w-2.5 opacity-60" />
+                        <span className="opacity-70">{SLOT_TYPE_LABELS[r.slot_type] ?? r.slot_type}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!hasContent && (
+                  <p className="text-[9px] text-[#b0b8c4] text-center py-3">—</p>
+                )}
               </div>
 
               {/* Footer with count */}

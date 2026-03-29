@@ -775,7 +775,7 @@ export async function saveCoachRecurringAvailability(data: {
   return { success: true };
 }
 
-export async function generateSlotsFromRecurring(data: { coach_id: string; week_start: string; groupe_id: string }) {
+export async function generateSlotsFromRecurring(data: { coach_id: string; week_start: string; groupe_id: string; num_weeks?: number }) {
   const auth = await requireCoachOrAdmin();
   if ("error" in auth) return auth;
 
@@ -792,45 +792,52 @@ export async function generateSlotsFromRecurring(data: { coach_id: string; week_
   if (!recurring || recurring.length === 0) return { error: "Aucune disponibilité récurrente configurée." };
 
   const weekStart = new Date(data.week_start);
+  const numWeeks = Math.min(Math.max(data.num_weeks ?? 1, 1), 10);
   const created: any[] = [];
+  const now = new Date();
 
-  for (const item of recurring) {
-    // Calculate the date for this day_of_week in the given week
-    const targetDate = new Date(weekStart);
-    targetDate.setDate(weekStart.getDate() + item.day_of_week);
+  for (let w = 0; w < numWeeks; w++) {
+    const currentWeekStart = new Date(weekStart);
+    currentWeekStart.setDate(weekStart.getDate() + w * 7);
 
-    // Skip past dates
-    if (targetDate < new Date()) continue;
+    for (const item of recurring) {
+      // Calculate the date for this day_of_week in the given week
+      const targetDate = new Date(currentWeekStart);
+      targetDate.setDate(currentWeekStart.getDate() + item.day_of_week);
 
-    const dateStr = targetDate.toISOString().slice(0, 10);
-    const startAt = new Date(`${dateStr}T${item.start_time}`).toISOString();
-    const endAt = new Date(`${dateStr}T${item.end_time}`).toISOString();
+      // Skip past dates
+      if (targetDate < now) continue;
 
-    // Check if slot already exists
-    const { data: existing } = await admin
-      .from("coaching_call_slots")
-      .select("id")
-      .eq("coach_id", data.coach_id)
-      .eq("start_at", startAt)
-      .eq("end_at", endAt)
-      .limit(1);
+      const dateStr = targetDate.toISOString().slice(0, 10);
+      const startAt = new Date(`${dateStr}T${item.start_time}`).toISOString();
+      const endAt = new Date(`${dateStr}T${item.end_time}`).toISOString();
 
-    if (existing && existing.length > 0) continue;
+      // Check if slot already exists
+      const { data: existing } = await admin
+        .from("coaching_call_slots")
+        .select("id")
+        .eq("coach_id", data.coach_id)
+        .eq("start_at", startAt)
+        .eq("end_at", endAt)
+        .limit(1);
 
-    const { data: slot, error: slotErr } = await admin
-      .from("coaching_call_slots")
-      .insert({
-        coach_id: data.coach_id,
-        groupe_id: data.groupe_id,
-        start_at: startAt,
-        end_at: endAt,
-        slot_type: item.slot_type,
-        created_by: auth.profile.id,
-      })
-      .select()
-      .single();
+      if (existing && existing.length > 0) continue;
 
-    if (!slotErr && slot) created.push(slot);
+      const { data: slot, error: slotErr } = await admin
+        .from("coaching_call_slots")
+        .insert({
+          coach_id: data.coach_id,
+          groupe_id: data.groupe_id,
+          start_at: startAt,
+          end_at: endAt,
+          slot_type: item.slot_type,
+          created_by: auth.profile.id,
+        })
+        .select()
+        .single();
+
+      if (!slotErr && slot) created.push(slot);
+    }
   }
 
   revalidatePath(ADMIN_PATH);

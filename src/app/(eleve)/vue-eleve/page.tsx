@@ -22,41 +22,30 @@ export default async function VueElevePage() {
     redirect("/dashboard");
   }
 
-  // Get coach's assigned groupes
-  const { data: assignments } = await supabase
-    .from("coach_groupe_assignments")
-    .select("groupe_id")
-    .eq("coach_id", user.id);
-
-  const groupeIds = (assignments ?? []).map((a) => a.groupe_id);
-
-  if (groupeIds.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-sm text-gray-500">Aucune classe assignée.</p>
-      </div>
-    );
-  }
-
-  // Get groupes info
+  // Get ALL groupes (the coach can pick any class to see the student experience)
   const { data: groupes } = await supabase
     .from("groupes")
     .select("id, name, color, annee")
-    .in("id", groupeIds)
+    .eq("visible", true)
     .order("name");
 
-  // Get students in those groupes
-  const { data: students } = await supabase
-    .from("profiles")
-    .select("id, first_name, last_name, email, avatar_url, groupe_id")
-    .eq("role", "eleve")
-    .in("groupe_id", groupeIds)
-    .order("first_name");
+  const allGroupes = (groupes ?? []) as Pick<Groupe, "id" | "name" | "color" | "annee">[];
+  const groupeIds = allGroupes.map((g) => g.id);
+
+  // Get students in all groupes
+  const { data: students } = groupeIds.length > 0
+    ? await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, email, avatar_url, groupe_id")
+        .eq("role", "eleve")
+        .in("groupe_id", groupeIds)
+        .order("first_name")
+    : { data: [] };
 
   return (
     <div className="max-w-4xl mx-auto">
       <CoachStudentPicker
-        groupes={(groupes ?? []) as Pick<Groupe, "id" | "name" | "color" | "annee">[]}
+        groupes={allGroupes}
         students={
           (students ?? []) as Pick<
             Profile,
