@@ -565,10 +565,14 @@ export interface CoachingStudentProfile {
   work_capacity: CoachingWorkCapacity | null;
   method_level: CoachingMethodLevel | null;
   confidence_score: number | null;
-  niveau_initial: CoachingNiveauInitial | null;
-  mental_initial: CoachingMentalInitial | null;
-  niveau_progressif: CoachingNiveauInitial | null;
-  mental_progressif: CoachingMentalInitial | null;
+  /** Score 0-100 (0 = Fragile, 100 = Fort) */
+  niveau_initial: number | null;
+  /** Score 0-100 (0 = Fragile, 100 = Fort) */
+  mental_initial: number | null;
+  /** Score 0-100, évolue semaine par semaine */
+  niveau_progressif: number | null;
+  /** Score 0-100, évolue semaine par semaine */
+  mental_progressif: number | null;
   coach_report: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;

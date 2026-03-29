@@ -68,10 +68,10 @@ type AdminUserChanges = {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
-  niveau_initial?: string | null;
-  mental_initial?: string | null;
-  niveau_progressif?: string | null;
-  mental_progressif?: string | null;
+  niveau_initial?: number | null;
+  mental_initial?: number | null;
+  niveau_progressif?: number | null;
+  mental_progressif?: number | null;
 };
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ export function UtilisateursShell({
   initialDossierNamePresets: DossierNamePreset[];
   initialCours?: { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[];
   initialGroupeCoursAcces?: { groupe_id: string; cours_id: string }[];
-  initialCoachingProfiles?: { student_id: string; niveau_initial: string | null; mental_initial: string | null; niveau_progressif: string | null; mental_progressif: string | null }[];
+  initialCoachingProfiles?: { student_id: string; niveau_initial: number | null; mental_initial: number | null; niveau_progressif: number | null; mental_progressif: number | null }[];
 }) {
   const [view, setView] = useState<"comptes" | "groupe" | "administration" | "dossier_summary">("comptes");
   const [selectedGroupeId, setSelectedGroupeId] = useState<string | null>(null);
@@ -3336,7 +3336,7 @@ function EditUserModal({
   directAccessIds: string[];
   excludedAccessIds: string[];
   groupeAccessById: Map<string, string[]>;
-  coachingProfile: { student_id: string; niveau_initial: string | null; mental_initial: string | null; niveau_progressif: string | null; mental_progressif: string | null } | null;
+  coachingProfile: { student_id: string; niveau_initial: number | null; mental_initial: number | null; niveau_progressif: number | null; mental_progressif: number | null } | null;
   isPending: boolean;
   onSave: (userId: string, changes: AdminUserChanges) => void;
   onClose: () => void;
@@ -3346,10 +3346,10 @@ function EditUserModal({
   const [email, setEmail] = useState(user.email ?? "");
   const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState(user.role);
-  const [niveauInitial, setNiveauInitial] = useState(coachingProfile?.niveau_initial ?? "");
-  const [mentalInitial, setMentalInitial] = useState(coachingProfile?.mental_initial ?? "");
-  const [niveauProgressif, setNiveauProgressif] = useState(coachingProfile?.niveau_progressif ?? "");
-  const [mentalProgressif, setMentalProgressif] = useState(coachingProfile?.mental_progressif ?? "");
+  const [niveauInitial, setNiveauInitial] = useState<number>(coachingProfile?.niveau_initial ?? 50);
+  const [mentalInitial, setMentalInitial] = useState<number>(coachingProfile?.mental_initial ?? 50);
+  const [niveauProgressif, setNiveauProgressif] = useState<number>(coachingProfile?.niveau_progressif ?? 50);
+  const [mentalProgressif, setMentalProgressif] = useState<number>(coachingProfile?.mental_progressif ?? 50);
   const [groupeId, setGroupeId] = useState<string | null>(user.groupe_id);
   // Cascade state for class selector
   const [selOfferForUser, setSelOfferForUser] = useState(() => {
@@ -3436,10 +3436,10 @@ function EditUserModal({
     normalizedCurrentDirectAccess !== normalizedNextDirectAccess ||
     normalizedCurrentExcludedAccess !== normalizedNextExcludedAccess ||
     normalizedCurrentMatieres !== normalizedNextMatieres ||
-    niveauInitial !== (coachingProfile?.niveau_initial ?? "") ||
-    mentalInitial !== (coachingProfile?.mental_initial ?? "") ||
-    niveauProgressif !== (coachingProfile?.niveau_progressif ?? "") ||
-    mentalProgressif !== (coachingProfile?.mental_progressif ?? "");
+    niveauInitial !== (coachingProfile?.niveau_initial ?? 50) ||
+    mentalInitial !== (coachingProfile?.mental_initial ?? 50) ||
+    niveauProgressif !== (coachingProfile?.niveau_progressif ?? 50) ||
+    mentalProgressif !== (coachingProfile?.mental_progressif ?? 50);
 
   const toggleMatiere = (matiereId: string) => {
     setMatiereIds((prev) =>
@@ -3788,47 +3788,19 @@ function EditUserModal({
 
           {/* Statut Initial & Progressif — only for students */}
           {(role === "eleve") && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Statut Initial</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Niveau</span>
-                    <div className="flex gap-1.5">
-                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
-                        <button key={o.v} onClick={() => setNiveauInitial(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${niveauInitial === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Mental</span>
-                    <div className="flex gap-1.5">
-                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
-                        <button key={o.v} onClick={() => setMentalInitial(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${mentalInitial === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
-                      ))}
-                    </div>
-                  </div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: "rgba(255,255,255,0.5)" }}>Statut Initial</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <StatutSlider label="Niveau" value={niveauInitial} onChange={setNiveauInitial} />
+                  <StatutSlider label="Mental" value={mentalInitial} onChange={setMentalInitial} />
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Statut Progressif</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Niveau</span>
-                    <div className="flex gap-1.5">
-                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
-                        <button key={o.v} onClick={() => setNiveauProgressif(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${niveauProgressif === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest block mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Mental</span>
-                    <div className="flex gap-1.5">
-                      {[{ v: "fort", l: "Fort", c: "bg-green-500/15 border-green-500/30 text-green-300" }, { v: "moyen", l: "Moyen", c: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" }, { v: "fragile", l: "Fragile", c: "bg-red-500/15 border-red-500/30 text-red-300" }].map(o => (
-                        <button key={o.v} onClick={() => setMentalProgressif(o.v)} className={`px-2.5 py-1 rounded-full text-[11px] border transition-all ${mentalProgressif === o.v ? o.c : "border-white/10 text-white/40 hover:bg-white/5"}`}>{o.l}</button>
-                      ))}
-                    </div>
-                  </div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: "rgba(255,255,255,0.5)" }}>Statut Progressif</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <StatutSlider label="Niveau" value={niveauProgressif} onChange={setNiveauProgressif} />
+                  <StatutSlider label="Mental" value={mentalProgressif} onChange={setMentalProgressif} />
                 </div>
               </div>
             </div>
@@ -3904,10 +3876,10 @@ function EditUserModal({
                 access_dossier_ids: personalAccessIds,
                 excluded_access_dossier_ids: excludedInheritedAccessIds,
                 matiere_ids: matiereIds,
-                niveau_initial: niveauInitial || null,
-                mental_initial: mentalInitial || null,
-                niveau_progressif: niveauProgressif || null,
-                mental_progressif: mentalProgressif || null,
+                niveau_initial: niveauInitial,
+                mental_initial: mentalInitial,
+                niveau_progressif: niveauProgressif,
+                mental_progressif: mentalProgressif,
               })}
               disabled={!hasChanges || isPending || !email.trim()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
@@ -3918,6 +3890,67 @@ function EditUserModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── StatutSlider ─────────────────────────────────────────────────────────────
+
+function statutColor(value: number): string {
+  // Red (0) → Yellow (50) → Green (100)
+  if (value <= 50) {
+    const r = 239;
+    const g = Math.round(68 + (value / 50) * (180 - 68));
+    const b = 68;
+    return `rgb(${r},${g},${b})`;
+  }
+  const r = Math.round(239 - ((value - 50) / 50) * (239 - 34));
+  const g = Math.round(180 + ((value - 50) / 50) * (197 - 180));
+  const b = Math.round(68 - ((value - 50) / 50) * (68 - 94));
+  return `rgb(${r},${g},${b})`;
+}
+
+function statutLabel(value: number): string {
+  if (value <= 25) return "Fragile";
+  if (value <= 45) return "Moyen -";
+  if (value <= 55) return "Moyen";
+  if (value <= 75) return "Moyen +";
+  return "Fort";
+}
+
+function StatutSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const color = statutColor(value);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>{label}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold" style={{ color }}>{value}</span>
+          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${color}20`, color }}>{statutLabel(value)}</span>
+        </div>
+      </div>
+      <div className="relative">
+        {/* Track background — gradient red to green */}
+        <div className="h-2 rounded-full" style={{ background: "linear-gradient(to right, #ef4444, #eab308, #22c55e)" }} />
+        {/* Filled portion */}
+        <div className="absolute top-0 left-0 h-2 rounded-full" style={{ width: `${value}%`, background: `linear-gradient(to right, #ef4444, ${color})`, opacity: 0.9 }} />
+        {/* Thumb indicator */}
+        <div className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 shadow-md" style={{ left: `calc(${value}% - 7px)`, backgroundColor: color, borderColor: "rgba(255,255,255,0.8)" }} />
+        {/* Invisible range input on top for interaction */}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={value}
+          onChange={(e) => onChange(parseInt(e.target.value))}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          style={{ margin: 0 }}
+        />
+      </div>
+      <div className="flex justify-between mt-1">
+        <span className="text-[8px]" style={{ color: "rgba(239,68,68,0.5)" }}>Fragile</span>
+        <span className="text-[8px]" style={{ color: "rgba(34,197,94,0.5)" }}>Fort</span>
       </div>
     </div>
   );

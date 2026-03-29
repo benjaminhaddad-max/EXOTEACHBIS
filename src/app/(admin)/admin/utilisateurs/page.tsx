@@ -66,7 +66,7 @@ export default async function UtilisateursPage() {
         initialDossierNamePresets={adminSettings.dossierNamePresets}
         initialCours={(coursRes.data ?? []) as { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[]}
         initialGroupeCoursAcces={(groupeCoursAccesRes.data ?? []) as { groupe_id: string; cours_id: string }[]}
-        initialCoachingProfiles={(coachingProfilesRes.data ?? []) as { student_id: string; niveau_initial: string | null; mental_initial: string | null; niveau_progressif: string | null; mental_progressif: string | null }[]}
+        initialCoachingProfiles={(coachingProfilesRes.data ?? []) as { student_id: string; niveau_initial: number | null; mental_initial: number | null; niveau_progressif: number | null; mental_progressif: number | null }[]}
       />
     </div>
   );

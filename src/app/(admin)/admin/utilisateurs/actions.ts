@@ -54,10 +54,10 @@ export async function updateUserAdminProfile(data: {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
-  niveau_initial?: string | null;
-  mental_initial?: string | null;
-  niveau_progressif?: string | null;
-  mental_progressif?: string | null;
+  niveau_initial?: number | null;
+  mental_initial?: number | null;
+  niveau_progressif?: number | null;
+  mental_progressif?: number | null;
 }) {
   try {
   const adminCheck = await ensureAdminAccess();
