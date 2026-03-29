@@ -11,7 +11,6 @@ import {
   CheckCircle,
   Clock,
   Play,
-  Filter,
   MessageCircleQuestion,
   Download,
   Layers,
@@ -62,7 +61,6 @@ interface CoursDetailShellProps {
 }
 
 type SidebarTab = "series" | "flashcards";
-type SerieFilter = "all" | "qcm_supplementaires" | "annales" | "concours_blanc" | "entrainement";
 
 const SERIE_TYPE_STYLE: Record<string, { label: string; active: string; icon: string }> = {
   qcm_supplementaires: { label: "QCM supplémentaires", active: "bg-teal-500/20 text-teal-300 ring-1 ring-teal-400/30", icon: "🧪" },
@@ -70,22 +68,6 @@ const SERIE_TYPE_STYLE: Record<string, { label: string; active: string; icon: st
   concours_blanc:      { label: "Concours blancs", active: "bg-orange-500/20 text-orange-300 ring-1 ring-orange-400/30", icon: "🏆" },
   entrainement:        { label: "Entraînement", active: "bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30", icon: "💪" },
   revision:            { label: "Révision", active: "bg-purple-500/20 text-purple-300 ring-1 ring-purple-400/30", icon: "📖" },
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  entrainement: "Entraînement",
-  concours_blanc: "Concours blanc",
-  revision: "Révision",
-  annales: "Annales classées",
-  qcm_supplementaires: "QCM sup.",
-};
-
-const TYPE_PILL: Record<string, string> = {
-  entrainement: "bg-blue-500/20 text-blue-300",
-  concours_blanc: "bg-orange-500/20 text-orange-300",
-  revision: "bg-green-500/20 text-green-300",
-  annales: "bg-amber-500/20 text-amber-300",
-  qcm_supplementaires: "bg-teal-500/20 text-teal-300",
 };
 
 const RESSOURCE_ICON: Record<string, typeof FileText> = {
