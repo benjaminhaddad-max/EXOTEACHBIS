@@ -10,7 +10,7 @@ import {
 import type { Serie, Filiere, Dossier, Groupe, Matiere } from "@/types/database";
 import {
   createExamen, updateExamen, deleteExamen,
-  toggleResultsVisibility,
+  toggleResultsVisibility, toggleExamenVisibility,
   setExamenGroupes,
 } from "@/app/(admin)/admin/examens/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -95,6 +95,7 @@ export function ExamensShell({
   const [isPending, startTransition] = useTransition();
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"examens" | "parametrage">("examens");
+  const [visibilityPendingKey, setVisibilityPendingKey] = useState<string | null>(null);
 
   useEffect(() => {
     setExamens(orderExamens(initialExamens));
@@ -167,13 +168,30 @@ export function ExamensShell({
   };
 
   const handleToggleResults = (examen: ExamenWithSeries) => {
+    const pendingKey = `results:${examen.id}`;
+    setVisibilityPendingKey(pendingKey);
     startTransition(async () => {
       const newVal = !examen.results_visible;
       const res = await toggleResultsVisibility(examen.id, newVal);
-      if ("error" in res) { showToast(res.error!, "error"); return; }
+      if ("error" in res) { setVisibilityPendingKey(null); showToast(res.error!, "error"); return; }
       setExamens((prev) => prev.map((e) => e.id === examen.id ? { ...e, results_visible: newVal } : e));
+      setVisibilityPendingKey(null);
       router.refresh();
       showToast(newVal ? "Résultats rendus visibles" : "Résultats masqués", "success");
+    });
+  };
+
+  const handleToggleExamVisibility = (examen: ExamenWithSeries) => {
+    const pendingKey = `exam:${examen.id}`;
+    setVisibilityPendingKey(pendingKey);
+    startTransition(async () => {
+      const newVal = !examen.visible;
+      const res = await toggleExamenVisibility(examen.id, newVal);
+      if ("error" in res) { setVisibilityPendingKey(null); showToast(res.error!, "error"); return; }
+      setExamens((prev) => prev.map((e) => e.id === examen.id ? { ...e, visible: newVal } : e));
+      setVisibilityPendingKey(null);
+      router.refresh();
+      showToast(newVal ? "Examen rendu visible aux élèves" : "Examen masqué côté élève", "success");
     });
   };
 
@@ -286,6 +304,8 @@ export function ExamensShell({
                 const status = getStatus(e.debut_at, e.fin_at);
                 const nbSeries = e.series?.length ?? 0;
                 const targetGroupes = (e.groupe_ids ?? []).map(gid => groupeMap.get(gid)).filter(Boolean) as Groupe[];
+                const examVisibilityPending = visibilityPendingKey === `exam:${e.id}`;
+                const resultsVisibilityPending = visibilityPendingKey === `results:${e.id}`;
                 return (
                   <Link key={e.id} href={`/admin/examens/${e.id}`} className="block bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/[0.07] transition-colors cursor-pointer">
                     <div className="flex items-start justify-between gap-4">
@@ -295,7 +315,12 @@ export function ExamensShell({
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status]}`}>
                             {STATUS_LABELS[status]}
                           </span>
-                          {!e.visible && <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/40">Masqué</span>}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.visible ? "bg-green-500/10 text-green-400" : "bg-white/10 text-white/45"}`}>
+                            {e.visible ? "Visible aux élèves" : "Masqué aux élèves"}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.results_visible ? "bg-sky-500/10 text-sky-300" : "bg-white/10 text-white/45"}`}>
+                            {e.results_visible ? "Résultats visibles" : "Résultats masqués"}
+                          </span>
                           <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-white/30">
                             /{e.notation_sur ?? 20}
                           </span>
@@ -357,19 +382,36 @@ export function ExamensShell({
                             </div>
                           </div>
                         )}
+
+                        <div
+                          className="mt-3 grid gap-2 md:grid-cols-2"
+                          onClick={(ev) => ev.preventDefault()}
+                        >
+                          <VisibilityControlCard
+                            title="Examen visible aux élèves"
+                            description="Affiche l'examen et ses séries dans l'espace élève."
+                            enabled={e.visible}
+                            enabledLabel="Visible"
+                            disabledLabel="Masqué"
+                            colorClassName={e.visible ? "bg-green-500" : "bg-white/15"}
+                            pending={examVisibilityPending}
+                            onToggle={() => handleToggleExamVisibility(e)}
+                          />
+                          <VisibilityControlCard
+                            title="Résultats / classement visibles"
+                            description={e.visible
+                              ? "Affiche la note et le classement aux élèves."
+                              : "Sans effet tant que l'examen reste masqué côté élève."}
+                            enabled={e.results_visible}
+                            enabledLabel="Affichés"
+                            disabledLabel="Masqués"
+                            colorClassName={e.results_visible ? "bg-sky-500" : "bg-white/15"}
+                            pending={resultsVisibilityPending}
+                            onToggle={() => handleToggleResults(e)}
+                          />
+                        </div>
                       </div>
                       <div className="flex gap-1 shrink-0" onClick={(ev) => ev.preventDefault()}>
-                        <button
-                          onClick={(ev) => { ev.preventDefault(); handleToggleResults(e); }}
-                          className={`flex items-center gap-1 p-2 rounded-lg transition-colors text-xs ${
-                            e.results_visible
-                              ? "bg-green-500/10 text-green-400 hover:bg-green-500/20"
-                              : "bg-white/5 text-white/30 hover:text-white/50"
-                          }`}
-                          title={e.results_visible ? "Résultats visibles — cliquer pour masquer" : "Résultats masqués — cliquer pour afficher"}
-                        >
-                          {e.results_visible ? <Eye size={13} /> : <EyeOff size={13} />}
-                        </button>
                         <button
                           onClick={(ev) => { ev.preventDefault(); setModal({ type: "edit", examen: e }); }}
                           className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
@@ -471,6 +513,66 @@ export function ExamensShell({
       )}
       </div>
       )}
+    </div>
+  );
+}
+
+function VisibilityControlCard({
+  title,
+  description,
+  enabled,
+  enabledLabel,
+  disabledLabel,
+  colorClassName,
+  pending,
+  onToggle,
+}: {
+  title: string;
+  description: string;
+  enabled: boolean;
+  enabledLabel: string;
+  disabledLabel: string;
+  colorClassName: string;
+  pending: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-white/85">{title}</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-white/35">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={pending}
+          className="shrink-0 rounded-full p-1 hover:bg-white/5 transition-colors disabled:opacity-60"
+        >
+          <div className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${colorClassName}`}>
+            <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-4" : ""}`} />
+          </div>
+        </button>
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] font-semibold">
+        {pending ? (
+          <>
+            <Loader2 size={10} className="animate-spin text-white/35" />
+            <span className="text-white/35">Mise à jour…</span>
+          </>
+        ) : (
+          <>
+            {enabled ? (
+              <Eye size={10} className="text-white/45" />
+            ) : (
+              <EyeOff size={10} className="text-white/35" />
+            )}
+            <span className={enabled ? "text-white/70" : "text-white/35"}>
+              {enabled ? enabledLabel : disabledLabel}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
