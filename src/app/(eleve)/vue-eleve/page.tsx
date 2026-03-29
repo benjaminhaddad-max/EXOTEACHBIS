@@ -15,7 +15,7 @@ export default async function VueElevePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, groupe_id")
     .eq("id", user.id)
     .single();
 
@@ -25,16 +25,46 @@ export default async function VueElevePage() {
 
   const admin = createAdminClient();
 
-  // Get ALL groupes (bypass RLS)
-  const { data: groupes } = await admin
-    .from("groupes")
-    .select("id, name, color, annee")
-    .order("name");
+  // Get coach's assigned groupes to find their university
+  const { data: assignments } = await admin
+    .from("coach_groupe_assignments")
+    .select("groupe_id")
+    .eq("coach_id", user.id);
+
+  let coachGroupeIds = (assignments ?? []).map((a) => a.groupe_id);
+  if (coachGroupeIds.length === 0 && profile.groupe_id) {
+    coachGroupeIds = [profile.groupe_id];
+  }
+
+  // Get the coach's assigned groupes to find which university they belong to
+  const { data: coachGroupes } = coachGroupeIds.length > 0
+    ? await admin.from("groupes").select("id, formation_dossier_id").in("id", coachGroupeIds)
+    : { data: [] };
+
+  // Get all unique formation_dossier_ids (universities) the coach is linked to
+  const universityIds = [...new Set(
+    (coachGroupes ?? [])
+      .map((g) => g.formation_dossier_id)
+      .filter(Boolean) as string[]
+  )];
+
+  // Get all groupes belonging to the same university/universities
+  const { data: groupes } = universityIds.length > 0
+    ? await admin
+        .from("groupes")
+        .select("id, name, color, annee")
+        .in("formation_dossier_id", universityIds)
+        .order("name")
+    : await admin
+        .from("groupes")
+        .select("id, name, color, annee")
+        .in("id", coachGroupeIds.length > 0 ? coachGroupeIds : ["__none__"])
+        .order("name");
 
   const allGroupes = (groupes ?? []) as Pick<Groupe, "id" | "name" | "color" | "annee">[];
   const groupeIds = allGroupes.map((g) => g.id);
 
-  // Get students in all groupes
+  // Get students in those groupes
   const { data: students } = groupeIds.length > 0
     ? await admin
         .from("profiles")
