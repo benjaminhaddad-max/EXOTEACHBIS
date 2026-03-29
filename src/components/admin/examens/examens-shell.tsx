@@ -71,6 +71,24 @@ function orderExamens(items: ExamenWithSeries[]) {
   return [...items].sort((a, b) => new Date(b.debut_at).getTime() - new Date(a.debut_at).getTime());
 }
 
+function cleanSerieName(name: string) {
+  const trimmed = name.trim();
+  const parts = trimmed.split(" — ");
+  if (parts.length > 1) {
+    return parts.slice(1).join(" — ").trim();
+  }
+  return trimmed;
+}
+
+function getSerieDisplayName(serie: Serie | undefined, matiereMap: Map<string, Matiere>) {
+  if (!serie) return "—";
+  if (serie.matiere_id) {
+    const matiere = matiereMap.get(serie.matiere_id);
+    if (matiere?.name) return matiere.name;
+  }
+  return cleanSerieName(serie.name);
+}
+
 export function ExamensShell({
   initialExamens,
   allSeries,
@@ -124,6 +142,12 @@ export function ExamensShell({
     for (const g of groupes) m.set(g.id, g);
     return m;
   }, [groupes]);
+
+  const matiereMap = useMemo(() => {
+    const m = new Map<string, Matiere>();
+    for (const matiere of matieres) m.set(matiere.id, matiere);
+    return m;
+  }, [matieres]);
 
   const refreshExamens = async () => {
     const supabase = createClient();
@@ -321,9 +345,6 @@ export function ExamensShell({
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.results_visible ? "bg-sky-500/10 text-sky-300" : "bg-white/10 text-white/45"}`}>
                             {e.results_visible ? "Résultats visibles" : "Résultats masqués"}
                           </span>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-white/30">
-                            /{e.notation_sur ?? 20}
-                          </span>
                         </div>
                         {e.description && (
                           <p className="text-xs text-white/50 mt-1">{e.description}</p>
@@ -357,7 +378,7 @@ export function ExamensShell({
                           <div className="flex flex-wrap gap-1.5 mt-3">
                             {e.examen_series!.map((es) => (
                               <span key={es.series_id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 border border-white/10 rounded-md text-xs text-white/60">
-                                {es.series?.name ?? "—"}
+                                {getSerieDisplayName(es.series, matiereMap)}
                                 <span className="text-[10px] text-[#C9A84C] font-semibold">×{es.coefficient}</span>
                               </span>
                             ))}
@@ -376,7 +397,7 @@ export function ExamensShell({
                                     {new Date(es.debut_at!).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                                     {es.fin_at && <>–{new Date(es.fin_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</>}
                                   </span>
-                                  <span className="text-white/60 font-medium truncate">{es.series?.name ?? "—"}</span>
+                                  <span className="text-white/60 font-medium truncate">{getSerieDisplayName(es.series, matiereMap)}</span>
                                 </div>
                               ))}
                             </div>
