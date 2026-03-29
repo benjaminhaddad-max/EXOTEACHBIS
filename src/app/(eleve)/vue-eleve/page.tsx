@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { CoachStudentPicker } from "@/components/coach/coach-student-picker";
 import type { Groupe, Profile } from "@/types/database";
@@ -22,11 +23,12 @@ export default async function VueElevePage() {
     redirect("/dashboard");
   }
 
-  // Get ALL groupes (the coach can pick any class to see the student experience)
-  const { data: groupes } = await supabase
+  const admin = createAdminClient();
+
+  // Get ALL groupes (bypass RLS)
+  const { data: groupes } = await admin
     .from("groupes")
     .select("id, name, color, annee")
-    .eq("visible", true)
     .order("name");
 
   const allGroupes = (groupes ?? []) as Pick<Groupe, "id" | "name" | "color" | "annee">[];
@@ -34,7 +36,7 @@ export default async function VueElevePage() {
 
   // Get students in all groupes
   const { data: students } = groupeIds.length > 0
-    ? await supabase
+    ? await admin
         .from("profiles")
         .select("id, first_name, last_name, email, avatar_url, groupe_id")
         .eq("role", "eleve")
