@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import type { Dossier, Cours } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
-import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie } from "@/app/(admin)/admin/pedagogie/actions";
+import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie, updateQuestionCoursId } from "@/app/(admin)/admin/pedagogie/actions";
 import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
 import { FlashcardsSection } from "./flashcards-section";
@@ -328,6 +328,10 @@ export function FullSerieEditor({
   const [removing, setRemoving] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
 
+  // Chapter assignment
+  const [assigningCours, setAssigningCours] = useState<string | null>(null);
+  const isChapterAssignable = serie.type === "annales" || serie.type === "concours_blanc";
+
   // Import/Export
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -380,6 +384,13 @@ export function FullSerieEditor({
 
   const toggleQ = (id: string) =>
     setExpandedQ((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const handleAssignCours = async (questionId: string, newCoursId: string | null) => {
+    setAssigningCours(questionId);
+    await updateQuestionCoursId(questionId, newCoursId);
+    setSerieQuestions((prev) => prev.map((q: any) => q.id === questionId ? { ...q, cours_id: newCoursId } : q));
+    setAssigningCours(null);
+  };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -533,7 +544,24 @@ export function FullSerieEditor({
                           <span className="text-[10px] text-white/30">{opts.filter((o: any) => o.is_correct).length}V · {opts.filter((o: any) => !o.is_correct).length}F</span>
                         </div>
                       </div>
-                      <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {isChapterAssignable && coursList.length > 0 && (
+                          <select
+                            value={q.cours_id ?? ""}
+                            onChange={(e) => handleAssignCours(q.id, e.target.value || null)}
+                            disabled={assigningCours === q.id}
+                            className={`text-[10px] rounded-md border px-1.5 py-0.5 outline-none transition-colors cursor-pointer ${
+                              q.cours_id
+                                ? "border-[#C9A84C]/40 bg-[#C9A84C]/10 text-[#C9A84C] font-semibold"
+                                : "border-white/15 bg-white/5 text-white/40"
+                            } ${assigningCours === q.id ? "opacity-50" : ""}`}
+                          >
+                            <option value="" className="bg-[#0e1e35] text-white/50">— Chapitre —</option>
+                            {coursList.map((c) => (
+                              <option key={c.id} value={c.id} className="bg-[#0e1e35] text-white">{c.name}</option>
+                            ))}
+                          </select>
+                        )}
                         <button onClick={() => handleRemoveQ(q.id)} disabled={removing === q.id}
                           title="Retirer de la série"
                           className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors disabled:opacity-40">

@@ -165,6 +165,17 @@ export async function toggleResultsVisibility(id: string, results_visible: boole
   return { success: true };
 }
 
+export async function toggleExamenVisibility(id: string, visible: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("examens")
+    .update({ visible, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 // --- Filières ---
 
 export async function getFilieres() {
