@@ -54,6 +54,7 @@ const RELANCE_THRESHOLD_HOURS = 48;
 
 function threadMatchesQaTreeSelection(thread: QaThread, matiereIds: Set<string>) {
   if (matiereIds.size === 0) return true;
+  if (thread.context_type === "general") return true;
   if (!thread.matiere_id) return false;
   return matiereIds.has(thread.matiere_id);
 }

@@ -12,7 +12,8 @@ export type QaContextType =
   | "cours"
   | "qcm_question"
   | "qcm_option"
-  | "coaching";
+  | "coaching"
+  | "general";
 
 export type QaStatus =
   | "ai_pending"

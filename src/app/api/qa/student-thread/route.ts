@@ -154,6 +154,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "contextType manquant." }, { status: 400 });
       }
 
+      const isGeneral = contextType === "general";
       const { data: thread, error: threadError } = await admin
         .from("qa_threads")
         .insert({
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
           serie_id: serieId ?? null,
           context_label: resolvedLabel || contextType,
           title: text.slice(0, 120),
-          status: "ai_pending",
+          status: isGeneral ? "escalated" : "ai_pending",
         })
         .select("*, matiere:matieres(id, name, color)")
         .single();
@@ -198,6 +199,26 @@ export async function POST(request: NextRequest) {
           { error: messageError?.message ?? "Impossible d'envoyer le message." },
           { status: 500 },
         );
+      }
+
+      // Notify admins for general questions
+      if (isGeneral) {
+        const { data: admins } = await admin
+          .from("profiles")
+          .select("id")
+          .in("role", ["admin", "superadmin"]);
+
+        if (admins?.length) {
+          await admin.from("notifications").insert(
+            admins.map((a) => ({
+              user_id: a.id,
+              type: "qa_escalated",
+              title: "Question d'un étudiant à l'administration",
+              body: text.slice(0, 100),
+              link: `/admin/questions-reponses?thread=${thread.id}`,
+            })),
+          );
+        }
       }
 
       return NextResponse.json({

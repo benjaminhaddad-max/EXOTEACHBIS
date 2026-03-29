@@ -95,7 +95,7 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
 
   // Auto-trigger AI if thread is ai_pending (just created, AI hasn't responded yet)
   useEffect(() => {
-    if (threadStatus !== "ai_pending" || viewerRole !== "student" || messages.length === 0) return;
+    if (threadStatus !== "ai_pending" || viewerRole !== "student" || messages.length === 0 || thread.context_type === "general") return;
     const lastStudentMsg = [...messages].reverse().find(m => m.sender_type === "student");
     if (!lastStudentMsg?.content) return;
 
@@ -243,8 +243,8 @@ export function ChatThread({ thread, viewerRole, viewerId, onStatusChange }: Cha
       setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? inserted as QaMessage : m)));
     }
 
-    // If student sends a message, trigger AI response (always, even after resolved/escalated)
-    if (viewerRole === "student") {
+    // If student sends a message, trigger AI response (skip for general/admin questions)
+    if (viewerRole === "student" && thread.context_type !== "general") {
       setAiThinking(true);
       let gotAiResponse = false;
 

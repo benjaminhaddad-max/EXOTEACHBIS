@@ -47,8 +47,10 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
         // Safety timeout — never spin forever
         timeout = setTimeout(() => setLoading(false), 8000);
 
-        // Resolve context (skip if already provided)
-        if (!ctx.contextLabel || !ctx.matiereId) {
+        // Resolve context (skip if already provided or general)
+        if (ctx.contextType === "general") {
+          setResolvedLabel(ctx.contextLabel ?? "Question à l'administration");
+        } else if (!ctx.contextLabel || !ctx.matiereId) {
           try {
             const resolved = await resolveQaContextClient(ctx.contextType, {
               dossierId: ctx.dossierId,
@@ -158,7 +160,7 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
         serie_id: ctx.serieId ?? null,
         context_label: resolvedLabel,
         title,
-        status: "ai_pending",
+        status: ctx.contextType === "general" ? "escalated" : "ai_pending",
       })
       .select("*, matiere:matieres(id, name, color)")
       .single();
@@ -285,11 +287,12 @@ export function AskQuestionDrawer({ onClose, ...ctx }: AskQuestionDrawerProps) {
                 <MessageCircleQuestion className="w-6 h-6 text-blue-500" />
               </div>
               <h4 className="text-sm font-semibold text-gray-900 mb-1">
-                Posez votre question
+                {ctx.contextType === "general" ? "Contactez l'administration" : "Posez votre question"}
               </h4>
               <p className="text-xs text-gray-500 mb-3 max-w-[320px]">
-                L&apos;IA vous répondra immédiatement. Si la réponse ne vous convient pas,
-                vous pourrez demander l&apos;aide d&apos;un professeur.
+                {ctx.contextType === "general"
+                  ? "Votre message sera envoyé directement à l'équipe administrative qui vous répondra dans les meilleurs délais."
+                  : "L'IA vous répondra immédiatement. Si la réponse ne vous convient pas, vous pourrez demander l'aide d'un professeur."}
               </p>
               {errorMsg && (
                 <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 max-w-full">

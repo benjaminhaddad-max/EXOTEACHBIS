@@ -921,7 +921,7 @@ function CoachWeeklyOverview({
           const hasContent = daySlots.length > 0 || dayRecurring.length > 0;
 
           return (
-            <div key={key} className={`min-h-[180px] ${isToday ? "bg-blue-50/40" : ""}`}>
+            <div key={key} className={`min-h-[300px] ${isToday ? "bg-blue-50/40" : ""}`}>
               {/* Day header */}
               <div className={`px-2 py-1.5 text-center border-b border-[#e5edf6] ${isToday ? "bg-[#12314d]" : "bg-[#f8fbfe]"}`}>
                 <p className={`text-[10px] font-bold uppercase ${isToday ? "text-white/70" : "text-[#8a98a8]"}`}>

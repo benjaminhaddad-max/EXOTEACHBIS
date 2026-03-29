@@ -31,6 +31,9 @@ export function buildDeepLink(thread: {
       if (thread.matiere_id) return `/cours/matiere/${thread.matiere_id}`;
       return "/cours";
 
+    case "general":
+      return "/admin/questions-reponses";
+
     case "dossier":
     default:
       return "/cours";

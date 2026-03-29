@@ -1,11 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MessageCircleQuestion, Bot, UserRound, Check, Clock, AlertTriangle, ArrowLeft, ChevronRight, Trash2, Archive } from "lucide-react";
-import type { QaThread, QaMessage } from "@/types/qa";
+import {
+  MessageCircleQuestion,
+  Bot,
+  UserRound,
+  Check,
+  Clock,
+  AlertTriangle,
+  ArrowLeft,
+  ChevronRight,
+  Trash2,
+  Archive,
+  BookOpen,
+  GraduationCap,
+  HelpCircle,
+  Building2,
+  MessageCircle,
+  Plus,
+} from "lucide-react";
+import type { QaThread, QaMessage, QaContextType } from "@/types/qa";
 import { ChatThread } from "@/components/qa/chat-thread";
 import { ContextBadge } from "@/components/qa/context-badge";
+import { AskQuestionDrawer } from "@/components/qa/ask-question-drawer";
 
 interface ThreadWithMeta extends Omit<QaThread, "last_message"> {
   last_message?: Pick<QaMessage, "id" | "sender_type" | "content_type" | "content" | "created_at"> | null;
@@ -25,6 +43,17 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   resolved: { label: "Résolue", color: "text-gray-500 bg-gray-50 border-gray-200", icon: Check },
 };
 
+type ContextFilter = "all" | "cours" | "qcm" | "matiere" | "coaching" | "general";
+
+const CONTEXT_FILTERS: { id: ContextFilter; label: string; icon: typeof BookOpen; matchTypes: QaContextType[] }[] = [
+  { id: "all", label: "Tout", icon: MessageCircleQuestion, matchTypes: [] },
+  { id: "cours", label: "Cours", icon: BookOpen, matchTypes: ["cours"] },
+  { id: "qcm", label: "Exercices", icon: HelpCircle, matchTypes: ["qcm_question", "qcm_option"] },
+  { id: "matiere", label: "Matière", icon: GraduationCap, matchTypes: ["matiere", "dossier"] },
+  { id: "coaching", label: "Coaching", icon: MessageCircle, matchTypes: ["coaching"] },
+  { id: "general", label: "Administration", icon: Building2, matchTypes: ["general"] },
+];
+
 function formatRelative(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
@@ -43,12 +72,13 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
   const [threads, setThreads] = useState(initialThreads);
   const [selectedThread, setSelectedThread] = useState<ThreadWithMeta | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [contextFilter, setContextFilter] = useState<ContextFilter>("all");
+  const [showGeneralDrawer, setShowGeneralDrawer] = useState(false);
   const supabase = createClient();
 
   const handleDeleteThread = async (e: React.MouseEvent, threadId: string) => {
     e.stopPropagation();
     if (!confirm("Supprimer cette conversation ?")) return;
-    // Delete messages first, then thread
     await supabase.from("qa_messages").delete().eq("thread_id", threadId);
     await supabase.from("qa_threads").delete().eq("id", threadId);
     setThreads((prev) => prev.filter((t) => t.id !== threadId));
@@ -62,13 +92,31 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
 
   const activeThreads = threads.filter((t) => t.status !== "resolved");
   const resolvedThreads = threads.filter((t) => t.status === "resolved");
-  const displayThreads = showArchived ? resolvedThreads : activeThreads;
+  const baseThreads = showArchived ? resolvedThreads : activeThreads;
 
-  // Mobile: show chat or list
+  const filteredThreads = useMemo(() => {
+    if (contextFilter === "all") return baseThreads;
+    const filter = CONTEXT_FILTERS.find((f) => f.id === contextFilter);
+    if (!filter || filter.matchTypes.length === 0) return baseThreads;
+    return baseThreads.filter((t) => filter.matchTypes.includes(t.context_type));
+  }, [baseThreads, contextFilter]);
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<ContextFilter, number> = { all: 0, cours: 0, qcm: 0, matiere: 0, coaching: 0, general: 0 };
+    for (const t of baseThreads) {
+      counts.all++;
+      for (const f of CONTEXT_FILTERS) {
+        if (f.id !== "all" && f.matchTypes.includes(t.context_type)) {
+          counts[f.id]++;
+        }
+      }
+    }
+    return counts;
+  }, [baseThreads]);
+
   if (selectedThread) {
     return (
       <div className="max-w-4xl mx-auto">
-        {/* Back button + header */}
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => setSelectedThread(null)}
@@ -85,7 +133,6 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
           </div>
         </div>
 
-        {/* Chat */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden" style={{ height: "calc(100vh - 220px)" }}>
           <ChatThread
             thread={selectedThread as unknown as QaThread}
@@ -114,38 +161,79 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
         ))}
       </div>
 
-      {/* Tabs: Active / Archived */}
-      <div className="flex gap-2 mb-4">
+      {/* Context filter pills */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        {CONTEXT_FILTERS.map((f) => {
+          const Icon = f.icon;
+          const count = filterCounts[f.id];
+          const isActive = contextFilter === f.id;
+          if (f.id !== "all" && count === 0) return null;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setContextFilter(f.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                isActive
+                  ? "bg-[#0e1e35] text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {f.label}
+              <span className={`ml-0.5 text-[10px] font-bold ${isActive ? "text-white/70" : "text-gray-400"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tabs: Active / Archived + New question button */}
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowArchived(false)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              !showArchived ? "bg-[#0e1e35] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            En cours ({activeThreads.length})
+          </button>
+          <button
+            onClick={() => setShowArchived(true)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              showArchived ? "bg-[#0e1e35] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Archivées ({resolvedThreads.length})
+          </button>
+        </div>
+
         <button
-          onClick={() => setShowArchived(false)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            !showArchived ? "bg-[#0e1e35] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
+          onClick={() => setShowGeneralDrawer(true)}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-[#0e1e35] to-[#1a3a5c] text-white text-sm font-semibold shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5"
         >
-          En cours ({activeThreads.length})
-        </button>
-        <button
-          onClick={() => setShowArchived(true)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            showArchived ? "bg-[#0e1e35] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          Archivées ({resolvedThreads.length})
+          <Plus className="w-4 h-4" />
+          Question à l&apos;administration
         </button>
       </div>
 
       {/* Thread list */}
-      {displayThreads.length === 0 ? (
+      {filteredThreads.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
           <MessageCircleQuestion className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-gray-400 mb-1">Aucune question</h3>
+          <h3 className="text-base font-semibold text-gray-400 mb-1">
+            {contextFilter !== "all" ? "Aucune question dans cette catégorie" : "Aucune question"}
+          </h3>
           <p className="text-sm text-gray-400">
-            Posez des questions depuis vos cours ou exercices — l&apos;IA vous répondra immédiatement.
+            {contextFilter === "general"
+              ? "Posez une question à l'administration en cliquant sur le bouton ci-dessus."
+              : "Posez des questions depuis vos cours ou exercices — l'IA vous répondra immédiatement."}
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {displayThreads.map((t) => {
+          {filteredThreads.map((t) => {
             const cfg = STATUS_CONFIG[t.status] ?? STATUS_CONFIG.ai_pending;
             const StatusIcon = cfg.icon;
             const lastMsg = t.last_message;
@@ -172,7 +260,6 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
               >
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
-                    {/* Title + status */}
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className={`text-sm font-semibold truncate ${hasUnread ? "text-gray-900" : "text-gray-700"}`}>
                         {t.title || "Question"}
@@ -183,12 +270,10 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
                       </span>
                     </div>
 
-                    {/* Context badge */}
                     <div className="mb-1.5">
                       <ContextBadge contextType={t.context_type} contextLabel={t.context_label} compact />
                     </div>
 
-                    {/* Preview */}
                     {preview && (
                       <p className={`text-xs truncate ${hasUnread ? "text-gray-700 font-medium" : "text-gray-500"}`}>
                         {preview}
@@ -196,7 +281,6 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
                     )}
                   </div>
 
-                  {/* Right side: time + actions + chevron */}
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="text-[10px] text-gray-400">
                       {lastMsg ? formatRelative(lastMsg.created_at) : formatRelative(t.created_at)}
@@ -233,6 +317,18 @@ export function MesQuestionsShell({ threads: initialThreads, userId }: MesQuesti
             );
           })}
         </div>
+      )}
+
+      {/* General question drawer */}
+      {showGeneralDrawer && (
+        <AskQuestionDrawer
+          contextType="general"
+          contextLabel="Question à l'administration"
+          onClose={() => {
+            setShowGeneralDrawer(false);
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );
