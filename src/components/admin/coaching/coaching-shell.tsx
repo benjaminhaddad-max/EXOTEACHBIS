@@ -966,23 +966,35 @@ function CoachWeeklyOverview({
                   );
                 })}
 
-                {/* Recurring availability (when no actual slots exist for this day) */}
-                {daySlots.length === 0 && dayRecurring.map((r) => {
-                  const SlotIcon = SLOT_TYPE_ICONS[r.slot_type] ?? Clock;
-                  const colorClass = SLOT_TYPE_COLORS[r.slot_type] ?? "text-gray-600 bg-gray-50";
-                  return (
-                    <div key={r.id} className={`rounded-lg px-1.5 py-1 text-[10px] ${colorClass}`}>
+                {/* Recurring availability grouped by time slot */}
+                {daySlots.length === 0 && (() => {
+                  // Group recurring items by start_time+end_time
+                  const groups = new Map<string, CoachRecurringAvailability[]>();
+                  for (const r of dayRecurring) {
+                    const key = `${r.start_time}-${r.end_time}`;
+                    const arr = groups.get(key) ?? [];
+                    arr.push(r);
+                    groups.set(key, arr);
+                  }
+                  return [...groups.entries()].map(([timeKey, items]) => (
+                    <div key={timeKey} className="rounded-lg px-1.5 py-1 text-[10px] bg-gray-50 text-[#5d7085]">
                       <div className="flex items-center gap-1">
-                        <Clock className="h-2.5 w-2.5 shrink-0 opacity-70" />
-                        <span className="font-medium">{r.start_time.slice(0, 5)}–{r.end_time.slice(0, 5)}</span>
+                        <Clock className="h-2.5 w-2.5 shrink-0 opacity-50" />
+                        <span className="font-medium">{items[0].start_time.slice(0, 5)}–{items[0].end_time.slice(0, 5)}</span>
                       </div>
-                      <div className="flex items-center gap-0.5 mt-0.5">
-                        <SlotIcon className="h-2.5 w-2.5 opacity-60" />
-                        <span className="opacity-70">{SLOT_TYPE_LABELS[r.slot_type] ?? r.slot_type}</span>
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                        {items.map((r) => {
+                          const SlotIcon = SLOT_TYPE_ICONS[r.slot_type] ?? Clock;
+                          return (
+                            <span key={r.id} className={`inline-flex items-center gap-0.5 ${SLOT_TYPE_COLORS[r.slot_type] ?? ""} rounded px-1 py-0.5`}>
+                              <SlotIcon className="h-2.5 w-2.5" />
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
-                  );
-                })}
+                  ));
+                })()}
 
                 {!hasContent && (
                   <p className="text-[9px] text-[#b0b8c4] text-center py-3">—</p>
