@@ -34,8 +34,6 @@ const adminNavItems = [
 
 const coachNavItems = [
   { href: "/admin/coaching", label: "Coaching", icon: Handshake },
-  { href: "/admin/communication", label: "Communication", icon: MessageSquare },
-  { href: "/cours", label: "Cours & Exercices", icon: BookOpen },
   { href: "/vue-eleve", label: "Vue élève", icon: Eye },
 ];
 

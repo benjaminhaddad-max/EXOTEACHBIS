@@ -12,7 +12,6 @@ import {
   TrendingUp,
 
   Handshake,
-  MessageSquare,
   Eye,
 } from "lucide-react";
 import { useUser } from "@/hooks/use-user";
@@ -33,8 +32,6 @@ const studentNavItems = [
 
 const coachNavItems = [
   { href: "/admin/coaching", label: "Coaching", icon: Handshake },
-  { href: "/admin/communication", label: "Communication", icon: MessageSquare },
-  { href: "/cours", label: "Cours & Exercices", icon: BookOpen },
   { href: "/vue-eleve", label: "Vue élève", icon: Eye },
 ];
 

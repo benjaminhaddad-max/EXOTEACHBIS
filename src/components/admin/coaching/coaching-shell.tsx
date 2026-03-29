@@ -934,30 +934,41 @@ function CoachWeeklyOverview({
               </div>
 
               <div className="p-1.5 space-y-1">
-                {/* Actual slots (booked or available) */}
-                {daySlots.map((slot) => {
-                  const student = slot.booking ? studentsById.get(slot.booking.student_id) : null;
+                {/* Booked slots first (RDV) */}
+                {daySlots.filter((s) => s.booking).map((slot) => {
+                  const student = studentsById.get(slot.booking!.student_id);
+                  const SlotIcon = SLOT_TYPE_ICONS[slot.slot_type] ?? Clock;
+                  const startTime = new Date(slot.start_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+                  const endTime = new Date(slot.end_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+                  return (
+                    <div key={slot.id} className="rounded-lg px-2 py-1.5 text-[10px] bg-emerald-600 text-white">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-2.5 w-2.5 shrink-0 opacity-80" />
+                        <span className="font-semibold">{startTime}–{endTime}</span>
+                      </div>
+                      <p className="truncate mt-0.5 font-semibold">
+                        {student ? `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() : "Élève"}
+                      </p>
+                      <div className="flex items-center gap-0.5 mt-0.5 opacity-80">
+                        <SlotIcon className="h-2.5 w-2.5" />
+                        <span>{SLOT_TYPE_LABELS[slot.slot_type] ?? slot.slot_type}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Available (unbooked) slots */}
+                {daySlots.filter((s) => !s.booking).map((slot) => {
                   const SlotIcon = SLOT_TYPE_ICONS[slot.slot_type] ?? Clock;
                   const startTime = new Date(slot.start_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
                   return (
-                    <div
-                      key={slot.id}
-                      className={`rounded-lg px-1.5 py-1 text-[10px] ${
-                        slot.booking
-                          ? "bg-[#12314d] text-white"
-                          : "border border-dashed border-[#d0d8e2] text-[#8a98a8]"
-                      }`}
-                    >
+                    <div key={slot.id} className="rounded-lg px-1.5 py-1 text-[10px] border border-dashed border-[#d0d8e2] text-[#8a98a8]">
                       <div className="flex items-center gap-1">
                         <Clock className="h-2.5 w-2.5 shrink-0 opacity-70" />
                         <span className="font-medium">{startTime}</span>
                       </div>
-                      {slot.booking && student && (
-                        <p className="truncate mt-0.5 font-medium opacity-90">
-                          {student.first_name ?? ""} {(student.last_name ?? "")[0]?.toUpperCase() ?? ""}.
-                        </p>
-                      )}
                       <div className="flex items-center gap-0.5 mt-0.5">
                         <SlotIcon className="h-2.5 w-2.5 opacity-60" />
                         <span className="opacity-70">{SLOT_TYPE_LABELS[slot.slot_type] ?? slot.slot_type}</span>
@@ -966,9 +977,8 @@ function CoachWeeklyOverview({
                   );
                 })}
 
-                {/* Recurring availability grouped by time slot */}
+                {/* Recurring availability (when no actual slots) */}
                 {daySlots.length === 0 && (() => {
-                  // Group recurring items by start_time+end_time
                   const groups = new Map<string, CoachRecurringAvailability[]>();
                   for (const r of dayRecurring) {
                     const key = `${r.start_time}-${r.end_time}`;
@@ -1001,15 +1011,6 @@ function CoachWeeklyOverview({
                   <p className="text-[9px] text-[#b0b8c4] text-center py-3">—</p>
                 )}
               </div>
-
-              {/* Footer with count */}
-              {bookedCount > 0 && (
-                <div className="px-1.5 pb-1.5">
-                  <span className="block text-center text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-full py-0.5">
-                    {bookedCount} RDV
-                  </span>
-                </div>
-              )}
             </div>
           );
         })}
@@ -1052,17 +1053,11 @@ function CoachDashboardTabs({
   groupsById: Map<string, Groupe>;
   recurringAvailability?: CoachRecurringAvailability[];
 }) {
-  const [tab, setTab] = useState<"planning" | "eleves" | "rdv">("planning");
-
-  const coachBookings = useMemo(
-    () => bookings.filter((b) => b.coach_id === coachId).sort((a, b) => new Date(b.booked_at).getTime() - new Date(a.booked_at).getTime()),
-    [bookings, coachId]
-  );
+  const [tab, setTab] = useState<"planning" | "eleves">("planning");
 
   const tabs = [
     { key: "planning" as const, label: "Planning", count: slots.filter((s) => s.coach_id === coachId && new Date(s.start_at) >= new Date()).length },
     { key: "eleves" as const, label: "Élèves", count: students.length },
-    { key: "rdv" as const, label: "Rendez-vous", count: coachBookings.filter((b) => b.status === "booked").length },
   ];
 
   return (
@@ -1137,36 +1132,9 @@ function CoachDashboardTabs({
         </div>
       )}
 
-      {tab === "rdv" && (
-        <div className="space-y-2">
-          {coachBookings.length === 0 ? (
-            <p className="py-8 text-center text-sm text-[#7d8c9e]">Aucun rendez-vous pour l&apos;instant.</p>
-          ) : (
-            coachBookings.map((booking) => {
-              const slot = slots.find((s) => s.id === booking.slot_id);
-              const student = students.find((s) => s.id === booking.student_id);
-              return (
-                <div key={booking.id} className="flex items-center justify-between rounded-xl border border-[#e5edf6] bg-white px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <CalendarClock className="h-4 w-4 text-[#5d7085]" />
-                    <div>
-                      <p className="text-sm font-medium text-[#12314d]">
-                        {slot ? formatDateTime(slot.start_at) : "Date inconnue"}
-                      </p>
-                      <p className="text-xs text-[#7d8c9e]">
-                        {student ? getDisplayName(student) : "Élève inconnu"}
-                        {slot?.location ? ` · ${slot.location}` : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${BOOKING_STATUS_STYLES[booking.status as CoachingCallBookingStatus] ?? "bg-gray-100 text-gray-600"}`}>
-                    {BOOKING_STATUS_LABELS[booking.status as CoachingCallBookingStatus] ?? booking.status}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
+      {/* RDV tab removed — appointments are shown directly in "Ma semaine" calendar */
+      false && (
+        <div />
       )}
     </div>
   );
