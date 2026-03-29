@@ -54,6 +54,7 @@ export async function updateUserAdminProfile(data: {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
+  matiere_roles?: { matiere_id: string; role_type: string }[];
   niveau_initial?: number | null;
   mental_initial?: number | null;
   niveau_progressif?: number | null;
@@ -207,7 +208,7 @@ export async function updateUserAdminProfile(data: {
     }
   }
 
-  if (data.matiere_ids !== undefined || data.role !== undefined) {
+  if (data.matiere_roles !== undefined || data.matiere_ids !== undefined || data.role !== undefined) {
     const shouldKeepAssignments = (data.role ?? "prof") === "prof";
 
     const { error: deleteError } = await admin
@@ -220,17 +221,44 @@ export async function updateUserAdminProfile(data: {
     }
 
     if (shouldKeepAssignments) {
-      const uniqueMatiereIds = [...new Set(data.matiere_ids ?? [])];
-      if (uniqueMatiereIds.length > 0) {
+      // New format: matiere_roles with role_type
+      if (data.matiere_roles && data.matiere_roles.length > 0) {
+        // Deduplicate by (matiere_id, role_type)
+        const seen = new Set<string>();
+        const uniqueRoles = data.matiere_roles.filter((r) => {
+          const key = `${r.matiere_id}:${r.role_type}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
         const { error: insertError } = await admin.from("prof_matieres").insert(
-          uniqueMatiereIds.map((matiereId) => ({
+          uniqueRoles.map((r) => ({
             prof_id: data.userId,
-            matiere_id: matiereId,
+            matiere_id: r.matiere_id,
+            role_type: r.role_type,
           }))
         );
 
         if (insertError) {
           return { error: insertError.message };
+        }
+      }
+      // Legacy format: matiere_ids without role_type (defaults to "cours")
+      else if (data.matiere_ids) {
+        const uniqueMatiereIds = [...new Set(data.matiere_ids)];
+        if (uniqueMatiereIds.length > 0) {
+          const { error: insertError } = await admin.from("prof_matieres").insert(
+            uniqueMatiereIds.map((matiereId) => ({
+              prof_id: data.userId,
+              matiere_id: matiereId,
+              role_type: "cours",
+            }))
+          );
+
+          if (insertError) {
+            return { error: insertError.message };
+          }
         }
       }
     }

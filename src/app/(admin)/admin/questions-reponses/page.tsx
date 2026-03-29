@@ -49,8 +49,8 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("matieres").select("*").eq("visible", true).order("order_index"),
     role === "prof"
-      ? supabase.from("prof_matieres").select("prof_id, matiere_id").eq("prof_id", user.id)
-      : supabase.from("prof_matieres").select("prof_id, matiere_id"),
+      ? supabase.from("prof_matieres").select("prof_id, matiere_id, role_type").eq("prof_id", user.id).in("role_type", ["qa", "cours"])
+      : supabase.from("prof_matieres").select("prof_id, matiere_id, role_type"),
     role === "prof"
       ? supabase
           .from("profiles")

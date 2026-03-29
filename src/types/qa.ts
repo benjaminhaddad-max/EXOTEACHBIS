@@ -28,10 +28,13 @@ export type QaMessageContentType = "text" | "voice" | "image" | "video";
 
 // ---------- Tables ----------
 
+export type ProfRoleType = "cours" | "qa" | "contenu";
+
 export interface ProfMatiere {
   id: string;
   prof_id: string;
   matiere_id: string;
+  role_type: ProfRoleType;
   created_at: string;
   // Relations
   profile?: Profile;

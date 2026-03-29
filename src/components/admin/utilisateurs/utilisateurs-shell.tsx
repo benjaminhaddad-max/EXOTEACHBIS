@@ -48,7 +48,7 @@ type Modal =
   | { type: "create_user" }
   | null;
 type Toast = { message: string; kind: "success" | "error" } | null;
-type ProfMatiereAssignment = { prof_id: string; matiere_id: string };
+type ProfMatiereAssignment = { prof_id: string; matiere_id: string; role_type?: string };
 type OfferGroupBucket = {
   code: string;
   label: string;
@@ -68,6 +68,7 @@ type AdminUserChanges = {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
+  matiere_roles?: { matiere_id: string; role_type: string }[];
   niveau_initial?: number | null;
   mental_initial?: number | null;
   niveau_progressif?: number | null;
@@ -253,7 +254,7 @@ export function UtilisateursShell({
   const refreshProfMatieres = useCallback(async () => {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
-    const { data } = await supabase.from("prof_matieres").select("prof_id, matiere_id");
+    const { data } = await supabase.from("prof_matieres").select("prof_id, matiere_id, role_type");
     if (data) setProfMatieres(data as ProfMatiereAssignment[]);
   }, []);
 
@@ -971,6 +972,7 @@ export function UtilisateursShell({
           filieres={initialFilieres}
           cours={initialCours}
           selectedMatiereIds={profMatieresByUser.get(modal.user.id) ?? []}
+          profMatiereRows={profMatieres.filter((pm) => pm.prof_id === modal.user.id)}
           directAccessIds={profileAccessById.get(modal.user.id) ?? (modal.user.access_dossier_id ? [modal.user.access_dossier_id] : [])}
           excludedAccessIds={profileAccessExclusionsById.get(modal.user.id) ?? []}
           groupeAccessById={groupeAccessById}
@@ -3323,7 +3325,7 @@ function CreateUserModal({
 // ─── EditUserModal ────────────────────────────────────────────────────────────
 
 function EditUserModal({
-  user, groupes, dossiers, dossierTree, matieres, filieres, cours, selectedMatiereIds, directAccessIds, excludedAccessIds, groupeAccessById, coachingProfile, isPending, onSave, onClose,
+  user, groupes, dossiers, dossierTree, matieres, filieres, cours, selectedMatiereIds, profMatiereRows, directAccessIds, excludedAccessIds, groupeAccessById, coachingProfile, isPending, onSave, onClose,
 }: {
   user: Profile;
   groupes: Groupe[];
@@ -3333,6 +3335,7 @@ function EditUserModal({
   cours: { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean }[];
   filieres: Filiere[];
   selectedMatiereIds: string[];
+  profMatiereRows: ProfMatiereAssignment[];
   directAccessIds: string[];
   excludedAccessIds: string[];
   groupeAccessById: Map<string, string[]>;
@@ -3371,6 +3374,10 @@ function EditUserModal({
   const [personalAccessIds, setPersonalAccessIds] = useState<string[]>(directAccessIds);
   const [excludedInheritedAccessIds, setExcludedInheritedAccessIds] = useState<string[]>(excludedAccessIds);
   const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
+  // Role-type specific matiere assignments
+  const [coursMatIds, setCoursMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type).map((r) => r.matiere_id));
+  const [qaMatIds, setQaMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "qa").map((r) => r.matiere_id));
+  const [contenuMatIds, setContenuMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "contenu").map((r) => r.matiere_id));
   const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
   const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
   const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
@@ -3440,6 +3447,11 @@ function EditUserModal({
     mentalInitial !== (coachingProfile?.mental_initial ?? 50) ||
     niveauProgressif !== (coachingProfile?.niveau_progressif ?? 50) ||
     mentalProgressif !== (coachingProfile?.mental_progressif ?? 50);
+
+  const toggleRoleMatiere = (roleType: "cours" | "qa" | "contenu", matiereId: string) => {
+    const setter = roleType === "cours" ? setCoursMatIds : roleType === "qa" ? setQaMatIds : setContenuMatIds;
+    setter((prev) => prev.includes(matiereId) ? prev.filter((id) => id !== matiereId) : [...prev, matiereId]);
+  };
 
   const toggleMatiere = (matiereId: string) => {
     setMatiereIds((prev) =>
@@ -3807,43 +3819,60 @@ function EditUserModal({
           )}
 
           {role === "prof" && (
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Matières enseignées</label>
-              <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                {dossiers
-                  .filter((dossier) => (matieresByDossier.get(dossier.id)?.length ?? 0) > 0)
-                  .map((dossier) => (
-                    <div key={dossier.id}>
-                      <p className="mb-2 text-[11px] font-semibold" style={{ color: "#E3C286" }}>
-                        [{DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}] {getDossierPathLabel(dossier.id, dossiers)}
-                      </p>
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                        {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
-                          const checked = matiereIds.includes(matiere.id);
-                          return (
-                            <button
-                              key={matiere.id}
-                              type="button"
-                              onClick={() => toggleMatiere(matiere.id)}
-                              className="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors"
-                              style={{
-                                borderColor: checked ? "rgba(201,168,76,0.7)" : "rgba(255,255,255,0.08)",
-                                backgroundColor: checked ? "rgba(201,168,76,0.14)" : "rgba(255,255,255,0.02)",
-                                color: checked ? "#F8E6B0" : "rgba(255,255,255,0.72)",
-                              }}
-                            >
-                              <span
-                                className="h-2.5 w-2.5 rounded-full shrink-0"
-                                style={{ backgroundColor: checked ? "#E3C286" : matiere.color }}
-                              />
-                              <span className="truncate">{matiere.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-              </div>
+            <div className="space-y-4">
+              {([
+                { key: "cours" as const, label: "Donne cours", desc: "Apparaît sur le planning des élèves", color: "#60A5FA", ids: coursMatIds },
+                { key: "qa" as const, label: "Répond aux questions", desc: "Accès au Q&A de la plateforme", color: "#FBBF24", ids: qaMatIds },
+                { key: "contenu" as const, label: "Crée du contenu", desc: "Fiches, exercices, QCM", color: "#34D399", ids: contenuMatIds },
+              ]).map((section) => (
+                <div key={section.key}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: section.color }} />
+                    <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+                      {section.label}
+                    </label>
+                    <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— {section.desc}</span>
+                  </div>
+                  <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    {dossiers
+                      .filter((dossier) => (matieresByDossier.get(dossier.id)?.length ?? 0) > 0)
+                      .map((dossier) => (
+                        <div key={dossier.id}>
+                          <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
+                            {getDossierPathLabel(dossier.id, dossiers)}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
+                              const checked = section.ids.includes(matiere.id);
+                              return (
+                                <button
+                                  key={matiere.id}
+                                  type="button"
+                                  onClick={() => toggleRoleMatiere(section.key, matiere.id)}
+                                  className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
+                                  style={{
+                                    borderColor: checked ? section.color + "99" : "rgba(255,255,255,0.08)",
+                                    backgroundColor: checked ? section.color + "22" : "rgba(255,255,255,0.02)",
+                                    color: checked ? section.color : "rgba(255,255,255,0.55)",
+                                  }}
+                                >
+                                  <span
+                                    className="h-2 w-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: checked ? section.color : matiere.color }}
+                                  />
+                                  {matiere.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    {dossiers.filter((d) => (matieresByDossier.get(d.id)?.length ?? 0) > 0).length === 0 && (
+                      <p className="text-[11px] py-2 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune matière disponible</p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -3876,6 +3905,11 @@ function EditUserModal({
                 access_dossier_ids: personalAccessIds,
                 excluded_access_dossier_ids: excludedInheritedAccessIds,
                 matiere_ids: matiereIds,
+                matiere_roles: [
+                  ...coursMatIds.map((id) => ({ matiere_id: id, role_type: "cours" })),
+                  ...qaMatIds.map((id) => ({ matiere_id: id, role_type: "qa" })),
+                  ...contenuMatIds.map((id) => ({ matiere_id: id, role_type: "contenu" })),
+                ],
                 niveau_initial: niveauInitial,
                 mental_initial: mentalInitial,
                 niveau_progressif: niveauProgressif,
