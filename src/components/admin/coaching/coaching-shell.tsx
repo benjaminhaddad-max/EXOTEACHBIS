@@ -527,6 +527,22 @@ export function CoachingShell({
     return bookings.filter((b) => filteredGroupeIds.has(b.groupe_id));
   }, [bookings, filteredGroupeIds]);
 
+  // Build a set of student IDs matching the filter for threads/rdv
+  const filteredStudentIds = useMemo(() => {
+    if (!filteredGroupeIds) return null;
+    return new Set(students.filter(s => s.groupe_id && filteredGroupeIds.has(s.groupe_id)).map(s => s.id));
+  }, [filteredGroupeIds, students]);
+
+  const filteredThreads = useMemo(() => {
+    if (!filteredStudentIds) return coachingThreads;
+    return coachingThreads.filter(t => filteredStudentIds.has(t.student_id));
+  }, [coachingThreads, filteredStudentIds]);
+
+  const filteredRdvRequests = useMemo(() => {
+    if (!filteredGroupeIds) return coachingRdvRequests;
+    return coachingRdvRequests.filter(r => filteredGroupeIds.has(r.groupe_id));
+  }, [coachingRdvRequests, filteredGroupeIds]);
+
   // Counts for pills
   const studentCountByOffer = useMemo(() => {
     const map = new Map<string, number>();
@@ -606,9 +622,8 @@ export function CoachingShell({
         ))}
       </div>
 
-      {/* Pill filters — Formation → Université (for planning/rdv views) */}
-      {(adminView === "planning" || adminView === "rdv") && (
-        <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+      {/* Pill filters — Formation → Université */}
+      <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
           {/* Formation */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[9px] font-bold uppercase tracking-widest w-24 shrink-0 text-gray-400">Formation</span>
@@ -659,7 +674,6 @@ export function CoachingShell({
             </div>
           )}
         </div>
-      )}
 
       {/* Main content */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" style={{ minHeight: "calc(100vh - 250px)" }}>
@@ -690,7 +704,7 @@ export function CoachingShell({
 
         {adminView === "chat" && (
           <CoachingChatThreadsPanel
-            threads={coachingThreads}
+            threads={filteredThreads}
             coaches={coaches}
             students={students}
             currentProfile={currentProfile}
@@ -699,7 +713,7 @@ export function CoachingShell({
 
         {adminView === "rdv_requests" && (
           <CoachingRdvPanel
-            rdvRequests={coachingRdvRequests}
+            rdvRequests={filteredRdvRequests}
             coaches={coaches}
             students={students}
           />
