@@ -5,6 +5,8 @@ import { MessageCircle, Search, Loader2, Send, Check, AlertCircle, CheckCheck, L
 import { createClient } from "@/lib/supabase/client";
 import { useQaRealtime } from "@/hooks/use-qa-realtime";
 import { assignCoachToThread, respondToCoachingThread, sendInternalNote } from "@/app/(admin)/admin/coaching/actions";
+import { VoiceNotePlayer } from "@/components/qa/voice-note-player";
+import { MediaPreview } from "@/components/qa/media-preview";
 import type { QaThread, QaMessage } from "@/types/qa";
 import type { Profile, CoachingInternalNote } from "@/types/database";
 
@@ -240,7 +242,18 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
                           )}
                           <div className={`max-w-[70%] min-w-[80px] px-3 py-2 ${isStudent ? "bg-white border border-gray-200 rounded-2xl rounded-bl-sm" : "bg-[#0e1e35] text-white rounded-2xl rounded-br-sm"}`}>
                             {isStudent && sender && <p className="text-[10px] font-semibold text-indigo-600 mb-0.5">{getFullName(sender)}</p>}
-                            <p className={`text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isStudent ? "text-gray-900" : "text-white"}`}>{msg.content}</p>
+                            {msg.content_type === "text" && msg.content && (
+                              <p className={`text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isStudent ? "text-gray-900" : "text-white"}`}>{msg.content}</p>
+                            )}
+                            {msg.content_type === "voice" && msg.media_url && (
+                              <VoiceNotePlayer url={msg.media_url} duration={msg.media_duration_s} accent={isStudent ? "student" : "prof"} />
+                            )}
+                            {msg.content_type === "image" && msg.media_url && (
+                              <MediaPreview url={msg.media_url} type="image" accent={isStudent ? "student" : "prof"} />
+                            )}
+                            {msg.content_type === "video" && msg.media_url && (
+                              <MediaPreview url={msg.media_url} type="video" accent={isStudent ? "student" : "prof"} />
+                            )}
                             <div className="flex items-center gap-1 justify-end mt-0.5">
                               <span className={`text-[10px] ${isStudent ? "text-gray-400" : "text-white/50"}`}>{formatTime(msg.created_at)}</span>
                               {!isStudent && (msg.read_by_student ? <CheckCheck size={13} className="text-blue-400" /> : <Check size={13} className="text-white/40" />)}
