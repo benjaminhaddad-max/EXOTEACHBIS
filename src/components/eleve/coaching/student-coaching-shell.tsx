@@ -63,6 +63,7 @@ export function StudentCoachingShell({
           universityName={universityName}
           initialThread={initialThread}
           coaches={coaches}
+          onRequestRdv={() => setTab("rdv")}
         />
       )}
       {tab === "rdv" && (
