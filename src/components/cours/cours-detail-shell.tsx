@@ -91,6 +91,7 @@ export function CoursDetailShell({
 }: CoursDetailShellProps) {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("series");
   const [qaOpen, setQaOpen] = useState(false);
+  const [pdfPage, setPdfPage] = useState(currentPage);
 
   const allSeries = useMemo(() => {
     const directIds = new Set(directSeries.map((s) => s.id));
@@ -135,7 +136,7 @@ export function CoursDetailShell({
             className="inline-flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-xs font-semibold text-[#6B7A8D] transition-all hover:border-[#4FABDB]/40 hover:text-[#4FABDB] hover:shadow-sm"
           >
             <MessageCircleQuestion size={14} />
-            Poser une question
+            Question sur la page {pdfPage}
           </button>
         </div>
 
@@ -149,6 +150,7 @@ export function CoursDetailShell({
                 nbPages={cours.nb_pages ?? 0}
                 currentPage={currentPage}
                 version={cours.version ?? 1}
+                onPageChange={setPdfPage}
               />
             </div>
           ) : (
@@ -403,7 +405,7 @@ export function CoursDetailShell({
           coursId={cours.id}
           matiereId={matiere?.id}
           dossierId={dossierId ?? undefined}
-          contextLabel={cours.name}
+          contextLabel={`${cours.name} — Page ${pdfPage}/${cours.nb_pages}`}
           onClose={() => setQaOpen(false)}
         />
       )}

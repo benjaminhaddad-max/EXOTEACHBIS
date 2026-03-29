@@ -24,9 +24,10 @@ interface PdfViewerProps {
   nbPages: number;
   currentPage: number;
   version: number;
+  onPageChange?: (page: number) => void;
 }
 
-export function PdfViewer({ coursId, pdfUrl, nbPages, currentPage: initialPage, version }: PdfViewerProps) {
+export function PdfViewer({ coursId, pdfUrl, nbPages, currentPage: initialPage, version, onPageChange }: PdfViewerProps) {
   const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(nbPages || 0);
   const [zoomFactor, setZoomFactor] = useState(1.0); // multiplier on top of fit-width
@@ -70,6 +71,7 @@ export function PdfViewer({ coursId, pdfUrl, nbPages, currentPage: initialPage, 
     const clamped = Math.max(1, Math.min(newPage, totalPages));
     setPage(clamped);
     saveProgress(clamped, totalPages);
+    onPageChange?.(clamped);
   };
 
   const zoom = (delta: number) => {
