@@ -20,8 +20,9 @@ export function CoachingVideosSection({ videos }: CoachingVideosSectionProps) {
 
   if (videos.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-        Aucune vidéo disponible pour le moment.
+      <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border border-gray-200">
+        <Play size={32} className="text-gray-300 mb-2" />
+        <p className="text-sm text-gray-400">Aucune vidéo disponible pour le moment.</p>
       </div>
     );
   }
@@ -30,7 +31,7 @@ export function CoachingVideosSection({ videos }: CoachingVideosSectionProps) {
     <div className="space-y-8">
       {motivationVideos.length > 0 && (
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wide mb-4" style={{ color: "#E3C286" }}>
+          <h3 className="text-sm font-bold uppercase tracking-wide text-amber-700 mb-4">
             Motivation & état d&apos;esprit en P1
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -43,7 +44,7 @@ export function CoachingVideosSection({ videos }: CoachingVideosSectionProps) {
 
       {methodeVideos.length > 0 && (
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wide mb-4" style={{ color: "#E3C286" }}>
+          <h3 className="text-sm font-bold uppercase tracking-wide text-amber-700 mb-4">
             Méthode de travail Diploma Santé
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -63,11 +64,7 @@ function VideoCard({ video }: { video: CoachingVideo }) {
     : null;
 
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-    >
-      {/* Video player */}
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {embedUrl ? (
         <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
           <iframe
@@ -79,28 +76,17 @@ function VideoCard({ video }: { video: CoachingVideo }) {
         </div>
       ) : video.video_url ? (
         <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
-          <video
-            src={video.video_url}
-            controls
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+          <video src={video.video_url} controls className="absolute inset-0 w-full h-full object-cover" />
         </div>
       ) : (
-        <div
-          className="flex items-center justify-center"
-          style={{ height: 180, backgroundColor: "rgba(255,255,255,0.03)" }}
-        >
-          <Play size={32} style={{ color: "rgba(255,255,255,0.15)" }} />
+        <div className="flex items-center justify-center h-44 bg-gray-50">
+          <Play size={32} className="text-gray-300" />
         </div>
       )}
-
-      {/* Info */}
       <div className="p-3">
-        <p className="text-sm font-semibold text-white">{video.title}</p>
+        <p className="text-sm font-semibold text-gray-900">{video.title}</p>
         {video.description && (
-          <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>
-            {video.description}
-          </p>
+          <p className="text-xs mt-1 text-gray-500">{video.description}</p>
         )}
       </div>
     </div>

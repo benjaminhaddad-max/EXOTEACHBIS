@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback, useRef } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from "react";
 import {
   ArrowLeft, Plus, Pencil, Trash2, GripVertical,
   Check, AlertCircle, Loader2, Layers, BookOpen, ChevronRight, Sparkles, X, Zap, FileText,
-  Image as ImageIcon, ChevronDown, Upload, ExternalLink, Download, RefreshCw,
+  Image as ImageIcon, ChevronDown, Upload, ExternalLink, Download, RefreshCw, Filter,
 } from "lucide-react";
 import { ImportExoteachModal } from "./import-exoteach-modal";
 import type { Cours } from "@/types/database";
@@ -797,6 +797,18 @@ export function CoursDetailPanel({
   >(null);
   const [toast, setToast] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [, startTransition] = useTransition();
+  const [serieFilter, setSerieFilter] = useState<string>("all");
+
+  const filteredSeries = useMemo(() => {
+    if (serieFilter === "all") return series;
+    return series.filter((s) => s.type === serieFilter);
+  }, [series, serieFilter]);
+
+  const serieTypeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of series) counts[s.type] = (counts[s.type] ?? 0) + 1;
+    return counts;
+  }, [series]);
 
   const showToast = useCallback((message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -946,6 +958,40 @@ export function CoursDetailPanel({
                       </button>
                     </div>
                   </div>
+                  {/* Filtres par type */}
+                  {series.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                      <Filter size={11} className="text-white/25" />
+                      <button
+                        onClick={() => setSerieFilter("all")}
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
+                          serieFilter === "all"
+                            ? "bg-[#C9A84C] text-[#0e1e35]"
+                            : "bg-white/8 text-white/40 hover:bg-white/12 hover:text-white/60"
+                        }`}
+                      >
+                        Tout ({series.length})
+                      </button>
+                      {(["qcm_supplementaires", "annales", "concours_blanc", "entrainement", "revision"] as const).map((t) => {
+                        const count = serieTypeCounts[t] ?? 0;
+                        if (count === 0) return null;
+                        return (
+                          <button
+                            key={t}
+                            onClick={() => setSerieFilter(t)}
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
+                              serieFilter === t
+                                ? `${TYPE_COLORS[t]} ring-1 ring-current`
+                                : "bg-white/8 text-white/40 hover:bg-white/12 hover:text-white/60"
+                            }`}
+                          >
+                            {TYPE_LABELS[t]} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {series.length === 0 ? (
                     <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
                       <Layers size={20} className="mx-auto text-white/20 mb-2" />
@@ -956,7 +1002,7 @@ export function CoursDetailPanel({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {series.map((s) => (
+                      {filteredSeries.map((s) => (
                         <a
                           key={s.id}
                           href={`/serie/${s.id}`}
