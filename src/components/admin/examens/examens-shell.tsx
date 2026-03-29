@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2,
   Calendar, Clock, Eye, EyeOff, Layers,
@@ -16,6 +16,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ParametrageShell } from "@/components/admin/examens/parametrage-shell";
+import { useRouter } from "next/navigation";
 
 export type ExamenSerieWithCoeff = {
   series_id: string;
@@ -66,6 +67,10 @@ const STATUS_LABELS = {
   ended: "Terminé",
 };
 
+function orderExamens(items: ExamenWithSeries[]) {
+  return [...items].sort((a, b) => new Date(b.debut_at).getTime() - new Date(a.debut_at).getTime());
+}
+
 export function ExamensShell({
   initialExamens,
   allSeries,
@@ -83,13 +88,17 @@ export function ExamensShell({
   groupes: Groupe[];
   matieres: Matiere[];
 }) {
-  const [examens, setExamens] = useState<ExamenWithSeries[]>(initialExamens);
-  const [seriesList, setSeriesList] = useState<Serie[]>(allSeries);
+  const router = useRouter();
+  const [examens, setExamens] = useState<ExamenWithSeries[]>(() => orderExamens(initialExamens));
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"examens" | "parametrage">("examens");
+
+  useEffect(() => {
+    setExamens(orderExamens(initialExamens));
+  }, [initialExamens]);
 
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -152,6 +161,7 @@ export function ExamensShell({
       const res = await deleteExamen(id);
       if ("error" in res) { showToast(res.error!, "error"); return; }
       setExamens((prev) => prev.filter((e) => e.id !== id));
+      router.refresh();
       showToast("Examen supprimé", "success");
     });
   };
@@ -162,6 +172,7 @@ export function ExamensShell({
       const res = await toggleResultsVisibility(examen.id, newVal);
       if ("error" in res) { showToast(res.error!, "error"); return; }
       setExamens((prev) => prev.map((e) => e.id === examen.id ? { ...e, results_visible: newVal } : e));
+      router.refresh();
       showToast(newVal ? "Résultats rendus visibles" : "Résultats masqués", "success");
     });
   };
@@ -396,14 +407,52 @@ export function ExamensShell({
                     if (modal.type === "edit") {
                       const res = await updateExamen(modal.examen.id, data);
                       if ("error" in res) { showToast(res.error!, "error"); return; }
-                      await setExamenGroupes(modal.examen.id, groupeIds);
+                      const groupesRes = await setExamenGroupes(modal.examen.id, groupeIds);
+                      if ("error" in groupesRes) { showToast(groupesRes.error!, "error"); return; }
+
+                      if (res.examen) {
+                        setExamens((prev) =>
+                          orderExamens(
+                            prev.map((e) =>
+                              e.id === modal.examen.id
+                                ? {
+                                    ...e,
+                                    ...res.examen,
+                                    groupe_ids: groupeIds,
+                                  }
+                                : e
+                            )
+                          )
+                        );
+                      } else {
+                        await refreshExamens();
+                      }
                     } else {
                       const res = await createExamen(data);
                       if ("error" in res) { showToast(res.error!, "error"); return; }
-                      if (res.id) await setExamenGroupes(res.id, groupeIds);
+                      if (res.id) {
+                        const groupesRes = await setExamenGroupes(res.id, groupeIds);
+                        if ("error" in groupesRes) { showToast(groupesRes.error!, "error"); return; }
+                      }
+
+                      if (res.examen) {
+                        setExamens((prev) =>
+                          orderExamens([
+                            {
+                              ...res.examen,
+                              series: [],
+                              examen_series: [],
+                              groupe_ids: groupeIds,
+                            },
+                            ...prev,
+                          ])
+                        );
+                      } else {
+                        await refreshExamens();
+                      }
                     }
                     setModal(null);
-                    await refreshExamens();
+                    router.refresh();
                     showToast(modal.type === "create" ? "Examen créé" : "Examen modifié", "success");
                   });
                 }}

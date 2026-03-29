@@ -25,10 +25,10 @@ export async function createExamen(data: {
     results_visible: data.results_visible ?? false,
     notation_sur: data.notation_sur ?? 20,
     created_by: user?.id ?? null,
-  }).select("id").single();
+  }).select("*").single();
   if (error) return { error: error.message };
   revalidatePath(PATH);
-  return { success: true, id: inserted.id };
+  return { success: true, id: inserted.id, examen: inserted };
 }
 
 export async function updateExamen(
@@ -58,8 +58,14 @@ export async function updateExamen(
     })
     .eq("id", id);
   if (error) return { error: error.message };
+  const { data: updated, error: selectError } = await supabase
+    .from("examens")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (selectError) return { error: selectError.message };
   revalidatePath(PATH);
-  return { success: true };
+  return { success: true, examen: updated };
 }
 
 export async function deleteExamen(id: string) {
