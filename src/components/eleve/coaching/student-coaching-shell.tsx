@@ -33,7 +33,7 @@ export function StudentCoachingShell({
   rdvRequests,
   coaches,
 }: StudentCoachingShellProps) {
-  const [tab, setTab] = useState<Tab>("videos");
+  const [tab, setTab] = useState<Tab>("chat");
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -59,9 +59,10 @@ export function StudentCoachingShell({
       {tab === "videos" && <CoachingVideosSection videos={videos} />}
       {tab === "chat" && (
         <CoachingChatSection
-          userId={currentProfile.id}
+          currentProfile={currentProfile}
           universityName={universityName}
           initialThread={initialThread}
+          coaches={coaches}
         />
       )}
       {tab === "rdv" && (
