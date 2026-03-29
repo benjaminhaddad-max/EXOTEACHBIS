@@ -1037,6 +1037,8 @@ function CoachDashboardTabs({
   coachesById,
   groupsById,
   recurringAvailability = [],
+  coachingThreads = [],
+  currentProfile,
 }: {
   slots: CoachingCallSlot[];
   bookings: CoachingCallBooking[];
@@ -1044,6 +1046,7 @@ function CoachDashboardTabs({
   groupes: Groupe[];
   coaches: Profile[];
   coachId: string;
+  currentProfile: Profile;
   intakeForms: CoachingIntakeForm[];
   formFields: FormField[];
   formsByStudentId: Map<string, CoachingIntakeForm>;
