@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAccessScopeForUser } from "@/lib/access-scope";
 import { QaDashboard } from "@/components/admin/qa/qa-dashboard";
-import type { Dossier, Matiere, Profile } from "@/types/database";
+import type { Dossier, Groupe, Matiere, Profile } from "@/types/database";
 import type { ProfMatiere, QaThread } from "@/types/qa";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
   const scope = await getAccessScopeForUser(supabase as any, user.id);
   const role = profile.role;
 
-  const [threadsRes, dossiersRes, matieresRes, profMatieresRes, profsRes] = await Promise.all([
+  const [threadsRes, dossiersRes, matieresRes, profMatieresRes, profsRes, groupesRes] = await Promise.all([
     supabase
       .from("qa_threads")
       .select(`
@@ -61,6 +61,10 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
           .select("id, first_name, last_name, email, avatar_url, phone, role")
           .eq("role", "prof")
           .order("first_name"),
+    supabase
+      .from("groupes")
+      .select("id, name, formation_dossier_id")
+      .order("name"),
   ]);
 
   const allDossiers = (dossiersRes.data ?? []) as Dossier[];
@@ -97,6 +101,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
         qaMatieres={qaMatieres}
         qaProfs={qaProfs}
         profMatieres={qaProfMatieres.map((row) => ({ prof_id: row.prof_id, matiere_id: row.matiere_id }))}
+        qaGroupes={(groupesRes.data ?? []) as Pick<Groupe, "id" | "name" | "formation_dossier_id">[]}
       />
     </div>
   );

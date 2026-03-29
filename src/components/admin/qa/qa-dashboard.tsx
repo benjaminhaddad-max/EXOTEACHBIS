@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Dossier, Matiere, Profile } from "@/types/database";
+import type { Dossier, Groupe, Matiere, Profile } from "@/types/database";
 import type { QaThread } from "@/types/qa";
 import { QaPedagogieMatiereTreeSidebar } from "./qa-pedagogie-matiere-tree-sidebar";
 import { QaThreadList } from "./qa-thread-list";
@@ -10,9 +10,13 @@ import { QaChatPanel } from "./qa-chat-panel";
 import {
   ArrowLeft,
   Building2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   GraduationCap,
   Inbox,
+  Layers,
+  Users,
 } from "lucide-react";
 
 type TopTab = "profs" | "admin";
@@ -98,6 +102,108 @@ function sortThreadsForOps(threads: QaThread[]) {
   });
 }
 
+type GroupeLite = Pick<Groupe, "id" | "name" | "formation_dossier_id">;
+
+type AdminTreeNode = {
+  dossier: Dossier;
+  children: AdminTreeNode[];
+  groupes: GroupeLite[];
+  threadCount: number;
+};
+
+function AdminFormationNode({
+  node,
+  depth,
+  selectedGroupeId,
+  onSelectGroupe,
+  threadCountByGroupe,
+}: {
+  node: AdminTreeNode;
+  depth: number;
+  selectedGroupeId: string | null;
+  onSelectGroupe: (id: string | null) => void;
+  threadCountByGroupe: Map<string, number>;
+}) {
+  const [expanded, setExpanded] = useState(depth < 2);
+  const hasBranch = node.children.length > 0 || node.groupes.length > 0;
+
+  const dType = node.dossier.dossier_type;
+  const isOffer = dType === "offer";
+  const isUniv = dType === "university";
+
+  const textCls = isOffer
+    ? "text-[12px] font-bold text-indigo-900"
+    : isUniv
+    ? "text-[11px] font-semibold text-blue-800"
+    : "text-[10.5px] font-semibold text-gray-700";
+
+  const iconCls = isOffer ? "text-indigo-500" : isUniv ? "text-blue-500" : "text-gray-400";
+  const Icon = isOffer ? GraduationCap : isUniv ? Building2 : Layers;
+
+  return (
+    <div>
+      <div
+        className="flex items-center gap-0.5 py-0.5 hover:bg-gray-100/60 rounded-md cursor-pointer"
+        style={{ paddingLeft: depth * 12 + 4 }}
+        onClick={() => hasBranch && setExpanded((p) => !p)}
+      >
+        <span className="w-5 h-6 flex items-center justify-center shrink-0 text-gray-300">
+          {hasBranch ? (expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />) : null}
+        </span>
+        <Icon className={`w-3.5 h-3.5 shrink-0 ${iconCls}`} />
+        <span className={`flex-1 truncate ml-1.5 ${textCls}`}>{node.dossier.name}</span>
+        {node.threadCount > 0 && (
+          <span className="text-[9px] tabular-nums px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium shrink-0 mr-1">
+            {node.threadCount}
+          </span>
+        )}
+      </div>
+
+      {expanded && (
+        <div>
+          {node.children.map((ch) => (
+            <AdminFormationNode
+              key={ch.dossier.id}
+              node={ch}
+              depth={depth + 1}
+              selectedGroupeId={selectedGroupeId}
+              onSelectGroupe={onSelectGroupe}
+              threadCountByGroupe={threadCountByGroupe}
+            />
+          ))}
+          {node.groupes.map((g) => {
+            const count = threadCountByGroupe.get(g.id) ?? 0;
+            const isActive = selectedGroupeId === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => onSelectGroupe(isActive ? null : g.id)}
+                className={`w-full flex items-center gap-1.5 py-1 rounded-md text-left transition-colors ${
+                  isActive ? "bg-blue-600 text-white" : "hover:bg-gray-100/80"
+                }`}
+                style={{ paddingLeft: (depth + 1) * 12 + 24 }}
+              >
+                <Users className={`w-3 h-3 shrink-0 ${isActive ? "text-white/70" : "text-slate-400"}`} />
+                <span className={`flex-1 truncate text-[10px] font-medium ${isActive ? "text-white" : "text-slate-700"}`}>
+                  {g.name}
+                </span>
+                {count > 0 && (
+                  <span className={`text-[9px] tabular-nums px-1.5 py-0.5 rounded-full font-medium shrink-0 mr-2 ${
+                    isActive ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface QaDashboardProps {
   initialThreads: QaThread[];
   userId: string;
@@ -106,6 +212,7 @@ interface QaDashboardProps {
   qaMatieres: Matiere[];
   qaProfs: QaProfLite[];
   profMatieres: ProfMatiereLink[];
+  qaGroupes?: GroupeLite[];
 }
 
 export function QaDashboard({
@@ -116,6 +223,7 @@ export function QaDashboard({
   qaMatieres,
   qaProfs,
   profMatieres,
+  qaGroupes = [],
 }: QaDashboardProps) {
   const supabase = createClient();
 
@@ -255,9 +363,58 @@ export function QaDashboard({
   // ─── Admin Q&A derived data ─────────────────────────────────────────────────
   const [adminSearch, setAdminSearch] = useState("");
   const [adminShowArchived, setAdminShowArchived] = useState(false);
+  const [adminSelectedGroupeId, setAdminSelectedGroupeId] = useState<string | null>(null);
+
+  // Build formation tree: dossier (offer/university) → groupes
+  const adminFormationTree = useMemo(() => {
+    const dossierMap = new Map<string, Dossier>();
+    for (const d of qaDossiers) dossierMap.set(d.id, d);
+
+    type TreeNode = {
+      dossier: Dossier;
+      children: TreeNode[];
+      groupes: GroupeLite[];
+      threadCount: number;
+    };
+
+    const groupesByFormation = new Map<string, GroupeLite[]>();
+    for (const g of qaGroupes) {
+      if (!g.formation_dossier_id) continue;
+      if (!groupesByFormation.has(g.formation_dossier_id)) groupesByFormation.set(g.formation_dossier_id, []);
+      groupesByFormation.get(g.formation_dossier_id)!.push(g);
+    }
+
+    // Count admin threads per groupe
+    const threadCountByGroupe = new Map<string, number>();
+    for (const t of adminThreads) {
+      const gid = (t.student as any)?.groupe_id;
+      if (gid) threadCountByGroupe.set(gid, (threadCountByGroupe.get(gid) ?? 0) + 1);
+    }
+
+    const childrenByParent = new Map<string | null, Dossier[]>();
+    for (const d of qaDossiers) {
+      const pid = d.parent_id ?? null;
+      if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+      childrenByParent.get(pid)!.push(d);
+    }
+
+    function buildNode(d: Dossier): TreeNode {
+      const children = (childrenByParent.get(d.id) ?? []).map(buildNode);
+      const groupes = groupesByFormation.get(d.id) ?? [];
+      const groupeCount = groupes.reduce((acc, g) => acc + (threadCountByGroupe.get(g.id) ?? 0), 0);
+      const childCount = children.reduce((acc, c) => acc + c.threadCount, 0);
+      return { dossier: d, children, groupes, threadCount: groupeCount + childCount };
+    }
+
+    const roots = (childrenByParent.get(null) ?? []).map(buildNode);
+    return { roots, threadCountByGroupe };
+  }, [qaDossiers, qaGroupes, adminThreads]);
 
   const filteredAdminThreads = useMemo(() => {
-    const base = adminShowArchived ? adminThreads : adminThreads.filter((t) => !t.archived_at);
+    let base = adminShowArchived ? adminThreads : adminThreads.filter((t) => !t.archived_at);
+    if (adminSelectedGroupeId) {
+      base = base.filter((t) => (t.student as any)?.groupe_id === adminSelectedGroupeId);
+    }
     const normalizedSearch = adminSearch.trim().toLowerCase();
     if (!normalizedSearch) return sortThreadsForOps(base);
     return sortThreadsForOps(
@@ -267,7 +424,7 @@ export function QaDashboard({
         return studentName.includes(normalizedSearch) || title.includes(normalizedSearch);
       })
     );
-  }, [adminThreads, adminSearch, adminShowArchived]);
+  }, [adminThreads, adminSearch, adminShowArchived, adminSelectedGroupeId]);
 
   // ─── Stats for prof tab ─────────────────────────────────────────────────────
   const unresolvedCount = threadsAfterScope.filter((thread) => thread.status !== "resolved").length;
@@ -581,16 +738,58 @@ export function QaDashboard({
       {/* ═══════════ ADMIN TAB ═══════════ */}
       {topTab === "admin" && (
         <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex">
+          {/* Formation tree sidebar */}
+          <div className="hidden lg:flex flex-col shrink-0 border-r border-gray-200 overflow-y-auto h-full bg-gray-50/60 w-[min(260px,28vw)]">
+            <div className="px-3 pt-3 pb-2 shrink-0 border-b border-gray-100">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Formations & Classes</p>
+            </div>
+
+            <div className="px-2 pt-2 pb-1">
+              <button
+                type="button"
+                onClick={() => setAdminSelectedGroupeId(null)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  !adminSelectedGroupeId
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                <Layers size={13} />
+                Toutes les questions
+                {adminUnresolvedCount > 0 && (
+                  <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                    !adminSelectedGroupeId ? "bg-white/25 text-white" : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {adminUnresolvedCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className="px-2 pb-3 flex-1 min-h-0 space-y-0.5">
+              {adminFormationTree.roots.map((node) => (
+                <AdminFormationNode
+                  key={node.dossier.id}
+                  node={node}
+                  depth={0}
+                  selectedGroupeId={adminSelectedGroupeId}
+                  onSelectGroupe={setAdminSelectedGroupeId}
+                  threadCountByGroupe={adminFormationTree.threadCountByGroupe}
+                />
+              ))}
+            </div>
+          </div>
+
           {/* Thread list */}
           <div
-            className={`w-full lg:w-[min(420px,36vw)] border-r border-gray-100 flex flex-col shrink-0 min-h-0 ${
+            className={`w-full lg:w-[min(400px,34vw)] border-r border-gray-100 flex flex-col shrink-0 min-h-0 ${
               selected ? "hidden lg:flex" : "flex"
             }`}
           >
-            <div className="p-4 border-b border-gray-100 space-y-3 shrink-0">
+            <div className="p-3 border-b border-gray-100 space-y-3 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-                  <Building2 className="h-4 w-4 text-slate-600" />
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100">
+                  <Building2 className="h-3.5 w-3.5 text-slate-600" />
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900">Questions administratives</p>
