@@ -10,6 +10,7 @@ interface QaThreadListProps {
   onArchiveThread?: (threadId: string) => void;
   onDeleteThread?: (threadId: string) => void;
   showArchived?: boolean;
+  overdueThreadIds?: Set<string>;
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Bot }> = {
@@ -27,6 +28,7 @@ export function QaThreadList({
   onArchiveThread,
   onDeleteThread,
   showArchived = false,
+  overdueThreadIds,
 }: QaThreadListProps) {
   const canModerate = Boolean(onArchiveThread && onDeleteThread);
 
@@ -51,6 +53,7 @@ export function QaThreadList({
         const status = statusConfig[t.status] ?? statusConfig.ai_pending;
         const StatusIcon = status.icon;
         const isArchived = Boolean(t.archived_at);
+        const isOverdue = overdueThreadIds?.has(t.id) ?? false;
         const studentName =
           t.student
             ? `${t.student.first_name ?? ""} ${t.student.last_name ?? ""}`.trim() || t.student.email
@@ -112,6 +115,11 @@ export function QaThreadList({
                         }}
                       >
                         {t.matiere.name}
+                      </span>
+                    )}
+                    {isOverdue && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-red-50 text-red-600">
+                        Retard prof
                       </span>
                     )}
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${status.color}`}>
