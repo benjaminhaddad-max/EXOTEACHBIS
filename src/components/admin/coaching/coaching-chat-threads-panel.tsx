@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition, useCallback, useRef, useEffect } from "react";
-import { MessageCircle, Search, Loader2, Send, Check, AlertCircle, CheckCheck, User } from "lucide-react";
+import { MessageCircle, Search, Loader2, Send, Check, AlertCircle, CheckCheck, Lock, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useQaRealtime } from "@/hooks/use-qa-realtime";
-import { assignCoachToThread, respondToCoachingThread } from "@/app/(admin)/admin/coaching/actions";
+import { assignCoachToThread, respondToCoachingThread, sendInternalNote } from "@/app/(admin)/admin/coaching/actions";
 import type { QaThread, QaMessage } from "@/types/qa";
-import type { Profile } from "@/types/database";
+import type { Profile, CoachingInternalNote } from "@/types/database";
 
 interface CoachingChatThreadsPanelProps {
   threads: QaThread[];
@@ -23,17 +23,9 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   resolved: { label: "Résolu", color: "bg-gray-100 text-gray-500 border-gray-200" },
 };
 
-function getInitials(p: Profile): string {
-  return ((p.first_name?.[0] ?? "") + (p.last_name?.[0] ?? "")).toUpperCase() || "?";
-}
-
-function getFullName(p: Profile): string {
-  return [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.email;
-}
-
-function formatTime(d: string) {
-  return new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
+function getInitials(p: Profile): string { return ((p.first_name?.[0] ?? "") + (p.last_name?.[0] ?? "")).toUpperCase() || "?"; }
+function getFullName(p: Profile): string { return [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || p.email; }
+function formatTime(d: string) { return new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); }
 
 export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, students, currentProfile }: CoachingChatThreadsPanelProps) {
   const [threads, setThreads] = useState(initialThreads);
@@ -47,8 +39,17 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
   const scrollRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
+  // Internal notes state
+  const [showInternalChat, setShowInternalChat] = useState(false);
+  const [internalNotes, setInternalNotes] = useState<CoachingInternalNote[]>([]);
+  const [internalText, setInternalText] = useState("");
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const internalScrollRef = useRef<HTMLDivElement>(null);
+
   const studentMap = new Map(students.map((s) => [s.id, s]));
   const coachMap = new Map(coaches.map((c) => [c.id, c]));
+  // Also add current profile to the map for display
+  const allStaffMap = new Map([...coachMap, [currentProfile.id, currentProfile]]);
 
   const showToast = (msg: string, kind: "success" | "error") => {
     setToast({ message: msg, kind });
@@ -62,6 +63,7 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
     return name.includes(search.toLowerCase()) || t.title?.toLowerCase().includes(search.toLowerCase());
   });
 
+  // Load messages when thread selected
   useEffect(() => {
     if (!selectedThread) return;
     setLoadingMessages(true);
@@ -73,17 +75,37 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
     })();
   }, [selectedThread?.id, supabase]);
 
-  useQaRealtime(
-    selectedThread?.id ?? null,
-    useCallback((msg: QaMessage) => {
-      setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
-      supabase.from("qa_messages").update({ read_by_prof: true }).eq("id", msg.id);
-    }, [supabase]),
-  );
-
+  // Load internal notes when thread selected
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
+    if (!selectedThread) return;
+    setLoadingNotes(true);
+    (async () => {
+      const { data } = await supabase.from("coaching_internal_notes").select("*").eq("thread_id", selectedThread.id).order("created_at", { ascending: true });
+      setInternalNotes((data ?? []) as CoachingInternalNote[]);
+      setLoadingNotes(false);
+    })();
+  }, [selectedThread?.id, supabase]);
+
+  // Realtime for messages
+  useQaRealtime(selectedThread?.id ?? null, useCallback((msg: QaMessage) => {
+    setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+    supabase.from("qa_messages").update({ read_by_prof: true }).eq("id", msg.id);
+  }, [supabase]));
+
+  // Realtime for internal notes
+  useEffect(() => {
+    if (!selectedThread) return;
+    const channel = supabase
+      .channel(`internal-notes-${selectedThread.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "coaching_internal_notes", filter: `thread_id=eq.${selectedThread.id}` },
+        (payload) => { setInternalNotes((prev) => prev.some(n => n.id === (payload.new as any).id) ? prev : [...prev, payload.new as CoachingInternalNote]); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedThread?.id, supabase]);
+
+  // Auto-scroll
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+  useEffect(() => { if (internalScrollRef.current) internalScrollRef.current.scrollTop = internalScrollRef.current.scrollHeight; }, [internalNotes]);
 
   const handleAssignCoach = (threadId: string, coachId: string) => {
     startTransition(async () => {
@@ -107,55 +129,50 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
     });
   };
 
+  const handleSendInternalNote = () => {
+    if (!selectedThread || !internalText.trim()) return;
+    startTransition(async () => {
+      const res = await sendInternalNote({ thread_id: selectedThread.id, content: internalText.trim() });
+      if ("error" in res && res.error) { showToast(res.error, "error"); return; }
+      setInternalText("");
+      if ("note" in res && res.note) setInternalNotes((prev) => [...prev, res.note as CoachingInternalNote]);
+    });
+  };
+
   return (
     <div className="flex" style={{ height: "calc(100vh - 280px)", minHeight: 400 }}>
-      {/* ─── Thread list (left sidebar) ─── */}
+      {/* ─── Thread list ─── */}
       <div className="w-80 shrink-0 flex flex-col border-r border-gray-200 bg-white">
         <div className="p-3 border-b border-gray-200">
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un élève..."
-              className="w-full rounded-lg pl-8 pr-3 py-2 text-xs text-gray-900 bg-gray-50 border border-gray-200 focus:outline-none focus:border-gray-300"
-            />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un élève..."
+              className="w-full rounded-lg pl-8 pr-3 py-2 text-xs text-gray-900 bg-gray-50 border border-gray-200 focus:outline-none focus:border-gray-300" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {filtered.length === 0 && (
-            <p className="text-center text-xs py-8 text-gray-400">Aucune conversation</p>
-          )}
+          {filtered.length === 0 && <p className="text-center text-xs py-8 text-gray-400">Aucune conversation</p>}
           {filtered.map((t) => {
             const student = studentMap.get(t.student_id);
             const coach = t.assigned_coach_id ? coachMap.get(t.assigned_coach_id) : null;
             const sc = STATUS_LABELS[t.status] ?? STATUS_LABELS.escalated;
             const isSelected = selectedThread?.id === t.id;
             return (
-              <button
-                key={t.id}
-                onClick={() => setSelectedThread(t)}
-                className={`w-full text-left px-3 py-3 border-b border-gray-100 transition-colors flex gap-3 ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`}
-              >
-                {/* Avatar */}
+              <button key={t.id} onClick={() => { setSelectedThread(t); setShowInternalChat(false); }}
+                className={`w-full text-left px-3 py-3 border-b border-gray-100 transition-colors flex gap-3 ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}`}>
                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">
                   {student ? getInitials(student) : "?"}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-sm font-semibold text-gray-900 truncate">
-                      {student ? getFullName(student) : "Élève"}
-                    </span>
-                    <span className="text-[10px] text-gray-400 shrink-0">
-                      {formatTime(t.updated_at)}
-                    </span>
+                    <span className="text-sm font-semibold text-gray-900 truncate">{student ? getFullName(student) : "Élève"}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">{formatTime(t.updated_at)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <p className="text-xs text-gray-500 truncate flex-1">{t.title}</p>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full border shrink-0 ${sc.color}`}>{sc.label}</span>
                   </div>
-                  {coach && (
-                    <p className="text-[10px] text-amber-600 mt-0.5">→ {getFullName(coach)}</p>
-                  )}
+                  {coach && <p className="text-[10px] text-amber-600 mt-0.5">→ {getFullName(coach)}</p>}
                 </div>
               </button>
             );
@@ -163,8 +180,8 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
         </div>
       </div>
 
-      {/* ─── Chat panel (right) ─── */}
-      <div className="flex-1 flex flex-col bg-white">
+      {/* ─── Chat panel ─── */}
+      <div className="flex-1 flex flex-col bg-white min-w-0">
         {!selectedThread ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -187,69 +204,117 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
                   <p className="text-[10px] text-gray-400">{selectedThread.title}</p>
                 </div>
               </div>
-              <select
-                value={selectedThread.assigned_coach_id ?? ""}
-                onChange={(e) => handleAssignCoach(selectedThread.id, e.target.value)}
-                className="rounded-lg px-2.5 py-1.5 text-xs text-gray-700 bg-white border border-gray-200 focus:outline-none"
-              >
-                <option value="">Assigner un coach...</option>
-                {coaches.map((c) => <option key={c.id} value={c.id}>{getFullName(c)}</option>)}
-              </select>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowInternalChat(!showInternalChat)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${showInternalChat ? "bg-amber-50 border-amber-200 text-amber-700" : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"}`}>
+                  <Lock size={12} />
+                  Discussion interne
+                </button>
+                <select value={selectedThread.assigned_coach_id ?? ""} onChange={(e) => handleAssignCoach(selectedThread.id, e.target.value)}
+                  className="rounded-lg px-2.5 py-1.5 text-xs text-gray-700 bg-white border border-gray-200 focus:outline-none">
+                  <option value="">Assigner un coach...</option>
+                  {coaches.map((c) => <option key={c.id} value={c.id}>{getFullName(c)}</option>)}
+                </select>
+              </div>
             </div>
 
-            {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 bg-[#f0f2f5]">
-              {loadingMessages ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            {/* Messages + Internal notes side by side */}
+            <div className="flex flex-1 min-h-0">
+              {/* Main messages */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 bg-[#f0f2f5]">
+                  {loadingMessages ? (
+                    <div className="flex items-center justify-center h-full"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+                  ) : messages.length === 0 ? (
+                    <p className="text-center text-xs py-8 text-gray-400">Aucun message</p>
+                  ) : (
+                    messages.map((msg) => {
+                      const isStudent = msg.sender_type === "student";
+                      const sender = msg.sender_id ? (studentMap.get(msg.sender_id) ?? coachMap.get(msg.sender_id) ?? (msg.sender_id === currentProfile.id ? currentProfile : null)) : null;
+                      return (
+                        <div key={msg.id} className={`flex ${isStudent ? "justify-start" : "justify-end"} px-3 mb-1.5`}>
+                          {isStudent && (
+                            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0 mr-1.5 mt-auto">
+                              {sender ? getInitials(sender) : "?"}
+                            </div>
+                          )}
+                          <div className={`max-w-[70%] min-w-[80px] px-3 py-2 ${isStudent ? "bg-white border border-gray-200 rounded-2xl rounded-bl-sm" : "bg-[#0e1e35] text-white rounded-2xl rounded-br-sm"}`}>
+                            {isStudent && sender && <p className="text-[10px] font-semibold text-indigo-600 mb-0.5">{getFullName(sender)}</p>}
+                            <p className={`text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isStudent ? "text-gray-900" : "text-white"}`}>{msg.content}</p>
+                            <div className="flex items-center gap-1 justify-end mt-0.5">
+                              <span className={`text-[10px] ${isStudent ? "text-gray-400" : "text-white/50"}`}>{formatTime(msg.created_at)}</span>
+                              {!isStudent && (msg.read_by_student ? <CheckCheck size={13} className="text-blue-400" /> : <Check size={13} className="text-white/40" />)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-              ) : messages.length === 0 ? (
-                <p className="text-center text-xs py-8 text-gray-400">Aucun message</p>
-              ) : (
-                messages.map((msg) => {
-                  const isStudent = msg.sender_type === "student";
-                  const sender = msg.sender_id ? (studentMap.get(msg.sender_id) ?? coachMap.get(msg.sender_id)) : null;
-                  return (
-                    <div key={msg.id} className={`flex ${isStudent ? "justify-start" : "justify-end"} px-3 mb-1.5`}>
-                      {isStudent && (
-                        <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0 mr-1.5 mt-auto">
-                          {sender ? getInitials(sender) : "?"}
-                        </div>
-                      )}
-                      <div className={`max-w-[70%] min-w-[80px] px-3 py-2 ${isStudent ? "bg-white border border-gray-200 rounded-2xl rounded-bl-sm" : "bg-[#0e1e35] text-white rounded-2xl rounded-br-sm"}`}>
-                        {isStudent && sender && (
-                          <p className="text-[10px] font-semibold text-indigo-600 mb-0.5">{getFullName(sender)}</p>
-                        )}
-                        <p className={`text-[13px] leading-relaxed whitespace-pre-wrap break-words ${isStudent ? "text-gray-900" : "text-white"}`}>
-                          {msg.content}
-                        </p>
-                        <div className="flex items-center gap-1 justify-end mt-0.5">
-                          <span className={`text-[10px] ${isStudent ? "text-gray-400" : "text-white/50"}`}>{formatTime(msg.created_at)}</span>
-                          {!isStudent && (msg.read_by_student ? <CheckCheck size={13} className="text-blue-400" /> : <Check size={13} className="text-white/40" />)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                {/* Reply bar */}
+                <div className="flex items-center gap-2 p-3 shrink-0 border-t border-gray-200 bg-white">
+                  <input value={replyText} onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
+                    placeholder="Répondre à l'élève..."
+                    className="flex-1 rounded-lg px-3 py-2 text-sm text-gray-900 bg-gray-50 border border-gray-200 focus:outline-none focus:border-gray-300" />
+                  <button onClick={handleReply} disabled={!replyText.trim() || isPending}
+                    className="p-2 rounded-lg disabled:opacity-50 bg-[#0e1e35] text-white hover:bg-[#152a45] transition-colors">
+                    {isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  </button>
+                </div>
+              </div>
 
-            {/* Reply bar */}
-            <div className="flex items-center gap-2 p-3 shrink-0 border-t border-gray-200 bg-white">
-              <input
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
-                placeholder="Répondre à l'élève..."
-                className="flex-1 rounded-lg px-3 py-2 text-sm text-gray-900 bg-gray-50 border border-gray-200 focus:outline-none focus:border-gray-300"
-              />
-              <button
-                onClick={handleReply}
-                disabled={!replyText.trim() || isPending}
-                className="p-2 rounded-lg disabled:opacity-50 bg-[#0e1e35] text-white hover:bg-[#152a45] transition-colors"
-              >
-                {isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
+              {/* Internal notes panel */}
+              {showInternalChat && (
+                <div className="w-72 shrink-0 flex flex-col border-l border-amber-200 bg-amber-50/50">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-3 py-2.5 border-b border-amber-200 bg-amber-50">
+                    <div className="flex items-center gap-1.5">
+                      <Lock size={12} className="text-amber-600" />
+                      <span className="text-[11px] font-semibold text-amber-700">Discussion interne</span>
+                    </div>
+                    <button onClick={() => setShowInternalChat(false)} className="p-1 rounded hover:bg-amber-100"><X size={12} className="text-amber-600" /></button>
+                  </div>
+                  <p className="px-3 py-1.5 text-[9px] text-amber-600/70 border-b border-amber-100">
+                    Invisible pour l&apos;élève — échangez entre admin et coach
+                  </p>
+
+                  {/* Notes */}
+                  <div ref={internalScrollRef} className="flex-1 overflow-y-auto py-2 px-2 space-y-2">
+                    {loadingNotes ? (
+                      <div className="flex items-center justify-center h-full"><Loader2 className="w-4 h-4 animate-spin text-amber-400" /></div>
+                    ) : internalNotes.length === 0 ? (
+                      <p className="text-center text-[10px] text-amber-400 py-6">Aucune note interne</p>
+                    ) : (
+                      internalNotes.map((note) => {
+                        const sender = allStaffMap.get(note.sender_id);
+                        const isMe = note.sender_id === currentProfile.id;
+                        return (
+                          <div key={note.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[85%] px-2.5 py-1.5 rounded-lg text-xs ${isMe ? "bg-amber-200 text-amber-900" : "bg-white text-gray-800 border border-amber-200"}`}>
+                              {!isMe && sender && <p className="text-[9px] font-semibold text-amber-600 mb-0.5">{getFullName(sender)}</p>}
+                              <p className="whitespace-pre-wrap break-words">{note.content}</p>
+                              <p className="text-[9px] text-amber-500/60 text-right mt-0.5">{formatTime(note.created_at)}</p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Input */}
+                  <div className="flex items-center gap-1.5 p-2 border-t border-amber-200 bg-amber-50">
+                    <input value={internalText} onChange={(e) => setInternalText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendInternalNote(); } }}
+                      placeholder="Note interne..."
+                      className="flex-1 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 bg-white border border-amber-200 focus:outline-none focus:border-amber-300" />
+                    <button onClick={handleSendInternalNote} disabled={!internalText.trim() || isPending}
+                      className="p-1.5 rounded-lg disabled:opacity-50 bg-amber-500 text-white hover:bg-amber-600 transition-colors">
+                      <Send size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

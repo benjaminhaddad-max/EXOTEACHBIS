@@ -732,3 +732,24 @@ export async function updateStudentNiveauMental(data: {
   revalidatePath(ADMIN_PATH);
   return { success: true };
 }
+
+// ─── Internal Notes (private admin ↔ coach) ────────────────────────────────
+
+export async function sendInternalNote(data: { thread_id: string; content: string }) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { data: note, error } = await admin
+    .from("coaching_internal_notes")
+    .insert({
+      thread_id: data.thread_id,
+      sender_id: auth.profile.id,
+      content: data.content.trim(),
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  return { success: true, note };
+}

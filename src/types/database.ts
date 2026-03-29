@@ -616,6 +616,19 @@ export interface CoachingVideo {
 }
 
 // =============================================
+// Coaching Internal Notes (private admin ↔ coach)
+// =============================================
+
+export interface CoachingInternalNote {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  sender?: Profile;
+}
+
+// =============================================
 // Coaching RDV Requests
 // =============================================
 
