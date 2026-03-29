@@ -16,7 +16,6 @@ import {
   createCoachCallSlot,
   deleteCoachCallSlot,
   saveCoachRecurringAvailability,
-  generateSlotsFromRecurring,
 } from "@/app/(admin)/admin/coaching/actions";
 import type { CoachingCallSlot, CoachingCallBooking, CoachRecurringAvailability, CoachSlotType, Groupe } from "@/types/database";
 
@@ -75,7 +74,8 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
   const [recDay, setRecDay] = useState(0);
   const [recStart, setRecStart] = useState("09:00");
   const [recEnd, setRecEnd] = useState("10:00");
-  const [recType, setRecType] = useState<CoachSlotType>("rdv_visio");
+  const [recTypes, setRecTypes] = useState<Set<CoachSlotType>>(new Set(["rdv_visio"]));
+  const toggleRecType = (t: CoachSlotType) => setRecTypes(prev => { const next = new Set(prev); if (next.has(t)) next.delete(t); else next.add(t); return next; });
   const [recToast, setRecToast] = useState<string | null>(null);
 
   // Form state
@@ -187,8 +187,13 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
   const thisWeek = () => setWeekStart(getWeekStart(new Date()));
 
   const handleAddRecurring = () => {
-    const item = { day_of_week: recDay, start_time: recStart, end_time: recEnd, slot_type: recType };
-    const next = [...recurring, { ...item, id: crypto.randomUUID(), coach_id: coachId, is_active: true, created_at: "", updated_at: "" } as CoachRecurringAvailability];
+    if (recTypes.size === 0) return;
+    const newItems = [...recTypes].map(type => ({
+      id: crypto.randomUUID(), coach_id: coachId, day_of_week: recDay,
+      start_time: recStart, end_time: recEnd, slot_type: type,
+      is_active: true, created_at: "", updated_at: "",
+    } as CoachRecurringAvailability));
+    const next = [...recurring, ...newItems];
     setRecurring(next);
     startTransition(async () => {
       const res = await saveCoachRecurringAvailability({ coach_id: coachId, items: next.map(r => ({ day_of_week: r.day_of_week, start_time: r.start_time, end_time: r.end_time, slot_type: r.slot_type })) });
@@ -202,16 +207,6 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
     setRecurring(next);
     startTransition(async () => {
       await saveCoachRecurringAvailability({ coach_id: coachId, items: next.map(r => ({ day_of_week: r.day_of_week, start_time: r.start_time, end_time: r.end_time, slot_type: r.slot_type })) });
-    });
-  };
-
-  const handleGenerateSlots = () => {
-    if (!groupes[0]) return;
-    startTransition(async () => {
-      const res = await generateSlotsFromRecurring({ coach_id: coachId, week_start: weekStart.toISOString(), groupe_id: groupes[0].id });
-      if ("error" in res && res.error) { setRecToast("Erreur: " + res.error); }
-      else { setRecToast(`${(res as any).count ?? 0} créneaux générés`); }
-      setTimeout(() => setRecToast(null), 3000);
     });
   };
 
@@ -255,10 +250,21 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
               <input type="time" value={recEnd} onChange={e => setRecEnd(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs" />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Type</label>
-              <select value={recType} onChange={e => setRecType(e.target.value as CoachSlotType)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
-                {Object.entries(SLOT_TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
+              <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Types</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {Object.entries(SLOT_TYPE_CONFIG).map(([k, v]) => {
+                  const checked = recTypes.has(k as CoachSlotType);
+                  return (
+                    <button key={k} type="button" onClick={() => toggleRecType(k as CoachSlotType)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-all ${checked ? `${v.bg} ${v.color} border-current` : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] font-bold ${checked ? `${v.bg.replace("100", "600")} text-white border-transparent` : "border-gray-300 bg-white"}`}>
+                        {checked && "✓"}
+                      </span>
+                      {v.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <button onClick={handleAddRecurring} disabled={isPending} className="flex items-center gap-1 rounded-lg bg-[#12314d] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f2940] disabled:opacity-50">
               <Plus className="w-3.5 h-3.5" /> Ajouter
@@ -288,14 +294,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
             {recurring.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">Aucune disponibilité récurrente configurée</p>}
           </div>
 
-          {/* Generate button */}
-          {recurring.length > 0 && groupes.length > 0 && (
-            <button onClick={handleGenerateSlots} disabled={isPending}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarDays className="w-3.5 h-3.5" />}
-              Générer les créneaux de cette semaine ({formatWeekRange(weekStart)})
-            </button>
-          )}
+          {/* Spacing */}
         </div>
       )}
 

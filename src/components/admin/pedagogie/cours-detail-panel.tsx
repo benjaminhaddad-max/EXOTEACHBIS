@@ -998,6 +998,7 @@ export function CoursDetailPanel({
   const [toast, setToast] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [, startTransition] = useTransition();
   const [serieFilter, setSerieFilter] = useState<string>("all");
+  const [sidebarTab, setSidebarTab] = useState<"series" | "flashcards">("series");
 
   const filteredSeries = useMemo(() => {
     if (serieFilter === "all") return series;
@@ -1131,21 +1132,44 @@ export function CoursDetailPanel({
           )}
         </div>
 
-        {/* ── DROITE : sidebar navy séries + questions ── */}
-        <div className="w-80 shrink-0 border-l border-gray-200 flex flex-col overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* ── DROITE : sidebar navy avec onglets Séries / Flashcards ── */}
+        <div className="w-96 shrink-0 border-l border-gray-200 flex flex-col overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+          {/* Onglets */}
+          <div className="shrink-0 flex border-b border-white/10">
+            <button
+              onClick={() => setSidebarTab("series")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold transition-colors border-b-2 ${
+                sidebarTab === "series"
+                  ? "border-[#C9A84C] text-[#C9A84C]"
+                  : "border-transparent text-white/40 hover:text-white/60"
+              }`}
+            >
+              <Layers size={13} />
+              Séries ({series.length})
+            </button>
+            <button
+              onClick={() => setSidebarTab("flashcards")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold transition-colors border-b-2 ${
+                sidebarTab === "flashcards"
+                  ? "border-indigo-400 text-indigo-400"
+                  : "border-transparent text-white/40 hover:text-white/60"
+              }`}
+            >
+              <BookOpen size={13} />
+              Flashcards
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={20} className="animate-spin text-white/30" />
               </div>
-            ) : (
+            ) : sidebarTab === "series" ? (
               <>
                 {/* ── Séries ── */}
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-                      Séries <span className="text-white/25 normal-case font-normal">({series.length})</span>
-                    </h3>
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => setModal({ type: "import_exoteach" })}
                         title="Importer des séries depuis ExoTeach"
@@ -1158,9 +1182,8 @@ export function CoursDetailPanel({
                       </button>
                     </div>
                   </div>
-                  {/* Filtres par type */}
                   {series.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Filter size={11} className="text-white/25" />
                       <button
                         onClick={() => setSerieFilter("all")}
@@ -1234,13 +1257,13 @@ export function CoursDetailPanel({
                           </div>
                         </a>
                       ))}
-                </div>
-              )}
-            </section>
-
-            {/* ── Flashcards ── */}
-            <ChapterFlashcards coursId={cours.id} />
+                    </div>
+                  )}
+                </section>
               </>
+            ) : (
+              /* ── Flashcards ── */
+              <ChapterFlashcards coursId={cours.id} />
             )}
           </div>
         </div>{/* end sidebar navy */}

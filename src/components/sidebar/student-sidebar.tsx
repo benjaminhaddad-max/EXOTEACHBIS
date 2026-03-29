@@ -12,7 +12,10 @@ import {
   TrendingUp,
 
   Handshake,
+  MessageSquare,
+  Eye,
 } from "lucide-react";
+import { useUser } from "@/hooks/use-user";
 import { SidebarShell } from "./sidebar-shell";
 import { SidebarItem } from "./sidebar-item";
 
@@ -28,10 +31,20 @@ const studentNavItems = [
   { href: "/profil", label: "Profil", icon: UserCircle },
 ];
 
+const coachNavItems = [
+  { href: "/admin/coaching", label: "Coaching", icon: Handshake },
+  { href: "/admin/communication", label: "Communication", icon: MessageSquare },
+  { href: "/cours", label: "Cours & Exercices", icon: BookOpen },
+  { href: "/dashboard", label: "Vue élève", icon: Eye },
+];
+
 export function StudentSidebar() {
+  const { profile } = useUser();
+  const navItems = profile?.role === "coach" ? coachNavItems : studentNavItems;
+
   return (
     <SidebarShell>
-      {studentNavItems.map((item) => (
+      {navItems.map((item) => (
         <SidebarItem key={item.href} {...item} />
       ))}
     </SidebarShell>
