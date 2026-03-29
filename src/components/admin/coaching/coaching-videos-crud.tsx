@@ -81,8 +81,8 @@ export function CoachingVideosCrud({ videos: initialVideos, universities }: Coac
           university_dossier_id: form.university_dossier_id || null,
           order_index: form.order_index,
         });
-        if ("error" in res) { showToast(res.error!, "error"); return; }
-        if (res.video) setVideos((prev) => [...prev, res.video as CoachingVideo]);
+        if ("error" in res && res.error) { showToast(res.error, "error"); return; }
+        if ("video" in res && res.video) setVideos((prev) => [...prev, res.video as CoachingVideo]);
         showToast("Vidéo créée", "success");
       }
       setShowForm(false);

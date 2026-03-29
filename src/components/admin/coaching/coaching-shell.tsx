@@ -151,10 +151,10 @@ function fromLocalDateTimeInput(value: string) {
 
 function initialPointADraft(profile?: CoachingStudentProfile | null): PointADraft {
   return {
-    mentality: profile?.mentality ?? "passif",
-    schoolLevel: profile?.school_level ?? "normal",
-    workCapacity: profile?.work_capacity ?? "moyenne",
-    methodLevel: profile?.method_level ?? "moyenne",
+    mentality: (profile?.mentality ?? "passif") as CoachingMentality,
+    schoolLevel: (profile?.school_level ?? "normal") as CoachingSchoolLevel,
+    workCapacity: (profile?.work_capacity ?? "moyenne") as CoachingWorkCapacity,
+    methodLevel: (profile?.method_level ?? "moyenne") as CoachingMethodLevel,
     coachReport: profile?.coach_report ?? "",
   };
 }

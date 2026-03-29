@@ -57,6 +57,9 @@ export default async function CoachingPage() {
     formTemplate: null as FormTemplate | null,
     formFields: [] as FormField[],
     coachAssignments: [] as CoachGroupeAssignment[],
+    coachingThreads: [] as QaThread[],
+    coachingRdvRequests: [] as CoachingRdvRequest[],
+    coachingVideos: [] as CoachingVideo[],
   };
 
   let data = emptyData;
@@ -180,6 +183,9 @@ export default async function CoachingPage() {
       formTemplate: (formTemplateRes.data ?? null) as FormTemplate | null,
       formFields,
       coachAssignments: (assignmentsRes.data ?? []) as CoachGroupeAssignment[],
+      coachingThreads: (coachingThreadsRes.data ?? []) as QaThread[],
+      coachingRdvRequests: (rdvRequestsRes.data ?? []) as CoachingRdvRequest[],
+      coachingVideos: (videosRes.data ?? []) as CoachingVideo[],
     };
   }
 
@@ -199,6 +205,9 @@ export default async function CoachingPage() {
         formTemplate={data.formTemplate}
         formFields={data.formFields}
         coachAssignments={data.coachAssignments}
+        coachingThreads={data.coachingThreads}
+        coachingRdvRequests={data.coachingRdvRequests}
+        coachingVideos={data.coachingVideos}
         setupError={setupError}
       />
     </div>

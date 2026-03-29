@@ -103,9 +103,9 @@ export function CoachingChatThreadsPanel({ threads: initialThreads, coaches, stu
         sender_id: currentProfile.id,
         sender_type: currentProfile.role === "coach" ? "coach" : "prof",
       });
-      if ("error" in res) { showToast(res.error!, "error"); return; }
+      if ("error" in res && res.error) { showToast(res.error, "error"); return; }
       setReplyText("");
-      if (res.message) {
+      if ("message" in res && res.message) {
         setMessages((prev) => [...prev, res.message as QaMessage]);
       }
     });
