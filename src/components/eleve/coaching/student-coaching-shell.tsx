@@ -20,8 +20,8 @@ interface StudentCoachingShellProps {
 }
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: "chat", label: "Chat avec le coach", icon: <MessageCircle size={14} /> },
   { id: "videos", label: "Vidéos", icon: <Play size={14} /> },
-  { id: "chat", label: "Chat avec un coach", icon: <MessageCircle size={14} /> },
   { id: "rdv", label: "Prendre RDV", icon: <Calendar size={14} /> },
 ];
 
