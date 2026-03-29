@@ -318,21 +318,10 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Classe</label>
-                  <select
-                    value={formGroupeId}
-                    onChange={(e) => setFormGroupeId(e.target.value)}
-                    className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white"
-                  >
-                    {groupes.map((g) => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
-                  </select>
-                </div>
                 <button
                   onClick={() => {
-                    if (!formGroupeId) return;
+                    const gId = groupes[0]?.id;
+                    if (!gId) return;
                     startTransition(async () => {
                       const now = new Date();
                       const day = now.getDay();
@@ -342,7 +331,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
                       const res = await generateSlotsFromRecurring({
                         coach_id: coachId,
                         week_start: weekStart.toISOString(),
-                        groupe_id: formGroupeId,
+                        groupe_id: gId,
                         num_weeks: genWeeks,
                       });
                       if ("error" in res && res.error) {
@@ -353,7 +342,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
                       setTimeout(() => setRecToast(null), 4000);
                     });
                   }}
-                  disabled={isPending || !formGroupeId}
+                  disabled={isPending}
                   className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarDays className="h-3.5 w-3.5" />}
