@@ -1067,7 +1067,7 @@ function CoachDashboardTabs({
 
   const tabs = [
     { key: "conversations" as const, label: "Conversations", count: coachThreads.length },
-    { key: "planning" as const, label: "Planning", count: slots.filter((s) => s.coach_id === coachId && new Date(s.start_at) >= new Date()).length },
+    { key: "planning" as const, label: "Disponibilités", count: slots.filter((s) => s.coach_id === coachId && new Date(s.start_at) >= new Date()).length },
     { key: "eleves" as const, label: "Élèves", count: students.length },
   ];
 
