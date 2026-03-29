@@ -988,6 +988,7 @@ function CoachWeeklyOverview({
                           return (
                             <span key={r.id} className={`inline-flex items-center gap-0.5 ${SLOT_TYPE_COLORS[r.slot_type] ?? ""} rounded px-1 py-0.5`}>
                               <SlotIcon className="h-2.5 w-2.5" />
+                              <span>{SLOT_TYPE_LABELS[r.slot_type] ?? r.slot_type}</span>
                             </span>
                           );
                         })}
