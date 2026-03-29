@@ -22,6 +22,8 @@ import {
   getSerieQuestions, getBankQuestionsForSerie,
   getCoursForMatiere, updateQuestionCoursId, getSiblingCours,
 } from "@/app/(admin)/admin/pedagogie/actions";
+import { createDeck, deleteDeck, createCard, deleteCard } from "@/app/(admin)/admin/flashcards/actions";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -816,6 +818,162 @@ function ChapterAIModal({ cours, onSaved, onClose }: { cours: Cours; onSaved: ()
   );
 }
 
+// ─── Chapter Flashcards (sidebar) ──────────────────────────────────────────
+
+type FlashDeck = { id: string; name: string; cours_id: string | null; visible: boolean; cards?: { id: string; front: string; back: string }[] };
+
+function ChapterFlashcards({ coursId }: { coursId: string }) {
+  const [decks, setDecks] = useState<FlashDeck[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [addingCard, setAddingCard] = useState<string | null>(null);
+  const [cardFront, setCardFront] = useState("");
+  const [cardBack, setCardBack] = useState("");
+  const supabase = createClient();
+
+  const loadDecks = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("flashcard_decks")
+      .select("id, name, cours_id, visible")
+      .eq("cours_id", coursId)
+      .order("created_at", { ascending: false });
+    setDecks((data as FlashDeck[]) ?? []);
+    setLoading(false);
+  }, [coursId]);
+
+  useEffect(() => { loadDecks(); }, [loadDecks]);
+
+  const loadCards = async (deckId: string) => {
+    const { data } = await supabase
+      .from("flashcards")
+      .select("id, front, back")
+      .eq("deck_id", deckId)
+      .order("order_index");
+    setDecks((prev) => prev.map((d) => d.id === deckId ? { ...d, cards: (data ?? []) as any } : d));
+  };
+
+  const toggle = (id: string) => {
+    if (expanded === id) { setExpanded(null); return; }
+    setExpanded(id);
+    const d = decks.find((x) => x.id === id);
+    if (!d?.cards) loadCards(id);
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    await createDeck({ name: newName.trim(), cours_id: coursId });
+    setNewName(""); setShowCreate(false);
+    loadDecks();
+  };
+
+  const handleDeleteDeck = async (id: string) => {
+    if (!confirm("Supprimer ce deck ?")) return;
+    await deleteDeck(id);
+    loadDecks();
+  };
+
+  const handleAddCard = async (deckId: string) => {
+    if (!cardFront.trim() || !cardBack.trim()) return;
+    const deck = decks.find((d) => d.id === deckId);
+    await createCard({ deck_id: deckId, front: cardFront.trim(), back: cardBack.trim(), order_index: deck?.cards?.length ?? 0 });
+    setCardFront(""); setCardBack(""); setAddingCard(null);
+    loadCards(deckId);
+  };
+
+  const handleDeleteCard = async (cardId: string, deckId: string) => {
+    await deleteCard(cardId);
+    loadCards(deckId);
+  };
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+          Flashcards <span className="text-white/25 normal-case font-normal">({decks.length})</span>
+        </h3>
+        <button onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-[11px] font-bold transition-colors">
+          <Plus size={11} /> Deck
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-white/30" /></div>
+      ) : decks.length === 0 && !showCreate ? (
+        <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
+          <Layers size={18} className="mx-auto text-white/20 mb-2" />
+          <p className="text-xs text-white/30">Aucun deck pour ce chapitre</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {decks.map((deck) => {
+            const isOpen = expanded === deck.id;
+            return (
+              <div key={deck.id} className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-white/[0.03]" onClick={() => toggle(deck.id)}>
+                  <ChevronRight size={12} className={`text-white/30 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                  <Layers size={13} className="text-indigo-400 shrink-0" />
+                  <span className="flex-1 text-xs font-bold text-white/80 truncate">{deck.name}</span>
+                  <span className="text-[10px] text-white/30">{deck.cards?.length ?? "…"}</span>
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck.id); }}
+                    className="p-1 rounded hover:bg-red-500/20 text-white/20 hover:text-red-400"><Trash2 size={11} /></button>
+                </div>
+                {isOpen && (
+                  <div className="border-t border-white/5 px-3 py-2 space-y-1.5">
+                    {deck.cards?.map((c, i) => (
+                      <div key={c.id} className="flex items-start gap-2 py-1.5 px-2 rounded-lg bg-white/[0.02] group">
+                        <span className="text-[9px] text-white/20 font-mono mt-0.5 w-4">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-semibold text-white/70 leading-tight">{c.front}</p>
+                          <p className="text-[10px] text-white/40 leading-tight mt-0.5">{c.back}</p>
+                        </div>
+                        <button onClick={() => handleDeleteCard(c.id, deck.id)}
+                          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-white/20 hover:text-red-400"><Trash2 size={10} /></button>
+                      </div>
+                    ))}
+                    {addingCard === deck.id ? (
+                      <div className="space-y-1.5 pt-1">
+                        <input value={cardFront} onChange={(e) => setCardFront(e.target.value)} placeholder="Recto (question)..."
+                          className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white/80 placeholder:text-white/25 focus:outline-none focus:border-indigo-400/40" />
+                        <input value={cardBack} onChange={(e) => setCardBack(e.target.value)} placeholder="Verso (réponse)..."
+                          className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-white/80 placeholder:text-white/25 focus:outline-none focus:border-indigo-400/40"
+                          onKeyDown={(e) => { if (e.key === "Enter") handleAddCard(deck.id); }} />
+                        <div className="flex gap-1.5">
+                          <button onClick={() => handleAddCard(deck.id)} className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30">Ajouter</button>
+                          <button onClick={() => { setAddingCard(null); setCardFront(""); setCardBack(""); }} className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white/30 hover:text-white/50">Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setAddingCard(deck.id)}
+                        className="w-full flex items-center justify-center gap-1 py-1.5 rounded-lg border border-dashed border-white/10 text-[10px] font-semibold text-white/25 hover:text-indigo-300 hover:border-indigo-400/30">
+                        <Plus size={10} /> Ajouter une carte
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showCreate && (
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3 space-y-2 mt-2">
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du deck..."
+            className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white/80 placeholder:text-white/25 focus:outline-none focus:border-indigo-400/40" autoFocus />
+          <div className="flex gap-1.5">
+            <button onClick={handleCreate} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30">Créer</button>
+            <button onClick={() => { setShowCreate(false); setNewName(""); }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white/30 hover:text-white/50">Annuler</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────
 
 export function CoursDetailPanel({
@@ -1079,6 +1237,9 @@ export function CoursDetailPanel({
                 </div>
               )}
             </section>
+
+            {/* ── Flashcards ── */}
+            <ChapterFlashcards coursId={cours.id} />
               </>
             )}
           </div>

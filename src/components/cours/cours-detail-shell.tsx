@@ -17,6 +17,7 @@ import {
   MessageCircleQuestion,
   Download,
   ChevronDown,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PdfViewer } from "@/components/cours/pdf-viewer";
@@ -35,6 +36,13 @@ interface SerieItem {
   last_attempt: { score: number | null; ended_at: string | null } | null;
 }
 
+interface FlashcardDeckItem {
+  id: string;
+  name: string;
+  description: string | null;
+  nb_cards: number;
+}
+
 interface CoursDetailShellProps {
   cours: {
     id: string;
@@ -50,9 +58,10 @@ interface CoursDetailShellProps {
   directSeries: SerieItem[];
   matiereSeries: SerieItem[];
   ressources: Ressource[];
+  flashcardDecks?: FlashcardDeckItem[];
 }
 
-type Tab = "fiche" | "documents" | "exercices";
+type Tab = "fiche" | "documents" | "exercices" | "flashcards";
 type SerieFilter = "all" | "qcm_supplementaires" | "annales" | "concours_blanc" | "entrainement";
 
 const SERIE_FILTERS: { key: SerieFilter; label: string; color: string }[] = [
@@ -96,6 +105,7 @@ export function CoursDetailShell({
   directSeries,
   matiereSeries,
   ressources,
+  flashcardDecks = [],
 }: CoursDetailShellProps) {
   const [tab, setTab] = useState<Tab>("fiche");
   const [serieFilter, setSerieFilter] = useState<SerieFilter>("all");
@@ -132,6 +142,7 @@ export function CoursDetailShell({
     { key: "fiche", label: "Fiche de cours" },
     { key: "documents", label: "Documents complémentaires", count: ressources.length },
     { key: "exercices", label: "Exercices", count: allSeries.length },
+    ...(flashcardDecks.length > 0 ? [{ key: "flashcards" as Tab, label: "Flashcards", count: flashcardDecks.length }] : []),
   ];
 
   return (
@@ -368,6 +379,45 @@ export function CoursDetailShell({
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Flashcards ── */}
+      {tab === "flashcards" && (
+        <div className="space-y-3">
+          {flashcardDecks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#D7E2EF] bg-white py-16 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F0F3F8]">
+                <Layers className="h-7 w-7 text-[#C0C8D4]" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-[#7D8C9E]">Aucun deck de flashcards</p>
+              <p className="mt-1 text-xs text-[#A2AEBC]">Les flashcards seront ajoutées ici</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {flashcardDecks.map((deck) => (
+                <Link
+                  key={deck.id}
+                  href={`/cours/flashcards/${deck.id}`}
+                  className="group flex items-start gap-4 rounded-2xl border border-[#E2E8F0] bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-indigo-300/40 hover:shadow-lg"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-500 group-hover:bg-indigo-100 transition-colors">
+                    <Layers size={22} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#0e1e35] truncate group-hover:text-indigo-600 transition-colors">{deck.name}</p>
+                    {deck.description && (
+                      <p className="mt-0.5 text-xs text-[#8A98A9] line-clamp-2">{deck.description}</p>
+                    )}
+                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-600">
+                      {deck.nb_cards} carte{deck.nb_cards !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <Play size={16} className="mt-1 shrink-0 text-[#C0C8D4] group-hover:text-indigo-500 transition-colors" />
+                </Link>
+              ))}
             </div>
           )}
         </div>

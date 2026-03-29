@@ -97,6 +97,21 @@ export default async function CoursDetailPage({ params }: Props) {
     .eq("visible", true)
     .order("order_index");
 
+  // ── Flashcard decks for this chapter ──
+  const { data: flashcardDecksRaw } = await supabase
+    .from("flashcard_decks")
+    .select("id, name, description, cours_id, visible, flashcards(id)")
+    .eq("cours_id", coursId)
+    .eq("visible", true)
+    .order("created_at", { ascending: false });
+
+  const flashcardDecks = (flashcardDecksRaw ?? []).map((d: any) => ({
+    id: d.id,
+    name: d.name,
+    description: d.description,
+    nb_cards: d.flashcards?.length ?? 0,
+  }));
+
   // ── User progress ──
   const { data: progress } = user
     ? await supabase
@@ -153,6 +168,7 @@ export default async function CoursDetailPage({ params }: Props) {
           directSeries={directSeries}
           matiereSeries={matiereSeries}
           ressources={ressources ?? []}
+          flashcardDecks={flashcardDecks}
         />
       </div>
 
