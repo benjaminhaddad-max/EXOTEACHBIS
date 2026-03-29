@@ -667,3 +667,29 @@ export async function getQuestionsForCours(coursId: string) {
   if (error) console.error("[getQuestionsForCours]", error.message);
   return data ?? [];
 }
+
+export async function getCoursForMatiere(matiereId: string) {
+  const supabase = await createClient();
+  const { data: matiere } = await supabase
+    .from("matieres")
+    .select("dossier_id")
+    .eq("id", matiereId)
+    .single();
+  if (!matiere) return [];
+  const { data } = await supabase
+    .from("cours")
+    .select("id, name, order_index")
+    .eq("dossier_id", matiere.dossier_id)
+    .order("order_index");
+  return data ?? [];
+}
+
+export async function updateQuestionCoursId(questionId: string, coursId: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("questions")
+    .update({ cours_id: coursId })
+    .eq("id", questionId);
+  if (error) return { error: error.message };
+  return { success: true };
+}

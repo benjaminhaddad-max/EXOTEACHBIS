@@ -20,6 +20,7 @@ import {
 import {
   getSeriesForCours, getQuestionsForCours,
   getSerieQuestions, getBankQuestionsForSerie,
+  getCoursForMatiere, updateQuestionCoursId,
 } from "@/app/(admin)/admin/pedagogie/actions";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ type SerieFull = {
   id: string; name: string; type: SerieType; timed: boolean;
   duration_minutes: number | null; score_definitif: boolean;
   visible: boolean; nb_questions: number; cours_id: string | null;
+  matiere_id?: string | null;
 };
 
 const LABELS = ["A", "B", "C", "D", "E"] as const;
@@ -333,6 +335,10 @@ function SerieEditorModal({
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const [matiereCours, setMatiereCours] = useState<{ id: string; name: string }[]>([]);
+  const [assigningCours, setAssigningCours] = useState<string | null>(null);
+
+  const isChapterAssignable = type === "annales" || type === "concours_blanc";
 
   const loadAll = useCallback(async () => {
     setLoadingQ(true);
@@ -349,6 +355,45 @@ function SerieEditorModal({
       setLoadingQ(false);
     }
   }, [serie.id, coursId]);
+
+  useEffect(() => {
+    if (!isChapterAssignable) return;
+    if (serie.matiere_id) {
+      getCoursForMatiere(serie.matiere_id).then(setMatiereCours);
+    } else {
+      // Fetch sibling cours from the same matière via the current cours
+      (async () => {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: currentCours } = await supabase
+          .from("cours")
+          .select("matiere_id, dossier_id")
+          .eq("id", coursId)
+          .single();
+        if (!currentCours) return;
+        if (currentCours.matiere_id) {
+          const fetched = await getCoursForMatiere(currentCours.matiere_id);
+          setMatiereCours(fetched);
+        } else if (currentCours.dossier_id) {
+          const { data } = await supabase
+            .from("cours")
+            .select("id, name, order_index")
+            .eq("dossier_id", currentCours.dossier_id)
+            .order("order_index");
+          setMatiereCours(data ?? []);
+        }
+      })();
+    }
+  }, [isChapterAssignable, serie.matiere_id, coursId]);
+
+  const handleAssignCours = async (questionId: string, newCoursId: string | null) => {
+    setAssigningCours(questionId);
+    await updateQuestionCoursId(questionId, newCoursId);
+    setSerieQuestions((prev) =>
+      prev.map((q) => (q.id === questionId ? { ...q, cours_id: newCoursId } : q))
+    );
+    setAssigningCours(null);
+  };
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -531,9 +576,27 @@ function SerieEditorModal({
                       <ChevronRight size={13} className={`mt-0.5 text-white/40 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`} />
                       <div className="flex-1 min-w-0">
                         <MathText text={q.text} className="text-xs text-white/80 leading-snug line-clamp-2" />
-                        <div className="flex gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                           {q.difficulty && <span className={`text-[10px] ${DIFF_COLORS[q.difficulty]}`}>★ {q.difficulty}</span>}
                           <span className="text-[10px] text-white/30">{opts.filter((o: any) => o.is_correct).length}V · {opts.filter((o: any) => !o.is_correct).length}F</span>
+                          {isChapterAssignable && matiereCours.length > 0 && (
+                            <select
+                              value={q.cours_id ?? ""}
+                              onChange={(e) => { e.stopPropagation(); handleAssignCours(q.id, e.target.value || null); }}
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={assigningCours === q.id}
+                              className={`text-[10px] rounded-md border px-1.5 py-0.5 outline-none transition-colors cursor-pointer ${
+                                q.cours_id
+                                  ? "border-[#C9A84C]/40 bg-[#C9A84C]/10 text-[#C9A84C] font-semibold"
+                                  : "border-white/15 bg-white/5 text-white/40"
+                              } ${assigningCours === q.id ? "opacity-50" : ""}`}
+                            >
+                              <option value="" className="bg-[#0e1e35] text-white/50">— Chapitre —</option>
+                              {matiereCours.map((c) => (
+                                <option key={c.id} value={c.id} className="bg-[#0e1e35] text-white">{c.name}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
