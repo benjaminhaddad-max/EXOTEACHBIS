@@ -1057,7 +1057,6 @@ function CoachDashboardTabs({
   groupsById: Map<string, Groupe>;
   recurringAvailability?: CoachRecurringAvailability[];
   coachingThreads?: QaThread[];
-  currentProfile: Profile;
 }) {
   const [tab, setTab] = useState<"conversations" | "planning" | "eleves">("conversations");
 
