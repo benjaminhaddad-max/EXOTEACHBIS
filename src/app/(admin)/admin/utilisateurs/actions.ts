@@ -432,3 +432,65 @@ export async function savePedagogieAdminSettings(data: {
   revalidatePath("/admin/pedagogie");
   return { success: true };
 }
+
+export async function createUserAdminProfile(data: {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  groupe_id?: string | null;
+}) {
+  try {
+    const adminCheck = await ensureAdminAccess();
+    if ("error" in adminCheck) return adminCheck;
+
+    const admin = createAdminClient();
+
+    const normalizedEmail = data.email.trim().toLowerCase();
+    if (!normalizedEmail) return { error: "L'email est requis." };
+    if (!data.password || data.password.length < 6) return { error: "Le mot de passe doit contenir au moins 6 caractères." };
+
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+      email: normalizedEmail,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: {
+        first_name: data.first_name.trim(),
+        last_name: data.last_name.trim(),
+        role: data.role,
+      },
+    });
+
+    if (authError) return { error: authError.message };
+    if (!authData.user) return { error: "Erreur lors de la création du compte." };
+
+    const userId = authData.user.id;
+
+    // Update profile with role and groupe
+    const profileUpdate: Record<string, unknown> = {
+      first_name: data.first_name.trim() || null,
+      last_name: data.last_name.trim() || null,
+      email: normalizedEmail,
+      role: data.role,
+      updated_at: new Date().toISOString(),
+    };
+    if (data.groupe_id !== undefined) {
+      profileUpdate.groupe_id = data.groupe_id;
+    }
+
+    const { error: profileError } = await admin
+      .from("profiles")
+      .update(profileUpdate)
+      .eq("id", userId);
+
+    if (profileError) return { error: profileError.message };
+
+    revalidatePath(PATH);
+    return { success: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { error: `Erreur inattendue: ${msg}` };
+  }
+}

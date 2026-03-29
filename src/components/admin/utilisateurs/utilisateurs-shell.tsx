@@ -20,6 +20,7 @@ import type {
 } from "@/types/database";
 import {
   updateUserAdminProfile,
+  createUserAdminProfile,
   createGroupe, updateGroupe, deleteGroupe,
   setGroupeDossierAcces as saveGroupeDossierAcces,
   savePedagogieAdminSettings,
@@ -44,6 +45,7 @@ type Modal =
   | { type: "create_groupe"; parentId: string | null; formationDossierId?: string | null }
   | { type: "edit_groupe"; groupe: Groupe }
   | { type: "edit_user"; user: Profile }
+  | { type: "create_user" }
   | null;
 type Toast = { message: string; kind: "success" | "error" } | null;
 type ProfMatiereAssignment = { prof_id: string; matiere_id: string };
@@ -325,6 +327,21 @@ export function UtilisateursShell({
     }
   }, [showToast, refreshUsers, refreshProfMatieres, refreshProfileDossierAcces, refreshProfileDossierAccessExclusions]);
 
+  const handleCreateUser = useCallback(async (data: { first_name: string; last_name: string; email: string; password: string; role: UserRole; groupe_id?: string | null }) => {
+    setSavingUser(true);
+    try {
+      const res = await createUserAdminProfile(data);
+      if ("error" in res) { showToast(res.error!, "error"); setSavingUser(false); return; }
+      Promise.all([refreshUsers(), refreshProfMatieres()]).catch(() => {});
+      setModal(null);
+      showToast("Utilisateur créé", "success");
+    } catch (err: any) {
+      showToast("Erreur: " + (err?.message ?? "inconnue"), "error");
+    } finally {
+      setSavingUser(false);
+    }
+  }, [showToast, refreshUsers, refreshProfMatieres]);
+
   const handleSaveGroupeAccess = useCallback((groupeId: string, dossierIds: string[]) => {
     startTransition(async () => {
       const res = await saveGroupeDossierAcces(groupeId, dossierIds);
@@ -534,6 +551,7 @@ export function UtilisateursShell({
             groupeAccessById={groupeAccessById}
             profileAccessById={profileAccessById}
             onEditUser={(u) => setModal({ type: "edit_user", user: u })}
+            onCreateUser={() => setModal({ type: "create_user" })}
           />
         )}
         {view === "groupe" && selectedGroupe && (
@@ -951,6 +969,15 @@ export function UtilisateursShell({
           groupeAccessById={groupeAccessById}
           isPending={savingUser || isPending}
           onSave={handleSaveUser}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === "create_user" && (
+        <CreateUserModal
+          groupes={groupes}
+          dossiers={initialDossiers}
+          isPending={savingUser || isPending}
+          onCreate={handleCreateUser}
           onClose={() => setModal(null)}
         />
       )}
@@ -1709,7 +1736,7 @@ function GroupTreeNode({
 // ─── ComptesView ──────────────────────────────────────────────────────────────
 
 function ComptesView({
-  users, groupes, dossiers, filieres, matieres, profMatieresByUser, groupeAccessById, profileAccessById, onEditUser,
+  users, groupes, dossiers, filieres, matieres, profMatieresByUser, groupeAccessById, profileAccessById, onEditUser, onCreateUser,
 }: {
   users: Profile[];
   groupes: Groupe[];
@@ -1720,6 +1747,7 @@ function ComptesView({
   groupeAccessById: Map<string, string[]>;
   profileAccessById: Map<string, string[]>;
   onEditUser: (u: Profile) => void;
+  onCreateUser: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
@@ -1814,16 +1842,26 @@ function ComptesView({
 
   return (
     <div className="p-5">
-      {/* Search */}
-      <div className="relative max-w-sm mb-4">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Rechercher un utilisateur..."
-          className="w-full rounded-lg pl-8 pr-3 py-2 text-sm text-white focus:outline-none"
-          style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
-        />
+      {/* Search + Create */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative max-w-sm flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un utilisateur..."
+            className="w-full rounded-lg pl-8 pr-3 py-2 text-sm text-white focus:outline-none"
+            style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+          />
+        </div>
+        <button
+          onClick={onCreateUser}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors shrink-0"
+          style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+        >
+          <Plus size={13} />
+          Créer un utilisateur
+        </button>
       </div>
 
       {/* Pill filters — cascading: Formation → Université → Classe → Rôle */}
@@ -3112,6 +3150,161 @@ function GroupeFormModal({
           >
             {isPending && <Loader2 size={11} className="animate-spin" />}
             {groupe ? "Enregistrer" : "Créer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CreateUserModal ──────────────────────────────────────────────────────────
+
+function CreateUserModal({
+  groupes, dossiers, isPending, onCreate, onClose,
+}: {
+  groupes: Groupe[];
+  dossiers: Dossier[];
+  isPending: boolean;
+  onCreate: (data: { first_name: string; last_name: string; email: string; password: string; role: UserRole; groupe_id?: string | null }) => void;
+  onClose: () => void;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole>("eleve");
+  const [groupeId, setGroupeId] = useState<string | null>(null);
+  const [selOffer, setSelOffer] = useState("");
+  const [selUni, setSelUni] = useState("");
+
+  const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
+  const unis = useMemo(() => selOffer ? dossiers.filter(d => d.dossier_type === "university" && d.parent_id === selOffer) : [], [dossiers, selOffer]);
+  const classes = useMemo(() => selUni ? groupes.filter(g => g.formation_dossier_id === selUni) : [], [groupes, selUni]);
+
+  const canSubmit = email.trim() && password.length >= 6;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+      <div className="w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden" style={{ backgroundColor: "#0e1e35", border: "1px solid rgba(255,255,255,0.1)" }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ backgroundColor: "#C9A84C" }}>
+              <Plus size={14} />
+            </div>
+            <p className="text-sm font-bold text-white">Créer un utilisateur</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: "rgba(255,255,255,0.4)" }}
+            onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color = "white"; }}
+            onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.4)"; }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5 overflow-y-auto max-h-[calc(90vh-144px)]">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Prénom</label>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Nom</label>
+              <input value={lastName} onChange={e => setLastName(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Email *</label>
+              <div className="relative">
+                <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.35)" }} />
+                <input value={email} onChange={e => setEmail(e.target.value)} type="email"
+                  className="w-full rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }} />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Mot de passe *</label>
+              <input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Min. 6 caractères"
+                className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }} />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Rôle</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {Object.entries(ROLE_CONFIG).map(([key, rc]) => (
+                <button key={key} onClick={() => setRole(key as UserRole)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${role === key ? `${rc.bg} ${rc.color} border-current` : "border-white/10 text-white/40 hover:bg-white/5"}`}>
+                  {rc.icon} {rc.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Classe (optionnel)</label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
+                <button onClick={() => { setSelOffer(""); setSelUni(""); setGroupeId(null); }}
+                  className="px-2.5 py-1 rounded-full text-[11px]"
+                  style={{ backgroundColor: !selOffer ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: !selOffer ? "#E3C286" : "rgba(255,255,255,0.5)", border: !selOffer ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                  Aucune
+                </button>
+                {offers.map(o => (
+                  <button key={o.id} onClick={() => { setSelOffer(o.id); setSelUni(""); setGroupeId(null); }}
+                    className="px-2.5 py-1 rounded-full text-[11px]"
+                    style={{ backgroundColor: selOffer === o.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: selOffer === o.id ? "#E3C286" : "rgba(255,255,255,0.5)", border: selOffer === o.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                    {o.name}
+                  </button>
+                ))}
+              </div>
+              {selOffer && unis.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
+                  {unis.map(u => (
+                    <button key={u.id} onClick={() => { setSelUni(u.id); setGroupeId(null); }}
+                      className="px-2.5 py-1 rounded-full text-[11px]"
+                      style={{ backgroundColor: selUni === u.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: selUni === u.id ? "#E3C286" : "rgba(255,255,255,0.5)", border: selUni === u.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                      {u.name.replace("Université ", "")}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selUni && classes.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
+                  {classes.map(c => (
+                    <button key={c.id} onClick={() => setGroupeId(c.id)}
+                      className="px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1.5"
+                      style={{ backgroundColor: groupeId === c.id ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.06)", color: groupeId === c.id ? "#6EE7B7" : "rgba(255,255,255,0.5)", border: groupeId === c.id ? "1px solid rgba(52,211,153,0.3)" : "1px solid transparent" }}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 pb-5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs transition-colors"
+            style={{ color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.05)")}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+            Annuler
+          </button>
+          <button
+            onClick={() => onCreate({ first_name: firstName, last_name: lastName, email, password, role, groupe_id: groupeId })}
+            disabled={!canSubmit || isPending}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+            style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
+            {isPending && <Loader2 size={11} className="animate-spin" />}
+            Créer
           </button>
         </div>
       </div>
