@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Calendar, ChevronRight, Clock, Layers, Lock, Medal, Trophy } from "lucide-react";
+import { BarChart3, Calendar, ChevronRight, Clock, Layers, Lock, Medal, Trophy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ExamStatus = "upcoming" | "active" | "ended";
@@ -32,6 +32,12 @@ export type StudentExamView = {
   notation_sur: number;
   moyenne20: number | null;
   nbSeriesDone: number;
+  rankingSummary: {
+    rank: number | null;
+    participants: number;
+    classAverage: number | null;
+    topScore: number | null;
+  } | null;
   series: StudentExamSerieView[];
 };
 
@@ -296,6 +302,168 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
               );
             })}
           </div>
+        </div>
+      ) : tab === "past" ? (
+        <div className="space-y-5">
+          {pastExamens.map((exam) => {
+            const detailHref = exam.results_visible ? `/examens/${exam.id}/resultats` : null;
+
+            const leftPanel = (
+              <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-semibold text-gray-900">{exam.name}</h2>
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                        Terminé
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(exam.debut_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(exam.fin_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Layers className="h-3 w-3" />
+                        {exam.series.length} série{exam.series.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  {detailHref && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-navy/5 px-3 py-1 text-xs font-medium text-navy">
+                      Voir le détail
+                      <ChevronRight className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {exam.series.map((serie) => (
+                    <div
+                      key={serie.id}
+                      className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                    >
+                      <p className="text-sm font-medium text-gray-800">{serie.name}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                        <span>{serie.timed ? `${serie.duration_minutes}min chrono` : "Libre"}</span>
+                        {serie.hasOwnDates && serie.serie_debut_at && (
+                          <span className="flex items-center gap-0.5">
+                            <Calendar className="h-2.5 w-2.5" />
+                            {new Date(serie.serie_debut_at).toLocaleDateString("fr-FR", {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {!exam.results_visible && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Les résultats de ce concours blanc ne sont pas encore visibles.
+                  </div>
+                )}
+              </div>
+            );
+
+            return (
+              <div key={exam.id} className="grid gap-4 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  {detailHref ? (
+                    <Link
+                      href={detailHref}
+                      className="block transition-transform hover:-translate-y-0.5"
+                    >
+                      {leftPanel}
+                    </Link>
+                  ) : (
+                    leftPanel
+                  )}
+                </div>
+
+                <div className="lg:col-span-1">
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 h-full">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                      Classement général
+                    </p>
+
+                    {exam.results_visible && exam.rankingSummary ? (
+                      <div className="mt-4 space-y-4">
+                        <div className="rounded-xl border border-navy/10 bg-navy/5 px-4 py-3">
+                          <p className="text-xs text-gray-500">Ton rang</p>
+                          <div className="mt-1 flex items-end gap-2">
+                            <span className="text-3xl font-bold text-navy">
+                              {exam.rankingSummary.rank ?? "—"}
+                            </span>
+                            <span className="pb-1 text-sm text-gray-400">
+                              / {exam.rankingSummary.participants || "—"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                            <p className="flex items-center gap-1 text-xs text-gray-500">
+                              <Users className="h-3 w-3" />
+                              Participants
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-gray-900">
+                              {exam.rankingSummary.participants}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                            <p className="flex items-center gap-1 text-xs text-gray-500">
+                              <BarChart3 className="h-3 w-3" />
+                              Moyenne promo
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-gray-900">
+                              {exam.rankingSummary.classAverage !== null
+                                ? `${exam.rankingSummary.classAverage.toFixed(1)}/${exam.notation_sur}`
+                                : "—"}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                            <p className="flex items-center gap-1 text-xs text-gray-500">
+                              <Trophy className="h-3 w-3" />
+                              Meilleure note
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-gray-900">
+                              {exam.rankingSummary.topScore !== null
+                                ? `${exam.rankingSummary.topScore.toFixed(1)}/${exam.notation_sur}`
+                                : "—"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Link
+                          href={detailHref ?? "#"}
+                          className="flex items-center justify-between rounded-xl border border-navy/20 bg-navy/5 px-4 py-3 text-sm font-medium text-navy transition-colors hover:bg-navy/10"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Medal className="h-4 w-4" />
+                            Ouvrir le détail complet
+                          </span>
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-700">
+                        Le classement général apparaîtra ici dès que les résultats seront publiés.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="space-y-5">

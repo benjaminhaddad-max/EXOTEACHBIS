@@ -90,7 +90,20 @@ export default async function ExamensElevePage() {
     )
   );
 
-  const [matiereCoefficientsRes, matieresRes, attemptsRes] = await Promise.all([
+  const endedVisibleExamens = examensVisible.filter((examen: any) => {
+    const status = getStatus(examen.debut_at, examen.fin_at);
+    return status === "ended" && Boolean(examen.results_visible);
+  });
+
+  const rankingSeriesIds = Array.from(
+    new Set(
+      endedVisibleExamens.flatMap((examen: any) =>
+        (examen.series ?? []).map((serie: any) => serie.id).filter(Boolean)
+      )
+    )
+  );
+
+  const [matiereCoefficientsRes, matieresRes, attemptsRes, rankingAttemptsRes] = await Promise.all([
     matiereIds.length > 0
       ? supabase
           .from("matiere_coefficients")
@@ -105,6 +118,13 @@ export default async function ExamensElevePage() {
       .select("series_id, score, nb_correct, nb_total")
       .eq("user_id", user.id)
       .not("ended_at", "is", null),
+    rankingSeriesIds.length > 0
+      ? supabase
+          .from("serie_attempts")
+          .select("user_id, series_id, score, nb_correct, nb_total, user:profiles(id, filiere_id)")
+          .in("series_id", rankingSeriesIds)
+          .not("ended_at", "is", null)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
 
   const coefficientMap = buildFiliereCoefficientMap(matiereCoefficientsRes.data ?? []);
@@ -120,6 +140,40 @@ export default async function ExamensElevePage() {
         nb_total: attempt.nb_total,
       });
     }
+  }
+
+  const bestRankingAttemptsByUserSerie = new Map<
+    string,
+    { userId: string; filiereId: string | null; seriesId: string; score: number; nb_correct: number; nb_total: number }
+  >();
+  for (const attempt of rankingAttemptsRes.data ?? []) {
+    const key = `${attempt.user_id}:${attempt.series_id}`;
+    const previous = bestRankingAttemptsByUserSerie.get(key);
+    const rawUser = Array.isArray((attempt as any).user) ? (attempt as any).user[0] : (attempt as any).user;
+    if (!previous || (attempt.score ?? 0) > previous.score) {
+      bestRankingAttemptsByUserSerie.set(key, {
+        userId: attempt.user_id,
+        filiereId: rawUser?.filiere_id ?? null,
+        seriesId: attempt.series_id,
+        score: attempt.score ?? 0,
+        nb_correct: attempt.nb_correct,
+        nb_total: attempt.nb_total,
+      });
+    }
+  }
+
+  const bestRankingRowsBySeriesId = new Map<
+    string,
+    Array<{ userId: string; filiereId: string | null; nb_correct: number; nb_total: number }>
+  >();
+  for (const row of bestRankingAttemptsByUserSerie.values()) {
+    if (!bestRankingRowsBySeriesId.has(row.seriesId)) bestRankingRowsBySeriesId.set(row.seriesId, []);
+    bestRankingRowsBySeriesId.get(row.seriesId)!.push({
+      userId: row.userId,
+      filiereId: row.filiereId,
+      nb_correct: row.nb_correct,
+      nb_total: row.nb_total,
+    });
   }
 
   const examens: StudentExamView[] = examensVisible.map((examen: any) => {
@@ -153,6 +207,79 @@ export default async function ExamensElevePage() {
       if (totalCoeff > 0) moyenne20 = weightedSum / totalCoeff;
     }
 
+    let rankingSummary: StudentExamView["rankingSummary"] = null;
+    if (status === "ended" && examen.results_visible) {
+      const byUser = new Map<
+        string,
+        {
+          userId: string;
+          filiereId: string | null;
+          serieScores: Record<string, { nb_correct: number; nb_total: number }>;
+          moyenne20: number;
+        }
+      >();
+
+      for (const examSerie of examen.examen_series ?? []) {
+        const rows = bestRankingRowsBySeriesId.get(examSerie.series_id) ?? [];
+        for (const row of rows) {
+          if (!byUser.has(row.userId)) {
+            byUser.set(row.userId, {
+              userId: row.userId,
+              filiereId: row.filiereId,
+              serieScores: {},
+              moyenne20: 0,
+            });
+          }
+
+          byUser.get(row.userId)!.serieScores[examSerie.series_id] = {
+            nb_correct: row.nb_correct,
+            nb_total: row.nb_total,
+          };
+        }
+      }
+
+      const students = Array.from(byUser.values())
+        .filter((student) => (rankingFiliereId ? student.filiereId === rankingFiliereId : true))
+        .map((student) => {
+          let weightedSum = 0;
+          let totalCoeff = 0;
+
+          for (const examSerie of examen.examen_series ?? []) {
+            const sc = student.serieScores[examSerie.series_id];
+            if (!sc || sc.nb_total <= 0) continue;
+
+            const score20 = (sc.nb_correct / sc.nb_total) * notationSur;
+            const appliedCoeff = resolveSerieCoefficient({
+              defaultCoefficient: examSerie.coefficient ?? 1,
+              matiereId: examSerie.series?.matiere_id ?? null,
+              filiereId: rankingFiliereId,
+              coefficientMap,
+            });
+
+            weightedSum += score20 * appliedCoeff;
+            totalCoeff += appliedCoeff;
+          }
+
+          return {
+            ...student,
+            moyenne20: totalCoeff > 0 ? weightedSum / totalCoeff : 0,
+          };
+        })
+        .sort((a, b) => b.moyenne20 - a.moyenne20);
+
+      const myRank = students.findIndex((student) => student.userId === user.id) + 1;
+      const classAverage =
+        students.length > 0 ? students.reduce((sum, student) => sum + student.moyenne20, 0) / students.length : null;
+      const topScore = students.length > 0 ? students[0].moyenne20 : null;
+
+      rankingSummary = {
+        rank: myRank > 0 ? myRank : null,
+        participants: students.length,
+        classAverage,
+        topScore,
+      };
+    }
+
     return {
       id: examen.id,
       name: examen.name,
@@ -164,6 +291,7 @@ export default async function ExamensElevePage() {
       notation_sur: notationSur,
       moyenne20,
       nbSeriesDone,
+      rankingSummary,
       series: (examen.series ?? []).map((serie: any) => {
         const best = bestBySerie.get(serie.id);
         const serieDebut = serie.serie_debut_at || examen.debut_at;
