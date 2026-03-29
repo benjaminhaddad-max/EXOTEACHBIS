@@ -29,7 +29,6 @@ import {
   assignCoachToBooking,
 } from "@/app/(admin)/admin/coaching/actions";
 import { CoachAvailability } from "./coach-availability";
-import CoachingSidebar from "./coaching-sidebar";
 import { CoachingWeekView } from "./coaching-week-view";
 import CoachingRdvView from "./coaching-rdv-view";
 import { CoachingChatThreadsPanel } from "./coaching-chat-threads-panel";
@@ -485,9 +484,10 @@ export function CoachingShell({
     );
   }
 
-  // ─── Admin sidebar + main layout ────────────────────────────────────────────
-  const [adminView, setAdminView] = useState<"planning" | "rdv" | "chat" | "rdv_requests" | "videos">("chat");
-  const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+  // ─── Admin layout — tabs + pill filters (no sidebar) ────────────────────────
+  const [adminView, setAdminView] = useState<"chat" | "rdv_requests" | "videos" | "planning" | "rdv">("chat");
+  const [filterFormationId, setFilterFormationId] = useState("");
+  const [filterUniversityId, setFilterUniversityId] = useState("");
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const d = new Date();
     const day = d.getDay();
@@ -496,41 +496,56 @@ export function CoachingShell({
     return d;
   });
 
-  const toggleGroupe = (id: string) => {
-    setSelectedGroupeIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  // Build formation structure from dossiers
+  const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
+  const universities = useMemo(() => {
+    if (!filterFormationId) return dossiers.filter(d => d.dossier_type === "university");
+    return dossiers.filter(d => d.dossier_type === "university" && d.parent_id === filterFormationId);
+  }, [dossiers, filterFormationId]);
 
-  // Filter data by selected groupes
+  // Compute which groupeIds match the current filter
+  const filteredGroupeIds = useMemo(() => {
+    if (!filterFormationId && !filterUniversityId) return null; // null = no filter
+    if (filterUniversityId) {
+      return new Set(groupes.filter(g => g.formation_dossier_id === filterUniversityId).map(g => g.id));
+    }
+    if (filterFormationId) {
+      const uniIds = new Set(dossiers.filter(d => d.dossier_type === "university" && d.parent_id === filterFormationId).map(d => d.id));
+      return new Set(groupes.filter(g => g.formation_dossier_id && uniIds.has(g.formation_dossier_id)).map(g => g.id));
+    }
+    return null;
+  }, [dossiers, filterFormationId, filterUniversityId, groupes]);
+
+  // Filter data
   const filteredSlots = useMemo(() => {
-    if (selectedGroupeIds.size === 0) return slots;
-    return slots.filter((s) => selectedGroupeIds.has(s.groupe_id));
-  }, [slots, selectedGroupeIds]);
+    if (!filteredGroupeIds) return slots;
+    return slots.filter((s) => filteredGroupeIds.has(s.groupe_id));
+  }, [slots, filteredGroupeIds]);
 
   const filteredBookings = useMemo(() => {
-    if (selectedGroupeIds.size === 0) return bookings;
-    return bookings.filter((b) => selectedGroupeIds.has(b.groupe_id));
-  }, [bookings, selectedGroupeIds]);
+    if (!filteredGroupeIds) return bookings;
+    return bookings.filter((b) => filteredGroupeIds.has(b.groupe_id));
+  }, [bookings, filteredGroupeIds]);
 
-  const handleAdminAssignCoach = (coachId: string, groupeId: string) => {
-    startTransition(async () => {
-      const res = await assignCoachToGroupe({ coach_id: coachId, groupe_id: groupeId });
-      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
-      else setToast({ kind: "success", message: "Coach assigné" });
-    });
-  };
+  // Counts for pills
+  const studentCountByOffer = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const offer of offers) {
+      const uniIds = new Set(dossiers.filter(d => d.dossier_type === "university" && d.parent_id === offer.id).map(d => d.id));
+      const gIds = new Set(groupes.filter(g => g.formation_dossier_id && uniIds.has(g.formation_dossier_id)).map(g => g.id));
+      map.set(offer.id, students.filter(s => s.groupe_id && gIds.has(s.groupe_id)).length);
+    }
+    return map;
+  }, [dossiers, groupes, offers, students]);
 
-  const handleAdminRemoveCoach = (coachId: string, groupeId: string) => {
-    startTransition(async () => {
-      const res = await removeCoachFromGroupe({ coach_id: coachId, groupe_id: groupeId });
-      if ("error" in res) setToast({ kind: "error", message: res.error ?? "Erreur" });
-      else setToast({ kind: "success", message: "Coach retiré" });
-    });
-  };
+  const studentCountByUni = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const uni of universities) {
+      const gIds = new Set(groupes.filter(g => g.formation_dossier_id === uni.id).map(g => g.id));
+      map.set(uni.id, students.filter(s => s.groupe_id && gIds.has(s.groupe_id)).length);
+    }
+    return map;
+  }, [groupes, students, universities]);
 
   const handleAdminCreateSlot = (data: { coach_id: string; groupe_id: string; start_at: string; end_at: string; location?: string }) => {
     startTransition(async () => {
@@ -556,8 +571,16 @@ export function CoachingShell({
     });
   };
 
+  const adminTabs: { key: typeof adminView; label: string; icon: React.ReactNode }[] = [
+    { key: "chat", label: "Chat Coaching", icon: <Search className="w-3.5 h-3.5" /> },
+    { key: "rdv_requests", label: "Demandes RDV", icon: <PhoneCall className="w-3.5 h-3.5" /> },
+    { key: "videos", label: "Vidéos", icon: <ClipboardList className="w-3.5 h-3.5" /> },
+    { key: "planning", label: "Planning", icon: <CalendarClock className="w-3.5 h-3.5" /> },
+    { key: "rdv", label: "RDV (créneaux)", icon: <CalendarClock className="w-3.5 h-3.5" /> },
+  ];
+
   return (
-    <div className="flex gap-0 -mx-4 sm:-mx-6 xl:-mx-8 -mt-5" style={{ height: "calc(100vh - 80px)" }}>
+    <div className="space-y-4">
       {toast && (
         <div className={`fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white shadow-lg ${toast.kind === "success" ? "bg-emerald-600" : "bg-red-600"}`}>
           {toast.kind === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
@@ -565,24 +588,81 @@ export function CoachingShell({
         </div>
       )}
 
-      {/* Sidebar */}
-      <CoachingSidebar
-        dossiers={dossiers}
-        groupes={groupes}
-        coaches={coaches}
-        coachAssignments={coachAssignments}
-        selectedGroupeIds={selectedGroupeIds}
-        onToggleGroupe={toggleGroupe}
-        view={adminView}
-        onViewChange={setAdminView}
-        onAssignCoach={handleAdminAssignCoach}
-        onRemoveCoach={handleAdminRemoveCoach}
-        isCoach={isCoach}
-      />
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 w-fit">
+        {adminTabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setAdminView(t.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              adminView === t.key
+                ? "bg-white text-[#12314d] shadow-sm border border-gray-200"
+                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Pill filters — Formation → Université (for planning/rdv views) */}
+      {(adminView === "planning" || adminView === "rdv") && (
+        <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
+          {/* Formation */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-widest w-24 shrink-0 text-gray-400">Formation</span>
+            <button
+              onClick={() => { setFilterFormationId(""); setFilterUniversityId(""); }}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                !filterFormationId ? "bg-[#0e1e35] text-white border-[#0e1e35]" : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+              }`}
+            >
+              Tout <span className="text-[9px] opacity-60">{students.length}</span>
+            </button>
+            {offers.map((o) => (
+              <button
+                key={o.id}
+                onClick={() => { setFilterFormationId(o.id); setFilterUniversityId(""); }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                  filterFormationId === o.id ? "bg-[#0e1e35] text-white border-[#0e1e35]" : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                }`}
+              >
+                {o.name} <span className="text-[9px] opacity-60">{studentCountByOffer.get(o.id) ?? 0}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Université — only when a formation is selected */}
+          {filterFormationId && universities.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[9px] font-bold uppercase tracking-widest w-24 shrink-0 text-gray-400">Université</span>
+              <button
+                onClick={() => setFilterUniversityId("")}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                  !filterUniversityId ? "bg-[#0e1e35] text-white border-[#0e1e35]" : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                }`}
+              >
+                Toutes
+              </button>
+              {universities.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setFilterUniversityId(u.id)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                    filterUniversityId === u.id ? "bg-[#0e1e35] text-white border-[#0e1e35]" : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                  }`}
+                >
+                  {u.name.replace("Université ", "")} <span className="text-[9px] opacity-60">{studentCountByUni.get(u.id) ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto bg-[#f5f6fa] p-5">
-
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" style={{ minHeight: "calc(100vh - 250px)" }}>
         {adminView === "planning" && (
           <CoachingWeekView
             slots={filteredSlots}
@@ -625,7 +705,7 @@ export function CoachingShell({
           />
         )}
 
-        {adminView === "videos" && !isCoach && (
+        {adminView === "videos" && (
           <CoachingVideosCrud
             videos={coachingVideos}
             universities={dossiers.filter(d => d.dossier_type === "university")}

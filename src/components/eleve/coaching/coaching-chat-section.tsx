@@ -58,7 +58,6 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
-      // Mark as read
       supabase.from("qa_messages").update({ read_by_student: true }).eq("id", msg.id);
     }, [supabase]),
   );
@@ -73,12 +72,10 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
     setSending(true);
     try {
       if (!thread) {
-        // Create thread with first message
         const result = await callApi("create_thread", { text });
         setThread(result.thread);
         setMessages(result.message ? [result.message] : []);
       } else {
-        // Send in existing thread
         const optimistic: QaMessage = {
           id: crypto.randomUUID(),
           thread_id: thread.id,
@@ -93,7 +90,6 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
           created_at: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, optimistic]);
-
         const result = await callApi("send_message", { threadId: thread.id, text });
         if (result.message) {
           setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? result.message : m)));
@@ -116,15 +112,10 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
         .from("qa-media")
         .upload(storagePath, blob, { contentType: blob.type || "audio/webm", upsert: true });
       if (uploadErr) { console.error("Voice upload error:", uploadErr); setSending(false); return; }
-
       const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
-
       await callApi("send_message", {
-        threadId: thread.id,
-        text: "",
-        contentType: "voice",
-        mediaUrl: urlData.publicUrl,
-        mediaDuration: Math.round(duration),
+        threadId: thread.id, text: "", contentType: "voice",
+        mediaUrl: urlData.publicUrl, mediaDuration: Math.round(duration),
       });
     } catch (err) {
       console.error("Voice send error:", err);
@@ -144,16 +135,9 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
         .from("qa-media")
         .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: true });
       if (uploadErr) { console.error("Media upload error:", uploadErr); setSending(false); return; }
-
       const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
       const dbType = type === "document" ? "image" : type;
-
-      await callApi("send_message", {
-        threadId: thread.id,
-        text: "",
-        contentType: dbType,
-        mediaUrl: urlData.publicUrl,
-      });
+      await callApi("send_message", { threadId: thread.id, text: "", contentType: dbType, mediaUrl: urlData.publicUrl });
     } catch (err) {
       console.error("Media send error:", err);
     } finally {
@@ -163,28 +147,28 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+      <div className="flex items-center justify-center h-64 bg-white rounded-xl border border-gray-200">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col rounded-xl overflow-hidden" style={{ height: "min(70vh, 600px)", backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div className="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" style={{ height: "min(70vh, 600px)" }}>
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        <MessageCircle size={16} style={{ color: "#C9A84C" }} />
-        <span className="text-sm font-semibold text-white">
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0 border-b border-gray-200 bg-gray-50">
+        <MessageCircle size={16} className="text-amber-600" />
+        <span className="text-sm font-semibold text-gray-900">
           Chat avec un de nos coachs{universityName ? ` de ${universityName}` : ""}
         </span>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 space-y-2 bg-[#f0f2f5]">
         {messages.length === 0 && !thread && (
           <div className="flex flex-col items-center justify-center h-full gap-3 px-4">
-            <MessageCircle size={32} style={{ color: "rgba(255,255,255,0.1)" }} />
-            <p className="text-sm text-center" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <MessageCircle size={32} className="text-gray-300" />
+            <p className="text-sm text-center text-gray-400">
               Pose ta question à nos coachs ! Tu peux écrire un message ou envoyer une note vocale.
             </p>
           </div>

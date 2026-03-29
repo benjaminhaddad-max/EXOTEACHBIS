@@ -16,11 +16,11 @@ const RDV_TYPES: { value: CoachingRdvType; label: string; icon: React.ReactNode;
   { value: "visio", label: "Visio-conférence", icon: <Video size={16} />, description: "Via Zoom ou Google Meet" },
 ];
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  pending: { label: "En attente", color: "text-yellow-300", bg: "bg-yellow-500/15 border-yellow-500/30", icon: <Clock size={12} /> },
-  assigned: { label: "Confirmé", color: "text-green-300", bg: "bg-green-500/15 border-green-500/30", icon: <Check size={12} /> },
-  completed: { label: "Effectué", color: "text-blue-300", bg: "bg-blue-500/15 border-blue-500/30", icon: <Check size={12} /> },
-  cancelled: { label: "Annulé", color: "text-red-300", bg: "bg-red-500/15 border-red-500/30", icon: <AlertCircle size={12} /> },
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending: { label: "En attente", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: <Clock size={12} /> },
+  assigned: { label: "Confirmé", color: "bg-green-100 text-green-700 border-green-200", icon: <Check size={12} /> },
+  completed: { label: "Effectué", color: "bg-blue-100 text-blue-700 border-blue-200", icon: <Check size={12} /> },
+  cancelled: { label: "Annulé", color: "bg-red-100 text-red-700 border-red-200", icon: <AlertCircle size={12} /> },
 };
 
 export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSectionProps) {
@@ -40,16 +40,10 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
   const handleSubmit = () => {
     startTransition(async () => {
       const res = await createCoachingRdvRequest({ rdv_type: selectedType, message: message.trim() || null });
-      if ("error" in res) {
-        showToast(res.error!, "error");
-        return;
-      }
+      if ("error" in res) { showToast(res.error!, "error"); return; }
       showToast("Demande de RDV envoyée !", "success");
       setMessage("");
-      // Add to local list
-      if (res.data) {
-        setLocalRequests((prev) => [res.data as CoachingRdvRequest, ...prev]);
-      }
+      if (res.data) setLocalRequests((prev) => [res.data as CoachingRdvRequest, ...prev]);
     });
   };
 
@@ -59,29 +53,28 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
     <div className="space-y-6">
       {/* Active request */}
       {activeRequest && (
-        <div className="rounded-xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Calendar size={14} style={{ color: "#C9A84C" }} />
-            <span className="text-sm font-semibold text-white">Ta demande de RDV</span>
+            <Calendar size={14} className="text-amber-600" />
+            <span className="text-sm font-semibold text-gray-900">Ta demande de RDV</span>
             {(() => {
               const sc = STATUS_CONFIG[activeRequest.status];
               return (
-                <span className={`ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${sc.bg} ${sc.color}`}>
+                <span className={`ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${sc.color}`}>
                   {sc.icon} {sc.label}
                 </span>
               );
             })()}
           </div>
-
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <span style={{ color: "rgba(255,255,255,0.4)" }}>Type :</span>
-              <span className="ml-1 text-white">{RDV_TYPES.find((t) => t.value === activeRequest.rdv_type)?.label}</span>
+              <span className="text-gray-400">Type :</span>
+              <span className="ml-1 text-gray-700">{RDV_TYPES.find((t) => t.value === activeRequest.rdv_type)?.label}</span>
             </div>
             {activeRequest.assigned_coach_id && (
               <div>
-                <span style={{ color: "rgba(255,255,255,0.4)" }}>Coach :</span>
-                <span className="ml-1 text-white">
+                <span className="text-gray-400">Coach :</span>
+                <span className="ml-1 text-gray-700">
                   {(() => {
                     const coach = coachMap.get(activeRequest.assigned_coach_id);
                     return coach ? `${coach.first_name ?? ""} ${coach.last_name ?? ""}`.trim() : "Assigné";
@@ -91,28 +84,25 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
             )}
             {activeRequest.scheduled_at && (
               <div>
-                <span style={{ color: "rgba(255,255,255,0.4)" }}>Date :</span>
-                <span className="ml-1 text-white">
+                <span className="text-gray-400">Date :</span>
+                <span className="ml-1 text-gray-700">
                   {new Date(activeRequest.scheduled_at).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
             )}
           </div>
-
           {activeRequest.message && (
-            <p className="mt-2 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
-              {activeRequest.message}
-            </p>
+            <p className="mt-2 text-xs text-gray-500">{activeRequest.message}</p>
           )}
         </div>
       )}
 
-      {/* Request form — only show if no active request */}
+      {/* Request form */}
       {!activeRequest && (
-        <div className="rounded-xl p-5 space-y-5" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-5">
           <div>
-            <h3 className="text-sm font-semibold text-white mb-1">Demander un rendez-vous</h3>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Demander un rendez-vous</h3>
+            <p className="text-xs text-gray-500">
               Choisis le type de rendez-vous souhaité. Un coach te sera attribué dans les plus brefs délais.
             </p>
           </div>
@@ -123,23 +113,22 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
               <button
                 key={type.value}
                 onClick={() => setSelectedType(type.value)}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-all text-center"
-                style={{
-                  backgroundColor: selectedType === type.value ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.03)",
-                  borderColor: selectedType === type.value ? "rgba(201,168,76,0.4)" : "rgba(255,255,255,0.08)",
-                  color: selectedType === type.value ? "#E3C286" : "rgba(255,255,255,0.5)",
-                }}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all text-center ${
+                  selectedType === type.value
+                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                    : "border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300"
+                }`}
               >
                 {type.icon}
                 <span className="text-xs font-semibold">{type.label}</span>
-                <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>{type.description}</span>
+                <span className="text-[10px] text-gray-400">{type.description}</span>
               </button>
             ))}
           </div>
 
           {/* Message */}
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">
               Message (optionnel)
             </label>
             <textarea
@@ -147,8 +136,7 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
               onChange={(e) => setMessage(e.target.value)}
               rows={3}
               placeholder="Précise ta demande si besoin..."
-              className="w-full rounded-lg px-3 py-2 text-sm text-white focus:outline-none resize-none"
-              style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+              className="w-full rounded-lg px-3 py-2 text-sm text-gray-900 border border-gray-200 focus:outline-none focus:border-amber-300 resize-none"
             />
           </div>
 
@@ -156,8 +144,7 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
           <button
             onClick={handleSubmit}
             disabled={isPending}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors"
-            style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors bg-[#0e1e35] text-white hover:bg-[#152a45]"
           >
             {isPending ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
             Envoyer ma demande
@@ -168,23 +155,17 @@ export function CoachingRdvSection({ existingRequests, coaches }: CoachingRdvSec
       {/* History */}
       {localRequests.filter((r) => r.status === "completed" || r.status === "cancelled").length > 0 && (
         <div>
-          <h4 className="text-[11px] font-bold uppercase tracking-wide mb-3" style={{ color: "rgba(255,255,255,0.3)" }}>
-            Historique
-          </h4>
+          <h4 className="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-3">Historique</h4>
           <div className="space-y-2">
             {localRequests
               .filter((r) => r.status === "completed" || r.status === "cancelled")
               .map((r) => {
                 const sc = STATUS_CONFIG[r.status];
                 return (
-                  <div key={r.id} className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
-                    <span className={`flex items-center gap-1 ${sc.color}`}>{sc.icon} {sc.label}</span>
-                    <span style={{ color: "rgba(255,255,255,0.4)" }}>
-                      {RDV_TYPES.find((t) => t.value === r.rdv_type)?.label}
-                    </span>
-                    <span className="ml-auto" style={{ color: "rgba(255,255,255,0.3)" }}>
-                      {new Date(r.created_at).toLocaleDateString("fr-FR")}
-                    </span>
+                  <div key={r.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs">
+                    <span className={`flex items-center gap-1 ${sc.color} px-1.5 py-0.5 rounded-full border`}>{sc.icon} {sc.label}</span>
+                    <span className="text-gray-500">{RDV_TYPES.find((t) => t.value === r.rdv_type)?.label}</span>
+                    <span className="ml-auto text-gray-400">{new Date(r.created_at).toLocaleDateString("fr-FR")}</span>
                   </div>
                 );
               })}
