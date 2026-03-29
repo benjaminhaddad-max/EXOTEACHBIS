@@ -20,7 +20,7 @@ import {
 import {
   getSeriesForCours, getQuestionsForCours,
   getSerieQuestions, getBankQuestionsForSerie,
-  getCoursForMatiere, updateQuestionCoursId,
+  getCoursForMatiere, updateQuestionCoursId, getSiblingCours,
 } from "@/app/(admin)/admin/pedagogie/actions";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -361,28 +361,7 @@ function SerieEditorModal({
     if (serie.matiere_id) {
       getCoursForMatiere(serie.matiere_id).then(setMatiereCours);
     } else {
-      // Fetch sibling cours from the same matière via the current cours
-      (async () => {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        const { data: currentCours } = await supabase
-          .from("cours")
-          .select("matiere_id, dossier_id")
-          .eq("id", coursId)
-          .single();
-        if (!currentCours) return;
-        if (currentCours.matiere_id) {
-          const fetched = await getCoursForMatiere(currentCours.matiere_id);
-          setMatiereCours(fetched);
-        } else if (currentCours.dossier_id) {
-          const { data } = await supabase
-            .from("cours")
-            .select("id, name, order_index")
-            .eq("dossier_id", currentCours.dossier_id)
-            .order("order_index");
-          setMatiereCours(data ?? []);
-        }
-      })();
+      getSiblingCours(coursId).then(setMatiereCours);
     }
   }, [isChapterAssignable, serie.matiere_id, coursId]);
 

@@ -684,6 +684,55 @@ export async function getCoursForMatiere(matiereId: string) {
   return data ?? [];
 }
 
+export async function getSiblingCours(coursId: string) {
+  const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("cours")
+    .select("matiere_id, dossier_id")
+    .eq("id", coursId)
+    .single();
+  if (!current) return [];
+
+  if (current.matiere_id) {
+    const { data: mat } = await supabase
+      .from("matieres")
+      .select("dossier_id")
+      .eq("id", current.matiere_id)
+      .single();
+    if (mat) {
+      const { data } = await supabase
+        .from("cours")
+        .select("id, name, order_index")
+        .eq("dossier_id", mat.dossier_id)
+        .order("order_index");
+      return data ?? [];
+    }
+  }
+
+  if (current.dossier_id) {
+    const { data: parentDossier } = await supabase
+      .from("dossiers")
+      .select("parent_id")
+      .eq("id", current.dossier_id)
+      .single();
+    const parentId = parentDossier?.parent_id ?? current.dossier_id;
+    const { data: childDossiers } = await supabase
+      .from("dossiers")
+      .select("id")
+      .eq("parent_id", parentId);
+    const dossierIds = (childDossiers ?? []).map((d: any) => d.id);
+    if (dossierIds.length === 0) dossierIds.push(current.dossier_id);
+    const { data } = await supabase
+      .from("cours")
+      .select("id, name, order_index, dossier_id")
+      .in("dossier_id", dossierIds)
+      .order("order_index");
+    return data ?? [];
+  }
+
+  return [];
+}
+
 export async function updateQuestionCoursId(questionId: string, coursId: string | null) {
   const supabase = await createClient();
   const { error } = await supabase
