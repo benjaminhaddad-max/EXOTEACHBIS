@@ -11,6 +11,7 @@ import type {
   CoachingRdvRequest,
   CoachingStudentProfile,
   CoachingVideo,
+  CoachRecurringAvailability,
   Dossier,
   FormField,
   FormTemplate,
@@ -60,6 +61,7 @@ export default async function CoachingPage() {
     coachingThreads: [] as QaThread[],
     coachingRdvRequests: [] as CoachingRdvRequest[],
     coachingVideos: [] as CoachingVideo[],
+    recurringAvailability: [] as CoachRecurringAvailability[],
   };
 
   let data = emptyData;
@@ -130,7 +132,11 @@ export default async function CoachingPage() {
 
     const videosQuery = admin.from("coaching_videos").select("*").order("order_index");
 
-    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes, dossiersRes, coachingThreadsRes, rdvRequestsRes, videosRes] = await Promise.all([
+    const recurringQuery = isCoach
+      ? admin.from("coach_recurring_availability").select("*").eq("coach_id", user.id).order("day_of_week").order("start_time")
+      : admin.from("coach_recurring_availability").select("*").order("day_of_week").order("start_time");
+
+    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes, dossiersRes, coachingThreadsRes, rdvRequestsRes, videosRes, recurringRes] = await Promise.all([
       groupesQuery,
       studentsQuery,
       coachesQuery,
@@ -144,6 +150,7 @@ export default async function CoachingPage() {
       coachingThreadsQuery,
       rdvRequestsQuery,
       videosQuery,
+      recurringQuery,
     ]);
 
     setupError =
@@ -186,6 +193,7 @@ export default async function CoachingPage() {
       coachingThreads: (coachingThreadsRes.data ?? []) as QaThread[],
       coachingRdvRequests: (rdvRequestsRes.data ?? []) as CoachingRdvRequest[],
       coachingVideos: (videosRes.data ?? []) as CoachingVideo[],
+      recurringAvailability: (recurringRes.data ?? []) as CoachRecurringAvailability[],
     };
   }
 
@@ -208,6 +216,7 @@ export default async function CoachingPage() {
         coachingThreads={data.coachingThreads}
         coachingRdvRequests={data.coachingRdvRequests}
         coachingVideos={data.coachingVideos}
+        recurringAvailability={data.recurringAvailability}
         setupError={setupError}
       />
     </div>

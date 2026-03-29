@@ -733,6 +733,196 @@ export async function updateStudentNiveauMental(data: {
   return { success: true };
 }
 
+// ─── Coach Recurring Availability ───────────────────────────────────────────
+
+export async function saveCoachRecurringAvailability(data: {
+  coach_id: string;
+  items: { day_of_week: number; start_time: string; end_time: string; slot_type: string }[];
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  // Coaches can only save their own
+  if (auth.profile.role === "coach" && data.coach_id !== auth.profile.id) {
+    return { error: "Vous ne pouvez modifier que vos propres disponibilités." };
+  }
+
+  const admin = createAdminClient();
+
+  // Delete existing for this coach
+  const { error: deleteErr } = await admin
+    .from("coach_recurring_availability")
+    .delete()
+    .eq("coach_id", data.coach_id);
+  if (deleteErr) return { error: deleteErr.message };
+
+  // Insert new
+  if (data.items.length > 0) {
+    const { error: insertErr } = await admin
+      .from("coach_recurring_availability")
+      .insert(data.items.map(item => ({
+        coach_id: data.coach_id,
+        day_of_week: item.day_of_week,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        slot_type: item.slot_type,
+        is_active: true,
+      })));
+    if (insertErr) return { error: insertErr.message };
+  }
+
+  revalidatePath(ADMIN_PATH);
+  return { success: true };
+}
+
+export async function generateSlotsFromRecurring(data: { coach_id: string; week_start: string; groupe_id: string }) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+
+  // Get recurring availability for this coach
+  const { data: recurring, error: recurringErr } = await admin
+    .from("coach_recurring_availability")
+    .select("*")
+    .eq("coach_id", data.coach_id)
+    .eq("is_active", true);
+
+  if (recurringErr) return { error: recurringErr.message };
+  if (!recurring || recurring.length === 0) return { error: "Aucune disponibilité récurrente configurée." };
+
+  const weekStart = new Date(data.week_start);
+  const created: any[] = [];
+
+  for (const item of recurring) {
+    // Calculate the date for this day_of_week in the given week
+    const targetDate = new Date(weekStart);
+    targetDate.setDate(weekStart.getDate() + item.day_of_week);
+
+    // Skip past dates
+    if (targetDate < new Date()) continue;
+
+    const dateStr = targetDate.toISOString().slice(0, 10);
+    const startAt = new Date(`${dateStr}T${item.start_time}`).toISOString();
+    const endAt = new Date(`${dateStr}T${item.end_time}`).toISOString();
+
+    // Check if slot already exists
+    const { data: existing } = await admin
+      .from("coaching_call_slots")
+      .select("id")
+      .eq("coach_id", data.coach_id)
+      .eq("start_at", startAt)
+      .eq("end_at", endAt)
+      .limit(1);
+
+    if (existing && existing.length > 0) continue;
+
+    const { data: slot, error: slotErr } = await admin
+      .from("coaching_call_slots")
+      .insert({
+        coach_id: data.coach_id,
+        groupe_id: data.groupe_id,
+        start_at: startAt,
+        end_at: endAt,
+        slot_type: item.slot_type,
+        created_by: auth.profile.id,
+      })
+      .select()
+      .single();
+
+    if (!slotErr && slot) created.push(slot);
+  }
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true, count: created.length };
+}
+
+// ─── Student direct booking ────────────────────────────────────────────────
+
+export async function bookSlotAsStudent(slotId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const { data: profile } = await supabase.from("profiles").select("id, groupe_id, role").eq("id", user.id).single();
+  if (!profile || profile.role !== "eleve") return { error: "Réservé aux élèves." };
+  if (!profile.groupe_id) return { error: "Tu dois être dans un groupe." };
+
+  const admin = createAdminClient();
+
+  // Get the slot
+  const { data: slot, error: slotErr } = await admin
+    .from("coaching_call_slots")
+    .select("*")
+    .eq("id", slotId)
+    .single();
+
+  if (slotErr || !slot) return { error: "Créneau introuvable." };
+
+  // Check slot is in the future
+  if (new Date(slot.start_at) < new Date()) return { error: "Ce créneau est passé." };
+
+  // Check not already booked
+  const { data: existingBooking } = await admin
+    .from("coaching_call_bookings")
+    .select("id")
+    .eq("slot_id", slotId)
+    .in("status", ["booked"])
+    .limit(1);
+
+  if (existingBooking && existingBooking.length > 0) return { error: "Ce créneau est déjà réservé." };
+
+  // Check student doesn't have another active booking
+  const { data: myBookings } = await admin
+    .from("coaching_call_bookings")
+    .select("id")
+    .eq("student_id", user.id)
+    .eq("status", "booked")
+    .limit(1);
+
+  if (myBookings && myBookings.length > 0) return { error: "Tu as déjà un RDV réservé. Annule-le d'abord." };
+
+  // Create booking
+  const { data: booking, error: bookErr } = await admin
+    .from("coaching_call_bookings")
+    .insert({
+      slot_id: slotId,
+      student_id: user.id,
+      coach_id: slot.coach_id,
+      groupe_id: profile.groupe_id,
+      status: "booked",
+    })
+    .select()
+    .single();
+
+  if (bookErr) return { error: bookErr.message };
+
+  revalidatePath(STUDENT_PATH);
+  revalidatePath(ADMIN_PATH);
+  return { success: true, booking };
+}
+
+export async function cancelStudentBooking(bookingId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Non authentifié" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("coaching_call_bookings")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", bookingId)
+    .eq("student_id", user.id)
+    .eq("status", "booked");
+
+  if (error) return { error: error.message };
+
+  revalidatePath(STUDENT_PATH);
+  revalidatePath(ADMIN_PATH);
+  return { success: true };
+}
+
 // ─── Internal Notes (private admin ↔ coach) ────────────────────────────────
 
 export async function sendInternalNote(data: { thread_id: string; content: string }) {

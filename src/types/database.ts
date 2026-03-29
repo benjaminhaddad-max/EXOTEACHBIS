@@ -492,6 +492,7 @@ export type CoachingSchoolLevel = "limite" | "normal" | "bon";
 export type CoachingWorkCapacity = "faible" | "moyenne" | "forte";
 export type CoachingMethodLevel = "mauvaise" | "moyenne" | "bonne";
 export type CoachingCallBookingStatus = "booked" | "completed" | "cancelled" | "no_show";
+export type CoachSlotType = "rdv_physique" | "rdv_visio" | "rdv_tel" | "chat";
 export type CoachingNiveauInitial = "fort" | "moyen" | "fragile";
 export type CoachingMentalInitial = "fort" | "moyen" | "fragile";
 export type CoachingVideoCategory = "motivation" | "methode";
@@ -529,11 +530,24 @@ export interface CoachingCallSlot {
   end_at: string;
   location: string | null;
   notes: string | null;
+  slot_type: CoachSlotType;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   coach?: Profile;
   groupe?: Groupe;
+}
+
+export interface CoachRecurringAvailability {
+  id: string;
+  coach_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  slot_type: CoachSlotType;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CoachingCallBooking {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Play, MessageCircle, Calendar } from "lucide-react";
-import type { Profile, CoachingVideo, CoachingRdvRequest } from "@/types/database";
+import type { Profile, CoachingVideo, CoachingRdvRequest, CoachingCallSlot, CoachingCallBooking } from "@/types/database";
 import type { QaThread } from "@/types/qa";
 import { CoachingVideosSection } from "./coaching-videos-section";
 import { CoachingChatSection } from "./coaching-chat-section";
@@ -17,6 +17,8 @@ interface StudentCoachingShellProps {
   initialThread: QaThread | null;
   rdvRequests: CoachingRdvRequest[];
   coaches: Profile[];
+  availableSlots: CoachingCallSlot[];
+  myBooking: (CoachingCallBooking & { slot?: CoachingCallSlot }) | null;
 }
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -32,6 +34,8 @@ export function StudentCoachingShell({
   initialThread,
   rdvRequests,
   coaches,
+  availableSlots,
+  myBooking,
 }: StudentCoachingShellProps) {
   const [tab, setTab] = useState<Tab>("chat");
 
@@ -70,6 +74,8 @@ export function StudentCoachingShell({
         <CoachingRdvSection
           existingRequests={rdvRequests}
           coaches={coaches}
+          availableSlots={availableSlots}
+          myBooking={myBooking}
         />
       )}
     </div>

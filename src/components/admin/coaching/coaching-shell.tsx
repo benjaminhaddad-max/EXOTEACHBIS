@@ -47,6 +47,7 @@ import type {
   CoachingWorkCapacity,
   CoachingRdvRequest,
   CoachingVideo,
+  CoachRecurringAvailability,
   Dossier,
   FormField,
   FormTemplate,
@@ -93,6 +94,7 @@ type CoachingShellProps = {
   coachingThreads?: QaThread[];
   coachingRdvRequests?: CoachingRdvRequest[];
   coachingVideos?: CoachingVideo[];
+  recurringAvailability?: CoachRecurringAvailability[];
   setupError?: string | null;
 };
 
@@ -174,6 +176,7 @@ export function CoachingShell({
   coachingThreads = [],
   coachingRdvRequests = [],
   coachingVideos = [],
+  recurringAvailability = [],
   setupError,
 }: CoachingShellProps) {
   const [intakeForms] = useState(initialIntakeForms);
@@ -479,6 +482,7 @@ export function CoachingShell({
           pointAProfiles={pointAProfiles}
           coachesById={coachesById}
           groupsById={groupsById}
+          recurringAvailability={recurringAvailability}
         />
       </div>
     );
@@ -815,6 +819,7 @@ function CoachDashboardTabs({
   pointAProfiles,
   coachesById,
   groupsById,
+  recurringAvailability = [],
 }: {
   slots: CoachingCallSlot[];
   bookings: CoachingCallBooking[];
@@ -830,6 +835,7 @@ function CoachDashboardTabs({
   pointAProfiles: CoachingStudentProfile[];
   coachesById: Map<string, Profile>;
   groupsById: Map<string, Groupe>;
+  recurringAvailability?: CoachRecurringAvailability[];
 }) {
   const [tab, setTab] = useState<"planning" | "eleves" | "rdv">("planning");
 
@@ -871,6 +877,7 @@ function CoachDashboardTabs({
           slots={slots.filter((s) => s.coach_id === coachId)}
           bookings={bookings}
           groupes={groupes}
+          recurringAvailability={recurringAvailability.filter(r => r.coach_id === coachId)}
         />
       )}
 

@@ -15,14 +15,25 @@ import {
 import {
   createCoachCallSlot,
   deleteCoachCallSlot,
+  saveCoachRecurringAvailability,
+  generateSlotsFromRecurring,
 } from "@/app/(admin)/admin/coaching/actions";
-import type { CoachingCallSlot, CoachingCallBooking, Groupe } from "@/types/database";
+import type { CoachingCallSlot, CoachingCallBooking, CoachRecurringAvailability, CoachSlotType, Groupe } from "@/types/database";
 
 type Props = {
   coachId: string;
   slots: CoachingCallSlot[];
   bookings: CoachingCallBooking[];
   groupes: Groupe[];
+  recurringAvailability?: CoachRecurringAvailability[];
+};
+
+const DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const SLOT_TYPE_CONFIG: Record<CoachSlotType, { label: string; color: string; bg: string }> = {
+  rdv_physique: { label: "Présentiel", color: "text-blue-700", bg: "bg-blue-100" },
+  rdv_visio: { label: "Visio", color: "text-purple-700", bg: "bg-purple-100" },
+  rdv_tel: { label: "Téléphone", color: "text-green-700", bg: "bg-green-100" },
+  chat: { label: "Chat", color: "text-amber-700", bg: "bg-amber-100" },
 };
 
 function getWeekStart(date: Date) {
@@ -53,10 +64,19 @@ function formatWeekRange(start: Date) {
   return `${start.getDate()} ${sMonth} – ${end.getDate()} ${eMonth}`;
 }
 
-export function CoachAvailability({ coachId, slots, bookings, groupes }: Props) {
+export function CoachAvailability({ coachId, slots, bookings, groupes, recurringAvailability = [] }: Props) {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [showForm, setShowForm] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [activeSection, setActiveSection] = useState<"recurring" | "ponctual">("recurring");
+
+  // Recurring state
+  const [recurring, setRecurring] = useState(recurringAvailability);
+  const [recDay, setRecDay] = useState(0);
+  const [recStart, setRecStart] = useState("09:00");
+  const [recEnd, setRecEnd] = useState("10:00");
+  const [recType, setRecType] = useState<CoachSlotType>("rdv_visio");
+  const [recToast, setRecToast] = useState<string | null>(null);
 
   // Form state
   const [formDate, setFormDate] = useState("");
@@ -166,8 +186,122 @@ export function CoachAvailability({ coachId, slots, bookings, groupes }: Props) 
 
   const thisWeek = () => setWeekStart(getWeekStart(new Date()));
 
+  const handleAddRecurring = () => {
+    const item = { day_of_week: recDay, start_time: recStart, end_time: recEnd, slot_type: recType };
+    const next = [...recurring, { ...item, id: crypto.randomUUID(), coach_id: coachId, is_active: true, created_at: "", updated_at: "" } as CoachRecurringAvailability];
+    setRecurring(next);
+    startTransition(async () => {
+      const res = await saveCoachRecurringAvailability({ coach_id: coachId, items: next.map(r => ({ day_of_week: r.day_of_week, start_time: r.start_time, end_time: r.end_time, slot_type: r.slot_type })) });
+      if ("error" in res && res.error) { setRecToast("Erreur: " + res.error); setTimeout(() => setRecToast(null), 3000); }
+      else { setRecToast("Disponibilités sauvegardées"); setTimeout(() => setRecToast(null), 2000); }
+    });
+  };
+
+  const handleRemoveRecurring = (id: string) => {
+    const next = recurring.filter(r => r.id !== id);
+    setRecurring(next);
+    startTransition(async () => {
+      await saveCoachRecurringAvailability({ coach_id: coachId, items: next.map(r => ({ day_of_week: r.day_of_week, start_time: r.start_time, end_time: r.end_time, slot_type: r.slot_type })) });
+    });
+  };
+
+  const handleGenerateSlots = () => {
+    if (!groupes[0]) return;
+    startTransition(async () => {
+      const res = await generateSlotsFromRecurring({ coach_id: coachId, week_start: weekStart.toISOString(), groupe_id: groupes[0].id });
+      if ("error" in res && res.error) { setRecToast("Erreur: " + res.error); }
+      else { setRecToast(`${(res as any).count ?? 0} créneaux générés`); }
+      setTimeout(() => setRecToast(null), 3000);
+    });
+  };
+
   return (
     <div className="space-y-4">
+      {/* Section toggle */}
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 w-fit">
+        <button onClick={() => setActiveSection("recurring")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeSection === "recurring" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
+          <Repeat className="inline w-3.5 h-3.5 mr-1" />Planning récurrent
+        </button>
+        <button onClick={() => setActiveSection("ponctual")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeSection === "ponctual" ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"}`}>
+          <CalendarDays className="inline w-3.5 h-3.5 mr-1" />Créneaux ponctuels
+        </button>
+      </div>
+
+      {recToast && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">{recToast}</div>
+      )}
+
+      {/* ─── Recurring section ─── */}
+      {activeSection === "recurring" && (
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500">Définis tes disponibilités hebdomadaires. Elles se répéteront chaque semaine.</p>
+
+          {/* Add form */}
+          <div className="flex items-end gap-2 flex-wrap p-3 rounded-xl bg-gray-50 border border-gray-200">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Jour</label>
+              <select value={recDay} onChange={e => setRecDay(parseInt(e.target.value))} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
+                {DAY_LABELS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Début</label>
+              <input type="time" value={recStart} onChange={e => setRecStart(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Fin</label>
+              <input type="time" value={recEnd} onChange={e => setRecEnd(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Type</label>
+              <select value={recType} onChange={e => setRecType(e.target.value as CoachSlotType)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
+                {Object.entries(SLOT_TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+            <button onClick={handleAddRecurring} disabled={isPending} className="flex items-center gap-1 rounded-lg bg-[#12314d] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0f2940] disabled:opacity-50">
+              <Plus className="w-3.5 h-3.5" /> Ajouter
+            </button>
+          </div>
+
+          {/* Recurring list by day */}
+          <div className="space-y-2">
+            {DAY_LABELS.map((dayLabel, dayIdx) => {
+              const dayItems = recurring.filter(r => r.day_of_week === dayIdx);
+              if (dayItems.length === 0) return null;
+              return (
+                <div key={dayIdx} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-gray-700 w-20 shrink-0">{dayLabel}</span>
+                  {dayItems.map(item => {
+                    const cfg = SLOT_TYPE_CONFIG[item.slot_type] ?? SLOT_TYPE_CONFIG.rdv_visio;
+                    return (
+                      <span key={item.id} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium ${cfg.bg} ${cfg.color}`}>
+                        {item.start_time.slice(0, 5)}–{item.end_time.slice(0, 5)} · {cfg.label}
+                        <button onClick={() => handleRemoveRecurring(item.id)} className="hover:text-red-600 ml-0.5">×</button>
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {recurring.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">Aucune disponibilité récurrente configurée</p>}
+          </div>
+
+          {/* Generate button */}
+          {recurring.length > 0 && groupes.length > 0 && (
+            <button onClick={handleGenerateSlots} disabled={isPending}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarDays className="w-3.5 h-3.5" />}
+              Générer les créneaux de cette semaine ({formatWeekRange(weekStart)})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ─── Ponctual section (existing) ─── */}
+      {activeSection === "ponctual" && (
+      <div className="space-y-4">
       {/* Week nav */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -336,6 +470,8 @@ export function CoachAvailability({ coachId, slots, bookings, groupes }: Props) 
           );
         })}
       </div>
+    </div>
+      )}
     </div>
   );
 }

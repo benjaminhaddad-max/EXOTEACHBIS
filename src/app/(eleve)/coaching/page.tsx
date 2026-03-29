@@ -3,7 +3,7 @@ import { Header } from "@/components/header";
 import { StudentCoachingShell } from "@/components/eleve/coaching/student-coaching-shell";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { CoachingVideo, CoachingRdvRequest, Profile, Groupe, Dossier } from "@/types/database";
+import type { CoachingVideo, CoachingRdvRequest, CoachingCallSlot, CoachingCallBooking, Profile, Groupe, Dossier } from "@/types/database";
 import type { QaThread } from "@/types/qa";
 
 export const dynamic = "force-dynamic";
@@ -70,7 +70,7 @@ export default async function StudentCoachingPage() {
   }
 
   // ─── Fetch data in parallel ─────────────────────────────────────────
-  const [videosRes, threadRes, rdvRes, coachesRes] = await Promise.all([
+  const [videosRes, threadRes, rdvRes, coachesRes, slotsRes, bookingsRes, myBookingRes] = await Promise.all([
     // Videos: visible + matching university or global
     admin
       .from("coaching_videos")
@@ -107,11 +107,45 @@ export default async function StudentCoachingPage() {
           .select("coach:profiles(*)")
           .eq("groupe_id", currentProfile.groupe_id)
       : Promise.resolve({ data: [] as any[] }),
+
+    // Available slots for booking (future, for student's groupe)
+    currentProfile.groupe_id
+      ? admin
+          .from("coaching_call_slots")
+          .select("*")
+          .eq("groupe_id", currentProfile.groupe_id)
+          .gte("start_at", new Date().toISOString())
+          .order("start_at")
+      : Promise.resolve({ data: [] as any[] }),
+
+    // Existing bookings (to know which slots are taken)
+    currentProfile.groupe_id
+      ? admin
+          .from("coaching_call_bookings")
+          .select("*")
+          .eq("groupe_id", currentProfile.groupe_id)
+          .in("status", ["booked", "completed"])
+      : Promise.resolve({ data: [] as any[] }),
+
+    // Student's own booking
+    admin
+      .from("coaching_call_bookings")
+      .select("*, slot:coaching_call_slots(*)")
+      .eq("student_id", user.id)
+      .eq("status", "booked")
+      .order("booked_at", { ascending: false })
+      .limit(1),
   ]);
 
   const videos = (videosRes.data ?? []) as CoachingVideo[];
   const initialThread = ((threadRes.data ?? [])[0] ?? null) as QaThread | null;
   const rdvRequests = (rdvRes.data ?? []) as CoachingRdvRequest[];
+  const allSlots = (slotsRes.data ?? []) as CoachingCallSlot[];
+  const allBookings = (bookingsRes.data ?? []) as CoachingCallBooking[];
+  const myBooking = ((myBookingRes.data ?? [])[0] ?? null) as (CoachingCallBooking & { slot?: CoachingCallSlot }) | null;
+  // Filter out booked slots
+  const bookedSlotIds = new Set(allBookings.map(b => b.slot_id));
+  const availableSlots = allSlots.filter(s => !bookedSlotIds.has(s.id) || s.id === myBooking?.slot_id);
   const coaches = ((coachesRes.data ?? [])
     .map((row: any) => row.coach)
     .filter(Boolean)) as Profile[];
@@ -126,6 +160,8 @@ export default async function StudentCoachingPage() {
         initialThread={initialThread}
         rdvRequests={rdvRequests}
         coaches={coaches}
+        availableSlots={availableSlots}
+        myBooking={myBooking}
       />
     </div>
   );
