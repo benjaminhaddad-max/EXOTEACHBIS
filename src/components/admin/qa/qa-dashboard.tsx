@@ -8,15 +8,11 @@ import { QaPedagogieMatiereTreeSidebar } from "./qa-pedagogie-matiere-tree-sideb
 import { QaThreadList } from "./qa-thread-list";
 import { QaChatPanel } from "./qa-chat-panel";
 import {
-  AlertCircle,
   ArrowLeft,
   BellRing,
-  Bot,
-  CheckCircle2,
   ChevronRight,
   Clock3,
   Inbox,
-  Send,
   User,
   Users2,
 } from "lucide-react";
@@ -24,12 +20,9 @@ import {
 type DashboardView = "queue" | "profs";
 type QueuePreset =
   | "unresolved"
-  | "escalated"
-  | "overdue"
-  | "ai_pending"
-  | "ai_answered"
-  | "prof_answered"
-  | "resolved"
+  | "overdue_2d"
+  | "overdue_3d"
+  | "overdue_4d"
   | "all";
 
 type QaProfLite = Pick<
@@ -57,7 +50,7 @@ type ProfSummary = {
   overdueCount: number;
 };
 
-const OVERDUE_THRESHOLD_HOURS = 24;
+const RELANCE_THRESHOLD_HOURS = 48;
 
 function threadMatchesQaTreeSelection(thread: QaThread, matiereIds: Set<string>) {
   if (matiereIds.size === 0) return true;
@@ -76,26 +69,20 @@ function getThreadAgeHours(thread: QaThread) {
   return (Date.now() - new Date(referenceDate).getTime()) / 3_600_000;
 }
 
-function isThreadOverdue(thread: QaThread) {
-  return !thread.archived_at && thread.status === "escalated" && getThreadAgeHours(thread) >= OVERDUE_THRESHOLD_HOURS;
+function isThreadOverdue(thread: QaThread, thresholdHours = RELANCE_THRESHOLD_HOURS) {
+  return !thread.archived_at && thread.status === "escalated" && getThreadAgeHours(thread) >= thresholdHours;
 }
 
 function matchesQueuePreset(thread: QaThread, preset: QueuePreset) {
   switch (preset) {
     case "unresolved":
       return thread.status !== "resolved";
-    case "escalated":
-      return thread.status === "escalated";
-    case "overdue":
-      return isThreadOverdue(thread);
-    case "ai_pending":
-      return thread.status === "ai_pending";
-    case "ai_answered":
-      return thread.status === "ai_answered";
-    case "prof_answered":
-      return thread.status === "prof_answered";
-    case "resolved":
-      return thread.status === "resolved";
+    case "overdue_2d":
+      return isThreadOverdue(thread, 48);
+    case "overdue_3d":
+      return isThreadOverdue(thread, 72);
+    case "overdue_4d":
+      return isThreadOverdue(thread, 96);
     case "all":
     default:
       return true;
@@ -103,13 +90,15 @@ function matchesQueuePreset(thread: QaThread, preset: QueuePreset) {
 }
 
 function getThreadPriority(thread: QaThread) {
-  if (isThreadOverdue(thread)) return 0;
-  if (thread.status === "escalated") return 1;
-  if (thread.status === "ai_pending") return 2;
-  if (thread.status === "ai_answered") return 3;
-  if (thread.status === "prof_answered") return 4;
-  if (thread.status === "resolved") return 5;
-  return 6;
+  if (isThreadOverdue(thread, 96)) return 0;
+  if (isThreadOverdue(thread, 72)) return 1;
+  if (isThreadOverdue(thread, 48)) return 2;
+  if (thread.status === "escalated") return 3;
+  if (thread.status === "ai_pending") return 4;
+  if (thread.status === "ai_answered") return 5;
+  if (thread.status === "prof_answered") return 6;
+  if (thread.status === "resolved") return 7;
+  return 8;
 }
 
 function sortThreadsForOps(threads: QaThread[]) {
@@ -118,14 +107,6 @@ function sortThreadsForOps(threads: QaThread[]) {
     if (priorityDelta !== 0) return priorityDelta;
     return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
   });
-}
-
-function formatRelativeDelay(hours: number) {
-  if (hours < 1) return "moins d'1h";
-  if (hours < 24) return `${Math.floor(hours)}h`;
-  const days = Math.floor(hours / 24);
-  const remainingHours = Math.floor(hours % 24);
-  return remainingHours > 0 ? `${days}j ${remainingHours}h` : `${days}j`;
 }
 
 interface QaDashboardProps {
@@ -258,7 +239,7 @@ export function QaDashboard({
         );
         const unresolvedThreads = relevantThreads.filter((thread) => thread.status !== "resolved");
         const escalatedThreads = relevantThreads.filter((thread) => thread.status === "escalated");
-        const overdueThreads = escalatedThreads.filter(isThreadOverdue);
+        const overdueThreads = escalatedThreads.filter((thread) => isThreadOverdue(thread, RELANCE_THRESHOLD_HOURS));
 
         return {
           prof,
@@ -333,7 +314,7 @@ export function QaDashboard({
   const overdueThreadIds = useMemo(() => {
     const ids = new Set<string>();
     for (const thread of filteredThreads) {
-      if (isThreadOverdue(thread)) ids.add(thread.id);
+      if (isThreadOverdue(thread, RELANCE_THRESHOLD_HOURS)) ids.add(thread.id);
     }
     return ids;
   }, [filteredThreads]);
@@ -346,8 +327,9 @@ export function QaDashboard({
   }, [filteredThreads, selected]);
 
   const unresolvedCount = threadsAfterScope.filter((thread) => thread.status !== "resolved").length;
-  const escalatedCount = threadsAfterScope.filter((thread) => thread.status === "escalated").length;
-  const overdueCount = threadsAfterScope.filter(isThreadOverdue).length;
+  const overdue2DaysCount = threadsAfterScope.filter((thread) => isThreadOverdue(thread, 48)).length;
+  const overdue3DaysCount = threadsAfterScope.filter((thread) => isThreadOverdue(thread, 72)).length;
+  const overdue4DaysCount = threadsAfterScope.filter((thread) => isThreadOverdue(thread, 96)).length;
   const profsToChaseCount = profSummaries.filter((summary) => summary.overdueCount > 0).length;
 
   const handleThreadSelect = (thread: QaThread) => {
@@ -434,46 +416,46 @@ export function QaDashboard({
 
   const statsCards = [
     {
-      id: "unresolved",
-      label: "Questions non résolues",
-      value: unresolvedCount,
-      help: "Accès direct à tout le backlog non clos.",
-      icon: Inbox,
-      tone: "border-slate-200 bg-slate-50 text-slate-900",
-      iconTone: "text-slate-600",
-      onClick: () => {
-        setViewMode("queue");
-        setQueuePreset("unresolved");
-      },
-      active: viewMode === "queue" && queuePreset === "unresolved",
-    },
-    {
-      id: "escalated",
-      label: "En attente prof",
-      value: escalatedCount,
-      help: "Questions escaladées, donc à reprendre côté prof.",
-      icon: AlertCircle,
-      tone: "border-red-100 bg-red-50 text-red-900",
-      iconTone: "text-red-500",
-      onClick: () => {
-        setViewMode("queue");
-        setQueuePreset("escalated");
-      },
-      active: viewMode === "queue" && queuePreset === "escalated",
-    },
-    {
-      id: "overdue",
-      label: "En retard +24h",
-      value: overdueCount,
-      help: "C’est là qu’on voit tout de suite où ça bloque.",
+      id: "overdue_2d",
+      label: "En retard > 2 jours",
+      value: overdue2DaysCount,
+      help: "Première zone de tension à regarder.",
       icon: Clock3,
       tone: "border-amber-100 bg-amber-50 text-amber-900",
       iconTone: "text-amber-500",
       onClick: () => {
         setViewMode("queue");
-        setQueuePreset("overdue");
+        setQueuePreset("overdue_2d");
       },
-      active: viewMode === "queue" && queuePreset === "overdue",
+      active: viewMode === "queue" && queuePreset === "overdue_2d",
+    },
+    {
+      id: "overdue_3d",
+      label: "En retard > 3 jours",
+      value: overdue3DaysCount,
+      help: "Là, on commence à avoir un vrai sujet côté prof.",
+      icon: Clock3,
+      tone: "border-orange-100 bg-orange-50 text-orange-900",
+      iconTone: "text-orange-500",
+      onClick: () => {
+        setViewMode("queue");
+        setQueuePreset("overdue_3d");
+      },
+      active: viewMode === "queue" && queuePreset === "overdue_3d",
+    },
+    {
+      id: "overdue_4d",
+      label: "En retard > 4 jours",
+      value: overdue4DaysCount,
+      help: "Urgence nette, à traiter immédiatement.",
+      icon: Clock3,
+      tone: "border-red-100 bg-red-50 text-red-900",
+      iconTone: "text-red-500",
+      onClick: () => {
+        setViewMode("queue");
+        setQueuePreset("overdue_4d");
+      },
+      active: viewMode === "queue" && queuePreset === "overdue_4d",
     },
     {
       id: "profs",
@@ -684,7 +666,11 @@ export function QaDashboard({
             {viewMode === "queue" ? (
               <>
                 <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
-                  Accès direct au backlog. Les cartes du haut changent ce que tu veux regarder en priorité.
+                  {queuePreset === "unresolved" && `Backlog non résolu : ${unresolvedCount} question${unresolvedCount > 1 ? "s" : ""}.`}
+                  {queuePreset === "overdue_2d" && "Vue active : questions en retard de plus de 2 jours."}
+                  {queuePreset === "overdue_3d" && "Vue active : questions en retard de plus de 3 jours."}
+                  {queuePreset === "overdue_4d" && "Vue active : questions en retard de plus de 4 jours."}
+                  {queuePreset === "all" && "Vue active : toutes les conversations visibles."}
                 </div>
                 {selectedMatiereIds.size > 0 && (
                   <p className="text-[11px] text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
@@ -719,31 +705,6 @@ export function QaDashboard({
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
 
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: "unresolved" as QueuePreset, label: "Non résolues" },
-                { id: "escalated" as QueuePreset, label: "Attente prof" },
-                { id: "overdue" as QueuePreset, label: "En retard +24h" },
-                { id: "ai_pending" as QueuePreset, label: "IA en cours" },
-                { id: "prof_answered" as QueuePreset, label: "Prof répondu" },
-                { id: "resolved" as QueuePreset, label: "Résolues" },
-                { id: "all" as QueuePreset, label: "Tout" },
-              ].map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => setQueuePreset(preset.id)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                    queuePreset === preset.id
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer select-none">
                 <input
@@ -755,20 +716,32 @@ export function QaDashboard({
                 Afficher les archivées
               </label>
 
-              {viewMode === "queue" && (
-                <select
-                  value={filterMatiere}
-                  onChange={(event) => setFilterMatiere(event.target.value)}
-                  className="w-full sm:w-[220px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="all">Toutes les matières</option>
-                  {matieres.map((matiere) => (
-                    <option key={matiere.id} value={matiere.id}>
-                      {matiere.name}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <div className="flex w-full sm:w-auto items-center gap-2">
+                {viewMode === "queue" && queuePreset !== "unresolved" && (
+                  <button
+                    type="button"
+                    onClick={() => setQueuePreset("unresolved")}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    Voir tout le backlog
+                  </button>
+                )}
+
+                {viewMode === "queue" && (
+                  <select
+                    value={filterMatiere}
+                    onChange={(event) => setFilterMatiere(event.target.value)}
+                    className="w-full sm:w-[220px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="all">Toutes les matières</option>
+                    {matieres.map((matiere) => (
+                      <option key={matiere.id} value={matiere.id}>
+                        {matiere.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
 
@@ -807,7 +780,7 @@ export function QaDashboard({
               <p className="text-sm font-semibold text-gray-600">Sélectionne une question pour voir où ça coince.</p>
               <p className="mt-2 max-w-md text-center text-xs text-gray-400">
                 {viewMode === "queue"
-                  ? "Commence par les cartes du haut ou le filtre “En retard +24h” pour repérer tout de suite les sujets bloquants."
+                  ? "Commence par les cartes du haut pour basculer directement sur les questions en retard ou revenir au backlog complet."
                   : "Choisis un prof à gauche pour voir instantanément son backlog, ses retards, puis ouvrir les conversations concernées."}
               </p>
             </div>
