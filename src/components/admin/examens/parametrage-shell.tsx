@@ -120,11 +120,6 @@ export function ParametrageShell({
                   <CoefficientsSection
                     universityId={selectedUni.id}
                     allDossiers={allDossiers}
-                    showToast={showToast}
-                  />
-                  <FiliereCoefficientsSection
-                    universityId={selectedUni.id}
-                    allDossiers={allDossiers}
                     matieres={matieres}
                     filieres={filieres}
                     showToast={showToast}
@@ -432,62 +427,116 @@ function GradingScaleSection({ universityId, universityName, showToast }: {
 
 // ─── Coefficients Section ────────────────────────────────────────────────────
 
-function CoefficientsSection({ universityId, allDossiers, showToast }: {
-  universityId: string; allDossiers: Dossier[]; showToast: (msg: string, kind: "success" | "error") => void;
+function CoefficientsSection({ universityId, allDossiers, matieres, filieres, showToast }: {
+  universityId: string;
+  allDossiers: Dossier[];
+  matieres: Matiere[];
+  filieres: Filiere[];
+  showToast: (msg: string, kind: "success" | "error") => void;
 }) {
-  const [coeffs, setCoeffs] = useState<Record<string, number>>({});
+  const [matiereRows, setMatiereRows] = useState<Matiere[]>(matieres);
+  const [defaultCoeffs, setDefaultCoeffs] = useState<Record<string, number>>({});
+  const [filiereCoeffs, setFiliereCoeffs] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
 
-  // Compute subjects grouped by semester
   const subjectsBySemester = useMemo(() => {
-    const semesters = allDossiers.filter(d => d.parent_id === universityId && (d.dossier_type === "semester" || d.dossier_type === "module"));
+    const semesters = allDossiers.filter(
+      (d) => d.parent_id === universityId && (d.dossier_type === "semester" || d.dossier_type === "module")
+    );
     const semesterIds = new Set(semesters.map(s => s.id));
     const subjects = allDossiers.filter(d => d.parent_id && semesterIds.has(d.parent_id) && d.dossier_type === "subject");
+    const matiereByDossierId = new Map(matiereRows.map((matiere) => [matiere.dossier_id, matiere]));
 
-    const grouped: { semester: Dossier; subjects: Dossier[] }[] = [];
+    const grouped: { semester: Dossier; subjects: Array<{ subject: Dossier; matiere: Matiere | null }> }[] = [];
     for (const sem of semesters.sort((a, b) => a.order_index - b.order_index)) {
-      const semSubjects = subjects.filter(s => s.parent_id === sem.id).sort((a, b) => a.order_index - b.order_index);
+      const semSubjects = subjects
+        .filter(s => s.parent_id === sem.id)
+        .sort((a, b) => a.order_index - b.order_index)
+        .map((subject) => ({ subject, matiere: matiereByDossierId.get(subject.id) ?? null }));
       if (semSubjects.length > 0) {
         grouped.push({ semester: sem, subjects: semSubjects });
       }
     }
     return grouped;
-  }, [universityId, allDossiers]);
+  }, [universityId, allDossiers, matiereRows]);
 
-  // Load coefficients when university changes
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getUniversityCoefficients(universityId).then(res => {
+
+    ensureUniversityMatiereCoverage(universityId).then(async (coverageRes) => {
       if (cancelled) return;
-      const map: Record<string, number> = {};
-      if (res.data) {
-        for (const r of res.data) {
-          map[r.subject_dossier_id] = Number(r.coefficient);
-        }
+      if (coverageRes.error) {
+        showToast("Erreur : " + coverageRes.error, "error");
+        setLoading(false);
+        return;
       }
-      setCoeffs(map);
+
+      const nextMatieres = (coverageRes.data ?? []) as Matiere[];
+      setMatiereRows(nextMatieres);
+
+      const [defaultRes, filiereRes] = await Promise.all([
+        getUniversityCoefficients(universityId),
+        getUniversityFiliereCoefficients(nextMatieres.map((matiere) => matiere.id)),
+      ]);
+
+      if (cancelled) return;
+
+      if (defaultRes.error) {
+        showToast("Erreur : " + defaultRes.error, "error");
+        setLoading(false);
+        return;
+      }
+
+      if (filiereRes.error) {
+        showToast("Erreur : " + filiereRes.error, "error");
+        setLoading(false);
+        return;
+      }
+
+      const nextDefaultCoeffs: Record<string, number> = {};
+      for (const row of defaultRes.data ?? []) {
+        nextDefaultCoeffs[row.subject_dossier_id] = Number(row.coefficient);
+      }
+
+      const nextFiliereCoeffs: Record<string, number> = {};
+      for (const row of (filiereRes.data ?? []) as Array<{ matiere_id: string; filiere_id: string; coefficient: number }>) {
+        nextFiliereCoeffs[`${row.matiere_id}:${row.filiere_id}`] = Number(row.coefficient);
+      }
+
+      setDefaultCoeffs(nextDefaultCoeffs);
+      setFiliereCoeffs(nextFiliereCoeffs);
       setLoading(false);
     });
+
     return () => { cancelled = true; };
   }, [universityId]);
 
-  const handleBlur = useCallback(async (subjectId: string, value: number) => {
-    setSavingId(subjectId);
+  const handleDefaultBlur = useCallback(async (subjectId: string, value: number) => {
+    setSavingKey(`default:${subjectId}`);
     const res = await upsertUniversityCoefficient(universityId, subjectId, value);
-    setSavingId(null);
+    setSavingKey(null);
     if (res.error) showToast("Erreur : " + res.error, "error");
   }, [universityId]);
+
+  const handleFiliereBlur = useCallback(async (matiereId: string, filiereId: string, value: number) => {
+    const key = `${matiereId}:${filiereId}`;
+    setSavingKey(key);
+    const res = await upsertMatiereCoefficient(matiereId, filiereId, value);
+    setSavingKey(null);
+    if (res.error) showToast("Erreur : " + res.error, "error");
+  }, []);
 
   const allSubjects = subjectsBySemester.flatMap(g => g.subjects);
 
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-white">Coefficients par défaut des épreuves</h2>
+        <h2 className="text-sm font-semibold text-white">Coefficients matières et filières</h2>
         <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-          Coefficients généraux utilisés quand tu ajoutes une matière à un concours blanc
+          Une ligne par matière. Tu règles ici le coefficient général de l&apos;épreuve, puis le poids de cette matière
+          pour chaque filière visée.
         </p>
       </div>
 
@@ -512,32 +561,102 @@ function CoefficientsSection({ universityId, allDossiers, showToast }: {
                   {semester.name}
                 </span>
               </div>
-              <div className="divide-y divide-white/5">
-                {subjects.map(subject => {
-                  const value = coeffs[subject.id] ?? 1;
-                  const isSaving = savingId === subject.id;
-                  return (
-                    <div key={subject.id} className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-xs font-medium text-white/80">{subject.name}</span>
-                      <div className="flex items-center gap-2">
-                        {isSaving && <Loader2 size={10} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />}
-                        <input
-                          type="number" min={0} max={20} step={0.5}
-                          value={value}
-                          onChange={e => {
-                            const v = parseFloat(e.target.value) || 0;
-                            setCoeffs(prev => ({ ...prev, [subject.id]: v }));
-                          }}
-                          onBlur={e => {
-                            const v = parseFloat(e.target.value) || 0;
-                            handleBlur(subject.id, v);
-                          }}
-                          className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10" style={{ backgroundColor: "rgba(255,255,255,0.02)" }}>
+                      <th className="px-4 py-3 text-left font-semibold text-white/45 min-w-[220px]">Matière</th>
+                      <th className="px-3 py-3 text-center font-semibold text-white/45 min-w-[110px]">Défaut examen</th>
+                      {filieres.map((filiere) => (
+                        <th key={filiere.id} className="px-3 py-3 text-center min-w-[105px]">
+                          <div className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold"
+                            style={{
+                              borderColor: `${filiere.color}44`,
+                              backgroundColor: `${filiere.color}14`,
+                              color: filiere.color,
+                            }}>
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: filiere.color }} />
+                            {filiere.code}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subjects.map(({ subject, matiere }) => {
+                      const defaultValue = defaultCoeffs[subject.id] ?? 1;
+                      const defaultSaving = savingKey === `default:${subject.id}`;
+
+                      return (
+                        <tr key={subject.id} className="border-b border-white/5 last:border-b-0">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-white/85">{subject.name}</span>
+                              {!matiere && (
+                                <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                  liaison matière
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center justify-center gap-2">
+                              {defaultSaving && <Loader2 size={10} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />}
+                              <input
+                                type="number"
+                                min={0}
+                                max={20}
+                                step={0.5}
+                                value={defaultValue}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  setDefaultCoeffs((prev) => ({ ...prev, [subject.id]: value }));
+                                }}
+                                onBlur={(e) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  handleDefaultBlur(subject.id, value);
+                                }}
+                                className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
+                              />
+                            </div>
+                          </td>
+                          {filieres.map((filiere) => {
+                            const key = matiere ? `${matiere.id}:${filiere.id}` : null;
+                            const value = key ? (filiereCoeffs[key] ?? 1) : 1;
+                            const isSaving = key ? savingKey === key : false;
+
+                            return (
+                              <td key={filiere.id} className="px-3 py-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  {isSaving && <Loader2 size={10} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />}
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={20}
+                                    step={0.5}
+                                    disabled={!matiere}
+                                    value={value}
+                                    onChange={(e) => {
+                                      if (!key) return;
+                                      const nextValue = parseFloat(e.target.value) || 0;
+                                      setFiliereCoeffs((prev) => ({ ...prev, [key]: nextValue }));
+                                    }}
+                                    onBlur={(e) => {
+                                      if (!matiere) return;
+                                      const nextValue = parseFloat(e.target.value) || 0;
+                                      handleFiliereBlur(matiere.id, filiere.id, nextValue);
+                                    }}
+                                    className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50 disabled:opacity-30"
+                                  />
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           ))}
