@@ -508,6 +508,7 @@ export function CoachingShell({
           groupes={groupes}
           coaches={coaches}
           coachId={currentProfile.id}
+          currentProfile={currentProfile}
           intakeForms={intakeForms}
           formFields={formFields}
           formsByStudentId={formsByStudentId}
@@ -517,6 +518,7 @@ export function CoachingShell({
           coachesById={coachesById}
           groupsById={groupsById}
           recurringAvailability={recurringAvailability}
+          coachingThreads={coachingThreads}
         />
       </div>
     );
@@ -1051,10 +1053,18 @@ function CoachDashboardTabs({
   coachesById: Map<string, Profile>;
   groupsById: Map<string, Groupe>;
   recurringAvailability?: CoachRecurringAvailability[];
+  coachingThreads?: QaThread[];
+  currentProfile: Profile;
 }) {
-  const [tab, setTab] = useState<"planning" | "eleves">("planning");
+  const [tab, setTab] = useState<"conversations" | "planning" | "eleves">("conversations");
+
+  const coachThreads = useMemo(
+    () => (coachingThreads ?? []).filter((t) => !t.archived_at),
+    [coachingThreads]
+  );
 
   const tabs = [
+    { key: "conversations" as const, label: "Conversations", count: coachThreads.length },
     { key: "planning" as const, label: "Planning", count: slots.filter((s) => s.coach_id === coachId && new Date(s.start_at) >= new Date()).length },
     { key: "eleves" as const, label: "Élèves", count: students.length },
   ];
@@ -1079,6 +1089,15 @@ function CoachDashboardTabs({
           </button>
         ))}
       </div>
+
+      {tab === "conversations" && (
+        <CoachingChatThreadsPanel
+          threads={coachThreads}
+          coaches={coaches}
+          students={students}
+          currentProfile={currentProfile}
+        />
+      )}
 
       {tab === "planning" && (
         <CoachAvailability
