@@ -102,19 +102,37 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
     }
   };
 
+  // Ensure a thread exists (create one if needed), return thread id
+  const ensureThread = async (): Promise<string | null> => {
+    if (thread) return thread.id;
+    try {
+      const result = await callApi("create_thread", { text: "📎" });
+      if (result.thread) {
+        setThread(result.thread);
+        if (result.message) setMessages([result.message]);
+        return result.thread.id;
+      }
+    } catch (err) {
+      console.error("Failed to create thread for media:", err);
+    }
+    return null;
+  };
+
   // Send voice
   const handleSendVoice = async (blob: Blob, duration: number) => {
-    if (!thread) return;
     setSending(true);
     try {
-      const storagePath = `voice/${thread.id}/${Date.now()}.webm`;
+      const threadId = await ensureThread();
+      if (!threadId) { setSending(false); return; }
+
+      const storagePath = `voice/${threadId}/${Date.now()}.webm`;
       const { error: uploadErr } = await supabase.storage
         .from("qa-media")
         .upload(storagePath, blob, { contentType: blob.type || "audio/webm", upsert: true });
       if (uploadErr) { console.error("Voice upload error:", uploadErr); setSending(false); return; }
       const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
       await callApi("send_message", {
-        threadId: thread.id, text: "", contentType: "voice",
+        threadId, text: "", contentType: "voice",
         mediaUrl: urlData.publicUrl, mediaDuration: Math.round(duration),
       });
     } catch (err) {
@@ -126,18 +144,20 @@ export function CoachingChatSection({ userId, universityName, initialThread }: C
 
   // Send media
   const handleSendMedia = async (file: File, type: "image" | "video" | "document") => {
-    if (!thread) return;
     setSending(true);
     try {
+      const threadId = await ensureThread();
+      if (!threadId) { setSending(false); return; }
+
       const ext = file.name.split(".").pop() || "bin";
-      const storagePath = `${type}/${thread.id}/${Date.now()}.${ext}`;
+      const storagePath = `${type}/${threadId}/${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage
         .from("qa-media")
         .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: true });
       if (uploadErr) { console.error("Media upload error:", uploadErr); setSending(false); return; }
       const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
       const dbType = type === "document" ? "image" : type;
-      await callApi("send_message", { threadId: thread.id, text: "", contentType: dbType, mediaUrl: urlData.publicUrl });
+      await callApi("send_message", { threadId, text: "", contentType: dbType, mediaUrl: urlData.publicUrl });
     } catch (err) {
       console.error("Media send error:", err);
     } finally {
