@@ -126,14 +126,7 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Mes concours blancs</p>
-          <p className="mt-1 text-sm text-gray-500">
-            Sépare clairement ce qui arrive bientôt de ce qui est déjà passé.
-          </p>
-        </div>
-
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
           <button
             type="button"
