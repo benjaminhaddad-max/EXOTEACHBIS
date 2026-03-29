@@ -53,19 +53,25 @@ const STATUS_LABELS = {
   ended: "Termine",
 };
 
-type TabKey = "upcoming" | "past";
+type TabKey = "upcoming" | "past" | "results";
 
 function EmptyState({ tab }: { tab: TabKey }) {
   return (
     <div className="rounded-xl border-2 border-dashed border-navy/20 bg-navy/5 p-12 text-center">
       <Trophy className="mx-auto h-12 w-12 text-navy/30" />
       <h3 className="mt-4 text-lg font-semibold text-navy">
-        {tab === "upcoming" ? "Aucun examen à venir" : "Aucun examen passé"}
+        {tab === "upcoming"
+          ? "Aucun examen à venir"
+          : tab === "past"
+            ? "Aucun examen passé"
+            : "Aucun résultat publié"}
       </h3>
       <p className="mt-2 text-sm text-gray-500">
         {tab === "upcoming"
           ? "Les prochains concours blancs apparaitront ici dès qu'ils seront publiés."
-          : "Les concours blancs terminés s'afficheront ici après leur passage."}
+          : tab === "past"
+            ? "Les concours blancs terminés s'afficheront ici après leur passage."
+            : "Les résultats, classements et statistiques apparaîtront ici dès qu'ils seront publiés."}
       </p>
     </div>
   );
@@ -88,8 +94,31 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
     [examens]
   );
 
-  const [tab, setTab] = useState<TabKey>(upcomingExamens.length > 0 ? "upcoming" : "past");
-  const currentExamens = tab === "upcoming" ? upcomingExamens : pastExamens;
+  const resultsExamens = useMemo(
+    () => pastExamens.filter((exam) => exam.results_visible),
+    [pastExamens]
+  );
+
+  const resultsSummary = useMemo(() => {
+    const scoredExamens = resultsExamens.filter((exam) => exam.moyenne20 !== null);
+    const average =
+      scoredExamens.length > 0
+        ? scoredExamens.reduce((sum, exam) => sum + (exam.moyenne20 ?? 0), 0) / scoredExamens.length
+        : null;
+    const best =
+      scoredExamens.length > 0 ? Math.max(...scoredExamens.map((exam) => exam.moyenne20 ?? 0)) : null;
+
+    return {
+      published: resultsExamens.length,
+      average,
+      best,
+    };
+  }, [resultsExamens]);
+
+  const [tab, setTab] = useState<TabKey>(
+    upcomingExamens.length > 0 ? "upcoming" : resultsExamens.length > 0 ? "results" : "past"
+  );
+  const currentExamens = tab === "upcoming" ? upcomingExamens : tab === "past" ? pastExamens : resultsExamens;
 
   if (examens.length === 0) {
     return <EmptyState tab="upcoming" />;
@@ -128,11 +157,153 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
             Passés
             <span className="ml-1 text-gray-400">({pastExamens.length})</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setTab("results")}
+            className={cn(
+              "rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
+              tab === "results" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
+            )}
+          >
+            Résultats & stats
+            <span className="ml-1 text-gray-400">({resultsExamens.length})</span>
+          </button>
         </div>
       </div>
 
       {currentExamens.length === 0 ? (
         <EmptyState tab={tab} />
+      ) : tab === "results" ? (
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">Résultats publiés</p>
+              <div className="mt-2 flex items-end gap-2">
+                <span className="text-2xl font-bold text-navy">{resultsSummary.published}</span>
+                <span className="pb-0.5 text-sm text-gray-400">concours</span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">Moyenne concours</p>
+              <div className="mt-2 flex items-end gap-2">
+                <span className="text-2xl font-bold text-navy">
+                  {resultsSummary.average !== null ? resultsSummary.average.toFixed(1) : "—"}
+                </span>
+                <span className="pb-0.5 text-sm text-gray-400">/20</span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">Meilleure note</p>
+              <div className="mt-2 flex items-end gap-2">
+                <span className="text-2xl font-bold text-navy">
+                  {resultsSummary.best !== null ? resultsSummary.best.toFixed(1) : "—"}
+                </span>
+                <span className="pb-0.5 text-sm text-gray-400">/20</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {resultsExamens.map((exam) => {
+              const completedSeries = exam.series.filter((serie) => serie.hasAttempt).length;
+              const topSeries = [...exam.series]
+                .filter((serie) => serie.score20 !== null)
+                .sort((a, b) => (b.score20 ?? 0) - (a.score20 ?? 0))
+                .slice(0, 3);
+
+              return (
+                <div key={exam.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-base font-semibold text-gray-900">{exam.name}</h2>
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          Résultats publiés
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(exam.debut_at).toLocaleDateString("fr-FR", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Layers className="h-3 w-3" />
+                          {completedSeries}/{exam.series.length} séries faites
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <BarChart3 className="h-3 w-3" />
+                          {exam.series.length} matières
+                        </span>
+                      </div>
+
+                      {topSeries.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {topSeries.map((serie) => (
+                            <div
+                              key={serie.id}
+                              className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600"
+                            >
+                              <span className="font-medium text-gray-800">{serie.name}</span>
+                              <span className="ml-1 text-navy">
+                                {serie.score20?.toFixed(1)}/{exam.notation_sur}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid min-w-[220px] gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                      <div className="rounded-xl border border-navy/10 bg-navy/5 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                          Ma note
+                        </p>
+                        <div className="mt-2 flex items-end gap-2">
+                          <span
+                            className={cn(
+                              "text-3xl font-bold",
+                              exam.moyenne20 === null
+                                ? "text-gray-400"
+                                : exam.moyenne20 >= exam.notation_sur * 0.7
+                                  ? "text-green-600"
+                                  : exam.moyenne20 >= exam.notation_sur * 0.5
+                                    ? "text-orange-500"
+                                    : "text-red-500"
+                            )}
+                          >
+                            {exam.moyenne20 !== null ? exam.moyenne20.toFixed(1) : "—"}
+                          </span>
+                          <span className="pb-1 text-sm text-gray-400">/{exam.notation_sur}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {exam.moyenne20 !== null
+                            ? "Moyenne pondérée sur les matières complétées."
+                            : "Aucune série rendue sur ce concours blanc."}
+                        </p>
+                      </div>
+
+                      <Link
+                        href={`/examens/${exam.id}/resultats`}
+                        className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-navy transition-colors hover:border-navy/30 hover:bg-navy/5"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Medal className="h-4 w-4" />
+                          Voir résultats détaillés
+                        </span>
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         <div className="space-y-5">
           {currentExamens.map((exam) => {
@@ -299,6 +470,12 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
                     );
                   })}
                 </div>
+
+                {isEnded && !exam.results_visible && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Les résultats de ce concours blanc ne sont pas encore visibles.
+                  </div>
+                )}
 
                 {isEnded && exam.results_visible && exam.moyenne20 !== null && (
                   <Link
