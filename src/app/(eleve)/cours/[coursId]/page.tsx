@@ -7,10 +7,13 @@ import { canAccessCours, getAccessScopeForUser } from "@/lib/access-scope";
 
 interface Props {
   params: Promise<{ coursId: string }>;
+  searchParams: Promise<{ page?: string }>;
 }
 
-export default async function CoursDetailPage({ params }: Props) {
+export default async function CoursDetailPage({ params, searchParams }: Props) {
   const { coursId } = await params;
+  const sp = await searchParams;
+  const requestedPage = sp.page ? parseInt(sp.page, 10) : null;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -164,7 +167,7 @@ export default async function CoursDetailPage({ params }: Props) {
           }}
           matiere={matiere ? { id: matiere.id, name: matiere.name, color: matiere.color } : null}
           dossierId={breadcrumbDossier?.id ?? null}
-          currentPage={progress?.current_page ?? 1}
+          currentPage={requestedPage && requestedPage > 0 ? requestedPage : (progress?.current_page ?? 1)}
           directSeries={directSeries}
           matiereSeries={matiereSeries}
           ressources={ressources ?? []}
