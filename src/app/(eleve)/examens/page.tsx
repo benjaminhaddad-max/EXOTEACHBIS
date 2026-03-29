@@ -27,6 +27,13 @@ const STATUS_BADGE = {
 };
 const STATUS_LABELS = { upcoming: "A venir", active: "En cours", ended: "Termine" };
 
+function cleanSerieName(name: string) {
+  const trimmed = name.trim();
+  const parts = trimmed.split(" — ");
+  if (parts.length > 1) return parts.slice(1).join(" — ").trim();
+  return trimmed;
+}
+
 export default async function ExamensElevePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -45,7 +52,7 @@ export default async function ExamensElevePage() {
   const [examensRes, exGroupesRes] = await Promise.all([
     supabase
       .from("examens")
-      .select("*, examens_series(order_index, coefficient, debut_at, fin_at, series:series(id, name, timed, duration_minutes, type, matiere_id))")
+      .select("*, examens_series(order_index, coefficient, debut_at, fin_at, series:series(id, name, timed, duration_minutes, type, matiere_id, visible))")
       .eq("visible", true)
       .order("debut_at", { ascending: false }),
     supabase.from("examens_groupes").select("*"),
@@ -61,8 +68,10 @@ export default async function ExamensElevePage() {
   const allExamens = (examensRes.data ?? []).map((e: any) => ({
     ...e,
     examen_series: (e.examens_series ?? [])
+      .filter((es: any) => es.series?.visible !== false)
       .sort((a: any, b: any) => a.order_index - b.order_index),
     series: (e.examens_series ?? [])
+      .filter((es: any) => es.series?.visible !== false)
       .sort((a: any, b: any) => a.order_index - b.order_index)
       .map((es: any) => ({ ...es.series, coefficient: es.coefficient, serie_debut_at: es.debut_at, serie_fin_at: es.fin_at }))
       .filter(Boolean),
@@ -71,9 +80,10 @@ export default async function ExamensElevePage() {
   }));
 
   // Filter: show exams that target the student's groupe (or exams with no targeting = available to all)
-  const examens = allExamens.filter((e: any) =>
-    e.groupe_ids.length === 0 || (studentGroupeId && e.groupe_ids.includes(studentGroupeId))
-  );
+  const examens = allExamens.filter((e: any) => {
+    const matchesGroup = e.groupe_ids.length === 0 || (studentGroupeId && e.groupe_ids.includes(studentGroupeId));
+    return matchesGroup && (e.series?.length ?? 0) > 0;
+  });
 
   const matiereIds = Array.from(
     new Set(
@@ -90,7 +100,15 @@ export default async function ExamensElevePage() {
         .in("matiere_id", matiereIds)
     : { data: [] };
 
+  const { data: matieresData } = matiereIds.length > 0
+    ? await supabase
+        .from("matieres")
+        .select("id, name")
+        .in("id", matiereIds)
+    : { data: [] };
+
   const coefficientMap = buildFiliereCoefficientMap(matiereCoefficients ?? []);
+  const matiereNameById = new Map((matieresData ?? []).map((matiere: any) => [matiere.id, matiere.name]));
 
   // Load user's best attempts per serie
   const { data: attemptsRaw } = await supabase
@@ -204,12 +222,6 @@ export default async function ExamensElevePage() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {e.series.map((serie: any) => {
                       const best = bestBySerie.get(serie.id);
-                      const coeff = resolveSerieCoefficient({
-                        defaultCoefficient: serie.coefficient ?? 1,
-                        matiereId: serie.matiere_id ?? null,
-                        filiereId: rankingFiliereId,
-                        coefficientMap,
-                      });
                       const hasScore = best && best.nb_total > 0;
                       const score20 = hasScore ? (best.nb_correct / best.nb_total) * notationSur : null;
                       // Per-serie status (uses serie dates if available, else exam dates)
@@ -219,17 +231,15 @@ export default async function ExamensElevePage() {
                       const serieIsActive = serieStatus === "active";
                       const serieIsEnded = serieStatus === "ended";
                       const hasOwnDates = !!serie.serie_debut_at;
+                      const displaySerieName = serie.matiere_id
+                        ? matiereNameById.get(serie.matiere_id) ?? cleanSerieName(serie.name)
+                        : cleanSerieName(serie.name);
 
                       return (
                         <div key={serie.id} className="flex items-center justify-between gap-3 bg-white rounded-lg border border-gray-200 px-4 py-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-medium text-gray-800 truncate">{serie.name}</p>
-                              {coeff !== 1 && (
-                                <span className="shrink-0 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-semibold">
-                                  x{coeff}
-                                </span>
-                              )}
+                              <p className="text-sm font-medium text-gray-800 truncate">{displaySerieName}</p>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className="text-xs text-gray-400">
