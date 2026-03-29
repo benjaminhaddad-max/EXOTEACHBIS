@@ -232,11 +232,9 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
 
       {/* ─── Recurring section ─── */}
       {activeSection === "recurring" && (
-        <div className="space-y-4">
-          <p className="text-xs text-gray-500">Définis tes disponibilités hebdomadaires. Elles se répéteront chaque semaine.</p>
-
+        <div className="space-y-3">
           {/* Add form */}
-          <div className="flex items-end gap-2 flex-wrap p-3 rounded-xl bg-gray-50 border border-gray-200">
+          <div className="flex items-end gap-2 flex-wrap p-2.5 rounded-xl bg-gray-50 border border-gray-200">
             <div>
               <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Jour</label>
               <select value={recDay} onChange={e => setRecDay(parseInt(e.target.value))} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
@@ -274,13 +272,13 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
           </div>
 
           {/* Recurring list by day */}
-          <div className="space-y-2">
+          <div className="space-y-1">
             {DAY_LABELS.map((dayLabel, dayIdx) => {
               const dayItems = recurring.filter(r => r.day_of_week === dayIdx);
               if (dayItems.length === 0) return null;
               return (
                 <div key={dayIdx} className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-gray-700 w-20 shrink-0">{dayLabel}</span>
+                  <span className="text-[11px] font-semibold text-gray-700 w-20 shrink-0">{dayLabel}</span>
                   {dayItems.map(item => {
                     const cfg = SLOT_TYPE_CONFIG[item.slot_type] ?? SLOT_TYPE_CONFIG.rdv_visio;
                     return (
@@ -293,31 +291,23 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
                 </div>
               );
             })}
-            {recurring.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">Aucune disponibilité récurrente configurée</p>}
+            {recurring.length === 0 && <p className="text-xs text-gray-400 py-2 text-center">Aucune disponibilité récurrente configurée</p>}
           </div>
 
           {/* Generate slots from recurring */}
           {recurring.length > 0 && (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
-              <div>
-                <h4 className="text-xs font-semibold text-[#12314d]">Générer les créneaux</h4>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  Crée les créneaux réservables à partir de tes disponibilités récurrentes.
-                </p>
-              </div>
-              <div className="flex items-end gap-3 flex-wrap">
-                <div>
-                  <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Durée</label>
-                  <select
-                    value={genWeeks}
-                    onChange={(e) => setGenWeeks(Number(e.target.value))}
-                    className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white"
-                  >
-                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
-                      <option key={w} value={w}>{w} semaines</option>
-                    ))}
-                  </select>
-                </div>
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 flex items-center gap-3 flex-wrap">
+              <p className="text-[11px] text-gray-600 font-medium">Générer les créneaux réservables :</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={genWeeks}
+                  onChange={(e) => setGenWeeks(Number(e.target.value))}
+                  className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs bg-white"
+                >
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
+                    <option key={w} value={w}>{w} semaines</option>
+                  ))}
+                </select>
                 <button
                   onClick={() => {
                     const gId = groupes[0]?.id;
