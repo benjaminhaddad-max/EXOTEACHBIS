@@ -497,3 +497,238 @@ export async function assignCoachToBooking(data: { booking_id: string; coach_id:
   revalidatePath(STUDENT_PATH);
   return { success: true, booking: booking as CoachingCallBooking };
 }
+
+// ─── Coaching Videos CRUD ──────────────────────────────────────────────────────
+
+export async function createCoachingVideo(data: {
+  title: string;
+  description?: string;
+  video_url?: string;
+  vimeo_id?: string;
+  category: "motivation" | "methode";
+  university_dossier_id?: string | null;
+  order_index?: number;
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les vidéos." };
+
+  const admin = createAdminClient();
+  const { data: video, error } = await admin
+    .from("coaching_videos")
+    .insert({
+      title: data.title.trim(),
+      description: data.description?.trim() || null,
+      video_url: data.video_url?.trim() || null,
+      vimeo_id: data.vimeo_id?.trim() || null,
+      category: data.category,
+      university_dossier_id: data.university_dossier_id ?? null,
+      order_index: data.order_index ?? 0,
+      created_by: auth.profile.id,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true, video };
+}
+
+export async function updateCoachingVideo(
+  videoId: string,
+  data: {
+    title?: string;
+    description?: string | null;
+    video_url?: string | null;
+    vimeo_id?: string | null;
+    category?: "motivation" | "methode";
+    university_dossier_id?: string | null;
+    order_index?: number;
+    visible?: boolean;
+  },
+) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les vidéos." };
+
+  const admin = createAdminClient();
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (data.title !== undefined) update.title = data.title.trim();
+  if (data.description !== undefined) update.description = data.description?.trim() || null;
+  if (data.video_url !== undefined) update.video_url = data.video_url?.trim() || null;
+  if (data.vimeo_id !== undefined) update.vimeo_id = data.vimeo_id?.trim() || null;
+  if (data.category !== undefined) update.category = data.category;
+  if (data.university_dossier_id !== undefined) update.university_dossier_id = data.university_dossier_id;
+  if (data.order_index !== undefined) update.order_index = data.order_index;
+  if (data.visible !== undefined) update.visible = data.visible;
+
+  const { error } = await admin.from("coaching_videos").update(update).eq("id", videoId);
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true };
+}
+
+export async function deleteCoachingVideo(videoId: string) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les vidéos." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("coaching_videos").delete().eq("id", videoId);
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true };
+}
+
+// ─── Coaching Chat Thread Management ───────────────────────────────────────────
+
+export async function assignCoachToThread(data: { thread_id: string; coach_id: string }) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("qa_threads")
+    .update({ assigned_coach_id: data.coach_id, updated_at: new Date().toISOString() })
+    .eq("id", data.thread_id)
+    .eq("context_type", "coaching");
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  return { success: true };
+}
+
+export async function respondToCoachingThread(data: {
+  thread_id: string;
+  content: string;
+  sender_id: string;
+  sender_type?: "coach" | "prof";
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { data: message, error } = await admin
+    .from("qa_messages")
+    .insert({
+      thread_id: data.thread_id,
+      sender_id: data.sender_id,
+      sender_type: data.sender_type ?? (auth.profile.role === "coach" ? "coach" : "prof"),
+      content_type: "text",
+      content: data.content,
+      read_by_prof: true,
+      read_by_student: false,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+
+  // Update thread status
+  await admin
+    .from("qa_threads")
+    .update({ status: "prof_answered", updated_at: new Date().toISOString() })
+    .eq("id", data.thread_id);
+
+  revalidatePath(ADMIN_PATH);
+  return { success: true, message };
+}
+
+// ─── Coaching RDV Management ───────────────────────────────────────────────────
+
+export async function assignCoachToRdv(data: {
+  rdv_request_id: string;
+  coach_id: string;
+  scheduled_at?: string;
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("coaching_rdv_requests")
+    .update({
+      assigned_coach_id: data.coach_id,
+      scheduled_at: data.scheduled_at ?? null,
+      status: "assigned",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", data.rdv_request_id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true };
+}
+
+export async function updateRdvRequestStatus(data: {
+  rdv_request_id: string;
+  status: "pending" | "assigned" | "completed" | "cancelled";
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("coaching_rdv_requests")
+    .update({ status: data.status, updated_at: new Date().toISOString() })
+    .eq("id", data.rdv_request_id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath(STUDENT_PATH);
+  return { success: true };
+}
+
+// ─── Student Niveau/Mental Management ──────────────────────────────────────────
+
+export async function updateStudentNiveauMental(data: {
+  student_id: string;
+  niveau_initial?: "fort" | "moyen" | "fragile" | null;
+  mental_initial?: "fort" | "moyen" | "fragile" | null;
+}) {
+  const auth = await requireCoachOrAdmin();
+  if ("error" in auth) return auth;
+
+  const admin = createAdminClient();
+
+  // Check if profile exists, if not create one
+  const { data: existing } = await admin
+    .from("coaching_student_profiles")
+    .select("id")
+    .eq("student_id", data.student_id)
+    .maybeSingle();
+
+  if (existing) {
+    const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.niveau_initial !== undefined) update.niveau_initial = data.niveau_initial;
+    if (data.mental_initial !== undefined) update.mental_initial = data.mental_initial;
+    const { error } = await admin.from("coaching_student_profiles").update(update).eq("student_id", data.student_id);
+    if (error) return { error: error.message };
+  } else {
+    // Need student's groupe_id to create
+    const { data: student } = await admin.from("profiles").select("groupe_id").eq("id", data.student_id).single();
+    if (!student?.groupe_id) return { error: "L'élève n'est pas dans un groupe." };
+
+    const { error } = await admin.from("coaching_student_profiles").insert({
+      student_id: data.student_id,
+      groupe_id: student.groupe_id,
+      niveau_initial: data.niveau_initial ?? null,
+      mental_initial: data.mental_initial ?? null,
+      confidence_score: 0,
+    });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(ADMIN_PATH);
+  return { success: true };
+}

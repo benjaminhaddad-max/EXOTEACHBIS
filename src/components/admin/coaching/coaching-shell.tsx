@@ -32,6 +32,9 @@ import { CoachAvailability } from "./coach-availability";
 import CoachingSidebar from "./coaching-sidebar";
 import { CoachingWeekView } from "./coaching-week-view";
 import CoachingRdvView from "./coaching-rdv-view";
+import { CoachingChatThreadsPanel } from "./coaching-chat-threads-panel";
+import { CoachingRdvPanel } from "./coaching-rdv-panel";
+import { CoachingVideosCrud } from "./coaching-videos-crud";
 import type {
   CoachGroupeAssignment,
   CoachingCallBooking,
@@ -43,12 +46,15 @@ import type {
   CoachingSchoolLevel,
   CoachingStudentProfile,
   CoachingWorkCapacity,
+  CoachingRdvRequest,
+  CoachingVideo,
   Dossier,
   FormField,
   FormTemplate,
   Groupe,
   Profile,
 } from "@/types/database";
+import type { QaThread } from "@/types/qa";
 
 type Toast = {
   kind: "success" | "error";
@@ -85,6 +91,9 @@ type CoachingShellProps = {
   formTemplate: FormTemplate | null;
   formFields: FormField[];
   coachAssignments?: CoachGroupeAssignment[];
+  coachingThreads?: QaThread[];
+  coachingRdvRequests?: CoachingRdvRequest[];
+  coachingVideos?: CoachingVideo[];
   setupError?: string | null;
 };
 
@@ -163,6 +172,9 @@ export function CoachingShell({
   formTemplate,
   formFields,
   coachAssignments = [],
+  coachingThreads = [],
+  coachingRdvRequests = [],
+  coachingVideos = [],
   setupError,
 }: CoachingShellProps) {
   const [intakeForms] = useState(initialIntakeForms);
@@ -474,7 +486,7 @@ export function CoachingShell({
   }
 
   // ─── Admin sidebar + main layout ────────────────────────────────────────────
-  const [adminView, setAdminView] = useState<"planning" | "rdv">("planning");
+  const [adminView, setAdminView] = useState<"planning" | "rdv" | "chat" | "rdv_requests" | "videos">("chat");
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const d = new Date();
@@ -565,6 +577,7 @@ export function CoachingShell({
         onViewChange={setAdminView}
         onAssignCoach={handleAdminAssignCoach}
         onRemoveCoach={handleAdminRemoveCoach}
+        isCoach={isCoach}
       />
 
       {/* Main content */}
@@ -592,6 +605,30 @@ export function CoachingShell({
             groupes={groupes}
             onStatusChange={handleAdminBookingStatus}
             onAssignCoach={handleAdminAssignBookingCoach}
+          />
+        )}
+
+        {adminView === "chat" && (
+          <CoachingChatThreadsPanel
+            threads={coachingThreads}
+            coaches={coaches}
+            students={students}
+            currentProfile={currentProfile}
+          />
+        )}
+
+        {adminView === "rdv_requests" && (
+          <CoachingRdvPanel
+            rdvRequests={coachingRdvRequests}
+            coaches={coaches}
+            students={students}
+          />
+        )}
+
+        {adminView === "videos" && !isCoach && (
+          <CoachingVideosCrud
+            videos={coachingVideos}
+            universities={dossiers.filter(d => d.dossier_type === "university")}
           />
         )}
       </div>

@@ -3,15 +3,8 @@ import { Header } from "@/components/header";
 import { StudentCoachingShell } from "@/components/eleve/coaching/student-coaching-shell";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type {
-  CoachingCallBooking,
-  CoachingCallSlot,
-  CoachingIntakeForm,
-  FormField,
-  FormTemplate,
-  Groupe,
-  Profile,
-} from "@/types/database";
+import type { CoachingVideo, CoachingRdvRequest, Profile, Groupe, Dossier } from "@/types/database";
+import type { QaThread } from "@/types/qa";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +14,7 @@ export default async function StudentCoachingPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const { data: currentProfile } = await supabase
     .from("profiles")
@@ -31,106 +22,105 @@ export default async function StudentCoachingPage() {
     .eq("id", user.id)
     .single();
 
-  if (!currentProfile) {
-    redirect("/login");
-  }
+  if (!currentProfile) redirect("/login");
 
   const admin = createAdminClient();
-  let groupe: Groupe | null = null;
-  let coaches: Profile[] = [];
-  let intakeForm: CoachingIntakeForm | null = null;
-  let booking: CoachingCallBooking | null = null;
-  let bookingSlot: CoachingCallSlot | null = null;
-  let availableSlots: CoachingCallSlot[] = [];
-  let formTemplate: FormTemplate | null = null;
-  let formFields: FormField[] = [];
-  let setupError: string | null = null;
+
+  // ─── Resolve university name from groupe ────────────────────────────
+  let universityName = "";
+  let universityDossierId: string | null = null;
 
   if (currentProfile.groupe_id) {
-    const now = new Date().toISOString();
-    const [groupeRes, coachesRes, formRes, bookingRes, slotsRes, bookingsRes, templateRes] = await Promise.all([
-      admin.from("groupes").select("*").eq("id", currentProfile.groupe_id).maybeSingle(),
-      admin.from("profiles").select("*").eq("role", "coach").eq("groupe_id", currentProfile.groupe_id).order("last_name").order("first_name"),
-      admin.from("coaching_intake_forms").select("*").eq("student_id", currentProfile.id).maybeSingle(),
-      admin
-        .from("coaching_call_bookings")
-        .select("*")
-        .eq("student_id", currentProfile.id)
-        .in("status", ["booked", "completed"])
-        .order("booked_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      admin.from("coaching_call_slots").select("*").eq("groupe_id", currentProfile.groupe_id).gte("end_at", now).order("start_at"),
-      admin
-        .from("coaching_call_bookings")
-        .select("*")
-        .eq("groupe_id", currentProfile.groupe_id)
-        .in("status", ["booked", "completed"]),
-      admin.from("form_templates").select("*").eq("slug", "coaching_onboarding").eq("is_active", true).maybeSingle(),
-    ]);
+    const { data: groupe } = await admin
+      .from("groupes")
+      .select("formation_dossier_id")
+      .eq("id", currentProfile.groupe_id)
+      .maybeSingle();
 
-    setupError =
-      groupeRes.error?.message ??
-      coachesRes.error?.message ??
-      formRes.error?.message ??
-      bookingRes.error?.message ??
-      slotsRes.error?.message ??
-      bookingsRes.error?.message ??
-      templateRes.error?.message ??
-      null;
+    if (groupe?.formation_dossier_id) {
+      const { data: dossier } = await admin
+        .from("dossiers")
+        .select("id, name, dossier_type, parent_id")
+        .eq("id", groupe.formation_dossier_id)
+        .maybeSingle();
 
-    groupe = (groupeRes.data ?? null) as Groupe | null;
-    coaches = (coachesRes.data ?? []) as Profile[];
-    intakeForm = (formRes.data ?? null) as CoachingIntakeForm | null;
-    booking = (bookingRes.data ?? null) as CoachingCallBooking | null;
-    formTemplate = (templateRes.data ?? null) as FormTemplate | null;
-
-    if (formTemplate?.id) {
-      const fieldsRes = await admin
-        .from("form_fields")
-        .select("*")
-        .eq("form_template_id", formTemplate.id)
-        .order("order_index");
-
-      if (!setupError && fieldsRes.error) {
-        setupError = fieldsRes.error.message;
+      if (dossier) {
+        if (dossier.dossier_type === "university") {
+          universityName = dossier.name;
+          universityDossierId = dossier.id;
+        } else if (dossier.parent_id) {
+          // Walk up to find university
+          const { data: parent } = await admin
+            .from("dossiers")
+            .select("id, name, dossier_type")
+            .eq("id", dossier.parent_id)
+            .maybeSingle();
+          if (parent?.dossier_type === "university") {
+            universityName = parent.name;
+            universityDossierId = parent.id;
+          }
+        }
       }
-      formFields = (fieldsRes.data ?? []) as FormField[];
     }
-
-    if (booking?.slot_id) {
-      const bookingSlotRes = await admin.from("coaching_call_slots").select("*").eq("id", booking.slot_id).maybeSingle();
-      if (!setupError && bookingSlotRes.error) {
-        setupError = bookingSlotRes.error.message;
-      }
-      bookingSlot = (bookingSlotRes.data ?? null) as CoachingCallSlot | null;
-    }
-
-    const takenSlotIds = new Set(
-      ((bookingsRes.data ?? []) as CoachingCallBooking[])
-        .filter((item) => item.student_id !== currentProfile.id)
-        .map((item) => item.slot_id)
-    );
-
-    availableSlots = ((slotsRes.data ?? []) as CoachingCallSlot[]).filter(
-      (slot) => !takenSlotIds.has(slot.id) || slot.id === booking?.slot_id
-    );
   }
+
+  // ─── Fetch data in parallel ─────────────────────────────────────────
+  const [videosRes, threadRes, rdvRes, coachesRes] = await Promise.all([
+    // Videos: visible + matching university or global
+    admin
+      .from("coaching_videos")
+      .select("*")
+      .eq("visible", true)
+      .or(
+        universityDossierId
+          ? `university_dossier_id.is.null,university_dossier_id.eq.${universityDossierId}`
+          : "university_dossier_id.is.null"
+      )
+      .order("order_index"),
+
+    // Existing coaching thread
+    admin
+      .from("qa_threads")
+      .select("*")
+      .eq("student_id", user.id)
+      .eq("context_type", "coaching")
+      .in("status", ["ai_pending", "ai_answered", "escalated", "prof_answered"])
+      .order("created_at", { ascending: false })
+      .limit(1),
+
+    // RDV requests
+    admin
+      .from("coaching_rdv_requests")
+      .select("*")
+      .eq("student_id", user.id)
+      .order("created_at", { ascending: false }),
+
+    // Coaches (for display)
+    currentProfile.groupe_id
+      ? admin
+          .from("coach_groupe_assignments")
+          .select("coach:profiles(*)")
+          .eq("groupe_id", currentProfile.groupe_id)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const videos = (videosRes.data ?? []) as CoachingVideo[];
+  const initialThread = ((threadRes.data ?? [])[0] ?? null) as QaThread | null;
+  const rdvRequests = (rdvRes.data ?? []) as CoachingRdvRequest[];
+  const coaches = ((coachesRes.data ?? [])
+    .map((row: any) => row.coach)
+    .filter(Boolean)) as Profile[];
 
   return (
     <div>
       <Header title="Coaching" />
       <StudentCoachingShell
         currentProfile={currentProfile as Profile}
-        groupe={groupe}
+        universityName={universityName}
+        videos={videos}
+        initialThread={initialThread}
+        rdvRequests={rdvRequests}
         coaches={coaches}
-        initialForm={intakeForm}
-        initialBooking={booking}
-        initialBookingSlot={bookingSlot}
-        initialAvailableSlots={availableSlots}
-        formTemplate={formTemplate}
-        formFields={formFields}
-        setupError={setupError}
       />
     </div>
   );

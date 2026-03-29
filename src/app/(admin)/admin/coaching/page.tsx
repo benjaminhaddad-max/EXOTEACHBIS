@@ -8,13 +8,16 @@ import type {
   CoachingCallBooking,
   CoachingCallSlot,
   CoachingIntakeForm,
+  CoachingRdvRequest,
   CoachingStudentProfile,
+  CoachingVideo,
   Dossier,
   FormField,
   FormTemplate,
   Groupe,
   Profile,
 } from "@/types/database";
+import type { QaThread } from "@/types/qa";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +116,18 @@ export default async function CoachingPage() {
     const assignmentsQuery = admin.from("coach_groupe_assignments").select("*").order("created_at");
     const dossiersQuery = admin.from("dossiers").select("*").order("order_index");
 
-    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes, dossiersRes] = await Promise.all([
+    // New coaching data queries
+    const coachingThreadsQuery = isCoach
+      ? admin.from("qa_threads").select("*").eq("context_type", "coaching").eq("assigned_coach_id", user.id).order("updated_at", { ascending: false })
+      : admin.from("qa_threads").select("*").eq("context_type", "coaching").order("updated_at", { ascending: false });
+
+    const rdvRequestsQuery = isCoach
+      ? admin.from("coaching_rdv_requests").select("*").eq("assigned_coach_id", user.id).order("created_at", { ascending: false })
+      : admin.from("coaching_rdv_requests").select("*").order("created_at", { ascending: false });
+
+    const videosQuery = admin.from("coaching_videos").select("*").order("order_index");
+
+    const [groupesRes, studentsRes, coachesRes, intakeFormsRes, slotsRes, bookingsRes, pointAProfilesRes, formTemplateRes, assignmentsRes, dossiersRes, coachingThreadsRes, rdvRequestsRes, videosRes] = await Promise.all([
       groupesQuery,
       studentsQuery,
       coachesQuery,
@@ -124,6 +138,9 @@ export default async function CoachingPage() {
       admin.from("form_templates").select("*").eq("slug", "coaching_onboarding").eq("is_active", true).maybeSingle(),
       assignmentsQuery,
       dossiersQuery,
+      coachingThreadsQuery,
+      rdvRequestsQuery,
+      videosQuery,
     ]);
 
     setupError =

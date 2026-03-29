@@ -5,7 +5,8 @@ export type QaContextType =
   | "matiere"
   | "cours"
   | "qcm_question"
-  | "qcm_option";
+  | "qcm_option"
+  | "coaching";
 
 export interface QaContextIds {
   dossierId?: string | null;

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
-import { ClipboardList, Plus, Play, Pencil, Trash2, Clock, X, Loader2, Check, AlertCircle } from "lucide-react";
+import { ClipboardList, Plus, Play, Pencil, Trash2, Clock, X, Loader2, Check, AlertCircle, Filter } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface SerieItem {
   id: string;
@@ -18,26 +19,47 @@ interface AdminSeriesPanelProps {
   series: SerieItem[];
 }
 
+const SERIE_TYPES = ["qcm_supplementaires", "annales", "concours_blanc", "entrainement", "revision"] as const;
+type SerieType = (typeof SERIE_TYPES)[number];
+
 const typeLabel: Record<string, string> = {
-  entrainement: "QCM d'entraînement",
+  entrainement: "Entraînement",
   concours_blanc: "Concours blanc",
   revision: "Révision",
+  annales: "Annales classées",
+  qcm_supplementaires: "QCM supplémentaires",
 };
 
 const typeColor: Record<string, string> = {
   entrainement: "bg-blue-100 text-blue-700",
   concours_blanc: "bg-orange-100 text-orange-700",
   revision: "bg-green-100 text-green-700",
+  annales: "bg-amber-100 text-amber-700",
+  qcm_supplementaires: "bg-teal-100 text-teal-700",
 };
+
+type SerieFilter = "all" | SerieType;
 
 export function AdminSeriesPanel({ coursId, series: initialSeries }: AdminSeriesPanelProps) {
   const [series, setSeries] = useState(initialSeries);
   const [showForm, setShowForm] = useState(false);
   const [serieName, setSerieName] = useState("");
-  const [serieType, setSerieType] = useState("entrainement");
+  const [serieType, setSerieType] = useState<string>("qcm_supplementaires");
   const [serieTimed, setSerieTimed] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [filter, setFilter] = useState<SerieFilter>("all");
+
+  const filteredSeries = useMemo(() => {
+    if (filter === "all") return series;
+    return series.filter((s) => s.type === filter);
+  }, [series, filter]);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of series) counts[s.type] = (counts[s.type] ?? 0) + 1;
+    return counts;
+  }, [series]);
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -82,7 +104,10 @@ export function AdminSeriesPanel({ coursId, series: initialSeries }: AdminSeries
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 border-b border-gray-100 bg-navy px-4 py-3">
           <ClipboardList className="h-4 w-4 text-gold" />
-          <h3 className="text-sm font-semibold text-white">Séries d'exercices</h3>
+          <h3 className="text-sm font-semibold text-white">
+            SÉRIES
+            <span className="ml-1.5 text-white/50">({series.length})</span>
+          </h3>
           <button
             onClick={() => setShowForm((v) => !v)}
             className="ml-auto flex items-center gap-1 rounded-lg bg-white/20 px-2.5 py-1 text-xs font-medium text-white hover:bg-white/30 transition"
@@ -103,13 +128,16 @@ export function AdminSeriesPanel({ coursId, series: initialSeries }: AdminSeries
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
             />
-            <div className="grid grid-cols-3 gap-2">
-              {(["entrainement", "concours_blanc", "revision"] as const).map((t) => (
+            <div className="flex flex-wrap gap-1.5">
+              {SERIE_TYPES.map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setSerieType(t)}
-                  className={`rounded-lg border-2 py-1.5 text-xs font-medium transition ${serieType === t ? "border-navy bg-navy/5 text-navy" : "border-gray-200 text-gray-500"}`}
+                  className={cn(
+                    "rounded-lg border-2 px-2.5 py-1.5 text-[11px] font-medium transition",
+                    serieType === t ? "border-navy bg-navy/5 text-navy" : "border-gray-200 text-gray-500"
+                  )}
                 >
                   {typeLabel[t]}
                 </button>
@@ -135,6 +163,40 @@ export function AdminSeriesPanel({ coursId, series: initialSeries }: AdminSeries
           </div>
         )}
 
+        {/* Filtres */}
+        {series.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-100 bg-gray-50/50 px-4 py-2.5">
+            <Filter className="h-3 w-3 text-gray-400" />
+            <button
+              onClick={() => setFilter("all")}
+              className={cn(
+                "rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
+                filter === "all" ? "bg-navy text-white" : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+              )}
+            >
+              Tout ({series.length})
+            </button>
+            {SERIE_TYPES.map((t) => {
+              const count = typeCounts[t] ?? 0;
+              if (count === 0) return null;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setFilter(t)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[10px] font-semibold transition",
+                    filter === t
+                      ? `${typeColor[t]} ring-1 ring-current`
+                      : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+                  )}
+                >
+                  {typeLabel[t]} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Liste des séries */}
         {series.length === 0 && !showForm ? (
           <div className="py-8 text-center">
@@ -145,7 +207,7 @@ export function AdminSeriesPanel({ coursId, series: initialSeries }: AdminSeries
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {series.map((serie) => (
+            {filteredSeries.map((serie) => (
               <div key={serie.id} className="group flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{serie.name}</p>

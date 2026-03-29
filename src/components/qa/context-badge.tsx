@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Folder, GraduationCap, HelpCircle } from "lucide-react";
+import { BookOpen, Folder, GraduationCap, HelpCircle, MessageCircle } from "lucide-react";
 import type { QaContextType } from "@/types/qa";
 
 const icons: Record<QaContextType, typeof Folder> = {
@@ -9,6 +9,7 @@ const icons: Record<QaContextType, typeof Folder> = {
   cours: BookOpen,
   qcm_question: HelpCircle,
   qcm_option: HelpCircle,
+  coaching: MessageCircle,
 };
 
 const colors: Record<QaContextType, string> = {
@@ -17,6 +18,7 @@ const colors: Record<QaContextType, string> = {
   cours: "bg-emerald-50 text-emerald-700 border-emerald-200",
   qcm_question: "bg-amber-50 text-amber-700 border-amber-200",
   qcm_option: "bg-amber-50 text-amber-700 border-amber-200",
+  coaching: "bg-yellow-50 text-yellow-700 border-yellow-200",
 };
 
 interface ContextBadgeProps {

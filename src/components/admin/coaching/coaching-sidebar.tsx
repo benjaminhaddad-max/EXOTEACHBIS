@@ -8,6 +8,8 @@ import {
   Calendar,
   ListChecks,
   UserPlus,
+  MessageCircle,
+  Play,
 } from "lucide-react";
 import type {
   Dossier,
@@ -23,8 +25,9 @@ interface CoachingSidebarProps {
   coachAssignments: CoachGroupeAssignment[];
   selectedGroupeIds: Set<string>;
   onToggleGroupe: (id: string) => void;
-  view: "planning" | "rdv";
-  onViewChange: (view: "planning" | "rdv") => void;
+  view: "planning" | "rdv" | "chat" | "rdv_requests" | "videos";
+  onViewChange: (view: "planning" | "rdv" | "chat" | "rdv_requests" | "videos") => void;
+  isCoach?: boolean;
   onAssignCoach: (coachId: string, groupeId: string) => void;
   onRemoveCoach: (coachId: string, groupeId: string) => void;
 }
@@ -40,6 +43,7 @@ export default function CoachingSidebar({
   onViewChange,
   onAssignCoach,
   onRemoveCoach,
+  isCoach = false,
 }: CoachingSidebarProps) {
   const [expandedOffers, setExpandedOffers] = useState<Set<string>>(new Set());
   const [expandedUnis, setExpandedUnis] = useState<Set<string>>(new Set());
@@ -231,29 +235,25 @@ export default function CoachingSidebar({
       </div>
 
       {/* View toggle */}
-      <div className="p-3 border-t border-white/10 flex gap-1">
-        <button
-          onClick={() => onViewChange("planning")}
-          className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg transition ${
-            view === "planning"
-              ? "bg-white/15 text-white"
-              : "text-white/50 hover:bg-white/5"
-          }`}
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          Planning
-        </button>
-        <button
-          onClick={() => onViewChange("rdv")}
-          className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg transition ${
-            view === "rdv"
-              ? "bg-white/15 text-white"
-              : "text-white/50 hover:bg-white/5"
-          }`}
-        >
-          <ListChecks className="w-3.5 h-3.5" />
-          RDV
-        </button>
+      <div className="p-3 border-t border-white/10 space-y-1">
+        {[
+          { key: "chat" as const, label: "Chat", icon: <MessageCircle className="w-3.5 h-3.5" /> },
+          { key: "rdv_requests" as const, label: "Demandes RDV", icon: <ListChecks className="w-3.5 h-3.5" /> },
+          ...(!isCoach ? [{ key: "videos" as const, label: "Vidéos", icon: <Play className="w-3.5 h-3.5" /> }] : []),
+          { key: "planning" as const, label: "Planning", icon: <Calendar className="w-3.5 h-3.5" /> },
+          { key: "rdv" as const, label: "RDV (ancien)", icon: <Calendar className="w-3.5 h-3.5" /> },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => onViewChange(tab.key)}
+            className={`w-full flex items-center gap-2 text-xs py-1.5 px-2.5 rounded-lg transition ${
+              view === tab.key ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/5"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
     </aside>
   );
