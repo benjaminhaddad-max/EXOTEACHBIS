@@ -19,8 +19,8 @@ interface CoachingChatSectionProps {
 }
 
 const API_URL = "/api/qa/coaching-thread";
-// Paris-Cité background image
-const BG_IMAGE = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Universit%C3%A9_de_Paris_-_Grands_Moulins_02.jpg/1280px-Universit%C3%A9_de_Paris_-_Grands_Moulins_02.jpg";
+// WhatsApp-style doodle pattern as inline SVG (works everywhere, no external URL)
+const WA_DOODLE = `url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'%3E%3Cpath d='M20 2a2 2 0 110 4 2 2 0 010-4zM6 14l4-4M30 14l4-4M14 30l-4 4M34 30l-4 4M2 20h4M34 20h4M20 34v4M20 2v4' stroke='%23000' stroke-opacity='.04' fill='none' stroke-width='.7'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='200' height='200' fill='url(%23p)'/%3E%3C/svg%3E")`;
 
 async function callApi(action: string, payload: Record<string, unknown> = {}) {
   const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...payload }) });
@@ -178,12 +178,10 @@ export function CoachingChatSection({ currentProfile, universityName, initialThr
       {/* ─── Messages area with university background ─── */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto py-2 relative"
-        style={{ backgroundColor: "#e8ddd3" }}
+        className="flex-1 overflow-y-auto py-2"
+        style={{ backgroundColor: "#ECE5DD", backgroundImage: WA_DOODLE }}
       >
-        {/* Background image with overlay */}
-        <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: `url("${BG_IMAGE}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
-        <div className="relative z-10">
+        <div>
           {messages.length === 0 && !thread && (
             <div className="flex flex-col items-center justify-center gap-4 px-6" style={{ minHeight: "calc(100vh - 350px)" }}>
               <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden" style={{ backgroundColor: "#128C7E" }}>
