@@ -11,7 +11,8 @@ export type QaContextType =
   | "matiere"
   | "cours"
   | "qcm_question"
-  | "qcm_option";
+  | "qcm_option"
+  | "coaching";
 
 export type QaStatus =
   | "ai_pending"
@@ -20,7 +21,7 @@ export type QaStatus =
   | "prof_answered"
   | "resolved";
 
-export type QaSenderType = "student" | "ai" | "prof";
+export type QaSenderType = "student" | "ai" | "prof" | "coach";
 
 export type QaMessageContentType = "text" | "voice" | "image" | "video";
 
@@ -52,6 +53,7 @@ export interface QaThread {
   title: string;
   status: QaStatus;
   assigned_prof_id: string | null;
+  assigned_coach_id: string | null;
   resolved_at: string | null;
   /** Si non null, conversation archivée (hors liste élève et liste admin par défaut). */
   archived_at?: string | null;
@@ -60,6 +62,7 @@ export interface QaThread {
   // Relations (joined)
   student?: Profile;
   assigned_prof?: Profile;
+  assigned_coach?: Profile;
   messages?: QaMessage[];
   last_message?: QaMessage;
   unread_count?: number;

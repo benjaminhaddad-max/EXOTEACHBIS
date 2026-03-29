@@ -492,6 +492,11 @@ export type CoachingSchoolLevel = "limite" | "normal" | "bon";
 export type CoachingWorkCapacity = "faible" | "moyenne" | "forte";
 export type CoachingMethodLevel = "mauvaise" | "moyenne" | "bonne";
 export type CoachingCallBookingStatus = "booked" | "completed" | "cancelled" | "no_show";
+export type CoachingNiveauInitial = "fort" | "moyen" | "fragile";
+export type CoachingMentalInitial = "fort" | "moyen" | "fragile";
+export type CoachingVideoCategory = "motivation" | "methode";
+export type CoachingRdvType = "physique" | "appel" | "visio";
+export type CoachingRdvStatus = "pending" | "assigned" | "completed" | "cancelled";
 
 export interface CoachingIntakeForm {
   id: string;
@@ -555,11 +560,13 @@ export interface CoachingStudentProfile {
   coach_id: string | null;
   intake_form_id: string | null;
   booking_id: string | null;
-  mentality: CoachingMentality;
-  school_level: CoachingSchoolLevel;
-  work_capacity: CoachingWorkCapacity;
-  method_level: CoachingMethodLevel;
-  confidence_score: number;
+  mentality: CoachingMentality | null;
+  school_level: CoachingSchoolLevel | null;
+  work_capacity: CoachingWorkCapacity | null;
+  method_level: CoachingMethodLevel | null;
+  confidence_score: number | null;
+  niveau_initial: CoachingNiveauInitial | null;
+  mental_initial: CoachingMentalInitial | null;
   coach_report: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -581,6 +588,45 @@ export interface CoachGroupeAssignment {
   created_at: string;
   coach?: Profile | null;
   groupe?: Groupe | null;
+}
+
+// =============================================
+// Coaching Videos
+// =============================================
+
+export interface CoachingVideo {
+  id: string;
+  title: string;
+  description: string | null;
+  video_url: string | null;
+  vimeo_id: string | null;
+  category: CoachingVideoCategory;
+  university_dossier_id: string | null;
+  order_index: number;
+  visible: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// =============================================
+// Coaching RDV Requests
+// =============================================
+
+export interface CoachingRdvRequest {
+  id: string;
+  student_id: string;
+  groupe_id: string;
+  rdv_type: CoachingRdvType;
+  message: string | null;
+  status: CoachingRdvStatus;
+  assigned_coach_id: string | null;
+  scheduled_at: string | null;
+  created_at: string;
+  updated_at: string;
+  student?: Profile;
+  assigned_coach?: Profile | null;
+  groupe?: Groupe;
 }
 
 // =============================================

@@ -1,0 +1,221 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Loader2, MessageCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import type { QaMessage, QaThread } from "@/types/qa";
+import { ChatBubble } from "@/components/qa/chat-bubble";
+import { ChatInputBar } from "@/components/qa/chat-input-bar";
+import { useQaRealtime } from "@/hooks/use-qa-realtime";
+
+interface CoachingChatSectionProps {
+  userId: string;
+  universityName: string;
+  initialThread: QaThread | null;
+}
+
+const API_URL = "/api/qa/coaching-thread";
+
+async function callApi(action: string, payload: Record<string, unknown> = {}) {
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error ?? "Erreur inattendue.");
+  return data;
+}
+
+export function CoachingChatSection({ userId, universityName, initialThread }: CoachingChatSectionProps) {
+  const [thread, setThread] = useState<QaThread | null>(initialThread);
+  const [messages, setMessages] = useState<QaMessage[]>([]);
+  const [loading, setLoading] = useState(!!initialThread);
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const supabase = createClient();
+
+  // Load messages on mount if thread exists
+  useEffect(() => {
+    if (!thread) { setLoading(false); return; }
+    (async () => {
+      try {
+        const result = await callApi("get_messages", { threadId: thread.id });
+        setMessages(result.messages ?? []);
+      } catch (err) {
+        console.error("Failed to load coaching messages:", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [thread?.id]);
+
+  // Realtime
+  useQaRealtime(
+    thread?.id ?? null,
+    useCallback((msg: QaMessage) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      // Mark as read
+      supabase.from("qa_messages").update({ read_by_student: true }).eq("id", msg.id);
+    }, [supabase]),
+  );
+
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  // Send text
+  const handleSendText = async (text: string) => {
+    setSending(true);
+    try {
+      if (!thread) {
+        // Create thread with first message
+        const result = await callApi("create_thread", { text });
+        setThread(result.thread);
+        setMessages(result.message ? [result.message] : []);
+      } else {
+        // Send in existing thread
+        const optimistic: QaMessage = {
+          id: crypto.randomUUID(),
+          thread_id: thread.id,
+          sender_id: userId,
+          sender_type: "student",
+          content_type: "text",
+          content: text,
+          media_url: null,
+          media_duration_s: null,
+          read_by_student: true,
+          read_by_prof: false,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, optimistic]);
+
+        const result = await callApi("send_message", { threadId: thread.id, text });
+        if (result.message) {
+          setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? result.message : m)));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to send coaching message:", err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Send voice
+  const handleSendVoice = async (blob: Blob, duration: number) => {
+    if (!thread) return;
+    setSending(true);
+    try {
+      const storagePath = `voice/${thread.id}/${Date.now()}.webm`;
+      const { error: uploadErr } = await supabase.storage
+        .from("qa-media")
+        .upload(storagePath, blob, { contentType: blob.type || "audio/webm", upsert: true });
+      if (uploadErr) { console.error("Voice upload error:", uploadErr); setSending(false); return; }
+
+      const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
+
+      await callApi("send_message", {
+        threadId: thread.id,
+        text: "",
+        contentType: "voice",
+        mediaUrl: urlData.publicUrl,
+        mediaDuration: Math.round(duration),
+      });
+    } catch (err) {
+      console.error("Voice send error:", err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Send media
+  const handleSendMedia = async (file: File, type: "image" | "video" | "document") => {
+    if (!thread) return;
+    setSending(true);
+    try {
+      const ext = file.name.split(".").pop() || "bin";
+      const storagePath = `${type}/${thread.id}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("qa-media")
+        .upload(storagePath, file, { contentType: file.type || "application/octet-stream", upsert: true });
+      if (uploadErr) { console.error("Media upload error:", uploadErr); setSending(false); return; }
+
+      const { data: urlData } = supabase.storage.from("qa-media").getPublicUrl(storagePath);
+      const dbType = type === "document" ? "image" : type;
+
+      await callApi("send_message", {
+        threadId: thread.id,
+        text: "",
+        contentType: dbType,
+        mediaUrl: urlData.publicUrl,
+      });
+    } catch (err) {
+      console.error("Media send error:", err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-6 h-6 animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col rounded-xl overflow-hidden" style={{ height: "min(70vh, 600px)", backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <MessageCircle size={16} style={{ color: "#C9A84C" }} />
+        <span className="text-sm font-semibold text-white">
+          Chat avec un de nos coachs{universityName ? ` de ${universityName}` : ""}
+        </span>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
+        {messages.length === 0 && !thread && (
+          <div className="flex flex-col items-center justify-center h-full gap-3 px-4">
+            <MessageCircle size={32} style={{ color: "rgba(255,255,255,0.1)" }} />
+            <p className="text-sm text-center" style={{ color: "rgba(255,255,255,0.4)" }}>
+              Pose ta question à nos coachs ! Tu peux écrire un message ou envoyer une note vocale.
+            </p>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <ChatBubble
+            key={msg.id}
+            message={msg}
+            viewerRole="student"
+            showAvatar={i === 0 || messages[i - 1]?.sender_type !== msg.sender_type}
+            senderName={
+              msg.sender_type === "coach" || msg.sender_type === "prof"
+                ? "Coach"
+                : msg.sender_type === "ai"
+                  ? "Assistant IA"
+                  : undefined
+            }
+          />
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className="shrink-0">
+        <ChatInputBar
+          onSendText={handleSendText}
+          onSendVoice={handleSendVoice}
+          onSendMedia={handleSendMedia}
+          disabled={sending}
+          placeholder={thread ? "Écris ton message..." : "Pose ta première question..."}
+        />
+      </div>
+    </div>
+  );
+}

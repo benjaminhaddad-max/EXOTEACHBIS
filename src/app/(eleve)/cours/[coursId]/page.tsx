@@ -1,9 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/header";
-import { PdfViewer } from "@/components/cours/pdf-viewer";
-import { SeriesList } from "@/components/cours/series-list";
-import { FileText } from "lucide-react";
+import { CoursDetailShell } from "@/components/cours/cours-detail-shell";
 import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 import { canAccessCours, getAccessScopeForUser } from "@/lib/access-scope";
 
@@ -18,7 +16,6 @@ export default async function CoursDetailPage({ params }: Props) {
   const { data: { user } } = await supabase.auth.getUser();
   const scope = user ? await getAccessScopeForUser(supabase, user.id) : null;
 
-  // Fetch cours with optional matière or dossier
   const { data: cours } = await supabase
     .from("cours")
     .select(`
@@ -32,23 +29,75 @@ export default async function CoursDetailPage({ params }: Props) {
 
   if (!cours || (scope && !canAccessCours(cours as any, scope))) notFound();
 
-  // Séries liées au cours
-  const { data: series } = await supabase
+  // ── Direct series (linked to this cours) ──
+  const { data: directSeriesRaw } = await supabase
     .from("series")
     .select(`*, series_questions (count), serie_attempts!left (id, score, ended_at)`)
     .eq("cours_id", coursId)
     .eq("visible", true)
     .order("created_at");
 
-  const seriesEnrichies = (series ?? []).map((s: any) => ({
-    ...s,
+  const directSeries = (directSeriesRaw ?? []).map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    type: s.type,
+    timed: s.timed,
     nb_questions: s.series_questions?.[0]?.count ?? 0,
     last_attempt: Array.isArray(s.serie_attempts) ? s.serie_attempts[0] ?? null : null,
-    series_questions: undefined,
-    serie_attempts: undefined,
   }));
 
-  // Progression utilisateur
+  // ── Matière-level series (annales, etc.) with questions for this cours ──
+  const matiere = (cours as any).matiere;
+  let matiereSeries: any[] = [];
+
+  if (matiere?.id) {
+    const { data: matiereSeriesRaw } = await supabase
+      .from("series")
+      .select(`
+        *,
+        series_questions (count),
+        serie_attempts!left (id, score, ended_at)
+      `)
+      .eq("matiere_id", matiere.id)
+      .is("cours_id", null)
+      .eq("visible", true)
+      .order("created_at");
+
+    if (matiereSeriesRaw && matiereSeriesRaw.length > 0) {
+      // Count how many questions in each matière series belong to this cours
+      const serieIds = matiereSeriesRaw.map((s: any) => s.id);
+      const { data: questionsForCours } = await (supabase as any)
+        .from("series_questions")
+        .select("series_id, question:questions!inner(id, cours_id)")
+        .in("series_id", serieIds)
+        .eq("question.cours_id", coursId);
+
+      const countBySerie = new Map<string, number>();
+      for (const row of questionsForCours ?? []) {
+        countBySerie.set(row.series_id, (countBySerie.get(row.series_id) ?? 0) + 1);
+      }
+
+      matiereSeries = matiereSeriesRaw.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        timed: s.timed,
+        nb_questions: s.series_questions?.[0]?.count ?? 0,
+        nb_questions_for_cours: countBySerie.get(s.id) ?? 0,
+        last_attempt: Array.isArray(s.serie_attempts) ? s.serie_attempts[0] ?? null : null,
+      }));
+    }
+  }
+
+  // ── Ressources (documents complémentaires) ──
+  const { data: ressources } = await supabase
+    .from("ressources")
+    .select("*")
+    .eq("cours_id", coursId)
+    .eq("visible", true)
+    .order("order_index");
+
+  // ── User progress ──
   const { data: progress } = user
     ? await supabase
         .from("user_progress")
@@ -58,11 +107,8 @@ export default async function CoursDetailPage({ params }: Props) {
         .single()
     : { data: null };
 
-  const matiere = (cours as any).matiere;
   const dossier = (cours as any).dossier;
   const breadcrumbDossier = matiere?.dossier ?? dossier;
-
-  const hasPdf = !!cours.pdf_url;
 
   return (
     <div>
@@ -77,9 +123,9 @@ export default async function CoursDetailPage({ params }: Props) {
       />
 
       <div className="px-4 py-5 max-w-7xl mx-auto">
-        {/* Badges version / pages */}
-        <div className="mb-4 flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-navy/10 px-3 py-1 text-xs font-semibold text-navy">
+        {/* Badges */}
+        <div className="mb-5 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#0e1e35]/8 px-3 py-1 text-xs font-semibold text-[#0e1e35]">
             Version {cours.version ?? 1}
           </span>
           {cours.nb_pages > 0 && (
@@ -88,48 +134,28 @@ export default async function CoursDetailPage({ params }: Props) {
             </span>
           )}
           {cours.description && (
-            <p className="ml-2 text-sm text-gray-500 truncate max-w-md">{cours.description}</p>
+            <p className="ml-2 text-sm text-[#6B7A8D] truncate max-w-md">{cours.description}</p>
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-          {/* ── COLONNE GAUCHE : PDF ── */}
-          <div className="lg:col-span-3 space-y-4">
-            {hasPdf ? (
-              <PdfViewer
-                coursId={cours.id}
-                pdfUrl={cours.pdf_url!}
-                nbPages={cours.nb_pages ?? 0}
-                currentPage={progress?.current_page ?? 1}
-                version={cours.version ?? 1}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-20 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
-                  <FileText className="h-7 w-7 text-gray-300" />
-                </div>
-                <p className="mt-3 text-sm font-medium text-gray-400">Aucune fiche PDF</p>
-                <p className="mt-1 text-xs text-gray-300">Le professeur ajoutera le cours bientôt</p>
-              </div>
-            )}
-          </div>
-
-          {/* ── COLONNE DROITE : Séries + Révisions ── */}
-          <div className="lg:col-span-2 space-y-4">
-            <SeriesList
-              series={seriesEnrichies}
-              qaContext={{
-                coursId: cours.id,
-                matiereId: matiere?.id,
-                dossierId: breadcrumbDossier?.id,
-                contextLabel: cours.name,
-              }}
-            />
-          </div>
-        </div>
+        <CoursDetailShell
+          cours={{
+            id: cours.id,
+            name: cours.name,
+            description: cours.description,
+            pdf_url: cours.pdf_url,
+            nb_pages: cours.nb_pages,
+            version: cours.version ?? 1,
+          }}
+          matiere={matiere ? { id: matiere.id, name: matiere.name, color: matiere.color } : null}
+          dossierId={breadcrumbDossier?.id ?? null}
+          currentPage={progress?.current_page ?? 1}
+          directSeries={directSeries}
+          matiereSeries={matiereSeries}
+          ressources={ressources ?? []}
+        />
       </div>
 
-      {/* Q&A FAB — contextual to this course */}
       <AskQuestionFab
         contextType="cours"
         coursId={cours.id}
