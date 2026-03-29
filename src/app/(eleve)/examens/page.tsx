@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Calendar, Clock, Layers, ChevronRight, Lock, Trophy, BarChart3, Medal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { redirect } from "next/navigation";
+import { buildFiliereCoefficientMap, resolveSerieCoefficient } from "@/lib/examens/filiere-coefficients";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +33,19 @@ export default async function ExamensElevePage() {
   if (!user) redirect("/login");
 
   // Get student's profile to know their groupe
-  const { data: profile } = await supabase.from("profiles").select("groupe_id").eq("id", user.id).single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("groupe_id, filiere_id")
+    .eq("id", user.id)
+    .single();
   const studentGroupeId = profile?.groupe_id;
+  const rankingFiliereId = profile?.filiere_id ?? null;
 
   // Load visible examens with series + coefficients + groupe targeting
   const [examensRes, exGroupesRes] = await Promise.all([
     supabase
       .from("examens")
-      .select("*, examens_series(order_index, coefficient, debut_at, fin_at, series:series(id, name, timed, duration_minutes, type))")
+      .select("*, examens_series(order_index, coefficient, debut_at, fin_at, series:series(id, name, timed, duration_minutes, type, matiere_id))")
       .eq("visible", true)
       .order("debut_at", { ascending: false }),
     supabase.from("examens_groupes").select("*"),
@@ -68,6 +74,23 @@ export default async function ExamensElevePage() {
   const examens = allExamens.filter((e: any) =>
     e.groupe_ids.length === 0 || (studentGroupeId && e.groupe_ids.includes(studentGroupeId))
   );
+
+  const matiereIds = Array.from(
+    new Set(
+      examens.flatMap((e: any) =>
+        (e.series ?? []).map((serie: any) => serie.matiere_id).filter(Boolean)
+      )
+    )
+  );
+
+  const { data: matiereCoefficients } = matiereIds.length > 0
+    ? await supabase
+        .from("matiere_coefficients")
+        .select("matiere_id, filiere_id, coefficient")
+        .in("matiere_id", matiereIds)
+    : { data: [] };
+
+  const coefficientMap = buildFiliereCoefficientMap(matiereCoefficients ?? []);
 
   // Load user's best attempts per serie
   const { data: attemptsRaw } = await supabase
@@ -112,8 +135,14 @@ export default async function ExamensElevePage() {
                 const best = bestBySerie.get(serie.id);
                 if (best && best.nb_total > 0) {
                   const s20 = (best.nb_correct / best.nb_total) * notationSur;
-                  weightedSum += s20 * (serie.coefficient ?? 1);
-                  totalCoeff += serie.coefficient ?? 1;
+                  const appliedCoeff = resolveSerieCoefficient({
+                    defaultCoefficient: serie.coefficient ?? 1,
+                    matiereId: serie.matiere_id ?? null,
+                    filiereId: rankingFiliereId,
+                    coefficientMap,
+                  });
+                  weightedSum += s20 * appliedCoeff;
+                  totalCoeff += appliedCoeff;
                   nbSeriesDone++;
                 }
               }
@@ -175,7 +204,12 @@ export default async function ExamensElevePage() {
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {e.series.map((serie: any) => {
                       const best = bestBySerie.get(serie.id);
-                      const coeff = serie.coefficient ?? 1;
+                      const coeff = resolveSerieCoefficient({
+                        defaultCoefficient: serie.coefficient ?? 1,
+                        matiereId: serie.matiere_id ?? null,
+                        filiereId: rankingFiliereId,
+                        coefficientMap,
+                      });
                       const hasScore = best && best.nb_total > 0;
                       const score20 = hasScore ? (best.nb_correct / best.nb_total) * notationSur : null;
                       // Per-serie status (uses serie dates if available, else exam dates)

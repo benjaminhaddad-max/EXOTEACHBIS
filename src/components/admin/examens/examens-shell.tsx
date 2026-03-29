@@ -227,7 +227,13 @@ export function ExamensShell({
       {/* Tab content */}
       {tab === "parametrage" ? (
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          <ParametrageShell dossiers={dossiers} allDossiers={allDossiers} embedded />
+          <ParametrageShell
+            dossiers={dossiers}
+            allDossiers={allDossiers}
+            matieres={matieres}
+            filieres={filieres}
+            embedded
+          />
         </div>
       ) : (
       <div className="flex flex-1 min-h-0 overflow-hidden">

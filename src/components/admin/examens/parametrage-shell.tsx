@@ -6,16 +6,18 @@ import {
   GraduationCap, Building2, ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
-import type { Dossier } from "@/types/database";
+import type { Dossier, Filiere, Matiere } from "@/types/database";
 import {
   getUniversityGradingScale,
   upsertUniversityGradingScale,
   getUniversityCoefficients,
+  getUniversityFiliereCoefficients,
   upsertUniversityCoefficient,
   getShortAnswerConfig,
   upsertShortAnswerConfig,
   getRedactionConfig,
   upsertRedactionConfig,
+  upsertMatiereCoefficient,
 } from "@/app/(admin)/admin/examens/actions";
 
 type Toast = { message: string; kind: "success" | "error" } | null;
@@ -23,7 +25,19 @@ type ScaleRow = { nb_errors: number; points: number };
 type CoeffRow = { subject_dossier_id: string; name: string; semester: string; coefficient: number };
 type NotationType = "qcm" | "short_answer" | "redaction";
 
-export function ParametrageShell({ dossiers, allDossiers, embedded }: { dossiers: Dossier[]; allDossiers: Dossier[]; embedded?: boolean }) {
+export function ParametrageShell({
+  dossiers,
+  allDossiers,
+  matieres,
+  filieres,
+  embedded,
+}: {
+  dossiers: Dossier[];
+  allDossiers: Dossier[];
+  matieres: Matiere[];
+  filieres: Filiere[];
+  embedded?: boolean;
+}) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [notationType, setNotationType] = useState<NotationType>("qcm");
@@ -105,6 +119,13 @@ export function ParametrageShell({ dossiers, allDossiers, embedded }: { dossiers
                   <CoefficientsSection
                     universityId={selectedUni.id}
                     allDossiers={allDossiers}
+                    showToast={showToast}
+                  />
+                  <FiliereCoefficientsSection
+                    universityId={selectedUni.id}
+                    allDossiers={allDossiers}
+                    matieres={matieres}
+                    filieres={filieres}
                     showToast={showToast}
                   />
                 </>
@@ -463,9 +484,9 @@ function CoefficientsSection({ universityId, allDossiers, showToast }: {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-sm font-semibold text-white">Coefficients matières</h2>
+        <h2 className="text-sm font-semibold text-white">Coefficients par défaut des épreuves</h2>
         <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-          Coefficients par défaut appliqués aux épreuves d&apos;examen — sauvegarde automatique
+          Coefficients généraux utilisés quand tu ajoutes une matière à un concours blanc
         </p>
       </div>
 
@@ -520,6 +541,218 @@ function CoefficientsSection({ universityId, allDossiers, showToast }: {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function FiliereCoefficientsSection({
+  universityId,
+  allDossiers,
+  matieres,
+  filieres,
+  showToast,
+}: {
+  universityId: string;
+  allDossiers: Dossier[];
+  matieres: Matiere[];
+  filieres: Filiere[];
+  showToast: (msg: string, kind: "success" | "error") => void;
+}) {
+  const [selectedFiliereId, setSelectedFiliereId] = useState<string>(filieres[0]?.id ?? "");
+  const [coeffs, setCoeffs] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedFiliereId && filieres[0]?.id) {
+      setSelectedFiliereId(filieres[0].id);
+    }
+  }, [filieres, selectedFiliereId]);
+
+  const subjectsBySemester = useMemo(() => {
+    const semesters = allDossiers.filter(
+      (d) =>
+        d.parent_id === universityId &&
+        (d.dossier_type === "semester" || d.dossier_type === "module")
+    );
+    const semesterIds = new Set(semesters.map((s) => s.id));
+    const subjects = allDossiers.filter(
+      (d) => d.parent_id && semesterIds.has(d.parent_id) && d.dossier_type === "subject"
+    );
+    const matiereByDossierId = new Map(matieres.map((matiere) => [matiere.dossier_id, matiere]));
+
+    return semesters
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((semester) => ({
+        semester,
+        subjects: subjects
+          .filter((subject) => subject.parent_id === semester.id)
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((subject) => ({
+            subject,
+            matiere: matiereByDossierId.get(subject.id) ?? null,
+          }))
+          .filter(({ matiere }) => Boolean(matiere)),
+      }))
+      .filter((group) => group.subjects.length > 0);
+  }, [universityId, allDossiers, matieres]);
+
+  const matiereIds = useMemo(
+    () =>
+      subjectsBySemester.flatMap(({ subjects }) =>
+        subjects.map(({ matiere }) => matiere?.id).filter(Boolean) as string[]
+      ),
+    [subjectsBySemester]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    getUniversityFiliereCoefficients(matiereIds).then((res) => {
+      if (cancelled) return;
+
+      const map: Record<string, number> = {};
+      if (res.data) {
+        for (const row of res.data as Array<{ matiere_id: string; filiere_id: string; coefficient: number }>) {
+          map[`${row.matiere_id}:${row.filiere_id}`] = Number(row.coefficient);
+        }
+      }
+
+      setCoeffs(map);
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matiereIds]);
+
+  const activeFiliere = filieres.find((filiere) => filiere.id === selectedFiliereId) ?? null;
+
+  const handleBlur = useCallback(
+    async (matiereId: string, filiereId: string, value: number) => {
+      setSavingKey(`${matiereId}:${filiereId}`);
+      const res = await upsertMatiereCoefficient(matiereId, filiereId, value);
+      setSavingKey(null);
+      if (res.error) showToast("Erreur : " + res.error, "error");
+    },
+    [showToast]
+  );
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h2 className="text-sm font-semibold text-white">Classements par filière</h2>
+        <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+          Poids des matières pour chaque filière visée. Ces coefficients servent au classement médecine, dentaire,
+          pharmacie, maïeutique ou kiné.
+        </p>
+      </div>
+
+      {filieres.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune filière configurée.</p>
+        </div>
+      ) : loading ? (
+        <div className="flex items-center gap-2 py-8 justify-center">
+          <Loader2 size={16} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>Chargement…</span>
+        </div>
+      ) : subjectsBySemester.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+            Aucune matière trouvée pour cette université.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {filieres.map((filiere) => {
+              const active = filiere.id === selectedFiliereId;
+              return (
+                <button
+                  key={filiere.id}
+                  type="button"
+                  onClick={() => setSelectedFiliereId(filiere.id)}
+                  className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-all"
+                  style={{
+                    borderColor: active ? `${filiere.color}55` : "rgba(255,255,255,0.12)",
+                    backgroundColor: active ? `${filiere.color}20` : "rgba(255,255,255,0.03)",
+                    color: active ? filiere.color : "rgba(255,255,255,0.65)",
+                  }}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: filiere.color }} />
+                  {filiere.name}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mb-4 rounded-xl border border-white/10 px-4 py-3" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+            <p className="text-[10px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
+              Filière active
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {activeFiliere ? activeFiliere.name : "—"}
+            </p>
+            <p className="mt-1 text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+              Les notes et rangs seront recalculés avec ces coefficients sur la filière sélectionnée.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {subjectsBySemester.map(({ semester, subjects }) => (
+              <div key={semester.id} className="rounded-xl overflow-hidden border border-white/10">
+                <div className="px-4 py-2" style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    {semester.name}
+                  </span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {subjects.map(({ subject, matiere }) => {
+                    if (!matiere || !selectedFiliereId) return null;
+
+                    const key = `${matiere.id}:${selectedFiliereId}`;
+                    const value = coeffs[key] ?? 1;
+                    const isSaving = savingKey === key;
+
+                    return (
+                      <div key={subject.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <div>
+                          <p className="text-xs font-medium text-white/80">{subject.name}</p>
+                          <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+                            {activeFiliere?.code ?? "—"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isSaving && <Loader2 size={10} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />}
+                          <input
+                            type="number"
+                            min={0}
+                            max={20}
+                            step={0.5}
+                            value={value}
+                            onChange={(e) => {
+                              const nextValue = parseFloat(e.target.value) || 0;
+                              setCoeffs((prev) => ({ ...prev, [key]: nextValue }));
+                            }}
+                            onBlur={(e) => {
+                              const nextValue = parseFloat(e.target.value) || 0;
+                              handleBlur(matiere.id, selectedFiliereId, nextValue);
+                            }}
+                            className="w-20 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

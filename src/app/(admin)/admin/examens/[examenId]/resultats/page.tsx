@@ -20,6 +20,9 @@ export default async function ResultatsPage({ params }: { params: Promise<{ exam
     .sort((a: any, b: any) => a.order_index - b.order_index);
 
   const seriesIds = examenSeries.map((es: any) => es.series_id);
+  const matiereIds = examenSeries
+    .map((es: any) => es.series?.matiere_id)
+    .filter(Boolean);
 
   // Load all serie_attempts for these series
   const { data: attempts } = seriesIds.length > 0
@@ -37,6 +40,13 @@ export default async function ResultatsPage({ params }: { params: Promise<{ exam
     .select("*")
     .order("order_index");
 
+  const { data: matiereCoefficients } = matiereIds.length > 0
+    ? await supabase
+        .from("matiere_coefficients")
+        .select("matiere_id, filiere_id, coefficient")
+        .in("matiere_id", matiereIds)
+    : { data: [] };
+
   return (
     <div className="bg-[#0e1e35] rounded-2xl min-h-[calc(100vh-8rem)] overflow-hidden">
       <ResultatsShell
@@ -47,6 +57,7 @@ export default async function ResultatsPage({ params }: { params: Promise<{ exam
         }}
         attempts={attempts ?? []}
         filieres={filieres ?? []}
+        matiereCoefficients={matiereCoefficients ?? []}
       />
     </div>
   );

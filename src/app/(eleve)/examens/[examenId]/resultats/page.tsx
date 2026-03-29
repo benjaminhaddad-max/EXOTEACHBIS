@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Trophy, BarChart3, Medal, ArrowLeft, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { buildFiliereCoefficientMap, resolveSerieCoefficient } from "@/lib/examens/filiere-coefficients";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,17 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("filiere_id, filiere:filieres(id, name, code, color)")
+    .eq("id", user.id)
+    .single();
+  const activeFiliere = Array.isArray(profile?.filiere) ? profile.filiere[0] : profile?.filiere;
+
   // Load examen
   const { data: examen } = await supabase
     .from("examens")
-    .select("*, examens_series(series_id, order_index, coefficient, series:series(id, name))")
+    .select("*, examens_series(series_id, order_index, coefficient, series:series(id, name, matiere_id))")
     .eq("id", examenId)
     .eq("visible", true)
     .single();
@@ -26,22 +34,35 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
   const examenSeries = (examen.examens_series ?? [])
     .sort((a: any, b: any) => a.order_index - b.order_index);
   const seriesIds = examenSeries.map((es: any) => es.series_id);
+  const matiereIds = examenSeries.map((es: any) => es.series?.matiere_id).filter(Boolean);
   const notationSur = examen.notation_sur ?? 20;
 
   // Load ALL attempts for these series (all students)
   const { data: allAttempts } = seriesIds.length > 0
     ? await supabase
         .from("serie_attempts")
-        .select("user_id, series_id, score, nb_correct, nb_total, user:profiles(id, first_name, last_name)")
+        .select("user_id, series_id, score, nb_correct, nb_total, user:profiles(id, first_name, last_name, filiere_id, filiere:filieres(id, name, code, color))")
         .in("series_id", seriesIds)
         .not("ended_at", "is", null)
     : { data: [] };
+
+  const { data: matiereCoefficients } = matiereIds.length > 0
+    ? await supabase
+        .from("matiere_coefficients")
+        .select("matiere_id, filiere_id, coefficient")
+        .in("matiere_id", matiereIds)
+    : { data: [] };
+
+  const coefficientMap = buildFiliereCoefficientMap(matiereCoefficients ?? []);
+  const rankingFiliereId = profile?.filiere_id ?? null;
 
   // Build per-student scores
   type StudentScore = {
     userId: string;
     name: string;
     isMe: boolean;
+    filiereId: string | null;
+    filiere?: { id: string; name: string; code: string; color: string } | null;
     serieScores: Record<string, { nb_correct: number; nb_total: number }>;
     moyenne20: number;
   };
@@ -50,14 +71,16 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
   for (const a of (allAttempts ?? [])) {
     const u = a.user as any;
     if (!u || a.nb_total === 0) continue;
-    if (!byUser.has(a.user_id)) {
-      byUser.set(a.user_id, {
-        userId: a.user_id,
-        name: [u.first_name, u.last_name].filter(Boolean).join(" ") || "Anonyme",
-        isMe: a.user_id === user.id,
-        serieScores: {},
-        moyenne20: 0,
-      });
+      if (!byUser.has(a.user_id)) {
+        byUser.set(a.user_id, {
+          userId: a.user_id,
+          name: [u.first_name, u.last_name].filter(Boolean).join(" ") || "Anonyme",
+          isMe: a.user_id === user.id,
+          filiereId: u.filiere_id ?? null,
+          filiere: u.filiere ?? null,
+          serieScores: {},
+          moyenne20: 0,
+        });
     }
     const row = byUser.get(a.user_id)!;
     const prev = row.serieScores[a.series_id];
@@ -67,21 +90,29 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
   }
 
   // Calculate weighted averages
-  for (const row of byUser.values()) {
-    let weightedSum = 0;
-    let totalCoeff = 0;
-    for (const es of examenSeries) {
-      const sc = row.serieScores[es.series_id];
-      if (sc && sc.nb_total > 0) {
-        const s20 = (sc.nb_correct / sc.nb_total) * notationSur;
-        weightedSum += s20 * (es.coefficient ?? 1);
-        totalCoeff += es.coefficient ?? 1;
+    for (const row of byUser.values()) {
+      let weightedSum = 0;
+      let totalCoeff = 0;
+      for (const es of examenSeries) {
+        const sc = row.serieScores[es.series_id];
+        if (sc && sc.nb_total > 0) {
+          const s20 = (sc.nb_correct / sc.nb_total) * notationSur;
+          const appliedCoeff = resolveSerieCoefficient({
+            defaultCoefficient: es.coefficient ?? 1,
+            matiereId: es.series?.matiere_id ?? null,
+            filiereId: rankingFiliereId,
+            coefficientMap,
+          });
+          weightedSum += s20 * appliedCoeff;
+          totalCoeff += appliedCoeff;
+        }
       }
+      row.moyenne20 = totalCoeff > 0 ? weightedSum / totalCoeff : 0;
     }
-    row.moyenne20 = totalCoeff > 0 ? weightedSum / totalCoeff : 0;
-  }
 
-  const students = Array.from(byUser.values()).sort((a, b) => b.moyenne20 - a.moyenne20);
+  const students = Array.from(byUser.values())
+    .filter((student) => (rankingFiliereId ? student.filiereId === rankingFiliereId : true))
+    .sort((a, b) => b.moyenne20 - a.moyenne20);
   const myRank = students.findIndex((s) => s.isMe) + 1;
   const myScore = students.find((s) => s.isMe);
   const classMoyenne = students.length > 0
@@ -107,6 +138,11 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
               <p className="text-white/60 text-sm mt-0.5">
                 {myRank > 0 ? `${myRank}${myRank === 1 ? "er" : "e"} sur ${students.length} participants` : ""}
               </p>
+              {activeFiliere && (
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/80">
+                  Classement {activeFiliere.name}
+                </div>
+              )}
             </div>
             <div className="text-right">
               <div className={cn(
@@ -127,15 +163,21 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
               return (
                 <div key={es.series_id} className="bg-white/10 rounded-lg px-3 py-2">
                   <p className="text-xs text-white/50 truncate">{es.series?.name ?? "?"}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-sm font-semibold">{s20 !== null ? s20.toFixed(1) : "—"}</span>
-                    <span className="text-[10px] text-white/40">/{notationSur}</span>
-                    {(es.coefficient ?? 1) !== 1 && (
-                      <span className="text-[10px] text-amber-400">x{es.coefficient}</span>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-sm font-semibold">{s20 !== null ? s20.toFixed(1) : "—"}</span>
+                      <span className="text-[10px] text-white/40">/{notationSur}</span>
+                    {(() => {
+                      const appliedCoeff = resolveSerieCoefficient({
+                        defaultCoefficient: es.coefficient ?? 1,
+                        matiereId: es.series?.matiere_id ?? null,
+                        filiereId: rankingFiliereId,
+                        coefficientMap,
+                      });
+                      return appliedCoeff !== 1 ? <span className="text-[10px] text-amber-400">x{appliedCoeff}</span> : null;
+                    })()}
+                    </div>
                   </div>
-                </div>
-              );
+                );
             })}
           </div>
         </div>
@@ -164,7 +206,9 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-navy" />
-          <h3 className="text-sm font-semibold text-gray-900">Classement</h3>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Classement {activeFiliere?.name ? `— ${activeFiliere.name}` : ""}
+          </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -175,7 +219,15 @@ export default async function ExamenResultatsPage({ params }: { params: Promise<
                 {examenSeries.map((es: any) => (
                   <th key={es.series_id} className="py-2.5 px-2 text-center text-xs font-medium text-gray-500 hidden sm:table-cell">
                     <div className="truncate max-w-[80px]">{es.series?.name ?? "?"}</div>
-                    {(es.coefficient ?? 1) !== 1 && <div className="text-[10px] text-amber-600">x{es.coefficient}</div>}
+                    {(() => {
+                      const appliedCoeff = resolveSerieCoefficient({
+                        defaultCoefficient: es.coefficient ?? 1,
+                        matiereId: es.series?.matiere_id ?? null,
+                        filiereId: rankingFiliereId,
+                        coefficientMap,
+                      });
+                      return appliedCoeff !== 1 ? <div className="text-[10px] text-amber-600">x{appliedCoeff}</div> : null;
+                    })()}
                   </th>
                 ))}
                 <th className="py-2.5 px-3 text-center text-xs font-semibold text-gray-700">Note</th>

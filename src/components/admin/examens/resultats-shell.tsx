@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, Download, Trophy, Users, BarChart3, Filter, Layers, Calendar } from "lucide-react";
 import Link from "next/link";
+import { buildFiliereCoefficientMap, resolveSerieCoefficient, type FiliereMatiereCoefficient } from "@/lib/examens/filiere-coefficients";
 
 type Filiere = { id: string; name: string; code: string; color: string; order_index: number };
 type ExamenSerie = {
@@ -54,18 +55,22 @@ export function ResultatsShell({
   examen,
   attempts,
   filieres,
+  matiereCoefficients,
 }: {
   examen: Examen;
   attempts: Attempt[];
   filieres: Filiere[];
+  matiereCoefficients: FiliereMatiereCoefficient[];
 }) {
   const [filterFiliere, setFilterFiliere] = useState<string>("all");
   const [tab, setTab] = useState<"global" | "serie">("global");
   const [selectedSerie, setSelectedSerie] = useState<string | null>(null);
 
   const notationSur = examen.notation_sur || 20;
+  const rankingFiliereId = filterFiliere === "all" ? null : filterFiliere;
+  const coefficientMap = useMemo(() => buildFiliereCoefficientMap(matiereCoefficients), [matiereCoefficients]);
 
-  const students = useMemo(() => {
+  const baseStudents = useMemo(() => {
     const byUser = new Map<string, StudentRow>();
 
     for (const a of attempts) {
@@ -95,15 +100,27 @@ export function ResultatsShell({
       }
     }
 
-    for (const row of byUser.values()) {
+    return Array.from(byUser.values());
+  }, [attempts]);
+
+  const students = useMemo(() => {
+    const rows = baseStudents.map((row) => ({ ...row, serieScores: { ...row.serieScores }, weightedTotal: 0, totalCoeff: 0, moyenne20: 0 }));
+
+    for (const row of rows) {
       let weightedSum = 0;
       let totalCoeff = 0;
       for (const es of examen.examen_series) {
         const s = row.serieScores[es.series_id];
         if (s) {
           const score20 = s.nb_total > 0 ? (s.nb_correct / s.nb_total) * notationSur : 0;
-          weightedSum += score20 * es.coefficient;
-          totalCoeff += es.coefficient;
+          const appliedCoeff = resolveSerieCoefficient({
+            defaultCoefficient: es.coefficient,
+            matiereId: es.series?.matiere_id ?? null,
+            filiereId: rankingFiliereId,
+            coefficientMap,
+          });
+          weightedSum += score20 * appliedCoeff;
+          totalCoeff += appliedCoeff;
         }
       }
       row.weightedTotal = weightedSum;
@@ -111,8 +128,8 @@ export function ResultatsShell({
       row.moyenne20 = totalCoeff > 0 ? weightedSum / totalCoeff : 0;
     }
 
-    return Array.from(byUser.values()).sort((a, b) => b.moyenne20 - a.moyenne20);
-  }, [attempts, examen.examen_series, notationSur]);
+    return rows.sort((a, b) => b.moyenne20 - a.moyenne20);
+  }, [baseStudents, coefficientMap, examen.examen_series, notationSur, rankingFiliereId]);
 
   const filteredStudents = filterFiliere === "all"
     ? students
@@ -137,7 +154,7 @@ export function ResultatsShell({
     for (const es of examen.examen_series) {
       stats[es.series_id] = { count: 0, sum: 0, scores: [], best: 0 };
     }
-    for (const s of students) {
+    for (const s of filteredStudents) {
       for (const [sid, sc] of Object.entries(s.serieScores)) {
         if (stats[sid]) {
           const s20 = sc.nb_total > 0 ? (sc.nb_correct / sc.nb_total) * notationSur : 0;
@@ -149,10 +166,10 @@ export function ResultatsShell({
       }
     }
     return stats;
-  }, [students, examen.examen_series, notationSur]);
+  }, [filteredStudents, examen.examen_series, notationSur]);
 
-  const classMoyenne = students.length > 0
-    ? students.reduce((acc, s) => acc + s.moyenne20, 0) / students.length
+  const classMoyenne = filteredStudents.length > 0
+    ? filteredStudents.reduce((acc, s) => acc + s.moyenne20, 0) / filteredStudents.length
     : 0;
 
   const selectedSerieInfo = examen.examen_series.find(es => es.series_id === selectedSerie);
@@ -180,7 +197,15 @@ export function ResultatsShell({
       URL.revokeObjectURL(url);
     } else {
       const headers = ["Rang", "Nom", "Email", "Filière",
-        ...examen.examen_series.map((es) => `${es.series?.name ?? "?"} (coeff ${es.coefficient})`),
+        ...examen.examen_series.map((es) => {
+          const displayCoeff = resolveSerieCoefficient({
+            defaultCoefficient: es.coefficient,
+            matiereId: es.series?.matiere_id ?? null,
+            filiereId: rankingFiliereId,
+            coefficientMap,
+          });
+          return `${es.series?.name ?? "?"} (coeff ${displayCoeff})`;
+        }),
         `Moyenne /${notationSur}`
       ];
       const rows = filteredStudents.map((s, i) => [
@@ -236,7 +261,7 @@ export function ResultatsShell({
           <div className="flex items-center gap-2 text-white/40 text-xs mb-1">
             <Users size={12} /> Participants
           </div>
-          <p className="text-2xl font-bold text-white">{students.length}</p>
+          <p className="text-2xl font-bold text-white">{filteredStudents.length}</p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-4">
           <div className="flex items-center gap-2 text-white/40 text-xs mb-1">
@@ -249,7 +274,7 @@ export function ResultatsShell({
             <Trophy size={12} /> Meilleure note
           </div>
           <p className="text-2xl font-bold text-white">
-            {students.length > 0 ? students[0].moyenne20.toFixed(1) : "—"}<span className="text-sm text-white/40">/{notationSur}</span>
+            {filteredStudents.length > 0 ? filteredStudents[0].moyenne20.toFixed(1) : "—"}<span className="text-sm text-white/40">/{notationSur}</span>
           </p>
         </div>
       </div>
@@ -257,18 +282,24 @@ export function ResultatsShell({
       {/* Series averages */}
       <div className="px-6 pt-4">
         <div className="flex flex-wrap gap-2">
-          {examen.examen_series.map((es) => {
-            const st = serieStats[es.series_id];
-            const avg = st && st.count > 0 ? st.sum / st.count : 0;
-            return (
-              <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs">
-                <p className="text-white/60 truncate max-w-[200px]">{es.series?.name ?? "?"}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-white font-semibold">{avg.toFixed(1)}/{notationSur}</span>
-                  <span className="text-[#C9A84C] text-[10px]">×{es.coefficient}</span>
-                  <span className="text-white/30 text-[10px]">{st?.count ?? 0} copies</span>
+            {examen.examen_series.map((es) => {
+              const st = serieStats[es.series_id];
+              const avg = st && st.count > 0 ? st.sum / st.count : 0;
+              const displayCoeff = resolveSerieCoefficient({
+                defaultCoefficient: es.coefficient,
+                matiereId: es.series?.matiere_id ?? null,
+                filiereId: rankingFiliereId,
+                coefficientMap,
+              });
+              return (
+                <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs">
+                  <p className="text-white/60 truncate max-w-[200px]">{es.series?.name ?? "?"}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-white font-semibold">{avg.toFixed(1)}/{notationSur}</span>
+                    <span className="text-[#C9A84C] text-[10px]">×{displayCoeff}</span>
+                    <span className="text-white/30 text-[10px]">{st?.count ?? 0} copies</span>
+                  </div>
                 </div>
-              </div>
             );
           })}
         </div>
@@ -332,6 +363,11 @@ export function ResultatsShell({
           <span className="text-white/30 ml-1">
             {tab === "serie" ? serieStudents.length : filteredStudents.length} élève{(tab === "serie" ? serieStudents.length : filteredStudents.length) !== 1 ? "s" : ""}
           </span>
+          {rankingFiliereId && (
+            <span className="rounded-full bg-[#C9A84C]/10 px-2 py-1 text-[10px] font-semibold text-[#C9A84C]">
+              coeff. {filieres.find((f) => f.id === rankingFiliereId)?.code ?? "filière"}
+            </span>
+          )}
         </div>
       </div>
 
@@ -380,12 +416,21 @@ export function ResultatsShell({
                   <th className="text-left py-3 px-2 text-white/50 text-xs font-medium w-10">#</th>
                   <th className="text-left py-3 px-2 text-white/50 text-xs font-medium min-w-[180px]">Élève</th>
                   <th className="text-left py-3 px-2 text-white/50 text-xs font-medium w-20">Filière</th>
-                  {examen.examen_series.map((es) => (
+                  {examen.examen_series.map((es) => {
+                    const displayCoeff = resolveSerieCoefficient({
+                      defaultCoefficient: es.coefficient,
+                      matiereId: es.series?.matiere_id ?? null,
+                      filiereId: rankingFiliereId,
+                      coefficientMap,
+                    });
+
+                    return (
                     <th key={es.series_id} className="py-3 px-2 text-center text-white/50 text-xs font-medium min-w-[80px]">
                       <div className="truncate max-w-[100px]">{es.series?.name ?? "?"}</div>
-                      <div className="text-[10px] text-[#C9A84C]">×{es.coefficient}</div>
+                      <div className="text-[10px] text-[#C9A84C]">×{displayCoeff}</div>
                     </th>
-                  ))}
+                    );
+                  })}
                   <th className="py-3 px-2 text-center text-white/50 text-xs font-semibold min-w-[80px]">
                     Moyenne /{notationSur}
                   </th>

@@ -15,6 +15,7 @@ import {
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
 import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
+import { buildFiliereCoefficientMap, resolveSerieCoefficient, type FiliereMatiereCoefficient } from "@/lib/examens/filiere-coefficients";
 
 type ExamenSerieWithCoeff = {
   series_id: string;
@@ -56,6 +57,7 @@ export function ExamenDetailShell({
   allDossiers,
   groupes,
   matieres,
+  matiereCoefficients,
 }: {
   examen: ExamenData;
   attempts: AttemptType[];
@@ -63,6 +65,7 @@ export function ExamenDetailShell({
   allDossiers: Dossier[];
   groupes: Groupe[];
   matieres: Matiere[];
+  matiereCoefficients: FiliereMatiereCoefficient[];
 }) {
   const [epreuves, setEpreuves] = useState<ExamenSerieWithCoeff[]>(initialExamen.examen_series);
   const [attempts, setAttempts] = useState(initialAttempts);
@@ -78,6 +81,8 @@ export function ExamenDetailShell({
   const [filterFiliere, setFilterFiliere] = useState("all");
 
   const notationSur = initialExamen.notation_sur || 20;
+  const rankingFiliereId = filterFiliere === "all" ? null : filterFiliere;
+  const coefficientMap = useMemo(() => buildFiliereCoefficientMap(matiereCoefficients), [matiereCoefficients]);
   const showToast = (message: string, kind: "success" | "error") => {
     setToast({ message, kind }); setTimeout(() => setToast(null), 3500);
   };
@@ -216,15 +221,25 @@ export function ExamenDetailShell({
         // Skip this épreuve if it doesn't target the student's classe
         if (es.groupe_ids !== null && es.groupe_ids !== undefined && es.groupe_ids.length > 0 && row.groupeId && !es.groupe_ids.includes(row.groupeId)) continue;
         const s = row.serieScores[es.series_id];
-        if (s) { const s20 = s.nb_total > 0 ? (s.nb_correct / s.nb_total) * notationSur : 0; ws += s20 * es.coefficient; tc += es.coefficient; }
+        if (s) {
+          const s20 = s.nb_total > 0 ? (s.nb_correct / s.nb_total) * notationSur : 0;
+          const appliedCoeff = resolveSerieCoefficient({
+            defaultCoefficient: es.coefficient,
+            matiereId: es.series?.matiere_id ?? null,
+            filiereId: rankingFiliereId,
+            coefficientMap,
+          });
+          ws += s20 * appliedCoeff;
+          tc += appliedCoeff;
+        }
       }
       row.weightedTotal = ws; row.totalCoeff = tc; row.moyenne20 = tc > 0 ? ws / tc : 0;
     }
     return Array.from(byUser.values()).sort((a: any, b: any) => b.moyenne20 - a.moyenne20);
-  }, [attempts, epreuves, notationSur]);
+  }, [attempts, coefficientMap, epreuves, notationSur, rankingFiliereId]);
 
   const filteredStudents = filterFiliere === "all" ? students : students.filter((s: any) => s.filiere?.id === filterFiliere);
-  const classMoyenne = students.length > 0 ? students.reduce((acc: number, s: any) => acc + s.moyenne20, 0) / students.length : 0;
+  const classMoyenne = filteredStudents.length > 0 ? filteredStudents.reduce((acc: number, s: any) => acc + s.moyenne20, 0) / filteredStudents.length : 0;
 
   const serieStudents = useMemo(() => {
     if (!selectedSerie) return [];
@@ -235,7 +250,15 @@ export function ExamenDetailShell({
   }, [filteredStudents, selectedSerie, notationSur]);
 
   const exportCSV = () => {
-    const headers = ["Rang", "Nom", "Email", "Filière", ...epreuves.map(es => `${es.series?.name ?? "?"} (×${es.coefficient})`), `Moyenne /${notationSur}`];
+    const headers = ["Rang", "Nom", "Email", "Filière", ...epreuves.map(es => {
+      const coeff = resolveSerieCoefficient({
+        defaultCoefficient: es.coefficient,
+        matiereId: es.series?.matiere_id ?? null,
+        filiereId: rankingFiliereId,
+        coefficientMap,
+      });
+      return `${es.series?.name ?? "?"} (×${coeff})`;
+    }), `Moyenne /${notationSur}`];
     const rows = filteredStudents.map((s: any, i: number) => [i + 1, s.name, s.email, s.filiere?.name ?? "—", ...epreuves.map(es => { const sc = s.serieScores[es.series_id]; return sc ? (sc.nb_total > 0 ? ((sc.nb_correct / sc.nb_total) * notationSur).toFixed(1) : "0") : "—"; }), s.moyenne20.toFixed(2)]);
     const csv = [headers.join(";"), ...rows.map((r: any) => r.join(";"))].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -440,7 +463,7 @@ export function ExamenDetailShell({
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-white/40 text-[10px] mb-1"><Users size={10} /> Participants</div>
-              <p className="text-xl font-bold text-white">{students.length}</p>
+              <p className="text-xl font-bold text-white">{filteredStudents.length}</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-white/40 text-[10px] mb-1"><Layers size={10} /> Épreuves</div>
@@ -448,7 +471,7 @@ export function ExamenDetailShell({
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3">
               <div className="flex items-center gap-1.5 text-white/40 text-[10px] mb-1"><Trophy size={10} /> Top</div>
-              <p className="text-xl font-bold text-white">{students.length > 0 ? (students[0] as any).moyenne20.toFixed(1) : "—"}<span className="text-xs text-white/40">/{notationSur}</span></p>
+              <p className="text-xl font-bold text-white">{filteredStudents.length > 0 ? (filteredStudents[0] as any).moyenne20.toFixed(1) : "—"}<span className="text-xs text-white/40">/{notationSur}</span></p>
             </div>
           </div>
 
@@ -481,6 +504,11 @@ export function ExamenDetailShell({
                 <option value="all">Toutes filières</option>
                 {filieres.map((f: any) => <option key={f.id} value={f.id}>{f.code}</option>)}
               </select>
+              {rankingFiliereId && (
+                <span className="rounded-full bg-[#C9A84C]/10 px-2 py-1 text-[10px] font-semibold text-[#C9A84C]">
+                  coeff. {filieres.find((f: any) => f.id === rankingFiliereId)?.code ?? "filière"}
+                </span>
+              )}
             </div>
           </div>
 
@@ -492,12 +520,20 @@ export function ExamenDetailShell({
                   <tr className="border-b border-white/10 sticky top-0 bg-[#0e1e35]">
                     <th className="text-left py-2 px-2 text-white/50 text-[10px] font-medium w-8">#</th>
                     <th className="text-left py-2 px-2 text-white/50 text-[10px] font-medium min-w-[140px]">Élève</th>
-                    {epreuves.map(es => (
-                      <th key={es.series_id} className="py-2 px-1 text-center text-white/40 text-[10px] font-medium min-w-[60px]">
-                        <div className="truncate max-w-[80px]">{es.series?.name?.replace(`${initialExamen.name} — `, "") ?? "?"}</div>
-                        <div className="text-[9px] text-[#C9A84C]">×{es.coefficient}</div>
-                      </th>
-                    ))}
+                    {epreuves.map(es => {
+                      const coeff = resolveSerieCoefficient({
+                        defaultCoefficient: es.coefficient,
+                        matiereId: es.series?.matiere_id ?? null,
+                        filiereId: rankingFiliereId,
+                        coefficientMap,
+                      });
+                      return (
+                        <th key={es.series_id} className="py-2 px-1 text-center text-white/40 text-[10px] font-medium min-w-[60px]">
+                          <div className="truncate max-w-[80px]">{es.series?.name?.replace(`${initialExamen.name} — `, "") ?? "?"}</div>
+                          <div className="text-[9px] text-[#C9A84C]">×{coeff}</div>
+                        </th>
+                      );
+                    })}
                     <th className="py-2 px-2 text-center text-white/50 text-[10px] font-semibold">Moy.</th>
                   </tr>
                 </thead>

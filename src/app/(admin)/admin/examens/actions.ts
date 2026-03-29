@@ -208,6 +208,19 @@ export async function getMatiereCoefficients() {
   return { data };
 }
 
+export async function getUniversityFiliereCoefficients(matiere_ids: string[]) {
+  if (matiere_ids.length === 0) return { data: [] };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("matiere_coefficients")
+    .select("*")
+    .in("matiere_id", matiere_ids);
+
+  if (error) return { error: error.message };
+  return { data: data ?? [] };
+}
+
 export async function upsertMatiereCoefficient(
   matiere_id: string,
   filiere_id: string,
@@ -222,6 +235,8 @@ export async function upsertMatiereCoefficient(
     );
   if (error) return { error: error.message };
   revalidatePath("/admin/examens");
+  revalidatePath("/admin/examens/parametrage");
+  revalidatePath("/examens");
   return { success: true };
 }
 

@@ -36,26 +36,39 @@ export default async function ExamenDetailPage({ params }: { params: Promise<{ e
     groupe_ids: (exGroupesRes.data ?? []).map((eg: any) => eg.groupe_id),
   };
 
+  const matiereIds = examen.examen_series
+    .map((es: any) => es.series?.matiere_id)
+    .filter(Boolean);
+
   // Load attempts for results
   const seriesIds = examen.examen_series.map((es: any) => es.series_id);
-  const { data: attempts } = seriesIds.length > 0
-    ? await supabase
-        .from("serie_attempts")
-        .select("*, user:profiles(id, first_name, last_name, email, filiere_id, groupe_id, filiere:filieres(id, name, code, color))")
-        .in("series_id", seriesIds)
-        .not("ended_at", "is", null)
-        .order("score", { ascending: false })
-    : { data: [] };
+  const [attemptsRes, matiereCoefficientsRes] = await Promise.all([
+    seriesIds.length > 0
+      ? supabase
+          .from("serie_attempts")
+          .select("*, user:profiles(id, first_name, last_name, email, filiere_id, groupe_id, filiere:filieres(id, name, code, color))")
+          .in("series_id", seriesIds)
+          .not("ended_at", "is", null)
+          .order("score", { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+    matiereIds.length > 0
+      ? supabase
+          .from("matiere_coefficients")
+          .select("matiere_id, filiere_id, coefficient")
+          .in("matiere_id", matiereIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
 
   return (
     <div className="bg-[#0e1e35] rounded-2xl h-[calc(100vh-9rem)] overflow-hidden flex flex-col">
       <ExamenDetailShell
         examen={examen}
-        attempts={attempts ?? []}
+        attempts={attemptsRes.data ?? []}
         filieres={filieresRes.data ?? []}
         allDossiers={(allDossiersRes.data ?? []) as Dossier[]}
         groupes={(groupesRes.data ?? []) as Groupe[]}
         matieres={(matieresRes.data ?? []) as Matiere[]}
+        matiereCoefficients={matiereCoefficientsRes.data ?? []}
       />
     </div>
   );
