@@ -24,6 +24,11 @@ export default async function StudentCoachingPage() {
 
   if (!currentProfile) redirect("/login");
 
+  // Coaches and admins go to admin coaching page
+  if (["coach", "admin", "superadmin"].includes(currentProfile.role)) {
+    redirect("/admin/coaching");
+  }
+
   const admin = createAdminClient();
 
   // ─── Resolve university name from groupe ────────────────────────────
