@@ -822,7 +822,7 @@ function ChapterAIModal({ cours, onSaved, onClose }: { cours: Cours; onSaved: ()
 
 type FlashDeck = { id: string; name: string; cours_id: string | null; visible: boolean; cards?: { id: string; front: string; back: string }[] };
 
-function ChapterFlashcards({ coursId }: { coursId: string }) {
+function ChapterFlashcards({ coursId, coursName }: { coursId: string; coursName: string }) {
   const [decks, setDecks] = useState<FlashDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -831,6 +831,16 @@ function ChapterFlashcards({ coursId }: { coursId: string }) {
   const [addingCard, setAddingCard] = useState<string | null>(null);
   const [cardFront, setCardFront] = useState("");
   const [cardBack, setCardBack] = useState("");
+
+  // AI generation
+  const [showAI, setShowAI] = useState(false);
+  const [aiTopic, setAiTopic] = useState(coursName);
+  const [aiNb, setAiNb] = useState(10);
+  const [aiStep, setAiStep] = useState<"config" | "loading" | "preview" | "saving">("config");
+  const [aiCards, setAiCards] = useState<{ front: string; back: string }[]>([]);
+  const [aiError, setAiError] = useState("");
+  const [aiDeckName, setAiDeckName] = useState(`Flashcards — ${coursName}`);
+
   const supabase = createClient();
 
   const loadDecks = useCallback(async () => {
@@ -888,15 +898,56 @@ function ChapterFlashcards({ coursId }: { coursId: string }) {
     loadCards(deckId);
   };
 
+  // AI handlers
+  const handleAIGenerate = async () => {
+    setAiError(""); setAiStep("loading");
+    try {
+      const res = await fetch("/api/generate-flashcards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sujet: aiTopic, nb_cards: aiNb }),
+      });
+      const json = await res.json();
+      if (json.error) { setAiError(json.error); setAiStep("config"); return; }
+      setAiCards(json.cards ?? []);
+      setAiStep("preview");
+    } catch (e: any) { setAiError(e.message); setAiStep("config"); }
+  };
+
+  const handleAISave = async () => {
+    setAiStep("saving");
+    const deckRes = await createDeck({ name: aiDeckName.trim() || `Flashcards — ${coursName}`, cours_id: coursId });
+    const deckId = (deckRes as any)?.id;
+    if (!deckId) { setAiError("Erreur création deck"); setAiStep("config"); return; }
+    for (let i = 0; i < aiCards.length; i++) {
+      await createCard({ deck_id: deckId, front: aiCards[i].front, back: aiCards[i].back, order_index: i });
+    }
+    setShowAI(false); setAiStep("config"); setAiCards([]);
+    loadDecks();
+  };
+
+  const handleRemoveAICard = (idx: number) => {
+    setAiCards((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   return (
-    <section>
-      <div className="flex items-center justify-between mb-3">
+    <section className="space-y-3">
+      {/* AI generation button */}
+      <button onClick={() => { setShowAI(true); setAiTopic(coursName); setAiDeckName(`Flashcards — ${coursName}`); setAiStep("config"); setAiCards([]); }}
+        className="w-full flex items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-500/6 px-3 py-2.5 hover:bg-indigo-500/12 transition-colors">
+        <Sparkles size={14} className="text-indigo-400 shrink-0" />
+        <span className="text-xs font-bold text-indigo-300">Générer avec l&apos;IA</span>
+        <span className="text-[10px] text-white/30 ml-1 truncate">— crée un deck automatiquement</span>
+      </button>
+
+      {/* Manual create */}
+      <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
-          Flashcards <span className="text-white/25 normal-case font-normal">({decks.length})</span>
+          Decks <span className="text-white/25 normal-case font-normal">({decks.length})</span>
         </h3>
         <button onClick={() => setShowCreate(true)}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-[11px] font-bold transition-colors">
-          <Plus size={11} /> Deck
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/8 hover:bg-white/12 text-white/50 text-[11px] font-bold transition-colors">
+          <Plus size={11} /> Manuel
         </button>
       </div>
 
@@ -906,6 +957,7 @@ function ChapterFlashcards({ coursId }: { coursId: string }) {
         <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
           <Layers size={18} className="mx-auto text-white/20 mb-2" />
           <p className="text-xs text-white/30">Aucun deck pour ce chapitre</p>
+          <p className="text-[10px] text-white/20 mt-1">Utilisez l&apos;IA pour en générer un</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -961,12 +1013,93 @@ function ChapterFlashcards({ coursId }: { coursId: string }) {
       )}
 
       {showCreate && (
-        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3 space-y-2 mt-2">
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3 space-y-2">
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du deck..."
             className="w-full text-xs bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white/80 placeholder:text-white/25 focus:outline-none focus:border-indigo-400/40" autoFocus />
           <div className="flex gap-1.5">
             <button onClick={handleCreate} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30">Créer</button>
             <button onClick={() => { setShowCreate(false); setNewName(""); }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white/30 hover:text-white/50">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Generation Modal */}
+      {showAI && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.75)" }}>
+          <div className="w-full max-w-xl max-h-[85vh] flex flex-col rounded-2xl border border-white/10 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles size={15} className="text-indigo-400" />
+                <span className="text-sm font-bold text-white">Générer des flashcards — {coursName}</span>
+              </div>
+              <button onClick={() => setShowAI(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/40"><X size={15} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {aiStep === "config" && (
+                <>
+                  <div>
+                    <label className="text-xs font-semibold text-white/50 uppercase tracking-wider block mb-1.5">Nom du deck</label>
+                    <input value={aiDeckName} onChange={(e) => setAiDeckName(e.target.value)}
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-white/50 uppercase tracking-wider block mb-1.5">Sujet / thème</label>
+                    <input value={aiTopic} onChange={(e) => setAiTopic(e.target.value)}
+                      className="w-full bg-white/6 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-white/50 uppercase tracking-wider block mb-1.5">Nombre de cartes</label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={5} max={30} value={aiNb} onChange={(e) => setAiNb(Number(e.target.value))} className="flex-1 accent-indigo-400" />
+                      <span className="w-6 text-center text-sm font-bold text-indigo-400">{aiNb}</span>
+                    </div>
+                  </div>
+                  {aiError && <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400"><AlertCircle size={12} />{aiError}</div>}
+                  <button onClick={handleAIGenerate}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold transition-colors">
+                    <Sparkles size={14} /> Générer {aiNb} flashcards
+                  </button>
+                </>
+              )}
+              {aiStep === "loading" && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 size={24} className="animate-spin text-indigo-400" />
+                  <p className="text-sm text-white/50">Claude génère {aiNb} flashcards...</p>
+                </div>
+              )}
+              {aiStep === "preview" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-white/50">{aiCards.length} cartes générées — vérifiez avant de sauvegarder</p>
+                    <button onClick={() => setAiStep("config")} className="text-xs text-white/30 hover:text-white/60">← Reconfigurer</button>
+                  </div>
+                  {aiCards.map((card, i) => (
+                    <div key={i} className="rounded-xl border border-white/8 bg-white/3 px-3 py-2.5 group relative">
+                      <p className="text-xs font-semibold text-indigo-300 leading-snug">{card.front}</p>
+                      <p className="text-xs text-white/50 mt-1 leading-snug">{card.back}</p>
+                      <button onClick={() => handleRemoveAICard(i)}
+                        className="absolute top-2 right-2 p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-white/20 hover:text-red-400 transition-all">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {aiStep === "saving" && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 size={24} className="animate-spin text-indigo-400" />
+                  <p className="text-sm text-white/50">Sauvegarde du deck...</p>
+                </div>
+              )}
+            </div>
+            {aiStep === "preview" && aiCards.length > 0 && (
+              <div className="px-5 py-3 border-t border-white/8 shrink-0">
+                <button onClick={handleAISave}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors">
+                  <Check size={14} /> Sauvegarder {aiCards.length} flashcards
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1263,7 +1396,7 @@ export function CoursDetailPanel({
               </>
             ) : (
               /* ── Flashcards ── */
-              <ChapterFlashcards coursId={cours.id} />
+              <ChapterFlashcards coursId={cours.id} coursName={cours.name} />
             )}
           </div>
         </div>{/* end sidebar navy */}
