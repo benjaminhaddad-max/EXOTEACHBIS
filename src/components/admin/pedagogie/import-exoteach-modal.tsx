@@ -216,13 +216,16 @@ for(var id of ids){
   }catch(e){console.error('❌ Erreur série '+id+':',e);errs.push(id);}
 }
 if(!series.length){alert('Aucune série trouvée.');return;}
-console.log('📤 Envoi de '+series.length+' série(s) à ExoTeachBIS...');
-try{
-  var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:series,coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}})});
-  var out=await res.json();
-  if(out.success)alert('✅ '+out.imported+' série(s) importée(s) !\\n(Rafraîchis ExoTeachBIS pour voir les séries)');
-  else alert('Erreur: '+(out.error||'inconnue'));
-}catch(e){alert('Erreur réseau: '+e.message);}
+var ok=0,fail=0;
+for(var si=0;si<series.length;si++){
+  console.log('📤 Envoi série '+(si+1)+'/'+series.length+': '+series[si].titre+'...');
+  try{
+    var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:[series[si]],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}})});
+    var out=await res.json();
+    if(out.success){ok++;console.log('  ✅ OK');}else{fail++;console.log('  ❌ '+out.error);}
+  }catch(e){fail++;console.log('  ❌ Erreur réseau: '+e.message);}
+}
+alert('✅ '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'')+'\\n(Rafraîchis ExoTeachBIS pour voir les séries)');
 })();`;
 }
 
