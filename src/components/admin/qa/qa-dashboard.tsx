@@ -762,13 +762,17 @@ export function QaDashboard({
         });
 
         // Matières for selected formation+university (only shown when both are selected)
-        const availableMatieres = (filterFormation === "all" || filterUni === "all") ? [] : qaMatieres.filter((m) => {
+        // Use parent dossier name (e.g. "UE1 - Chimie") instead of matiere name ("Chimie")
+        const availableMatieres = (filterFormation === "all" || filterUni === "all") ? [] as { id: string; name: string; displayName: string }[] : qaMatieres.filter((m) => {
           const n = m.name.trim().toUpperCase();
           if (n === "PASS" || n === "LAS" || n === "LSPS" || n.startsWith("PASS ") || n.startsWith("LAS ") || n.startsWith("LSPS ")) return false;
           if (matiereToOfferId.get(m.id) !== filterFormation) return false;
           if (matiereToUniId.get(m.id) !== filterUni) return false;
           return true;
-        });
+        }).map((m) => ({
+          ...m,
+          displayName: dossierById.get(m.dossier_id)?.name ?? m.name,
+        }));
 
         // Build prof → matiere mapping from profMatieres
         const profToMatiereIds = new Map<string, Set<string>>();
@@ -874,7 +878,7 @@ export function QaDashboard({
                     className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === "all" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
                   {availableMatieres.map((mat) => (
                     <button key={mat.id} type="button" onClick={() => setFilterMatiere(filterMatiere === mat.id ? "all" : mat.id)}
-                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === mat.id ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{mat.name}</button>
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === mat.id ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{mat.displayName}</button>
                   ))}
                 </div>
               )}
