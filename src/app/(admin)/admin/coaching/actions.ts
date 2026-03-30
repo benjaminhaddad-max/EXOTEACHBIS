@@ -519,12 +519,15 @@ export async function createCoachingVideo(data: {
   video_url?: string;
   vimeo_id?: string;
   category: "motivation" | "methode";
+  resource_type?: "video" | "pdf" | "document" | "link";
+  file_url?: string;
   university_dossier_id?: string | null;
+  groupe_ids?: string[];
   order_index?: number;
 }) {
   const auth = await requireCoachOrAdmin();
   if ("error" in auth) return auth;
-  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les vidéos." };
+  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les ressources." };
 
   const admin = createAdminClient();
   const { data: video, error } = await admin
@@ -535,7 +538,10 @@ export async function createCoachingVideo(data: {
       video_url: data.video_url?.trim() || null,
       vimeo_id: data.vimeo_id?.trim() || null,
       category: data.category,
+      resource_type: data.resource_type ?? "video",
+      file_url: data.file_url?.trim() || null,
       university_dossier_id: data.university_dossier_id ?? null,
+      groupe_ids: data.groupe_ids ?? [],
       order_index: data.order_index ?? 0,
       created_by: auth.profile.id,
     })
@@ -557,14 +563,17 @@ export async function updateCoachingVideo(
     video_url?: string | null;
     vimeo_id?: string | null;
     category?: "motivation" | "methode";
+    resource_type?: "video" | "pdf" | "document" | "link";
+    file_url?: string | null;
     university_dossier_id?: string | null;
+    groupe_ids?: string[];
     order_index?: number;
     visible?: boolean;
   },
 ) {
   const auth = await requireCoachOrAdmin();
   if ("error" in auth) return auth;
-  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les vidéos." };
+  if (auth.profile.role === "coach") return { error: "Seul un admin peut gérer les ressources." };
 
   const admin = createAdminClient();
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -573,7 +582,10 @@ export async function updateCoachingVideo(
   if (data.video_url !== undefined) update.video_url = data.video_url?.trim() || null;
   if (data.vimeo_id !== undefined) update.vimeo_id = data.vimeo_id?.trim() || null;
   if (data.category !== undefined) update.category = data.category;
+  if (data.resource_type !== undefined) update.resource_type = data.resource_type;
+  if (data.file_url !== undefined) update.file_url = data.file_url?.trim() || null;
   if (data.university_dossier_id !== undefined) update.university_dossier_id = data.university_dossier_id;
+  if (data.groupe_ids !== undefined) update.groupe_ids = data.groupe_ids;
   if (data.order_index !== undefined) update.order_index = data.order_index;
   if (data.visible !== undefined) update.visible = data.visible;
 

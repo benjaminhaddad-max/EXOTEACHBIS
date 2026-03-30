@@ -496,6 +496,7 @@ export type CoachSlotType = "rdv_physique" | "rdv_visio" | "rdv_tel" | "chat";
 export type CoachingNiveauInitial = "fort" | "moyen" | "fragile";
 export type CoachingMentalInitial = "fort" | "moyen" | "fragile";
 export type CoachingVideoCategory = "motivation" | "methode";
+export type CoachingResourceType = "video" | "pdf" | "document" | "link";
 export type CoachingRdvType = "physique" | "appel" | "visio";
 export type CoachingRdvStatus = "pending" | "assigned" | "completed" | "cancelled";
 
@@ -621,7 +622,10 @@ export interface CoachingVideo {
   video_url: string | null;
   vimeo_id: string | null;
   category: CoachingVideoCategory;
+  resource_type: CoachingResourceType;
+  file_url: string | null;
   university_dossier_id: string | null;
+  groupe_ids: string[];
   order_index: number;
   visible: boolean;
   created_by: string | null;

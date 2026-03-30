@@ -525,7 +525,7 @@ export function CoachingShell({
   }
 
   // ─── Admin layout — tabs + pill filters (no sidebar) ────────────────────────
-  const [adminView, setAdminView] = useState<"chat" | "rdv_requests" | "videos" | "planning" | "rdv">("chat");
+  const [adminView, setAdminView] = useState<"chat" | "rdv_requests" | "resources" | "planning" | "rdv">("chat");
   const [filterFormationId, setFilterFormationId] = useState("");
   const [filterUniversityId, setFilterUniversityId] = useState("");
   const [weekStart, setWeekStart] = useState<Date>(() => {
@@ -629,7 +629,7 @@ export function CoachingShell({
 
   const adminTabs: { key: typeof adminView; label: string; icon: React.ReactNode }[] = [
     { key: "chat", label: "Chat Coaching", icon: <Search className="w-3.5 h-3.5" /> },
-    { key: "videos", label: "Vidéos", icon: <ClipboardList className="w-3.5 h-3.5" /> },
+    { key: "resources", label: "Ressources", icon: <ClipboardList className="w-3.5 h-3.5" /> },
     { key: "planning", label: "Planning", icon: <CalendarClock className="w-3.5 h-3.5" /> },
   ];
 
@@ -757,10 +757,12 @@ export function CoachingShell({
           />
         )}
 
-        {adminView === "videos" && (
+        {adminView === "resources" && (
           <CoachingVideosCrud
             videos={coachingVideos}
             universities={dossiers.filter(d => d.dossier_type === "university")}
+            dossiers={dossiers}
+            groupes={groupes}
           />
         )}
       </div>
