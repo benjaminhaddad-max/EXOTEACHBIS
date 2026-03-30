@@ -51,31 +51,47 @@ for(var i=0;i<ids.length;i++){
   var id=ids[i];
   console.log('📥 Série '+id+' ('+(i+1)+'/'+ids.length+')...');
 
-  /* 1. Navigate to print page */
-  window.location.hash='#/serie/print/'+id;
+  /* 1. Navigate to serie edit page first */
+  window.location.hash='#/admin-series/edit/'+id;
   await wait(3000);
 
-  /* 2. Switch to Corrigé mode — find and click the "Corrigé" option */
+  /* 2. Click "Imprimer la série" button */
+  var printBtn=Array.from(document.querySelectorAll('button,a,span')).find(function(el){
+    var t=(el.textContent||'').toLowerCase();
+    return t.includes('imprimer');
+  });
+  if(printBtn){
+    printBtn.click();
+    console.log('  📄 Page impression ouverte');
+    await wait(3000);
+  }else{
+    /* Fallback: try direct print URL */
+    window.location.hash='#/serie/print/'+id;
+    await wait(3000);
+  }
+
+  /* 3. Switch to Corrigé mode */
+  /* Try select dropdown first */
   var typeSelect=document.querySelector('select');
   if(typeSelect){
-    /* Try to select "Corrigé" in the dropdown */
     var opts=typeSelect.querySelectorAll('option');
     for(var oi=0;oi<opts.length;oi++){
       if((opts[oi].textContent||'').toLowerCase().includes('corrig')){
         typeSelect.value=opts[oi].value;
         typeSelect.dispatchEvent(new Event('change',{bubbles:true}));
+        typeSelect.dispatchEvent(new Event('input',{bubbles:true}));
         console.log('  ✅ Mode Corrigé sélectionné');
         break;
       }
     }
     await wait(2000);
   }
-
-  /* Also try clicking a "Corrigé" button/tab if no select */
-  var corrBtn=Array.from(document.querySelectorAll('button,label,div')).find(function(el){
-    return(el.textContent||'').trim().toLowerCase()==='corrigé';
+  /* Also try clicking/typing "Corrigé" in an input or button */
+  var corrEl=Array.from(document.querySelectorAll('input,button,label,div,span')).find(function(el){
+    var t=(el.textContent||el.value||'').trim().toLowerCase();
+    return t==='corrigé'||t==='corrige';
   });
-  if(corrBtn){corrBtn.click();await wait(1500);}
+  if(corrEl){corrEl.click();await wait(1500);}
 
   /* 3. Find and click "Exporter en Word" button */
   /* Intercept the blob download by overriding the click temporarily */
@@ -99,9 +115,17 @@ for(var i=0;i<ids.length;i++){
     return origClick.call(this);
   };
 
-  var wordBtn=Array.from(document.querySelectorAll('button')).find(function(b){
-    var t=(b.textContent||'').toLowerCase();
-    return t.includes('word')||t.includes('exporter en w');
+  /* Log all clickable elements for debug */
+  var allClickable=Array.from(document.querySelectorAll('button,a,span,[role="button"]'));
+  console.log('  🔍 '+allClickable.length+' éléments cliquables sur la page');
+  allClickable.forEach(function(el,idx){
+    var t=(el.textContent||'').trim();
+    if(t.length>2&&t.length<40)console.log('    ['+idx+'] '+el.tagName+': '+t);
+  });
+
+  var wordBtn=allClickable.find(function(b){
+    var t=(b.textContent||'').toLowerCase().trim();
+    return t.includes('word')||t.includes('exporter');
   });
   if(wordBtn){
     wordBtn.click();
