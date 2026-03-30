@@ -220,8 +220,10 @@ export async function POST(req: NextRequest) {
     drawQcmGrid(page, gridTop, nb_questions, nb_choices, has_remorse, fonts);
 
     const pdfBytes = await pdfDoc.save();
+    const pdfBody = new Uint8Array(Array.from(pdfBytes));
+    const pdfBlob = new Blob([pdfBody], { type: "application/pdf" });
 
-    return new NextResponse(Buffer.from(pdfBytes), {
+    return new NextResponse(pdfBlob, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
