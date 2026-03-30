@@ -58,9 +58,11 @@ export default function ImpersonatePage() {
         localStorage.setItem("impersonate_active", "true");
         localStorage.setItem("impersonate_name", name || data.user.email || "");
 
-        const dest = profile?.role === "admin" || profile?.role === "superadmin"
+        const dest = profile?.role === "admin" || profile?.role === "superadmin" || profile?.role === "prof"
           ? "/admin/dashboard"
-          : "/dashboard";
+          : profile?.role === "coach"
+            ? "/admin/coaching"
+            : "/dashboard";
 
         setTimeout(() => {
           router.push(dest);

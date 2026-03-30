@@ -10,6 +10,9 @@ import {
   UserCircle,
   Megaphone,
   TrendingUp,
+  GraduationCap,
+  Trophy,
+  MessageSquare,
 
   Handshake,
   Eye,
@@ -30,6 +33,15 @@ const studentNavItems = [
   { href: "/profil", label: "Profil", icon: UserCircle },
 ];
 
+const profNavItems = [
+  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/pedagogie", label: "Pédagogie & Exercices", icon: GraduationCap },
+  { href: "/admin/examens", label: "Examens", icon: Trophy },
+  { href: "/admin/questions-reponses", label: "Questions / Réponses", icon: MessageCircleQuestion },
+  { href: "/admin/communication", label: "Communication", icon: MessageSquare },
+  { href: "/admin/planning", label: "Planning", icon: Calendar },
+];
+
 const coachNavItems = [
   { href: "/admin/coaching", label: "Coaching", icon: Handshake },
   { href: "/vue-eleve", label: "Vue élève", icon: Eye },
@@ -42,7 +54,7 @@ export function StudentSidebar() {
     return <SidebarShell>{null}</SidebarShell>;
   }
 
-  const navItems = profile.role === "coach" ? coachNavItems : studentNavItems;
+  const navItems = profile.role === "coach" ? coachNavItems : profile.role === "prof" ? profNavItems : studentNavItems;
 
   return (
     <SidebarShell>
