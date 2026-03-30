@@ -107,12 +107,13 @@ export function AccFabricator({ dossierId, dossierName }: { dossierId: string; d
       if (!isPdf) continue;
       try {
         const buffer = await file.arrayBuffer();
-        const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+        const bytes = new Uint8Array(buffer).slice(0);
+        const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
         const rawName = file.name
           .replace(/\.pdf$/i, "")
           .replace(/^ACC\s*\(SUJET\)\s*-\s*N°\d+\s*-\s*(Chapitre\s+)?/i, "")
           .trim();
-        pdfs.push({ file, name: rawName || file.name, pageCount: doc.numPages, pdfBytes: buffer });
+        pdfs.push({ file, name: rawName || file.name, pageCount: doc.numPages, pdfBytes: bytes.buffer as ArrayBuffer });
       } catch (err) {
         console.error("Erreur lecture PDF:", file.name, err);
       }
@@ -141,7 +142,7 @@ export function AccFabricator({ dossierId, dossierName }: { dossierId: string; d
 
       for (let ci = 0; ci < chapters.length; ci++) {
         const ch = chapters[ci];
-        const doc = await pdfjsLib.getDocument({ data: new Uint8Array(ch.pdfBytes) }).promise;
+        const doc = await pdfjsLib.getDocument({ data: new Uint8Array(ch.pdfBytes).slice(0) }).promise;
 
         for (let pi = 0; pi < doc.numPages; pi++) {
           const page = await doc.getPage(pi + 1);
@@ -256,10 +257,15 @@ export function AccFabricator({ dossierId, dossierName }: { dossierId: string; d
     const results: { year: string; blob: Blob; pageCount: number }[] = [];
 
     try {
-      const srcDocs: PDFDocument[] = [];
-      for (const ch of chapters) {
-        const doc = await PDFDocument.load(ch.pdfBytes);
-        srcDocs.push(doc);
+      const pdfjsCache = new Map<number, any>();
+      async function getPdfjsDoc(chapterIndex: number) {
+        if (!pdfjsCache.has(chapterIndex)) {
+          const ch = chapters[chapterIndex];
+          const copy = new Uint8Array(ch.pdfBytes).slice(0);
+          const doc = await pdfjsLib.getDocument({ data: copy }).promise;
+          pdfjsCache.set(chapterIndex, doc);
+        }
+        return pdfjsCache.get(chapterIndex)!;
       }
 
       for (let gi = 0; gi < yearGroups.length; gi++) {
@@ -273,8 +279,7 @@ export function AccFabricator({ dossierId, dossierName }: { dossierId: string; d
         const ctx = canvas.getContext("2d")!;
 
         for (const pg of group.pages) {
-          const ch = chapters[pg.chapterIndex];
-          const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ch.pdfBytes) }).promise;
+          const pdfDoc = await getPdfjsDoc(pg.chapterIndex);
           const page = await pdfDoc.getPage(pg.pageIndex + 1);
           const scale = 2.0;
           const vp = page.getViewport({ scale });
