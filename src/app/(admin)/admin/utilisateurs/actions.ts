@@ -54,7 +54,7 @@ export async function updateUserAdminProfile(data: {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
-  matiere_roles?: { matiere_id: string; role_type: string }[];
+  matiere_roles?: { matiere_id: string; role_type: string; groupe_id?: string | null }[];
   niveau_initial?: number | null;
   mental_initial?: number | null;
   niveau_progressif?: number | null;
@@ -223,10 +223,10 @@ export async function updateUserAdminProfile(data: {
     if (shouldKeepAssignments) {
       // New format: matiere_roles with role_type
       if (data.matiere_roles && data.matiere_roles.length > 0) {
-        // Deduplicate by (matiere_id, role_type)
+        // Deduplicate by (matiere_id, role_type, groupe_id)
         const seen = new Set<string>();
         const uniqueRoles = data.matiere_roles.filter((r) => {
-          const key = `${r.matiere_id}:${r.role_type}`;
+          const key = `${r.matiere_id}:${r.role_type}:${r.groupe_id ?? ""}`;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
@@ -237,6 +237,7 @@ export async function updateUserAdminProfile(data: {
             prof_id: data.userId,
             matiere_id: r.matiere_id,
             role_type: r.role_type,
+            groupe_id: r.groupe_id ?? null,
           }))
         );
 

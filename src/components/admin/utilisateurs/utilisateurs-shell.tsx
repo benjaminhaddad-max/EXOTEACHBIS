@@ -48,7 +48,7 @@ type Modal =
   | { type: "create_user" }
   | null;
 type Toast = { message: string; kind: "success" | "error" } | null;
-type ProfMatiereAssignment = { prof_id: string; matiere_id: string; role_type?: string };
+type ProfMatiereAssignment = { prof_id: string; matiere_id: string; role_type?: string; groupe_id?: string | null };
 type OfferGroupBucket = {
   code: string;
   label: string;
@@ -68,7 +68,7 @@ type AdminUserChanges = {
   access_dossier_ids?: string[];
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
-  matiere_roles?: { matiere_id: string; role_type: string }[];
+  matiere_roles?: { matiere_id: string; role_type: string; groupe_id?: string | null }[];
   niveau_initial?: number | null;
   mental_initial?: number | null;
   niveau_progressif?: number | null;
@@ -254,7 +254,7 @@ export function UtilisateursShell({
   const refreshProfMatieres = useCallback(async () => {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
-    const { data } = await supabase.from("prof_matieres").select("prof_id, matiere_id, role_type");
+    const { data } = await supabase.from("prof_matieres").select("prof_id, matiere_id, role_type, groupe_id");
     if (data) setProfMatieres(data as ProfMatiereAssignment[]);
   }, []);
 
@@ -3375,19 +3375,32 @@ function EditUserModal({
   const [excludedInheritedAccessIds, setExcludedInheritedAccessIds] = useState<string[]>(excludedAccessIds);
   const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
   // Role-type specific matiere assignments (2 sections: cours + qa/contenu merged)
-  const [coursMatIds, setCoursMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type).map((r) => r.matiere_id));
+  // coursAssignments: Map<matiere_id, Set<groupe_id>> — each matière maps to the classes assigned
+  const [coursAssignments, setCoursAssignments] = useState<Map<string, Set<string>>>(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type)) {
+      if (!map.has(r.matiere_id)) map.set(r.matiere_id, new Set());
+      if (r.groupe_id) map.get(r.matiere_id)!.add(r.groupe_id);
+    }
+    return map;
+  });
   const [qaContenuMatIds, setQaContenuMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "qa" || r.role_type === "contenu").map((r) => r.matiere_id));
   // Cascade filters per section
   const [coursFormation, setCoursFormation] = useState("");
   const [coursUni, setCoursUni] = useState("");
-  const [coursGroupeId, setCoursGroupeId] = useState<string>("");
   const [qaFormation, setQaFormation] = useState("");
   const [qaUni, setQaUni] = useState("");
   const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
   const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
   const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
   const currentExcludedAccessSignature = [...excludedAccessIds].sort().join("|");
-  const initialCoursMatSignature = useMemo(() => profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type).map((r) => r.matiere_id).sort().join("|"), [profMatiereRows]);
+  const initialCoursAssignmentSignature = useMemo(() => {
+    const entries: string[] = [];
+    for (const r of profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type)) {
+      entries.push(`${r.matiere_id}:${r.groupe_id ?? ""}`);
+    }
+    return entries.sort().join("|");
+  }, [profMatiereRows]);
   const initialQaMatSignature = useMemo(() => profMatiereRows.filter((r) => r.role_type === "qa" || r.role_type === "contenu").map((r) => r.matiere_id).sort().join("|"), [profMatiereRows]);
 
   useEffect(() => {
@@ -3450,16 +3463,42 @@ function EditUserModal({
     normalizedCurrentDirectAccess !== normalizedNextDirectAccess ||
     normalizedCurrentExcludedAccess !== normalizedNextExcludedAccess ||
     normalizedCurrentMatieres !== normalizedNextMatieres ||
-    initialCoursMatSignature !== [...coursMatIds].sort().join("|") ||
+    initialCoursAssignmentSignature !== (() => {
+      const entries: string[] = [];
+      for (const [matId, groupeIds] of coursAssignments) {
+        if (groupeIds.size === 0) entries.push(`${matId}:`);
+        else for (const gid of groupeIds) entries.push(`${matId}:${gid}`);
+      }
+      return entries.sort().join("|");
+    })() ||
     initialQaMatSignature !== [...qaContenuMatIds].sort().join("|") ||
     niveauInitial !== (coachingProfile?.niveau_initial ?? 50) ||
     mentalInitial !== (coachingProfile?.mental_initial ?? 50) ||
     niveauProgressif !== (coachingProfile?.niveau_progressif ?? 50) ||
     mentalProgressif !== (coachingProfile?.mental_progressif ?? 50);
 
-  const toggleRoleMatiere = (roleType: "cours" | "qa_contenu", matiereId: string) => {
-    const setter = roleType === "cours" ? setCoursMatIds : setQaContenuMatIds;
-    setter((prev) => prev.includes(matiereId) ? prev.filter((id) => id !== matiereId) : [...prev, matiereId]);
+  const toggleCoursMatiere = (matiereId: string) => {
+    setCoursAssignments((prev) => {
+      const next = new Map(prev);
+      if (next.has(matiereId)) next.delete(matiereId);
+      else next.set(matiereId, new Set());
+      return next;
+    });
+  };
+
+  const toggleCoursGroupe = (matiereId: string, groupeId: string) => {
+    setCoursAssignments((prev) => {
+      const next = new Map(prev);
+      const groupes = new Set(next.get(matiereId) ?? []);
+      if (groupes.has(groupeId)) groupes.delete(groupeId);
+      else groupes.add(groupeId);
+      next.set(matiereId, groupes);
+      return next;
+    });
+  };
+
+  const toggleQaMatiere = (matiereId: string) => {
+    setQaContenuMatIds((prev) => prev.includes(matiereId) ? prev.filter((id) => id !== matiereId) : [...prev, matiereId]);
   };
 
   const toggleMatiere = (matiereId: string) => {
@@ -3876,6 +3915,8 @@ function EditUserModal({
             const coursUnis = coursFormation ? getUnisForOffer(coursFormation) : [];
             const coursGroupes = coursUni ? getGroupesForUni(coursUni) : [];
             const coursMats = coursUni ? getMatieresForUni(coursUni) : [];
+            // All groupes for the selected university (for class checkboxes under each matière)
+            const allUniGroupes = coursUni ? groupes.filter((g) => g.formation_dossier_id === coursUni) : [];
 
             const qaUnis = qaFormation ? getUnisForOffer(qaFormation) : [];
             const qaMats = qaUni ? getMatieresForUni(qaUni) : [];
@@ -3893,37 +3934,55 @@ function EditUserModal({
                   {/* Formation */}
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
-                    <PillFilter items={offers} value={coursFormation} onChange={(v) => { setCoursFormation(v); setCoursUni(""); setCoursGroupeId(""); }} color="#60A5FA" />
+                    <PillFilter items={offers} value={coursFormation} onChange={(v) => { setCoursFormation(v); setCoursUni(""); }} color="#60A5FA" />
                   </div>
                   {/* Université */}
                   {coursFormation && coursUnis.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
-                      <PillFilter items={coursUnis} value={coursUni} onChange={(v) => { setCoursUni(v); setCoursGroupeId(""); }} color="#60A5FA" />
+                      <PillFilter items={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" />
                     </div>
                   )}
-                  {/* Classe */}
-                  {coursUni && coursGroupes.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
-                      <PillFilter items={coursGroupes} value={coursGroupeId} onChange={setCoursGroupeId} color="#60A5FA" />
-                    </div>
-                  )}
-                  {/* Matières */}
+                  {/* Matières → Classes */}
                   {coursUni && coursMats.length > 0 && (
                     <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {groupByDossierLabel(coursMats).map(([label, mats]) => (
                         <div key={label} className="mb-2">
                           <p className="mb-1 text-[9px] font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</p>
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="space-y-1.5">
                             {mats.map((m) => {
-                              const checked = coursMatIds.includes(m.id);
+                              const checked = coursAssignments.has(m.id);
+                              const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
                               return (
-                                <button key={m.id} type="button" onClick={() => toggleRoleMatiere("cours", m.id)}
-                                  className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors"
-                                  style={{ borderColor: checked ? "#60A5FA99" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#60A5FA22" : "rgba(255,255,255,0.02)", color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>
-                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#60A5FA" : m.color }} />{m.name}
-                                </button>
+                                <div key={m.id}>
+                                  <button type="button" onClick={() => toggleCoursMatiere(m.id)}
+                                    className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors w-full text-left"
+                                    style={{ borderColor: checked ? "#60A5FA99" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#60A5FA22" : "rgba(255,255,255,0.02)", color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>
+                                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#60A5FA" : m.color }} />{m.name}
+                                    {checked && assignedGroupes.size > 0 && (
+                                      <span className="ml-auto text-[9px] opacity-60">{assignedGroupes.size} classe{assignedGroupes.size > 1 ? "s" : ""}</span>
+                                    )}
+                                  </button>
+                                  {checked && allUniGroupes.length > 0 && (
+                                    <div className="ml-4 mt-1 flex flex-wrap gap-1">
+                                      {allUniGroupes.map((g) => {
+                                        const gChecked = assignedGroupes.has(g.id);
+                                        return (
+                                          <button key={g.id} type="button" onClick={() => toggleCoursGroupe(m.id, g.id)}
+                                            className="flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors"
+                                            style={{
+                                              borderColor: gChecked ? "#60A5FA80" : "rgba(255,255,255,0.06)",
+                                              backgroundColor: gChecked ? "#60A5FA33" : "rgba(255,255,255,0.02)",
+                                              color: gChecked ? "#60A5FA" : "rgba(255,255,255,0.4)",
+                                            }}>
+                                            <span className="h-1.5 w-1.5 rounded-sm shrink-0" style={{ backgroundColor: gChecked ? "#60A5FA" : "rgba(255,255,255,0.2)" }} />
+                                            {g.name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>
@@ -3965,7 +4024,7 @@ function EditUserModal({
                             {mats.map((m) => {
                               const checked = qaContenuMatIds.includes(m.id);
                               return (
-                                <button key={m.id} type="button" onClick={() => toggleRoleMatiere("qa_contenu", m.id)}
+                                <button key={m.id} type="button" onClick={() => toggleQaMatiere(m.id)}
                                   className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors"
                                   style={{ borderColor: checked ? "#FBBF2499" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#FBBF2422" : "rgba(255,255,255,0.02)", color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>
                                   <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#FBBF24" : m.color }} />{m.name}
@@ -4014,7 +4073,11 @@ function EditUserModal({
                 excluded_access_dossier_ids: excludedInheritedAccessIds,
                 matiere_ids: matiereIds,
                 matiere_roles: [
-                  ...coursMatIds.map((id) => ({ matiere_id: id, role_type: "cours" })),
+                  ...Array.from(coursAssignments.entries()).flatMap(([matId, groupeIds]) =>
+                    groupeIds.size > 0
+                      ? Array.from(groupeIds).map((gid) => ({ matiere_id: matId, role_type: "cours", groupe_id: gid }))
+                      : [{ matiere_id: matId, role_type: "cours", groupe_id: null as string | null }]
+                  ),
                   ...qaContenuMatIds.map((id) => ({ matiere_id: id, role_type: "qa" })),
                 ],
                 niveau_initial: niveauInitial,

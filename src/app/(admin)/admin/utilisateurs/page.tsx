@@ -38,7 +38,7 @@ export default async function UtilisateursPage() {
     supabase.from("dossiers").select("*").order("order_index"),
     supabase.from("matieres").select("*").order("name"),
     supabase.from("filieres").select("*").order("name"),
-    supabase.from("prof_matieres").select("prof_id, matiere_id, role_type"),
+    supabase.from("prof_matieres").select("prof_id, matiere_id, role_type, groupe_id"),
     supabase.from("groupe_dossier_acces").select("groupe_id, dossier_id"),
     supabase.from("profile_dossier_acces").select("profile_id, dossier_id"),
     supabase.from("profile_dossier_access_exclusions").select("profile_id, dossier_id"),
