@@ -8,6 +8,7 @@ import { QaPedagogieMatiereTreeSidebar } from "./qa-pedagogie-matiere-tree-sideb
 import { QaThreadList } from "./qa-thread-list";
 import { QaChatPanel } from "./qa-chat-panel";
 import {
+  Archive,
   ArrowLeft,
   Bell,
   Building2,
@@ -20,6 +21,7 @@ import {
   Layers,
   Loader2,
   Send,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -918,21 +920,23 @@ export function QaDashboard({
                       const ageHours = getThreadAgeHours(thread);
                       const ageDays = Math.floor(ageHours / 24);
                       return (
-                        <a key={thread.id} href={`/admin/questions-reponses?thread=${thread.id}`}
-                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group">
-                          <div className="flex-1 min-w-0">
+                        <div key={thread.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <a href={`/admin/questions-reponses?thread=${thread.id}`} className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-gray-800 truncate group-hover:text-blue-600">
                               {thread.title || thread.context_label || "Question sans titre"}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] text-gray-400">par {getDisplayName(thread.student)}</span>
                             </div>
-                          </div>
+                          </a>
                           <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             ageDays >= 4 ? "bg-red-100 text-red-700" : ageDays >= 3 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"
                           }`}>{ageDays}j retard</span>
-                          <ExternalLink size={12} className="shrink-0 text-gray-300 group-hover:text-blue-500" />
-                        </a>
+                          <button type="button" title="Archiver" onClick={() => handleArchiveThread(thread.id)}
+                            className="shrink-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"><Archive size={13} /></button>
+                          <button type="button" title="Supprimer" onClick={() => handleDeleteThread(thread.id)}
+                            className="shrink-0 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>
+                        </div>
                       );
                     })}
                   </div>
@@ -976,12 +980,8 @@ export function QaDashboard({
                       const ageHours = getThreadAgeHours(thread);
                       const ageDays = Math.floor(ageHours / 24);
                       return (
-                        <a
-                          key={thread.id}
-                          href={`/admin/questions-reponses?thread=${thread.id}`}
-                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group"
-                        >
-                          <div className="flex-1 min-w-0">
+                        <div key={thread.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <a href={`/admin/questions-reponses?thread=${thread.id}`} className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-gray-800 truncate group-hover:text-blue-600">
                               {thread.title || thread.context_label || "Question sans titre"}
                             </p>
@@ -991,14 +991,17 @@ export function QaDashboard({
                               )}
                               <span className="text-[10px] text-gray-400">par {getDisplayName(thread.student)}</span>
                             </div>
-                          </div>
+                          </a>
                           <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             ageDays >= 4 ? "bg-red-100 text-red-700" : ageDays >= 3 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"
                           }`}>
                             {ageDays}j retard
                           </span>
-                          <ExternalLink size={12} className="shrink-0 text-gray-300 group-hover:text-blue-500" />
-                        </a>
+                          <button type="button" title="Archiver" onClick={() => handleArchiveThread(thread.id)}
+                            className="shrink-0 p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"><Archive size={13} /></button>
+                          <button type="button" title="Supprimer" onClick={() => handleDeleteThread(thread.id)}
+                            className="shrink-0 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={13} /></button>
+                        </div>
                       );
                     })}
                   </div>
