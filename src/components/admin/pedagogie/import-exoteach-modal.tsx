@@ -135,25 +135,35 @@ for(var id of ids){
       if(exImgs.length===0){
         console.log('  Q'+exNum+' — pas d\\'image');
       }else{
-        /* Find answer labels A-E within this exercise section to separate énoncé from items */
-        var exLabels=[];
-        document.querySelectorAll('*').forEach(function(el){
-          var t=el.textContent.trim();
+        /* Find the start of answer options by looking for checkboxes or option containers.
+           On ExoTeach Correction view, each option starts with a checkbox input or a label container.
+           We look for elements that contain EXACTLY "A" followed by option text. */
+        var optionStarts=[];
+        document.querySelectorAll('input[type="checkbox"],input[type="radio"]').forEach(function(el){
           var r=el.getBoundingClientRect();
-          if(/^[A-E]$/.test(t)&&r.height>10&&r.height<40&&r.width<30&&r.top>=ex.y&&r.top<nextY){
-            exLabels.push({letter:t,y:r.top});
+          if(r.top>=ex.y&&r.top<nextY&&r.height>5){
+            optionStarts.push({y:r.top});
           }
         });
-        /* Deduplicate: keep first A only */
-        var seenL={};
-        exLabels=exLabels.filter(function(l){if(seenL[l.letter])return false;seenL[l.letter]=true;return true;});
-        exLabels.sort(function(a,b){return a.y-b.y;});
-        var firstLabelY=exLabels.length>0?exLabels[0].y:nextY;
+        /* Fallback: find option text patterns "A La réaction...", "B ..." */
+        if(optionStarts.length===0){
+          document.querySelectorAll('*').forEach(function(el){
+            var ownText='';
+            el.childNodes.forEach(function(n){if(n.nodeType===3)ownText+=n.textContent;});
+            var r=el.getBoundingClientRect();
+            if(/^\\s*[A-E]\\s+[A-Z]/.test(ownText)&&r.top>=ex.y&&r.top<nextY&&r.height>15&&r.height<60){
+              optionStarts.push({y:r.top,letter:ownText.trim()[0]});
+            }
+          });
+        }
+        optionStarts.sort(function(a,b){return a.y-b.y;});
+        /* First option = boundary between énoncé and items */
+        var firstOptionY=optionStarts.length>0?optionStarts[0].y:nextY;
 
-        /* Images ABOVE first label A = énoncé images (can be multiple!) */
-        var enonceImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top<firstLabelY-20;});
-        /* Images AT/BELOW first label = item images */
-        var itemImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top>=firstLabelY-20;});
+        /* Images ABOVE first option = énoncé images */
+        var enonceImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top<firstOptionY-20;});
+        /* Images AT/BELOW first option = item images */
+        var itemImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top>=firstOptionY-20;});
 
         /* Capture ALL énoncé images (concatenate if multiple) */
         if(enonceImgs.length>0&&!q.url_image_q&&!q.image_url_scraped){
@@ -166,22 +176,15 @@ for(var id of ids){
           }
         }
 
-        /* Capture item images — assign to nearest label above */
-        for(var ii=0;ii<itemImgs.length;ii++){
-          var imgY=itemImgs[ii].getBoundingClientRect().top;
-          var bestLetter=null;
-          for(var li=exLabels.length-1;li>=0;li--){
-            if(exLabels[li].y<=imgY+30){bestLetter=exLabels[li].letter;break;}
-          }
-          if(bestLetter){
-            var ansIdx='ABCDE'.indexOf(bestLetter);
-            if(ansIdx>=0&&ansIdx<(q.answers||[]).length&&!q.answers[ansIdx].url_image&&!q.answers[ansIdx].image_url_scraped){
-              var ab=await imgToB64(itemImgs[ii].src);
-              if(ab){
-                q.answers[ansIdx].image_url_scraped=ab;
-                console.log('  Q'+exNum+'.'+bestLetter+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
-              }
+        /* Capture item images — assign sequentially to options that need them */
+        for(var ii=0,ai=0;ii<itemImgs.length&&ai<(q.answers||[]).length;ai++){
+          if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
+            var ab=await imgToB64(itemImgs[ii].src);
+            if(ab){
+              q.answers[ai].image_url_scraped=ab;
+              console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
             }
+            ii++;
           }
         }
       }
