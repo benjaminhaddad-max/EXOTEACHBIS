@@ -35,158 +35,152 @@ function buildScript(ids: string[], coursId: string, serieType: string, matiereI
   const saveUrl = "https://exoteachbis.vercel.app/api/save-exoteach-data";
   const idsJson = JSON.stringify(ids);
 
-  // Script that navigates to each serie's print page on ExoTeach,
-  // switches to "Corrigé" mode, clicks "Exporter en Word",
-  // intercepts the generated blob, and sends it to our import-word API
-  const importUrl = "https://exoteachbis.vercel.app/api/import-word";
-
+  // Script that uses the player's correction view to scrape images.
+  // Flow: for each serie, get data via Apollo, then navigate to the edit page
+  // and open each exercise one by one to capture its images.
   return `(async()=>{
-if(!window.location.href.includes('exoteach.com')){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
+var client=window.__APOLLO_CLIENT__;
+if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
+function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
+function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
 function wait(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
+async function imgToB64(src){
+  try{
+    var url=src.startsWith('http')?src:'https://diploma.exoteach.com'+src;
+    var resp=await fetch(url,{credentials:'include'});
+    if(!resp.ok)return null;
+    var blob=await resp.blob();
+    if(blob.size<100)return null;
+    return await new Promise(function(ok){var rd=new FileReader();rd.onloadend=function(){ok(rd.result);};rd.readAsDataURL(blob);});
+  }catch(e){return null;}
+}
+
+function getContentImages(){
+  return Array.from(document.querySelectorAll('img')).filter(function(i){
+    if(!i.src||i.naturalWidth<80||i.naturalHeight<40)return false;
+    if(!i.src.includes('/medibox2-api/files/'))return false;
+    if(i.src.includes('/avatars/'))return false;
+    if(i.src.match(/\\.gif/i))return false;
+    return true;
+  });
+}
+
 var ids=${idsJson};
-var ok=0,fail=0;
+var series=[];var errs=[];
 
-for(var i=0;i<ids.length;i++){
-  var id=ids[i];
-  console.log('📥 Série '+id+' ('+(i+1)+'/'+ids.length+')...');
+for(var id of ids){
+  try{
+    console.log('📥 Récupération série '+id+'...');
+    var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',String(id))],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
+    if(!r.data||!r.data.qcm){errs.push(id);continue;}
+    var qcm=JSON.parse(JSON.stringify(r.data.qcm));
+    var nbQ=qcm.questions.length;
 
-  /* 1. Navigate to serie edit page first */
-  window.location.hash='#/admin-series/edit/'+id;
-  await wait(3000);
+    /* Navigate to edit page and open each exercise to scrape images */
+    console.log('🖼️ Navigation page édition ('+nbQ+'Q)...');
+    window.location.hash='#/admin-series/edit/'+id;
+    await wait(4000);
 
-  /* 2. Click "Imprimer la série" button */
-  var printBtn=Array.from(document.querySelectorAll('button,a,span')).find(function(el){
-    var t=(el.textContent||'').toLowerCase();
-    return t.includes('imprimer');
-  });
-  if(printBtn){
-    printBtn.click();
-    console.log('  📄 Page impression ouverte');
-    await wait(3000);
-  }else{
-    /* Fallback: try direct print URL */
-    window.location.hash='#/serie/print/'+id;
-    await wait(3000);
-  }
+    /* Click on each exercise number to open it and capture images */
+    for(var qi=0;qi<nbQ;qi++){
+      var q=qcm.questions[qi];
+      var exNum=qi+1;
 
-  /* 3. Switch to Corrigé mode */
-  /* Try select dropdown first */
-  var typeSelect=document.querySelector('select');
-  if(typeSelect){
-    var opts=typeSelect.querySelectorAll('option');
-    for(var oi=0;oi<opts.length;oi++){
-      if((opts[oi].textContent||'').toLowerCase().includes('corrig')){
-        typeSelect.value=opts[oi].value;
-        typeSelect.dispatchEvent(new Event('change',{bubbles:true}));
-        typeSelect.dispatchEvent(new Event('input',{bubbles:true}));
-        console.log('  ✅ Mode Corrigé sélectionné');
-        break;
+      /* Find and click the exercise number to expand it */
+      var exBtn=Array.from(document.querySelectorAll('.exercise-number,.exercise-header-number')).find(function(el){
+        return el.textContent.trim()===String(exNum);
+      });
+      if(exBtn){
+        /* Click the exercise row to expand it */
+        var row=exBtn.closest('[class*="exercise"]')||exBtn.parentElement?.parentElement;
+        if(row)row.click();
+        await wait(2000);/* Wait for images to load */
       }
+
+      /* Now capture images that appeared */
+      var imgs=getContentImages();
+      /* Filter to only images that weren't there before (new ones from this exercise) */
+      if(imgs.length>0){
+        /* Get the last image(s) that appeared — they belong to this exercise */
+        /* Use position: find images near the expanded exercise area */
+        var exY=exBtn?exBtn.getBoundingClientRect().top:0;
+        var nearImgs=imgs.filter(function(img){
+          var iy=img.getBoundingClientRect().top;
+          return iy>=exY-50;/* Images at or below this exercise */
+        });
+
+        if(nearImgs.length>0&&!q.url_image_q&&!q.image_url_scraped){
+          /* First image = énoncé */
+          var b64=await imgToB64(nearImgs[0].src);
+          if(b64){
+            q.image_url_scraped=b64;
+            console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)');
+          }
+          /* Remaining = item images */
+          for(var ii=1,ai=0;ii<nearImgs.length&&ai<(q.answers||[]).length;ai++){
+            if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
+              var ab=await imgToB64(nearImgs[ii].src);
+              if(ab){q.answers[ai].image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item');}
+              ii++;
+            }
+          }
+        }
+      }
+
+      /* Fetch answer images from Apollo if present */
+      for(var ai=0;ai<(q.answers||[]).length;ai++){
+        var ans=q.answers[ai];
+        if(ans.url_image&&!ans.image_url_scraped){
+          var ab=await imgToB64(ans.url_image);
+          if(ab){ans.image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item (API)');}
+        }
+      }
+
+      if(!q.image_url_scraped&&!q.url_image_q&&(!imgs.length||!imgs.some(function(im){return im.getBoundingClientRect().top>=(exBtn?exBtn.getBoundingClientRect().top-50:0);}))){
+        console.log('  Q'+exNum+' — pas d\\'image');
+      }
+
+      /* Close the exercise (click again or click elsewhere) to keep page clean */
+      /* Click the back/close button or the exercise header again */
+      var closeBtn=document.querySelector('[class*="back"],[class*="close"]');
+      if(closeBtn&&closeBtn.getBoundingClientRect().width>0)closeBtn.click();
+      else if(row)row.click();
+      await wait(500);
     }
-    await wait(2000);
-  }
-  /* Also try clicking/typing "Corrigé" in an input or button */
-  var corrEl=Array.from(document.querySelectorAll('input,button,label,div,span')).find(function(el){
-    var t=(el.textContent||el.value||'').trim().toLowerCase();
-    return t==='corrigé'||t==='corrige';
-  });
-  if(corrEl){corrEl.click();await wait(1500);}
 
-  /* 3. Find and click "Exporter en Word" button */
-  /* Intercept the blob download by overriding the click temporarily */
-  var wordBlob=null;
-  var origCreateObjectURL=URL.createObjectURL;
-  var origRevokeObjectURL=URL.revokeObjectURL;
-
-  /* Intercept blob creation to capture the Word file */
-  URL.createObjectURL=function(blob){
-    if(blob&&blob.size>1000){wordBlob=blob;console.log('  📄 Word intercepté ('+Math.round(blob.size/1024)+'KB)');}
-    return origCreateObjectURL.call(URL,blob);
-  };
-
-  /* Also intercept <a> downloads */
-  var origClick=HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click=function(){
-    if(this.download&&this.href&&this.href.startsWith('blob:')){
-      console.log('  📎 Download intercepté: '+this.download);
-      return;/* Prevent actual download */
-    }
-    return origClick.call(this);
-  };
-
-  /* Log all clickable elements for debug */
-  var allClickable=Array.from(document.querySelectorAll('button,a,span,[role="button"]'));
-  console.log('  🔍 '+allClickable.length+' éléments cliquables sur la page');
-  allClickable.forEach(function(el,idx){
-    var t=(el.textContent||'').trim();
-    if(t.length>2&&t.length<40)console.log('    ['+idx+'] '+el.tagName+': '+t);
-  });
-
-  var wordBtn=allClickable.find(function(b){
-    var t=(b.textContent||'').toLowerCase().trim();
-    return t.includes('word')||t.includes('exporter');
-  });
-  if(wordBtn){
-    wordBtn.click();
-    console.log('  ⏳ Génération Word...');
-    await wait(5000);
-  }else{
-    console.log('  ❌ Bouton "Exporter en Word" non trouvé');
-    /* Restore */
-    URL.createObjectURL=origCreateObjectURL;
-    HTMLAnchorElement.prototype.click=origClick;
-    fail++;
-    continue;
-  }
-
-  /* Restore original functions */
-  URL.createObjectURL=origCreateObjectURL;
-  HTMLAnchorElement.prototype.click=origClick;
-
-  if(!wordBlob){
-    console.log('  ❌ Word non capturé');
-    fail++;
-    continue;
-  }
-
-  /* 4. Get serie title from page */
-  var title='ExoTeach #'+id;
-  var titleEl=document.querySelector('h1,h2,[class*="title"]');
-  if(titleEl){
-    var tt=(titleEl.textContent||'').trim();
-    if(tt.length>5)title=tt;
-  }
-  /* Also try from Apollo */
-  try{
-    var client=window.__APOLLO_CLIENT__;
-    if(client){
-      var F=function(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;};
-      var A=function(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};};
-      var r=await client.query({fetchPolicy:'cache-first',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',String(id))],[F('titre')])]}}]}});
-      if(r.data&&r.data.qcm&&r.data.qcm.titre)title=r.data.qcm.titre;
-    }
-  }catch(e){}
-
-  /* 5. Send to ExoTeachBIS API */
-  console.log('  📤 Envoi "'+title+'" à ExoTeachBIS...');
-  try{
-    var formData=new FormData();
-    formData.append('file',wordBlob,title+'.docx');
-    formData.append('name',title);
-    formData.append('type','${serieType}');
-    ${coursId ? "formData.append('coursId','" + coursId + "');" : ""}
-    ${matiereId ? "formData.append('matiereId','" + matiereId + "');" : ""}
-    var res=await fetch('${importUrl}',{method:'POST',body:formData});
-    var out=await res.json();
-    if(out.success){
-      ok++;
-      console.log('  ✅ '+out.imported+' questions importées');
+    series.push(qcm);
+  }catch(e){console.error('❌ Erreur série '+id+':',e);errs.push(id);}
+}
+if(!series.length){alert('Aucune série trouvée.');return;}
+var ok=0,fail=0;
+for(var si=0;si<series.length;si++){
+  var qcm=series[si];
+  console.log('📤 Envoi série '+(si+1)+'/'+series.length+': '+qcm.titre+'...');
+  var allQ=qcm.questions||[];
+  var batches=[];
+  for(var bi=0;bi<allQ.length;bi+=2){batches.push(allQ.slice(bi,bi+2));}
+  if(batches.length===0)batches=[[]];
+  var serieId=null,serieOk=true,totalQ=0;
+  for(var bti=0;bti<batches.length;bti++){
+    var batch=batches[bti];
+    var payload;
+    if(bti===0){
+      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}};
     }else{
-      fail++;
-      console.log('  ❌ '+out.error);
+      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'},appendToSerieId:serieId};
     }
-  }catch(e){fail++;console.log('  ❌ Erreur réseau: '+e.message);}
+    try{
+      var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      var out=await res.json();
+      if(out.success){
+        totalQ+=(out.results&&out.results[0]&&out.results[0].questions)||batch.length;
+        if(bti===0&&out.results&&out.results[0])serieId=out.results[0].newId;
+        if(batches.length>1)console.log('  📦 batch '+(bti+1)+'/'+batches.length+' OK');
+      }else{serieOk=false;console.log('  ❌ batch '+(bti+1)+': '+(out.error||'erreur'));}
+    }catch(e){serieOk=false;console.log('  ❌ Erreur réseau: '+e.message);}
+  }
+  if(serieOk){ok++;console.log('  ✅ OK ('+totalQ+'Q)');}else{fail++;}
 }
 alert('✅ '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'')+'\\n(Rafraîchis ExoTeachBIS)');
 })();`;
