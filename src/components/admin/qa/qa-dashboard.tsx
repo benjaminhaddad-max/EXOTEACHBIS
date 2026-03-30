@@ -784,6 +784,7 @@ export function QaDashboard({
         // Group overdue threads by professor
         type ProfOverdue = { prof: QaProfLite; threads: QaThread[] };
         const profMap = new Map<string, ProfOverdue>();
+        const unassignedThreads: QaThread[] = [];
 
         for (const thread of overdueFiltered) {
           // If explicitly assigned, attribute to that prof
@@ -794,14 +795,20 @@ export function QaDashboard({
             profMap.get(thread.assigned_prof_id)!.threads.push(thread);
           } else if (thread.matiere_id) {
             // Otherwise, attribute to all profs who teach this matière
+            let attributed = false;
             for (const prof of qaProfs) {
               const mats = profToMatiereIds.get(prof.id);
               if (mats?.has(thread.matiere_id)) {
                 if (!profMap.has(prof.id)) profMap.set(prof.id, { prof, threads: [] });
                 const existing = profMap.get(prof.id)!;
                 if (!existing.threads.some((t) => t.id === thread.id)) existing.threads.push(thread);
+                attributed = true;
               }
             }
+            if (!attributed) unassignedThreads.push(thread);
+          } else {
+            // No assigned prof and no matière → unassigned
+            unassignedThreads.push(thread);
           }
         }
 
@@ -886,13 +893,53 @@ export function QaDashboard({
 
             {/* Prof list grouped */}
             <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
-              {profsWithOverdue.length === 0 ? (
+              {profsWithOverdue.length === 0 && unassignedThreads.length === 0 ? (
                 <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
                   <Inbox className="w-10 h-10 mx-auto text-gray-200 mb-3" />
-                  <p className="text-sm font-semibold text-gray-600">Aucun prof en retard</p>
+                  <p className="text-sm font-semibold text-gray-600">Aucune question en retard</p>
                   <p className="text-xs text-gray-400 mt-1">Toutes les questions ont été traitées dans les délais.</p>
                 </div>
-              ) : profsWithOverdue.map(({ prof, threads: overdueThreadsList }) => (
+              ) : (<>
+              {/* Unassigned threads */}
+              {unassignedThreads.length > 0 && (
+                <div className="rounded-2xl border border-orange-200 bg-white overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3 bg-orange-50 border-b border-orange-100">
+                    <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-xs font-bold text-orange-600 shrink-0">?</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900">Questions non assignées</p>
+                      <p className="text-[11px] text-gray-500">Aucun prof assigné — matière ou prof manquant</p>
+                    </div>
+                    <span className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                      {unassignedThreads.length} question{unassignedThreads.length > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {unassignedThreads.sort((a, b) => getThreadAgeHours(b) - getThreadAgeHours(a)).map((thread) => {
+                      const ageHours = getThreadAgeHours(thread);
+                      const ageDays = Math.floor(ageHours / 24);
+                      return (
+                        <a key={thread.id} href={`/admin/questions-reponses?thread=${thread.id}`}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-800 truncate group-hover:text-blue-600">
+                              {thread.title || thread.context_label || "Question sans titre"}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-gray-400">par {getDisplayName(thread.student)}</span>
+                            </div>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            ageDays >= 4 ? "bg-red-100 text-red-700" : ageDays >= 3 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"
+                          }`}>{ageDays}j retard</span>
+                          <ExternalLink size={12} className="shrink-0 text-gray-300 group-hover:text-blue-500" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Assigned profs */}
+              {profsWithOverdue.map(({ prof, threads: overdueThreadsList }) => (
                 <div key={prof.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                   {/* Prof header */}
                   <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
@@ -957,6 +1004,7 @@ export function QaDashboard({
                   </div>
                 </div>
               ))}
+              </>)}
             </div>
           </>
         );
