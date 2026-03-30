@@ -1130,19 +1130,10 @@ export function CoursDetailPanel({
   >(null);
   const [toast, setToast] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [, startTransition] = useTransition();
-  const [serieFilter, setSerieFilter] = useState<string>("all");
-  const [sidebarTab, setSidebarTab] = useState<"series" | "flashcards">("series");
+  const [sidebarTab, setSidebarTab] = useState<"qcm" | "annales" | "flashcards">("qcm");
 
-  const filteredSeries = useMemo(() => {
-    if (serieFilter === "all") return series;
-    return series.filter((s) => s.type === serieFilter);
-  }, [series, serieFilter]);
-
-  const serieTypeCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const s of series) counts[s.type] = (counts[s.type] ?? 0) + 1;
-    return counts;
-  }, [series]);
+  const qcmSeries = useMemo(() => series.filter((s) => s.type !== "annales"), [series]);
+  const annalesSeries = useMemo(() => series.filter((s) => s.type === "annales"), [series]);
 
   const showToast = useCallback((message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -1270,25 +1261,36 @@ export function CoursDetailPanel({
           {/* Onglets */}
           <div className="shrink-0 flex border-b border-white/10">
             <button
-              onClick={() => setSidebarTab("series")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold transition-colors border-b-2 ${
-                sidebarTab === "series"
-                  ? "border-[#C9A84C] text-[#C9A84C]"
+              onClick={() => setSidebarTab("qcm")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-bold transition-colors border-b-2 ${
+                sidebarTab === "qcm"
+                  ? "border-teal-400 text-teal-400"
                   : "border-transparent text-white/40 hover:text-white/60"
               }`}
             >
-              <Layers size={13} />
-              Séries ({series.length})
+              <Layers size={12} />
+              Séries {qcmSeries.length > 0 && <span className="text-[9px] opacity-70">({qcmSeries.length})</span>}
+            </button>
+            <button
+              onClick={() => setSidebarTab("annales")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-bold transition-colors border-b-2 ${
+                sidebarTab === "annales"
+                  ? "border-amber-400 text-amber-400"
+                  : "border-transparent text-white/40 hover:text-white/60"
+              }`}
+            >
+              <FileText size={12} />
+              Annales {annalesSeries.length > 0 && <span className="text-[9px] opacity-70">({annalesSeries.length})</span>}
             </button>
             <button
               onClick={() => setSidebarTab("flashcards")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold transition-colors border-b-2 ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-bold transition-colors border-b-2 ${
                 sidebarTab === "flashcards"
                   ? "border-indigo-400 text-indigo-400"
                   : "border-transparent text-white/40 hover:text-white/60"
               }`}
             >
-              <BookOpen size={13} />
+              <BookOpen size={12} />
               Flashcards
             </button>
           </div>
@@ -1298,101 +1300,76 @@ export function CoursDetailPanel({
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={20} className="animate-spin text-white/30" />
               </div>
-            ) : sidebarTab === "series" ? (
+            ) : sidebarTab === "qcm" || sidebarTab === "annales" ? (
               <>
-                {/* ── Séries ── */}
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => setModal({ type: "import_exoteach" })}
-                        title="Importer des séries depuis ExoTeach"
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#C9A84C]/40 hover:bg-[#C9A84C]/10 text-[#C9A84C] text-[11px] font-bold transition-colors">
-                        <Download size={11} /> ExoTeach
-                      </button>
-                      <button onClick={() => setModal({ type: "create_serie" })}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35] text-[11px] font-bold transition-colors">
-                        <Plus size={11} /> Ajouter
-                      </button>
-                    </div>
-                  </div>
-                  {series.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Filter size={11} className="text-white/25" />
-                      <button
-                        onClick={() => setSerieFilter("all")}
-                        className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
-                          serieFilter === "all"
-                            ? "bg-[#C9A84C] text-[#0e1e35]"
-                            : "bg-white/8 text-white/40 hover:bg-white/12 hover:text-white/60"
-                        }`}
-                      >
-                        Tout ({series.length})
-                      </button>
-                      {(["qcm_supplementaires", "annales", "concours_blanc", "entrainement", "revision"] as const).map((t) => {
-                        const count = serieTypeCounts[t] ?? 0;
-                        if (count === 0) return null;
-                        return (
-                          <button
-                            key={t}
-                            onClick={() => setSerieFilter(t)}
-                            className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
-                              serieFilter === t
-                                ? `${TYPE_COLORS[t]} ring-1 ring-current`
-                                : "bg-white/8 text-white/40 hover:bg-white/12 hover:text-white/60"
-                            }`}
-                          >
-                            {TYPE_LABELS[t]} ({count})
+                {/* ── Séries / Annales ── */}
+                {(() => {
+                  const tabSeries = sidebarTab === "qcm" ? qcmSeries : annalesSeries;
+                  const accentColor = sidebarTab === "qcm" ? "#2dd4bf" : "#fbbf24";
+                  const emptyLabel = sidebarTab === "qcm" ? "Aucune série" : "Aucune annale";
+                  return (
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => setModal({ type: "import_exoteach" })}
+                            title="Importer des séries depuis ExoTeach"
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#C9A84C]/40 hover:bg-[#C9A84C]/10 text-[#C9A84C] text-[11px] font-bold transition-colors">
+                            <Download size={11} /> ExoTeach
                           </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                          <button onClick={() => setModal({ type: "create_serie" })}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35] text-[11px] font-bold transition-colors">
+                            <Plus size={11} /> Ajouter
+                          </button>
+                        </div>
+                      </div>
 
-                  {series.length === 0 ? (
-                    <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
-                      <Layers size={20} className="mx-auto text-white/20 mb-2" />
-                      <p className="text-xs text-white/30">Aucune série — crée-en une</p>
-                      <button onClick={() => setModal({ type: "create_serie" })} className="mt-2 text-xs text-[#C9A84C] hover:underline">
-                        + Nouvelle série
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredSeries.map((s) => (
-                        <a
-                          key={s.id}
-                          href={`/serie/${s.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-xl border border-white/8 bg-white/4 p-3 flex items-center gap-3 cursor-pointer hover:bg-white/8 transition-colors group block"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-white group-hover:text-[#C9A84C] transition-colors">{s.name}</span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[s.type]}`}>{TYPE_LABELS[s.type]}</span>
-                              {!s.visible && <span className="text-[10px] text-white/30">Masquée</span>}
-                            </div>
-                            <p className="text-[11px] text-white/40 mt-1">
-                              {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
-                              {s.timed && ` · ${s.duration_minutes}min`}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
-                            <button onClick={(e) => { e.preventDefault(); setModal({ type: "edit_serie", s }); }}
-                              className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-                              title="Modifier la série">
-                              <Pencil size={13} />
-                            </button>
-                            <button onClick={(e) => { e.preventDefault(); handleDeleteSerie(s.id); }}
-                              className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </section>
+                      {tabSeries.length === 0 ? (
+                        <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
+                          <Layers size={20} className="mx-auto text-white/20 mb-2" />
+                          <p className="text-xs text-white/30">{emptyLabel} — crée-en une</p>
+                          <button onClick={() => setModal({ type: "create_serie" })} className="mt-2 text-xs hover:underline" style={{ color: accentColor }}>
+                            + Nouvelle série
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {tabSeries.map((s) => (
+                            <a
+                              key={s.id}
+                              href={`/serie/${s.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-xl border border-white/8 bg-white/4 p-3 flex items-center gap-3 cursor-pointer hover:bg-white/8 transition-colors group block"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-semibold text-white group-hover:text-[#C9A84C] transition-colors">{s.name}</span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[s.type]}`}>{TYPE_LABELS[s.type]}</span>
+                                  {!s.visible && <span className="text-[10px] text-white/30">Masquée</span>}
+                                </div>
+                                <p className="text-[11px] text-white/40 mt-1">
+                                  {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
+                                  {s.timed && ` · ${s.duration_minutes}min`}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
+                                <button onClick={(e) => { e.preventDefault(); setModal({ type: "edit_serie", s }); }}
+                                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+                                  title="Modifier la série">
+                                  <Pencil size={13} />
+                                </button>
+                                <button onClick={(e) => { e.preventDefault(); handleDeleteSerie(s.id); }}
+                                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors">
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
               </>
             ) : (
               /* ── Flashcards ── */
