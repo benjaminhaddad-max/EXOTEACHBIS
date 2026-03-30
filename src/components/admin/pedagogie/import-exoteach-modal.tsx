@@ -80,16 +80,13 @@ function getContentImages(){
     if(!i.src.includes('/files/'))return false;
     var r=i.getBoundingClientRect();
     if(r.width<25||r.height<25)return false;
-    /* Exclude small thumbnails */
+    /* Exclude small thumbnails by class */
     if(i.closest('.w-8,.w-10,.w-12,.w-14,.h-8,.h-10,.h-12,.h-14'))return false;
-    /* Exclude header/banner/logo area (top 120px of page or in header/nav) */
-    if(i.closest('header,nav,[class*="header"],[class*="banner"],[class*="logo"]'))return false;
-    if(r.top<120)return false;
-    /* Exclude square icons (aspect ratio close to 1:1 AND small) */
-    var aspect=r.width/r.height;
-    if(aspect>0.8&&aspect<1.2&&r.width<150)return false;
-    /* Exclude SVG-like icons served as images */
-    if(i.src.includes('/icon')||i.src.includes('logo'))return false;
+    /* Exclude header/nav logos */
+    if(i.closest('header,nav'))return false;
+    /* Exclude small square icons (matière icon = square ~80-120px) */
+    var aspect=i.naturalWidth/i.naturalHeight;
+    if(aspect>0.85&&aspect<1.15&&i.naturalWidth<200&&i.naturalHeight<200)return false;
     return true;
   });
 }
