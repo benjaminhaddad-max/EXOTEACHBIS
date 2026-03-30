@@ -132,13 +132,18 @@ export async function POST(req: NextRequest) {
         const qcm = gqlJson.data?.qcm;
         if (!qcm) { results.push({ id: String(id), status: "not_found" }); continue; }
 
-        // 2. Create serie
+        // 2. Create serie (auto-detect year from title)
+        const titleStr = qcm.titre || "";
+        const yearMatch = titleStr.match(/(\d{4}-\d{4})/);
+        const autoAnnee = yearMatch ? yearMatch[1] : null;
+
         const { data: newSerie, error: serieErr } = await supabase
           .from("series")
           .insert({
             name: qcm.titre || `ExoTeach #${id}`,
             cours_id: coursId || null,
             matiere_id: matiereId || null,
+            annee: autoAnnee,
             type: serieType || "annales",
             timed: false,
             visible: true,

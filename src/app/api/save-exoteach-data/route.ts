@@ -101,6 +101,11 @@ export async function POST(req: NextRequest) {
           // Append questions to existing serie
           serieId = appendToSerieId;
         } else {
+          // Auto-detect year from title (e.g. "ACC - Chimie, 2023-2024")
+          const titleStr = qcm.titre || "";
+          const yearMatch = titleStr.match(/(\d{4}-\d{4})/);
+          const autoAnnee = yearMatch ? yearMatch[1] : null;
+
           // Create new serie
           const { data: newSerie, error: serieErr } = await supabase
             .from("series")
@@ -108,6 +113,7 @@ export async function POST(req: NextRequest) {
               name: qcm.titre || `ExoTeach #${qcm.id_qcm}`,
               cours_id: coursId || null,
               matiere_id: matiereId || null,
+              annee: autoAnnee,
               type: serieType || "entrainement",
               timed: false, visible: true, score_definitif: false,
             })
