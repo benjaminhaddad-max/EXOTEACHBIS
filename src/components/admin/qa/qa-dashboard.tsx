@@ -397,6 +397,8 @@ export function QaDashboard({
   const [adminSearch, setAdminSearch] = useState("");
   const [adminShowArchived, setAdminShowArchived] = useState(false);
   const [adminSelectedGroupeId, setAdminSelectedGroupeId] = useState<string | null>(null);
+  const [adminFilterFormation, setAdminFilterFormation] = useState("all");
+  const [adminFilterUni, setAdminFilterUni] = useState("all");
 
   // Build formation tree: dossier (offer/university) → groupes
   const adminFormationTree = useMemo(() => {
@@ -443,10 +445,57 @@ export function QaDashboard({
     return { roots, threadCountByGroupe };
   }, [qaDossiers, qaGroupes, adminThreads]);
 
+  // Map groupe → offer (formation) for admin filtering
+  const groupeToOfferId = useMemo(() => {
+    const map = new Map<string, string>();
+    const dossierById = new Map(qaDossiers.map((d) => [d.id, d]));
+    for (const g of qaGroupes) {
+      if (!g.formation_dossier_id) continue;
+      let cur = dossierById.get(g.formation_dossier_id);
+      while (cur) {
+        if (cur.dossier_type === "offer") { map.set(g.id, cur.id); break; }
+        cur = cur.parent_id ? dossierById.get(cur.parent_id) : undefined;
+      }
+    }
+    return map;
+  }, [qaDossiers, qaGroupes]);
+
+  const groupeToUniId = useMemo(() => {
+    const map = new Map<string, string>();
+    const dossierById = new Map(qaDossiers.map((d) => [d.id, d]));
+    for (const g of qaGroupes) {
+      if (!g.formation_dossier_id) continue;
+      let cur = dossierById.get(g.formation_dossier_id);
+      while (cur) {
+        if (cur.dossier_type === "university") { map.set(g.id, cur.id); break; }
+        cur = cur.parent_id ? dossierById.get(cur.parent_id) : undefined;
+      }
+    }
+    return map;
+  }, [qaDossiers, qaGroupes]);
+
+  const adminUnisForFormation = useMemo(() =>
+    adminFilterFormation === "all" ? [] :
+    qaDossiers.filter((d) => d.dossier_type === "university" && d.parent_id === adminFilterFormation).sort((a, b) => a.order_index - b.order_index),
+    [qaDossiers, adminFilterFormation]
+  );
+
   const filteredAdminThreads = useMemo(() => {
     let base = adminShowArchived ? adminThreads : adminThreads.filter((t) => !t.archived_at);
     if (adminSelectedGroupeId) {
       base = base.filter((t) => (t.student as any)?.groupe_id === adminSelectedGroupeId);
+    }
+    if (adminFilterFormation !== "all") {
+      base = base.filter((t) => {
+        const gid = (t.student as any)?.groupe_id;
+        return gid && groupeToOfferId.get(gid) === adminFilterFormation;
+      });
+    }
+    if (adminFilterUni !== "all") {
+      base = base.filter((t) => {
+        const gid = (t.student as any)?.groupe_id;
+        return gid && groupeToUniId.get(gid) === adminFilterUni;
+      });
     }
     const normalizedSearch = adminSearch.trim().toLowerCase();
     if (!normalizedSearch) return sortThreadsForOps(base);
@@ -909,52 +958,37 @@ export function QaDashboard({
 
       {/* ═══════════ ADMIN TAB ═══════════ */}
       {topTab === "admin" && (
-        <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex">
-          {/* Formation tree sidebar */}
-          <div className="hidden lg:flex flex-col shrink-0 border-r border-gray-200 overflow-y-auto h-full bg-gray-50/60 w-[min(260px,28vw)]">
-            <div className="px-3 pt-3 pb-2 shrink-0 border-b border-gray-100">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Formations & Classes</p>
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Formation / University filters */}
+          {availableOffers.length > 1 && (
+            <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3 mb-4 space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 shrink-0">Formation</span>
+                <button type="button" onClick={() => { setAdminFilterFormation("all"); setAdminFilterUni("all"); }}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${adminFilterFormation === "all" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
+                {availableOffers.map((offer) => (
+                  <button key={offer.id} type="button" onClick={() => { setAdminFilterFormation(adminFilterFormation === offer.id ? "all" : offer.id); setAdminFilterUni("all"); }}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${adminFilterFormation === offer.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{offer.name}</button>
+                ))}
+              </div>
+              {adminFilterFormation !== "all" && adminUnisForFormation.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 shrink-0">Université</span>
+                  <button type="button" onClick={() => setAdminFilterUni("all")}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${adminFilterUni === "all" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
+                  {adminUnisForFormation.map((uni) => (
+                    <button key={uni.id} type="button" onClick={() => setAdminFilterUni(adminFilterUni === uni.id ? "all" : uni.id)}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${adminFilterUni === uni.id ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{uni.name.replace("Université ", "")}</button>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-            <div className="px-2 pt-2 pb-1">
-              <button
-                type="button"
-                onClick={() => setAdminSelectedGroupeId(null)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  !adminSelectedGroupeId
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-gray-500 hover:bg-gray-100"
-                }`}
-              >
-                <Layers size={13} />
-                Toutes les questions
-                {adminUnresolvedCount > 0 && (
-                  <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                    !adminSelectedGroupeId ? "bg-white/25 text-white" : "bg-blue-100 text-blue-700"
-                  }`}>
-                    {adminUnresolvedCount}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            <div className="px-2 pb-3 flex-1 min-h-0 space-y-0.5">
-              {adminFormationTree.roots.map((node) => (
-                <AdminFormationNode
-                  key={node.dossier.id}
-                  node={node}
-                  depth={0}
-                  selectedGroupeId={adminSelectedGroupeId}
-                  onSelectGroupe={setAdminSelectedGroupeId}
-                  threadCountByGroupe={adminFormationTree.threadCountByGroupe}
-                />
-              ))}
-            </div>
-          </div>
-
+          <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex">
           {/* Thread list */}
           <div
-            className={`w-full lg:w-[min(400px,34vw)] border-r border-gray-100 flex flex-col shrink-0 min-h-0 ${
+            className={`w-full lg:w-[min(420px,36vw)] border-r border-gray-100 flex flex-col shrink-0 min-h-0 ${
               selected ? "hidden lg:flex" : "flex"
             }`}
           >
@@ -966,7 +1000,7 @@ export function QaDashboard({
                 <div>
                   <p className="text-sm font-bold text-gray-900">Questions administratives</p>
                   <p className="text-[11px] text-gray-500">
-                    {adminUnresolvedCount} en attente · {adminThreads.length} total
+                    {filteredAdminThreads.length} question{filteredAdminThreads.length > 1 ? "s" : ""}
                   </p>
                 </div>
               </div>
@@ -1031,6 +1065,7 @@ export function QaDashboard({
               </div>
             )}
           </div>
+        </div>
         </div>
       )}
     </div>
