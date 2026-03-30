@@ -102,108 +102,93 @@ for(var id of ids){
     var qcm=JSON.parse(JSON.stringify(r.data.qcm));
     var nbQ=qcm.questions.length;
 
-    /* Navigate to player */
-    console.log('🖼️ Scraping images question par question ('+nbQ+'Q)...');
-    window.location.hash='#/serie/play/'+id;
-    await wait(3000);
+    /* Navigate to the EDIT page where all questions + images are displayed properly */
+    console.log('🖼️ Navigation vers la page d\\'édition (toutes les questions)...');
+    window.location.hash='#/admin-series/edit/'+id;
+    await wait(4000);
 
-    /* Click "Démarrer" */
-    var startBtn=Array.from(document.querySelectorAll('button')).find(function(b){return(b.textContent||'').match(/d[eé]marrer|commencer|start|lancer/i);});
-    if(startBtn){startBtn.click();await wait(2000);}
-
-    /* First pass: detect static/decorative images that appear on every question */
-    var imgSrcCount={};
-    var samplesToCheck=Math.min(3,nbQ);
-    for(var si=0;si<samplesToCheck;si++){
-      var sBtn=Array.from(document.querySelectorAll('button,a,div[role="button"],li')).find(function(b){return(b.textContent||'').trim()===String(si+1);});
-      if(sBtn){sBtn.click();await wait(800);}
-      getContentImages().forEach(function(img){imgSrcCount[img.src]=(imgSrcCount[img.src]||0)+1;});
+    /* Scroll the entire page to load all images */
+    var sc=document.querySelector('[class*="scroll"]')||document.querySelector('main')||document.documentElement;
+    for(var scrollStep=0;scrollStep<10;scrollStep++){
+      if(sc)sc.scrollTop=(scrollStep+1)*800;
+      await wait(500);
     }
-    var staticSrcs=new Set();
-    Object.keys(imgSrcCount).forEach(function(src){if(imgSrcCount[src]>=samplesToCheck)staticSrcs.add(src);});
-    if(staticSrcs.size>0)console.log('  🚫 '+staticSrcs.size+' image(s) statique(s) ignorée(s) (décor/logo)');
+    if(sc)sc.scrollTop=0;
+    await wait(1000);
 
-    /* For each question: click to navigate, then capture images */
+    /* Collect ALL content images on the page */
+    var allPageImgs=getContentImages();
+    console.log('  '+allPageImgs.length+' image(s) trouvée(s) sur la page');
+
+    /* Find all "Exercice N" headers to map images to questions */
+    var exerciceHeaders=[];
+    document.querySelectorAll('*').forEach(function(el){
+      var t=(el.textContent||'').trim();
+      var m=t.match(/^(?:Exercice|QCM)\s+(\d+)/i);
+      if(m&&el.children.length<5){
+        var r=el.getBoundingClientRect();
+        if(r.height>5&&r.height<80)exerciceHeaders.push({num:parseInt(m[1]),y:r.top,el:el});
+      }
+    });
+    /* Deduplicate by number */
+    var seenNums={};
+    exerciceHeaders=exerciceHeaders.filter(function(h){if(seenNums[h.num])return false;seenNums[h.num]=true;return true;});
+    exerciceHeaders.sort(function(a,b){return a.y-b.y;});
+
+    /* Map images to exercise sections by Y position */
+    var imgsByEx={};
+    for(var imgIdx=0;imgIdx<allPageImgs.length;imgIdx++){
+      var imgEl=allPageImgs[imgIdx];
+      var imgY=imgEl.getBoundingClientRect().top;
+      /* Find which exercise this image belongs to */
+      var exNum=null;
+      for(var hi=exerciceHeaders.length-1;hi>=0;hi--){
+        if(exerciceHeaders[hi].y<=imgY+20){exNum=exerciceHeaders[hi].num;break;}
+      }
+      if(exNum){
+        if(!imgsByEx[exNum])imgsByEx[exNum]=[];
+        imgsByEx[exNum].push(imgEl);
+      }
+    }
+
+    /* Assign images to questions */
     for(var qi=0;qi<nbQ;qi++){
       var q=qcm.questions[qi];
       var exNum=qi+1;
+      var exImgs=imgsByEx[exNum]||[];
 
-      /* Click question number in sidebar */
-      var clicked=false;
-      var btns=Array.from(document.querySelectorAll('button,a,div[role="button"],li'));
-      for(var bi=0;bi<btns.length;bi++){
-        var txt=(btns[bi].textContent||'').trim();
-        /* Match: "1", "Question 1", "QCM 1", "Exercice 1" etc. */
-        if(txt===String(exNum)||txt.match(new RegExp('^(Question|QCM|Exercice)\\\\s+'+exNum+'$','i'))){
-          btns[bi].click();clicked=true;break;
+      if(exImgs.length===0){
+        /* Fetch url_image from Apollo if present */
+        for(var ai=0;ai<(q.answers||[]).length;ai++){
+          var ans=q.answers[ai];
+          if(ans.url_image&&!ans.image_url_scraped){
+            var ab=await imgToB64(ans.url_image);
+            if(ab){ans.image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item (API)');}
+          }
         }
-      }
-      /* Also try clicking by index in sidebar list */
-      if(!clicked){
-        var sideItems=Array.from(document.querySelectorAll('[class*="sidebar"] button,[class*="sidebar"] li,[class*="sidebar"] a'));
-        if(sideItems.length===0)sideItems=Array.from(document.querySelectorAll('nav button,nav li,nav a'));
-        if(qi<sideItems.length){sideItems[qi].click();clicked=true;}
-      }
-      await wait(1200);
-
-      /* Get images on current view, excluding static decorative ones */
-      var imgs=getContentImages().filter(function(i){return !staticSrcs.has(i.src);});
-      if(imgs.length===0){
-        console.log('  Q'+exNum+' — pas d\\'image');
+        if(!q.url_image_q)console.log('  Q'+exNum+' — pas d\\'image');
         continue;
       }
 
-      /* Sort images by vertical position */
-      var sorted=imgs.map(function(img){return{img:img,y:img.getBoundingClientRect().top};}).sort(function(a,b){return a.y-b.y;});
-
-      /* Find answer option labels (A, B, C, D, E) to separate énoncé from items */
-      var labels=[];
-      document.querySelectorAll('*').forEach(function(el){
-        var t=(el.textContent||'').trim();
-        var r=el.getBoundingClientRect();
-        /* Single letter A-E, small element (label badge), visible */
-        if(/^[A-E]$/.test(t)&&r.height>8&&r.height<60&&r.width<60&&r.top>0){
-          labels.push({letter:t,y:r.top});
-        }
-      });
-      /* Deduplicate labels by letter (keep first occurrence) */
-      var seenLetters={};
-      labels=labels.filter(function(l){if(seenLetters[l.letter])return false;seenLetters[l.letter]=true;return true;});
-      labels.sort(function(a,b){return a.y-b.y;});
-
-      var firstLabelY=labels.length>0?labels[0].y:99999;
-
-      /* Images above first label = énoncé */
-      var enonceImgs=sorted.filter(function(s){return s.y<firstLabelY-30;});
-      /* Images at/below labels = items */
-      var itemImgs=sorted.filter(function(s){return s.y>=firstLabelY-30;});
-
-      /* Capture énoncé image (largest one if multiple) */
-      if(enonceImgs.length>0&&!q.url_image_q&&!q.image_url_scraped){
-        enonceImgs.sort(function(a,b){return(b.img.naturalWidth*b.img.naturalHeight)-(a.img.naturalWidth*a.img.naturalHeight);});
-        var b64=await domImgToB64(enonceImgs[0].img);
+      /* First image = question/énoncé image */
+      if(!q.url_image_q&&!q.image_url_scraped){
+        var b64=await domImgToB64(exImgs[0]);
         if(b64){
           q.image_url_scraped=b64;
           console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)');
         }
       }
 
-      /* Capture item images — assign to nearest label above */
-      for(var ii=0;ii<itemImgs.length;ii++){
-        var imgY=itemImgs[ii].y;
-        var bestLetter=null;
-        for(var li=labels.length-1;li>=0;li--){
-          if(labels[li].y<=imgY+40){bestLetter=labels[li].letter;break;}
-        }
-        if(bestLetter){
-          var ansIdx='ABCDE'.indexOf(bestLetter);
-          if(ansIdx>=0&&ansIdx<(q.answers||[]).length&&!q.answers[ansIdx].url_image&&!q.answers[ansIdx].image_url_scraped){
-            var ab=await domImgToB64(itemImgs[ii].img);
-            if(ab){
-              q.answers[ansIdx].image_url_scraped=ab;
-              console.log('  Q'+exNum+'.'+bestLetter+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
-            }
+      /* Remaining images = item images (assigned in order to answers that need them) */
+      for(var ii=1,ai=0;ii<exImgs.length&&ai<(q.answers||[]).length;ai++){
+        var ans=q.answers[ai];
+        if(!ans.url_image&&!ans.image_url_scraped){
+          var ab=await domImgToB64(exImgs[ii]);
+          if(ab){
+            ans.image_url_scraped=ab;
+            console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
           }
+          ii++;
         }
       }
 
