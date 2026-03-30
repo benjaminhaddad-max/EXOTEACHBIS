@@ -241,6 +241,7 @@ export function QaDashboard({
     initialThreadId ? initialThreads.find((thread) => thread.id === initialThreadId) ?? null : null
   );
   const [filterMatiere, setFilterMatiere] = useState("all");
+  const [filterFormation, setFilterFormation] = useState("all");
   const [queuePreset, setQueuePreset] = useState<QueuePreset>("unresolved");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -260,6 +261,28 @@ export function QaDashboard({
     });
 
   const selectAllMatieres = () => setSelectedMatiereIds(new Set());
+
+  // ─── Formation filter derived data ─────────────────────────────────────────
+  const availableOffers = useMemo(
+    () => qaDossiers.filter((d) => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index),
+    [qaDossiers]
+  );
+
+  const matiereToOfferId = useMemo(() => {
+    const byId = new Map(qaDossiers.map((d) => [d.id, d]));
+    const map = new Map<string, string>();
+    for (const mat of qaMatieres) {
+      let cur = byId.get(mat.dossier_id);
+      while (cur) {
+        if (cur.dossier_type === "offer") {
+          map.set(mat.id, cur.id);
+          break;
+        }
+        cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+      }
+    }
+    return map;
+  }, [qaDossiers, qaMatieres]);
 
   const refreshThreads = async () => {
     const { data } = await supabase
@@ -337,6 +360,7 @@ export function QaDashboard({
 
     const list = threadsAfterScope.filter((thread) => {
       if (!matchesQueuePreset(thread, queuePreset)) return false;
+      if (filterFormation !== "all" && thread.matiere_id && matiereToOfferId.get(thread.matiere_id) !== filterFormation) return false;
       if (filterMatiere !== "all" && thread.matiere_id !== filterMatiere) return false;
       if (!normalizedSearch) return true;
 
@@ -354,7 +378,7 @@ export function QaDashboard({
     });
 
     return sortThreadsForOps(list);
-  }, [filterMatiere, threadsAfterScope, queuePreset, search]);
+  }, [filterMatiere, filterFormation, matiereToOfferId, threadsAfterScope, queuePreset, search]);
 
   const overdueThreadIds = useMemo(() => {
     const ids = new Set<string>();
@@ -661,6 +685,36 @@ export function QaDashboard({
                   </p>
                 )}
 
+                {availableOffers.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setFilterFormation("all"); setFilterMatiere("all"); }}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        filterFormation === "all"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      Toutes
+                    </button>
+                    {availableOffers.map((offer) => (
+                      <button
+                        key={offer.id}
+                        type="button"
+                        onClick={() => { setFilterFormation(filterFormation === offer.id ? "all" : offer.id); setFilterMatiere("all"); }}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          filterFormation === offer.id
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        {offer.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <input
                   type="text"
                   value={search}
@@ -686,7 +740,9 @@ export function QaDashboard({
                     className="w-[200px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="all">Toutes les matières</option>
-                    {matieres.map((matiere) => (
+                    {matieres
+                      .filter((matiere) => filterFormation === "all" || matiereToOfferId.get(matiere.id) === filterFormation)
+                      .map((matiere) => (
                       <option key={matiere.id} value={matiere.id}>
                         {matiere.name}
                       </option>
