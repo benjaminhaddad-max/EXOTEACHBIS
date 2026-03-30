@@ -51,7 +51,7 @@ async function getImgUrl(imgEl){
     c.height=imgEl.naturalHeight||imgEl.height;
     if(c.width>0&&c.height>0){
       c.getContext('2d').drawImage(imgEl,0,0);
-      var d=c.toDataURL('image/png');
+      var d=c.toDataURL('image/jpeg',0.7);
       if(d&&d.length>200)return d;
     }
   }catch(e){}
@@ -218,12 +218,35 @@ for(var id of ids){
 if(!series.length){alert('Aucune série trouvée.');return;}
 var ok=0,fail=0;
 for(var si=0;si<series.length;si++){
-  console.log('📤 Envoi série '+(si+1)+'/'+series.length+': '+series[si].titre+'...');
-  try{
-    var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:[series[si]],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}})});
-    var out=await res.json();
-    if(out.success){ok++;console.log('  ✅ OK');}else{fail++;console.log('  ❌ '+out.error);}
-  }catch(e){fail++;console.log('  ❌ Erreur réseau: '+e.message);}
+  var qcm=series[si];
+  console.log('📤 Envoi série '+(si+1)+'/'+series.length+': '+qcm.titre+'...');
+  /* Send questions in batches of 5 to avoid 413 body too large */
+  var allQ=qcm.questions||[];
+  var batches=[];
+  for(var bi=0;bi<allQ.length;bi+=5){batches.push(allQ.slice(bi,bi+5));}
+  if(batches.length===0)batches=[[]];
+  var serieId=null,serieOk=true,totalQ=0;
+  for(var bti=0;bti<batches.length;bti++){
+    var batch=batches[bti];
+    var payload;
+    if(bti===0){
+      /* First batch: create serie + first questions */
+      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}};
+    }else{
+      /* Subsequent batches: append to existing serie */
+      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'},appendToSerieId:serieId};
+    }
+    try{
+      var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      var out=await res.json();
+      if(out.success){
+        totalQ+=(out.results&&out.results[0]&&out.results[0].questions)||batch.length;
+        if(bti===0&&out.results&&out.results[0])serieId=out.results[0].newId;
+        if(batches.length>1)console.log('  📦 batch '+(bti+1)+'/'+batches.length+' OK');
+      }else{serieOk=false;console.log('  ❌ batch '+(bti+1)+': '+(out.error||'erreur'));}
+    }catch(e){serieOk=false;console.log('  ❌ Erreur réseau: '+e.message);}
+  }
+  if(serieOk){ok++;console.log('  ✅ OK ('+totalQ+'Q)');}else{fail++;}
 }
 alert('✅ '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'')+'\\n(Rafraîchis ExoTeachBIS pour voir les séries)');
 })();`;

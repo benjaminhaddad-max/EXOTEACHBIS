@@ -83,7 +83,7 @@ function indexToLabel(i: number) { return String.fromCharCode(65 + i); }
 
 export async function POST(req: NextRequest) {
   try {
-    const { series, coursId, serieType, matiereId } = await req.json();
+    const { series, coursId, serieType, matiereId, appendToSerieId } = await req.json();
     if (!series?.length) return NextResponse.json({ error: "series vide" }, { status: 400, headers: CORS });
 
     const supabase = createClient(
@@ -95,18 +95,34 @@ export async function POST(req: NextRequest) {
 
     for (const qcm of series) {
       try {
-        const { data: newSerie, error: serieErr } = await supabase
-          .from("series")
-          .insert({
-            name: qcm.titre || `ExoTeach #${qcm.id_qcm}`,
-            cours_id: coursId || null,
-            matiere_id: matiereId || null,
-            type: serieType || "entrainement",
-            timed: false, visible: true, score_definitif: false,
-          })
-          .select("id").single();
+        let serieId: string;
 
-        if (serieErr || !newSerie) throw new Error(serieErr?.message || "Erreur création série");
+        if (appendToSerieId) {
+          // Append questions to existing serie
+          serieId = appendToSerieId;
+        } else {
+          // Create new serie
+          const { data: newSerie, error: serieErr } = await supabase
+            .from("series")
+            .insert({
+              name: qcm.titre || `ExoTeach #${qcm.id_qcm}`,
+              cours_id: coursId || null,
+              matiere_id: matiereId || null,
+              type: serieType || "entrainement",
+              timed: false, visible: true, score_definitif: false,
+            })
+            .select("id").single();
+
+          if (serieErr || !newSerie) throw new Error(serieErr?.message || "Erreur création série");
+          serieId = newSerie.id;
+        }
+
+        // Get current question count for order_index when appending
+        let startIndex = 0;
+        if (appendToSerieId) {
+          const { count } = await supabase.from("series_questions").select("*", { count: "exact", head: true }).eq("series_id", serieId);
+          startIndex = count ?? 0;
+        }
 
         let questionsImported = 0;
 
@@ -154,7 +170,7 @@ export async function POST(req: NextRequest) {
           if (optErr) console.error("Opt insert err:", optErr.message);
 
           await supabase.from("series_questions").insert({
-            series_id: newSerie.id, question_id: newQ.id, order_index: qi,
+            series_id: serieId, question_id: newQ.id, order_index: startIndex + qi,
           });
 
           questionsImported++;
@@ -162,7 +178,7 @@ export async function POST(req: NextRequest) {
 
         results.push({
           id: String(qcm.id_qcm), status: "ok",
-          titre: qcm.titre, newId: newSerie.id,
+          titre: qcm.titre, newId: serieId,
           questions: questionsImported,
         });
       } catch (err: any) {
