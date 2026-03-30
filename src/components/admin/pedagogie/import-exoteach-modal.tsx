@@ -73,7 +73,7 @@ async function domImgToB64(imgEl){
   return await imgToB64(imgEl.src);
 }
 
-/* Get all content images on current view (exclude thumbnails/avatars) */
+/* Get all content images on current view (exclude thumbnails/avatars/icons) */
 function getContentImages(){
   return Array.from(document.querySelectorAll('img')).filter(function(i){
     if(!i.src||i.naturalWidth<30)return false;
@@ -82,6 +82,14 @@ function getContentImages(){
     if(r.width<25||r.height<25)return false;
     /* Exclude small thumbnails */
     if(i.closest('.w-8,.w-10,.w-12,.w-14,.h-8,.h-10,.h-12,.h-14'))return false;
+    /* Exclude header/banner/logo area (top 120px of page or in header/nav) */
+    if(i.closest('header,nav,[class*="header"],[class*="banner"],[class*="logo"]'))return false;
+    if(r.top<120)return false;
+    /* Exclude square icons (aspect ratio close to 1:1 AND small) */
+    var aspect=r.width/r.height;
+    if(aspect>0.8&&aspect<1.2&&r.width<150)return false;
+    /* Exclude SVG-like icons served as images */
+    if(i.src.includes('/icon')||i.src.includes('logo'))return false;
     return true;
   });
 }
