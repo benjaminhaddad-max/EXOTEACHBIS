@@ -47,12 +47,13 @@ const coachNavItems = [
 ];
 
 export function AdminSidebar() {
-  const { profile } = useUser();
+  const { profile, loading } = useUser();
 
-  // Show admin items by default while loading, then switch to role-specific items
-  const navItems = !profile
-    ? adminNavItems
-    : profile.role === "coach"
+  const navItems = loading
+    ? []
+    : !profile
+      ? adminNavItems
+      : profile.role === "coach"
       ? coachNavItems
       : profile.role === "prof"
         ? profNavItems
@@ -60,9 +61,16 @@ export function AdminSidebar() {
 
   return (
     <SidebarShell>
-      {navItems.map((item) => (
-        <SidebarItem key={item.href} {...item} />
-      ))}
+      {loading
+        ? Array.from({ length: 6 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-11 rounded-xl bg-white/6 animate-pulse"
+            />
+          ))
+        : navItems.map((item) => (
+            <SidebarItem key={item.href} {...item} />
+          ))}
     </SidebarShell>
   );
 }
