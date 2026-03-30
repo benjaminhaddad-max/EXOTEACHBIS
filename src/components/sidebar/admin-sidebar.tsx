@@ -47,18 +47,16 @@ const coachNavItems = [
 ];
 
 export function AdminSidebar() {
-  const { profile, loading } = useUser();
+  const { profile } = useUser();
 
-  // Don't render nav items until profile is loaded to avoid flashing wrong sidebar
-  if (loading || !profile) {
-    return <SidebarShell>{null}</SidebarShell>;
-  }
-
-  const navItems = profile.role === "coach"
-    ? coachNavItems
-    : profile.role === "prof"
-      ? profNavItems
-      : adminNavItems;
+  // Show admin items by default while loading, then switch to role-specific items
+  const navItems = !profile
+    ? adminNavItems
+    : profile.role === "coach"
+      ? coachNavItems
+      : profile.role === "prof"
+        ? profNavItems
+        : adminNavItems;
 
   return (
     <SidebarShell>

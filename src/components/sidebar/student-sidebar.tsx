@@ -48,13 +48,16 @@ const coachNavItems = [
 ];
 
 export function StudentSidebar() {
-  const { profile, loading } = useUser();
+  const { profile } = useUser();
 
-  if (loading || !profile) {
-    return <SidebarShell>{null}</SidebarShell>;
-  }
-
-  const navItems = profile.role === "coach" ? coachNavItems : profile.role === "prof" ? profNavItems : studentNavItems;
+  // Show student items by default while loading, then switch to role-specific items
+  const navItems = !profile
+    ? studentNavItems
+    : profile.role === "coach"
+      ? coachNavItems
+      : profile.role === "prof"
+        ? profNavItems
+        : studentNavItems;
 
   return (
     <SidebarShell>
