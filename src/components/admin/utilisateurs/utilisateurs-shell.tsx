@@ -3374,10 +3374,10 @@ function EditUserModal({
   const [personalAccessIds, setPersonalAccessIds] = useState<string[]>(directAccessIds);
   const [excludedInheritedAccessIds, setExcludedInheritedAccessIds] = useState<string[]>(excludedAccessIds);
   const [matiereIds, setMatiereIds] = useState<string[]>(selectedMatiereIds);
-  // Role-type specific matiere assignments
+  // Role-type specific matiere assignments (2 sections: cours + qa/contenu merged)
   const [coursMatIds, setCoursMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type).map((r) => r.matiere_id));
-  const [qaMatIds, setQaMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "qa").map((r) => r.matiere_id));
-  const [contenuMatIds, setContenuMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "contenu").map((r) => r.matiere_id));
+  const [qaContenuMatIds, setQaContenuMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "qa" || r.role_type === "contenu").map((r) => r.matiere_id));
+  const [coursGroupeId, setCoursGroupeId] = useState<string>(user.groupe_id ?? groupes[0]?.id ?? "");
   const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
   const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
   const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
@@ -3448,8 +3448,8 @@ function EditUserModal({
     niveauProgressif !== (coachingProfile?.niveau_progressif ?? 50) ||
     mentalProgressif !== (coachingProfile?.mental_progressif ?? 50);
 
-  const toggleRoleMatiere = (roleType: "cours" | "qa" | "contenu", matiereId: string) => {
-    const setter = roleType === "cours" ? setCoursMatIds : roleType === "qa" ? setQaMatIds : setContenuMatIds;
+  const toggleRoleMatiere = (roleType: "cours" | "qa_contenu", matiereId: string) => {
+    const setter = roleType === "cours" ? setCoursMatIds : setQaContenuMatIds;
     setter((prev) => prev.includes(matiereId) ? prev.filter((id) => id !== matiereId) : [...prev, matiereId]);
   };
 
@@ -3819,60 +3819,126 @@ function EditUserModal({
           )}
 
           {role === "prof" && (
-            <div className="space-y-4">
-              {([
-                { key: "cours" as const, label: "Donne cours", desc: "Apparaît sur le planning des élèves", color: "#60A5FA", ids: coursMatIds },
-                { key: "qa" as const, label: "Répond aux questions", desc: "Accès au Q&A de la plateforme", color: "#FBBF24", ids: qaMatIds },
-                { key: "contenu" as const, label: "Crée du contenu", desc: "Fiches, exercices, QCM", color: "#34D399", ids: contenuMatIds },
-              ]).map((section) => (
-                <div key={section.key}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: section.color }} />
-                    <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
-                      {section.label}
-                    </label>
-                    <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— {section.desc}</span>
-                  </div>
-                  <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    {dossiers
-                      .filter((dossier) => (matieresByDossier.get(dossier.id)?.length ?? 0) > 0)
-                      .map((dossier) => (
-                        <div key={dossier.id}>
-                          <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
-                            {getDossierPathLabel(dossier.id, dossiers)}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
-                              const checked = section.ids.includes(matiere.id);
-                              return (
-                                <button
-                                  key={matiere.id}
-                                  type="button"
-                                  onClick={() => toggleRoleMatiere(section.key, matiere.id)}
-                                  className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
-                                  style={{
-                                    borderColor: checked ? section.color + "99" : "rgba(255,255,255,0.08)",
-                                    backgroundColor: checked ? section.color + "22" : "rgba(255,255,255,0.02)",
-                                    color: checked ? section.color : "rgba(255,255,255,0.55)",
-                                  }}
-                                >
-                                  <span
-                                    className="h-2 w-2 rounded-full shrink-0"
-                                    style={{ backgroundColor: checked ? section.color : matiere.color }}
-                                  />
-                                  {matiere.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    {dossiers.filter((d) => (matieresByDossier.get(d.id)?.length ?? 0) > 0).length === 0 && (
-                      <p className="text-[11px] py-2 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune matière disponible</p>
-                    )}
-                  </div>
+            <div className="space-y-5">
+              {/* ── Section 1: Donne cours (Classe > Matière) ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#60A5FA" }} />
+                  <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    Donne cours
+                  </label>
+                  <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— Emploi du temps & planning</span>
                 </div>
-              ))}
+                <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {/* Classe picker */}
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>Classe</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {groupes.map((g) => {
+                        const selected = coursGroupeId === g.id;
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => setCoursGroupeId(g.id)}
+                            className="rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
+                            style={{
+                              borderColor: selected ? "#60A5FA99" : "rgba(255,255,255,0.08)",
+                              backgroundColor: selected ? "#60A5FA22" : "rgba(255,255,255,0.02)",
+                              color: selected ? "#60A5FA" : "rgba(255,255,255,0.55)",
+                            }}
+                          >
+                            {g.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Matières de la classe */}
+                  {coursGroupeId && (() => {
+                    const selectedGroupe = groupes.find((g) => g.id === coursGroupeId);
+                    const formationId = selectedGroupe?.formation_dossier_id;
+                    // Find all dossier descendants of this formation
+                    const relevantDossierIds = new Set<string>();
+                    if (formationId) {
+                      const addDescendants = (parentId: string) => {
+                        relevantDossierIds.add(parentId);
+                        dossiers.filter((d) => d.parent_id === parentId).forEach((d) => addDescendants(d.id));
+                      };
+                      addDescendants(formationId);
+                    }
+                    const filteredDossiers = dossiers.filter((d) => relevantDossierIds.has(d.id) && (matieresByDossier.get(d.id)?.length ?? 0) > 0);
+                    return filteredDossiers.length > 0 ? filteredDossiers.map((dossier) => (
+                      <div key={dossier.id}>
+                        <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          {getDossierPathLabel(dossier.id, dossiers)}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
+                            const checked = coursMatIds.includes(matiere.id);
+                            return (
+                              <button key={matiere.id} type="button" onClick={() => toggleRoleMatiere("cours", matiere.id)}
+                                className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
+                                style={{
+                                  borderColor: checked ? "#60A5FA99" : "rgba(255,255,255,0.08)",
+                                  backgroundColor: checked ? "#60A5FA22" : "rgba(255,255,255,0.02)",
+                                  color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)",
+                                }}>
+                                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#60A5FA" : matiere.color }} />
+                                {matiere.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )) : (
+                      <p className="text-[11px] py-2 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Sélectionnez une classe</p>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* ── Section 2: Q&A & Contenu (Matière, pas de classe) ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#FBBF24" }} />
+                  <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    Q&A & Contenu
+                  </label>
+                  <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— Répond aux questions & crée du contenu pédagogique</span>
+                </div>
+                <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {dossiers
+                    .filter((dossier) => (matieresByDossier.get(dossier.id)?.length ?? 0) > 0)
+                    .map((dossier) => (
+                      <div key={dossier.id}>
+                        <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          {getDossierPathLabel(dossier.id, dossiers)}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
+                            const checked = qaContenuMatIds.includes(matiere.id);
+                            return (
+                              <button key={matiere.id} type="button" onClick={() => toggleRoleMatiere("qa_contenu", matiere.id)}
+                                className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
+                                style={{
+                                  borderColor: checked ? "#FBBF2499" : "rgba(255,255,255,0.08)",
+                                  backgroundColor: checked ? "#FBBF2422" : "rgba(255,255,255,0.02)",
+                                  color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)",
+                                }}>
+                                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#FBBF24" : matiere.color }} />
+                                {matiere.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  {dossiers.filter((d) => (matieresByDossier.get(d.id)?.length ?? 0) > 0).length === 0 && (
+                    <p className="text-[11px] py-2 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune matière disponible</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -3907,8 +3973,7 @@ function EditUserModal({
                 matiere_ids: matiereIds,
                 matiere_roles: [
                   ...coursMatIds.map((id) => ({ matiere_id: id, role_type: "cours" })),
-                  ...qaMatIds.map((id) => ({ matiere_id: id, role_type: "qa" })),
-                  ...contenuMatIds.map((id) => ({ matiere_id: id, role_type: "contenu" })),
+                  ...qaContenuMatIds.map((id) => ({ matiere_id: id, role_type: "qa" })),
                 ],
                 niveau_initial: niveauInitial,
                 mental_initial: mentalInitial,
