@@ -629,7 +629,6 @@ export function CoachingShell({
 
   const adminTabs: { key: typeof adminView; label: string; icon: React.ReactNode }[] = [
     { key: "chat", label: "Chat Coaching", icon: <Search className="w-3.5 h-3.5" /> },
-    { key: "rdv_requests", label: "Demandes RDV", icon: <PhoneCall className="w-3.5 h-3.5" /> },
     { key: "videos", label: "Vidéos", icon: <ClipboardList className="w-3.5 h-3.5" /> },
     { key: "planning", label: "Planning", icon: <CalendarClock className="w-3.5 h-3.5" /> },
   ];

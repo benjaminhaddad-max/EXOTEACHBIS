@@ -238,10 +238,8 @@ export default function CoachingSidebar({
       <div className="p-3 border-t border-white/10 space-y-1">
         {[
           { key: "chat" as const, label: "Chat", icon: <MessageCircle className="w-3.5 h-3.5" /> },
-          { key: "rdv_requests" as const, label: "Demandes RDV", icon: <ListChecks className="w-3.5 h-3.5" /> },
           ...(!isCoach ? [{ key: "videos" as const, label: "Vidéos", icon: <Play className="w-3.5 h-3.5" /> }] : []),
           { key: "planning" as const, label: "Planning", icon: <Calendar className="w-3.5 h-3.5" /> },
-          { key: "rdv" as const, label: "RDV (ancien)", icon: <Calendar className="w-3.5 h-3.5" /> },
         ].map((tab) => (
           <button
             key={tab.key}
