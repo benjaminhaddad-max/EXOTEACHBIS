@@ -3387,6 +3387,8 @@ function EditUserModal({
   const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
   const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
   const currentExcludedAccessSignature = [...excludedAccessIds].sort().join("|");
+  const initialCoursMatSignature = useMemo(() => profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type).map((r) => r.matiere_id).sort().join("|"), [profMatiereRows]);
+  const initialQaMatSignature = useMemo(() => profMatiereRows.filter((r) => r.role_type === "qa" || r.role_type === "contenu").map((r) => r.matiere_id).sort().join("|"), [profMatiereRows]);
 
   useEffect(() => {
     setPersonalAccessIds(directAccessIds);
@@ -3448,6 +3450,8 @@ function EditUserModal({
     normalizedCurrentDirectAccess !== normalizedNextDirectAccess ||
     normalizedCurrentExcludedAccess !== normalizedNextExcludedAccess ||
     normalizedCurrentMatieres !== normalizedNextMatieres ||
+    initialCoursMatSignature !== [...coursMatIds].sort().join("|") ||
+    initialQaMatSignature !== [...qaContenuMatIds].sort().join("|") ||
     niveauInitial !== (coachingProfile?.niveau_initial ?? 50) ||
     mentalInitial !== (coachingProfile?.mental_initial ?? 50) ||
     niveauProgressif !== (coachingProfile?.niveau_progressif ?? 50) ||
@@ -3837,6 +3841,7 @@ function EditUserModal({
               const descendantIds = new Set<string>();
               const walk = (pid: string) => { descendantIds.add(pid); dossiers.filter((d) => d.parent_id === pid).forEach((d) => walk(d.id)); };
               walk(uniId);
+              descendantIds.delete(uniId);
               return dossiers
                 .filter((d) => descendantIds.has(d.id) && (matieresByDossier.get(d.id)?.length ?? 0) > 0)
                 .flatMap((d) => (matieresByDossier.get(d.id) ?? []).map((m) => ({ ...m, dossierLabel: getDossierPathLabel(d.id, dossiers) })));
