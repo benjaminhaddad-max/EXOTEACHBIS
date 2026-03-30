@@ -223,7 +223,7 @@ for(var si=0;si<series.length;si++){
   /* Send questions in batches of 5 to avoid 413 body too large */
   var allQ=qcm.questions||[];
   var batches=[];
-  for(var bi=0;bi<allQ.length;bi+=5){batches.push(allQ.slice(bi,bi+5));}
+  for(var bi=0;bi<allQ.length;bi+=2){batches.push(allQ.slice(bi,bi+2));}
   if(batches.length===0)batches=[[]];
   var serieId=null,serieOk=true,totalQ=0;
   for(var bti=0;bti<batches.length;bti++){
