@@ -162,8 +162,6 @@ for(var id of ids){
       if(i.src.match(/\\.gif/i))return false;
       return true;
     });
-    ovLog('  '+allImgs.length+' image(s) trouvée(s), '+exHeaders.length+' exercices','img');
-
     /* 6. Find Exercice N headers */
     var exHeaders=[];
     document.querySelectorAll('*').forEach(function(el){
@@ -175,6 +173,7 @@ for(var id of ids){
     var seen={};
     exHeaders=exHeaders.filter(function(h){if(seen[h.num])return false;seen[h.num]=true;return true;});
     exHeaders.sort(function(a,b){return a.y-b.y;});
+    ovLog('  '+allImgs.length+' images, '+exHeaders.length+' exercices','img');
 
     /* 7. Map images to exercises by Y position */
     for(var qi=0;qi<nbQ;qi++){
