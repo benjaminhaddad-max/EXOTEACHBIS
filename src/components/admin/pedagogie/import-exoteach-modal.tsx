@@ -32,7 +32,7 @@ function parseIds(input: string): string[] {
 }
 
 /** Génère le script à coller dans la console ExoTeach */
-function buildScript(ids: string[], coursId: string, serieType: string): string {
+function buildScript(ids: string[], coursId: string, serieType: string, matiereId?: string | null): string {
   const saveUrl = "https://exoteachbis.vercel.app/api/save-exoteach-data";
   const idsJson = JSON.stringify(ids);
 
@@ -218,7 +218,7 @@ for(var id of ids){
 if(!series.length){alert('Aucune série trouvée.');return;}
 console.log('📤 Envoi de '+series.length+' série(s) à ExoTeachBIS...');
 try{
-  var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:series,coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}'})});
+  var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:series,coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}})});
   var out=await res.json();
   if(out.success)alert('✅ '+out.imported+' série(s) importée(s) !\\n(Rafraîchis ExoTeachBIS pour voir les séries)');
   else alert('Erreur: '+(out.error||'inconnue'));
@@ -228,15 +228,19 @@ try{
 
 export function ImportExoteachModal({
   coursId,
+  matiereId,
+  defaultType,
   onClose,
   onDone,
 }: {
   coursId: string;
+  matiereId?: string | null;
+  defaultType?: string;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [idsInput, setIdsInput] = useState("");
-  const [serieType, setSerieType] = useState("entrainement");
+  const [serieType, setSerieType] = useState(defaultType || "entrainement");
   const [copied, setCopied] = useState(false);
   const [results, setResults] = useState<Result[]>([]);
 
@@ -246,7 +250,7 @@ export function ImportExoteachModal({
 
   const handleCopy = async () => {
     if (parsedIds.length === 0) return;
-    const script = buildScript(parsedIds, coursId, serieType);
+    const script = buildScript(parsedIds, coursId, serieType, matiereId);
     await navigator.clipboard.writeText(script);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);

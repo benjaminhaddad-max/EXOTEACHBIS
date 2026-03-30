@@ -14,6 +14,7 @@ import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie, update
 import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
 import { FlashcardsSection } from "./flashcards-section";
+import { ImportExoteachModal } from "./import-exoteach-modal";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -734,6 +735,7 @@ export function DossierExercicesView({
   const [selectedAnnee, setSelectedAnnee] = useState<string | null>(null);
   const [showAddAnnee, setShowAddAnnee] = useState(false);
   const [newAnnee, setNewAnnee] = useState("");
+  const [showImportExoteach, setShowImportExoteach] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -812,6 +814,13 @@ export function DossierExercicesView({
           <Sparkles size={14} className="text-[#C9A84C] shrink-0" />
           <span className="text-xs font-bold text-[#C9A84C]">Générer avec l&apos;IA</span>
           <span className="text-[10px] text-white/30 ml-1 truncate">— assigne automatiquement aux chapitres</span>
+        </button>
+        {/* ExoTeach import button */}
+        <button onClick={() => setShowImportExoteach(true)}
+          className="w-full flex items-center gap-2 rounded-xl border border-teal-500/20 bg-teal-500/6 px-3 py-2 hover:bg-teal-500/12 transition-colors">
+          <FileDown size={14} className="text-teal-400 shrink-0" />
+          <span className="text-xs font-bold text-teal-400">Importer via ExoTeach</span>
+          <span className="text-[10px] text-white/30 ml-1 truncate">— depuis l&apos;ancienne plateforme</span>
         </button>
       </div>
 
@@ -978,6 +987,16 @@ export function DossierExercicesView({
           matiereName={dossierName}
           onSaved={() => setRefreshKey((k) => k + 1)}
           onClose={() => setShowAI(false)}
+        />
+      )}
+
+      {showImportExoteach && (
+        <ImportExoteachModal
+          coursId=""
+          matiereId={matiereId}
+          defaultType={activeTab !== "flashcards" ? activeTab : "annales"}
+          onDone={() => { setShowImportExoteach(false); setRefreshKey((k) => k + 1); }}
+          onClose={() => setShowImportExoteach(false)}
         />
       )}
 

@@ -83,7 +83,7 @@ function indexToLabel(i: number) { return String.fromCharCode(65 + i); }
 
 export async function POST(req: NextRequest) {
   try {
-    const { series, coursId, serieType } = await req.json();
+    const { series, coursId, serieType, matiereId } = await req.json();
     if (!series?.length) return NextResponse.json({ error: "series vide" }, { status: 400, headers: CORS });
 
     const supabase = createClient(
@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
           .insert({
             name: qcm.titre || `ExoTeach #${qcm.id_qcm}`,
             cours_id: coursId || null,
+            matiere_id: matiereId || null,
             type: serieType || "entrainement",
             timed: false, visible: true, score_definitif: false,
           })
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
             explanation: explanationText,
             image_url: questionImg,
             tags: [],
-            matiere_id: null,
+            matiere_id: matiereId || null,
           }).select("id").single();
 
           if (qErr || !newQ) {
