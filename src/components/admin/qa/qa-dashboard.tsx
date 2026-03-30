@@ -249,6 +249,7 @@ export function QaDashboard({
   const [filterMatiere, setFilterMatiere] = useState("all");
   const [filterFormation, setFilterFormation] = useState("all");
   const [filterUni, setFilterUni] = useState("all");
+  const [checkedThreadIds, setCheckedThreadIds] = useState<Set<string>>(new Set());
   const [queuePreset, setQueuePreset] = useState<QueuePreset>("unresolved");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -562,6 +563,32 @@ export function QaDashboard({
       showToast(error.message, "error");
       return;
     }
+    await refreshThreads();
+  };
+
+  const toggleChecked = (id: string) => setCheckedThreadIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const handleBulkArchive = async () => {
+    if (checkedThreadIds.size === 0) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("qa_threads").update({ archived_at: now, updated_at: now }).in("id", [...checkedThreadIds]);
+    if (error) { showToast(error.message, "error"); return; }
+    showToast(`${checkedThreadIds.size} question(s) archivée(s)`, "success");
+    setCheckedThreadIds(new Set());
+    await refreshThreads();
+  };
+
+  const handleBulkDelete = async () => {
+    if (checkedThreadIds.size === 0) return;
+    if (!confirm(`Supprimer définitivement ${checkedThreadIds.size} conversation(s) ?`)) return;
+    const { error } = await supabase.from("qa_threads").delete().in("id", [...checkedThreadIds]);
+    if (error) { showToast(error.message, "error"); return; }
+    showToast(`${checkedThreadIds.size} question(s) supprimée(s)`, "success");
+    setCheckedThreadIds(new Set());
     await refreshThreads();
   };
 
@@ -893,6 +920,23 @@ export function QaDashboard({
               )}
             </div>
 
+            {/* Bulk actions bar */}
+            {checkedThreadIds.size > 0 && (
+              <div className="shrink-0 flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 mb-3">
+                <span className="text-xs font-semibold text-blue-800">{checkedThreadIds.size} sélectionnée{checkedThreadIds.size > 1 ? "s" : ""}</span>
+                <button type="button" onClick={handleBulkArchive}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+                  <Archive size={12} /> Archiver
+                </button>
+                <button type="button" onClick={handleBulkDelete}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+                  <Trash2 size={12} /> Supprimer
+                </button>
+                <button type="button" onClick={() => setCheckedThreadIds(new Set())}
+                  className="ml-auto text-[11px] text-blue-600 hover:underline">Tout désélectionner</button>
+              </div>
+            )}
+
             {/* Prof list grouped */}
             <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
               {profsWithOverdue.length === 0 && unassignedThreads.length === 0 ? (
@@ -921,6 +965,8 @@ export function QaDashboard({
                       const ageDays = Math.floor(ageHours / 24);
                       return (
                         <div key={thread.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <input type="checkbox" checked={checkedThreadIds.has(thread.id)} onChange={() => toggleChecked(thread.id)}
+                            className="shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-200" />
                           <a href={`/admin/questions-reponses?thread=${thread.id}`} className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-gray-800 truncate group-hover:text-blue-600">
                               {thread.title || thread.context_label || "Question sans titre"}
@@ -981,6 +1027,8 @@ export function QaDashboard({
                       const ageDays = Math.floor(ageHours / 24);
                       return (
                         <div key={thread.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group">
+                          <input type="checkbox" checked={checkedThreadIds.has(thread.id)} onChange={() => toggleChecked(thread.id)}
+                            className="shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-200" />
                           <a href={`/admin/questions-reponses?thread=${thread.id}`} className="flex-1 min-w-0">
                             <p className="text-xs font-medium text-gray-800 truncate group-hover:text-blue-600">
                               {thread.title || thread.context_label || "Question sans titre"}
