@@ -9,13 +9,17 @@ import { QaThreadList } from "./qa-thread-list";
 import { QaChatPanel } from "./qa-chat-panel";
 import {
   ArrowLeft,
+  Bell,
   Building2,
   ChevronDown,
   ChevronRight,
   Clock3,
+  ExternalLink,
   GraduationCap,
   Inbox,
   Layers,
+  Loader2,
+  Send,
   Users,
 } from "lucide-react";
 
@@ -608,57 +612,10 @@ export function QaDashboard({
       </div>}
 
       {/* ═══════════ PROF TAB ═══════════ */}
-      {topTab === "profs" && (
+      {topTab === "profs" && isProf && (
         <>
-          {/* Stats cards (hidden for profs — they ARE the ones being relanced) */}
-          {!isProf && <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Pilotage Q/R Professeurs</p>
-                <p className="mt-0.5 text-sm text-gray-500">
-                  Backlog non résolu : <span className="font-bold text-gray-900">{unresolvedCount}</span> question{unresolvedCount > 1 ? "s" : ""}
-                </p>
-              </div>
-              {queuePreset !== "unresolved" && (
-                <button
-                  type="button"
-                  onClick={() => setQueuePreset("unresolved")}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  Voir tout le backlog
-                </button>
-              )}
-            </div>
-            <div className="grid gap-3 grid-cols-3">
-              {statsCards.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <button
-                    key={card.id}
-                    type="button"
-                    onClick={card.onClick}
-                    className={`rounded-2xl border px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm ${card.tone} ${
-                      card.active ? "ring-2 ring-blue-200" : ""
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold opacity-80">{card.label}</p>
-                        <p className="mt-1 text-2xl font-bold">{card.value}</p>
-                      </div>
-                      <div className="rounded-xl bg-white/70 p-2">
-                        <Icon className={`h-4 w-4 ${card.iconTone}`} />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>}
-
-          {/* Main content: tree + thread list + chat */}
+          {/* Main content: tree + thread list + chat (prof view) */}
           <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex">
-            {/* Pedagogy tree sidebar */}
             <div className="hidden lg:flex shrink-0 h-full min-h-0">
               <QaPedagogieMatiereTreeSidebar
                 dossiers={qaDossiers}
@@ -670,130 +627,231 @@ export function QaDashboard({
                 threadCountByMatiereId={threadCountByMatiereId}
               />
             </div>
-
-            {/* Thread list */}
-            <div
-              className={`w-full lg:w-[min(420px,36vw)] border-r border-gray-100 flex flex-col shrink-0 min-h-0 ${
-                selected ? "hidden lg:flex" : "flex"
-              }`}
-            >
+            <div className={`w-full lg:w-[min(420px,36vw)] border-r border-gray-100 flex flex-col shrink-0 min-h-0 ${selected ? "hidden lg:flex" : "flex"}`}>
               <div className="p-3 border-b border-gray-100 space-y-3 shrink-0">
-                {selectedMatiereIds.size > 0 && (
-                  <p className="text-[11px] text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
-                    Filtre actif : {selectedMatiereIds.size} matière{selectedMatiereIds.size > 1 ? "s" : ""} sélectionnée
-                    {selectedMatiereIds.size > 1 ? "s" : ""}
-                  </p>
-                )}
-
                 {availableOffers.length > 1 && (
                   <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => { setFilterFormation("all"); setFilterMatiere("all"); }}
-                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        filterFormation === "all"
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      Toutes
-                    </button>
+                    <button type="button" onClick={() => { setFilterFormation("all"); setFilterMatiere("all"); }}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === "all" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
                     {availableOffers.map((offer) => (
-                      <button
-                        key={offer.id}
-                        type="button"
-                        onClick={() => { setFilterFormation(filterFormation === offer.id ? "all" : offer.id); setFilterMatiere("all"); }}
-                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          filterFormation === offer.id
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
-                        }`}
-                      >
-                        {offer.name}
-                      </button>
+                      <button key={offer.id} type="button" onClick={() => { setFilterFormation(filterFormation === offer.id ? "all" : offer.id); setFilterMatiere("all"); }}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === offer.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{offer.name}</button>
                     ))}
                   </div>
                 )}
-
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Rechercher un étudiant, une matière, un contexte..."
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-
+                <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un étudiant, une matière, un contexte..."
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-[11px] text-gray-600 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showArchived}
-                      onChange={(event) => setShowArchived(event.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-100"
-                    />
+                    <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-100" />
                     Afficher les archivées
                   </label>
-
-                  <select
-                    value={filterMatiere}
-                    onChange={(event) => setFilterMatiere(event.target.value)}
-                    className="w-[200px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                  >
+                  <select value={filterMatiere} onChange={(e) => setFilterMatiere(e.target.value)}
+                    className="w-[200px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100">
                     <option value="all">Toutes les matières</option>
-                    {matieres
-                      .filter((matiere) => filterFormation === "all" || matiereToOfferId.get(matiere.id) === filterFormation)
-                      .map((matiere) => (
-                      <option key={matiere.id} value={matiere.id}>
-                        {matiere.name}
-                      </option>
+                    {matieres.filter((m) => filterFormation === "all" || matiereToOfferId.get(m.id) === filterFormation).map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </select>
                 </div>
               </div>
-
-              <QaThreadList
-                threads={filteredProfThreads}
-                selectedId={selected?.id}
-                onSelect={handleThreadSelect}
-                onArchiveThread={handleArchiveThread}
-                onDeleteThread={handleDeleteThread}
-                showArchived={showArchived}
-                overdueThreadIds={overdueThreadIds}
-              />
+              <QaThreadList threads={filteredProfThreads} selectedId={selected?.id} onSelect={handleThreadSelect}
+                onArchiveThread={handleArchiveThread} onDeleteThread={handleDeleteThread} showArchived={showArchived} overdueThreadIds={overdueThreadIds} />
             </div>
-
-            {/* Chat panel */}
             <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${!selected ? "hidden lg:flex" : "flex"}`}>
               {selected ? (
                 <>
                   <div className="lg:hidden flex items-center gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                    <button onClick={handleBack} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
-                      <ArrowLeft className="w-4 h-4" />
-                    </button>
+                    <button onClick={handleBack} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center"><ArrowLeft className="w-4 h-4" /></button>
                     <span className="text-sm font-medium truncate">{getDisplayName(selected.student)}</span>
                   </div>
-                  <QaChatPanel
-                    thread={selected}
-                    userId={userId}
-                    onResolve={() => refreshThreads()}
-                    onArchiveThread={handleArchiveThread}
-                    onUnarchiveThread={handleUnarchiveThread}
-                    onDeleteThread={handleDeleteThread}
-                  />
+                  <QaChatPanel thread={selected} userId={userId} onResolve={() => refreshThreads()}
+                    onArchiveThread={handleArchiveThread} onUnarchiveThread={handleUnarchiveThread} onDeleteThread={handleDeleteThread} />
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400 px-6">
                   <Inbox className="w-12 h-12 mb-3 text-gray-200" />
                   <p className="text-sm font-semibold text-gray-600">Sélectionne une question pour voir la conversation.</p>
-                  <p className="mt-2 max-w-md text-center text-xs text-gray-400">
-                    Utilise les cartes en haut pour filtrer par retard, ou l&apos;arbre à gauche pour filtrer par matière.
-                  </p>
+                  <p className="mt-2 max-w-md text-center text-xs text-gray-400">Utilise les cartes en haut pour filtrer par retard, ou l&apos;arbre à gauche pour filtrer par matière.</p>
                 </div>
               )}
             </div>
           </div>
         </>
       )}
+
+      {/* ═══════════ ADMIN PROF OVERSIGHT TAB ═══════════ */}
+      {topTab === "profs" && !isProf && (() => {
+        const overdueThreshold = queuePreset === "overdue_4d" ? 96 : queuePreset === "overdue_3d" ? 72 : 48;
+
+        // All overdue threads (not archived, escalated, over threshold)
+        const allOverdueThreads = profThreads.filter((t) => !t.archived_at && isThreadOverdue(t, overdueThreshold));
+
+        // Filter by formation if selected
+        const overdueFiltered = filterFormation === "all"
+          ? allOverdueThreads
+          : allOverdueThreads.filter((t) => t.matiere_id && matiereToOfferId.get(t.matiere_id) === filterFormation);
+
+        // Build prof → matiere mapping from profMatieres
+        const profToMatiereIds = new Map<string, Set<string>>();
+        for (const pm of profMatieres) {
+          if (!profToMatiereIds.has(pm.prof_id)) profToMatiereIds.set(pm.prof_id, new Set());
+          profToMatiereIds.get(pm.prof_id)!.add(pm.matiere_id);
+        }
+
+        // Group overdue threads by professor
+        type ProfOverdue = { prof: QaProfLite; threads: QaThread[] };
+        const profMap = new Map<string, ProfOverdue>();
+
+        for (const thread of overdueFiltered) {
+          // If explicitly assigned, attribute to that prof
+          if (thread.assigned_prof_id && thread.assigned_prof) {
+            if (!profMap.has(thread.assigned_prof_id)) {
+              profMap.set(thread.assigned_prof_id, { prof: thread.assigned_prof as unknown as QaProfLite, threads: [] });
+            }
+            profMap.get(thread.assigned_prof_id)!.threads.push(thread);
+          } else if (thread.matiere_id) {
+            // Otherwise, attribute to all profs who teach this matière
+            for (const prof of qaProfs) {
+              const mats = profToMatiereIds.get(prof.id);
+              if (mats?.has(thread.matiere_id)) {
+                if (!profMap.has(prof.id)) profMap.set(prof.id, { prof, threads: [] });
+                const existing = profMap.get(prof.id)!;
+                if (!existing.threads.some((t) => t.id === thread.id)) existing.threads.push(thread);
+              }
+            }
+          }
+        }
+
+        const profsWithOverdue = Array.from(profMap.values())
+          .filter((p) => p.threads.length > 0)
+          .sort((a, b) => b.threads.length - a.threads.length);
+
+        const totalOverdueProfs = profsWithOverdue.length;
+        const totalOverdueThreads = overdueFiltered.length;
+
+        return (
+          <>
+            {/* Stats cards */}
+            <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-4 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Suivi retards Q/R Professeurs</p>
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    <span className="font-bold text-gray-900">{totalOverdueProfs}</span> prof{totalOverdueProfs > 1 ? "s" : ""} en retard
+                    {" "}— <span className="font-bold text-gray-900">{totalOverdueThreads}</span> question{totalOverdueThreads > 1 ? "s" : ""} non traitée{totalOverdueThreads > 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 grid-cols-3">
+                {statsCards.map((card) => {
+                  const Icon = card.icon;
+                  return (
+                    <button key={card.id} type="button" onClick={card.onClick}
+                      className={`rounded-2xl border px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm ${card.tone} ${card.active ? "ring-2 ring-blue-200" : ""}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold opacity-80">{card.label}</p>
+                          <p className="mt-1 text-2xl font-bold">{card.value}</p>
+                        </div>
+                        <div className="rounded-xl bg-white/70 p-2"><Icon className={`h-4 w-4 ${card.iconTone}`} /></div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Formation filter */}
+            {availableOffers.length > 1 && (
+              <div className="shrink-0 flex flex-wrap gap-1.5 mb-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 self-center mr-1">Formation</span>
+                <button type="button" onClick={() => setFilterFormation("all")}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === "all" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
+                {availableOffers.map((offer) => (
+                  <button key={offer.id} type="button" onClick={() => setFilterFormation(filterFormation === offer.id ? "all" : offer.id)}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === offer.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{offer.name}</button>
+                ))}
+              </div>
+            )}
+
+            {/* Prof list grouped */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
+              {profsWithOverdue.length === 0 ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
+                  <Inbox className="w-10 h-10 mx-auto text-gray-200 mb-3" />
+                  <p className="text-sm font-semibold text-gray-600">Aucun prof en retard</p>
+                  <p className="text-xs text-gray-400 mt-1">Toutes les questions ont été traitées dans les délais.</p>
+                </div>
+              ) : profsWithOverdue.map(({ prof, threads: overdueThreadsList }) => (
+                <div key={prof.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                  {/* Prof header */}
+                  <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                    <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
+                      {(prof.first_name?.[0] ?? "").toUpperCase()}{(prof.last_name?.[0] ?? "").toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{getDisplayName(prof)}</p>
+                      <p className="text-[11px] text-gray-500">{prof.email}</p>
+                    </div>
+                    <span className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-100">
+                      {overdueThreadsList.length} question{overdueThreadsList.length > 1 ? "s" : ""} en retard
+                    </span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await fetch("/api/qa/relance", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ prof_id: prof.id, thread_ids: overdueThreadsList.map((t) => t.id) }),
+                        });
+                        if (res.ok) showToast(`Relance envoyée à ${getDisplayName(prof)}`, "success");
+                        else showToast("Erreur lors de la relance", "error");
+                      }}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                    >
+                      <Send size={12} />
+                      Repinger
+                    </button>
+                  </div>
+                  {/* Thread list */}
+                  <div className="divide-y divide-gray-50">
+                    {overdueThreadsList.sort((a, b) => getThreadAgeHours(b) - getThreadAgeHours(a)).map((thread) => {
+                      const ageHours = getThreadAgeHours(thread);
+                      const ageDays = Math.floor(ageHours / 24);
+                      return (
+                        <a
+                          key={thread.id}
+                          href={`/admin/questions-reponses?thread=${thread.id}`}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-800 truncate group-hover:text-blue-600">
+                              {thread.title || thread.context_label || "Question sans titre"}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {thread.matiere && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{thread.matiere.name}</span>
+                              )}
+                              <span className="text-[10px] text-gray-400">par {getDisplayName(thread.student)}</span>
+                            </div>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            ageDays >= 4 ? "bg-red-100 text-red-700" : ageDays >= 3 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {ageDays}j retard
+                          </span>
+                          <ExternalLink size={12} className="shrink-0 text-gray-300 group-hover:text-blue-500" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* ═══════════ ADMIN TAB ═══════════ */}
       {topTab === "admin" && (
