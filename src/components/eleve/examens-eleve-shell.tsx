@@ -247,7 +247,7 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
                               key={serie.id}
                               className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-600"
                             >
-                              <span className="font-medium text-gray-800">{serie.name}</span>
+                              <span className="font-medium text-gray-800">{serie.name?.replace(`${exam.name} — `, "")}</span>
                               <span className="ml-1 text-navy">
                                 {serie.score20?.toFixed(1)}/{exam.notation_sur}
                               </span>
@@ -349,7 +349,7 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
                       key={serie.id}
                       className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
                     >
-                      <p className="text-sm font-medium text-gray-800">{serie.name}</p>
+                      <p className="text-sm font-medium text-gray-800">{serie.name?.replace(`${exam.name} — `, "")}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
                         <span>{serie.timed ? `${serie.duration_minutes}min chrono` : "Libre"}</span>
                         {serie.hasOwnDates && serie.serie_debut_at && (
@@ -533,7 +533,7 @@ export function ExamensEleveShell({ examens }: { examens: StudentExamView[] }) {
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <p className="truncate text-sm font-medium text-gray-800">{serie.name}</p>
+                            <p className="truncate text-sm font-medium text-gray-800">{serie.name?.replace(`${exam.name} — `, "")}</p>
                           </div>
 
                           <div className="mt-0.5 flex flex-wrap items-center gap-2">

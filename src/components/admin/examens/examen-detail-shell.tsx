@@ -267,7 +267,7 @@ export function ExamenDetailShell({
         filiereId: rankingFiliereId,
         coefficientMap,
       });
-      return `${es.series?.name ?? "?"} (×${coeff})`;
+      return `${es.series?.name?.replace(`${initialExamen.name} — `, "") ?? "?"} (×${coeff})`;
     }), `Moyenne /${notationSur}`];
     const rows = filteredStudents.map((s: any, i: number) => [i + 1, s.name, s.email, s.filiere?.name ?? "—", ...epreuves.map(es => { const sc = s.serieScores[es.series_id]; return sc ? (sc.nb_total > 0 ? ((sc.nb_correct / sc.nb_total) * notationSur).toFixed(1) : "0") : "—"; }), s.moyenne20.toFixed(2)]);
     const csv = [headers.join(";"), ...rows.map((r: any) => r.join(";"))].join("\n");
@@ -326,7 +326,7 @@ export function ExamenDetailShell({
               <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: es.series?.matiere_id ? (matieres.find(m => m.id === es.series?.matiere_id)?.color ?? "#C9A84C") : "#C9A84C" }} />
-                  <p className="flex-1 text-sm text-white font-medium truncate">{es.series?.name ?? "?"}</p>
+                  <p className="flex-1 text-sm text-white font-medium truncate">{es.series?.name?.replace(`${initialExamen.name} — `, "") ?? "?"}</p>
                   <button onClick={() => handleRemove(es.series_id)} className="p-1 text-white/20 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
                 </div>
 

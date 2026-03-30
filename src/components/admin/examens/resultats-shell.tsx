@@ -204,7 +204,7 @@ export function ResultatsShell({
             filiereId: rankingFiliereId,
             coefficientMap,
           });
-          return `${es.series?.name ?? "?"} (coeff ${displayCoeff})`;
+          return `${es.series?.name?.replace(`${examen.name} — `, "") ?? "?"} (coeff ${displayCoeff})`;
         }),
         `Moyenne /${notationSur}`
       ];
@@ -293,7 +293,7 @@ export function ResultatsShell({
               });
               return (
                 <div key={es.series_id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs">
-                  <p className="text-white/60 truncate max-w-[200px]">{es.series?.name ?? "?"}</p>
+                  <p className="text-white/60 truncate max-w-[200px]">{es.series?.name?.replace(`${examen.name} — `, "") ?? "?"}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-white font-semibold">{avg.toFixed(1)}/{notationSur}</span>
                     <span className="text-[#C9A84C] text-[10px]">×{displayCoeff}</span>
@@ -339,7 +339,7 @@ export function ResultatsShell({
                     : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10"
                 }`}
               >
-                {es.series?.name ?? "?"}
+                {es.series?.name?.replace(`${examen.name} — `, "") ?? "?"}
               </button>
             ))}
           </div>
@@ -426,7 +426,7 @@ export function ResultatsShell({
 
                     return (
                     <th key={es.series_id} className="py-3 px-2 text-center text-white/50 text-xs font-medium min-w-[80px]">
-                      <div className="truncate max-w-[100px]">{es.series?.name ?? "?"}</div>
+                      <div className="truncate max-w-[100px]">{es.series?.name?.replace(`${examen.name} — `, "") ?? "?"}</div>
                       <div className="text-[10px] text-[#C9A84C]">×{displayCoeff}</div>
                     </th>
                     );
