@@ -93,11 +93,14 @@ export function PedagogieShell({
   initialDossiers,
   formationOffers,
   dossierNamePresets,
+  userRole = "admin",
 }: {
   initialDossiers: Dossier[];
   formationOffers: FormationOfferSetting[];
   dossierNamePresets: DossierNamePreset[];
+  userRole?: string;
 }) {
+  const canEdit = userRole === "admin" || userRole === "superadmin";
   const searchParams = useSearchParams();
   const [allDossiers, setAllDossiers] = useState<Dossier[]>(initialDossiers);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -346,23 +349,25 @@ export function PedagogieShell({
       >
         <div className="flex items-center justify-between border-b border-gray-200 bg-navy px-4 py-3">
           <h2 className="text-sm font-semibold text-white/90">Arborescence</h2>
-          <div className="flex items-center gap-2">
-            {!hasOfferRoots && (
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              {!hasOfferRoots && (
+                <button
+                  onClick={() => handleAction(() => installCanonicalOffers(formationOffers))}
+                  className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/10"
+                >
+                  Installer les offres
+                </button>
+              )}
               <button
-                onClick={() => handleAction(() => installCanonicalOffers(formationOffers))}
-                className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white/70 transition hover:bg-white/10"
+                onClick={() => setModal({ type: "add_picker", parentId: null })}
+                className="flex items-center gap-1 rounded-lg bg-gold/20 border border-gold/30 px-2.5 py-1.5 text-xs font-medium text-gold transition hover:bg-gold/30"
               >
-                Installer les offres
+                <Plus className="h-3.5 w-3.5" />
+                Ajouter
               </button>
-            )}
-            <button
-              onClick={() => setModal({ type: "add_picker", parentId: null })}
-              className="flex items-center gap-1 rounded-lg bg-gold/20 border border-gold/30 px-2.5 py-1.5 text-xs font-medium text-gold transition hover:bg-gold/30"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Ajouter
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
@@ -370,12 +375,14 @@ export function PedagogieShell({
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FolderPlus className="mb-2 h-8 w-8 text-gray-200" />
               <p className="text-xs text-gray-400">Aucun dossier</p>
-              <button
-                onClick={() => setModal({ type: "add_picker", parentId: null })}
-                className="mt-2 text-xs text-navy underline"
-              >
-                Créer le premier dossier
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => setModal({ type: "add_picker", parentId: null })}
+                  className="mt-2 text-xs text-navy underline"
+                >
+                  Créer le premier dossier
+                </button>
+              )}
             </div>
           ) : (
             <DndContext
@@ -394,6 +401,7 @@ export function PedagogieShell({
                     selectedId={selectedId}
                     expandedIds={expandedIds}
                     sensors={sensors}
+                    canEdit={canEdit}
                     onSelect={selectDossier}
                     onToggle={toggleExpanded}
                     onAdd={(parentId) => setModal({ type: "add_picker", parentId })}
@@ -464,20 +472,24 @@ export function PedagogieShell({
                       {getOfferLabel(selectedDossier.formation_offer)}
                     </span>
                   )}
-                  <button
-                    onClick={() => setModal({ type: "edit_dossier", dossier: selectedDossier })}
-                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  {dossierTab === "contenu" && (
-                    <button
-                      onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
-                      className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Ajouter
-                    </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => setModal({ type: "edit_dossier", dossier: selectedDossier })}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      {dossierTab === "contenu" && (
+                        <button
+                          onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
+                          className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Ajouter
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -520,7 +532,7 @@ export function PedagogieShell({
             /* Contenu tab */
             <div className="flex-1 overflow-y-auto p-5">
               {childDossiers.length === 0 && ressources.length === 0 && coursList.length === 0 && !loadingRessources ? (
-                <EmptyDossier onAdd={() => setModal({ type: "add_picker", parentId: selectedId })} />
+                <EmptyDossier onAdd={canEdit ? () => setModal({ type: "add_picker", parentId: selectedId }) : undefined} />
               ) : (
                 <div className="space-y-5">
                   {/* Sous-dossiers — drag & drop grille */}
@@ -539,8 +551,8 @@ export function PedagogieShell({
                                 key={child.id}
                                 dossier={child}
                                 onClick={() => selectDossier(child)}
-                                onEdit={() => setModal({ type: "edit_dossier", dossier: child })}
-                                onDelete={() => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) })}
+                                onEdit={canEdit ? () => setModal({ type: "edit_dossier", dossier: child }) : undefined}
+                                onDelete={canEdit ? () => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) }) : undefined}
                               />
                             ))}
                           </div>
@@ -570,8 +582,8 @@ export function PedagogieShell({
                                 cours={c}
                                 matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
                                 onSelect={() => setSelectedCours(c)}
-                                onEdit={() => setModal({ type: "edit_cours", cours: c })}
-                                onDelete={() => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) })}
+                                onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
                               />
                             ))}
                           </div>
@@ -595,8 +607,8 @@ export function PedagogieShell({
                               <SortableRessourceRow
                                 key={r.id}
                                 ressource={r}
-                                onEdit={() => setModal({ type: "edit_ressource", ressource: r })}
-                                onDelete={() => setConfirmDelete({ label: `la ressource "${r.titre}"`, onConfirm: () => handleAction(() => deleteRessource(r.id)) })}
+                                onEdit={canEdit ? () => setModal({ type: "edit_ressource", ressource: r }) : undefined}
+                                onDelete={canEdit ? () => setConfirmDelete({ label: `la ressource "${r.titre}"`, onConfirm: () => handleAction(() => deleteRessource(r.id)) }) : undefined}
                               />
                             ))}
                           </div>
@@ -869,7 +881,7 @@ function AddPickerModal({
 // =============================================
 
 function SortableTreeNode({
-  node, selectedId, expandedIds, depth = 0, sensors,
+  node, selectedId, expandedIds, depth = 0, sensors, canEdit = true,
   onSelect, onToggle, onAdd, onEdit, onDelete, onDragEndChildren,
 }: {
   node: DossierNode;
@@ -877,6 +889,7 @@ function SortableTreeNode({
   expandedIds: Set<string>;
   depth?: number;
   sensors: ReturnType<typeof useSensors>;
+  canEdit?: boolean;
   onSelect: (d: Dossier) => void;
   onToggle: (id: string) => void;
   onAdd: (parentId: string) => void;
@@ -894,14 +907,15 @@ function SortableTreeNode({
   return (
     <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "12px" : 0 }}>
       <div className={`group mb-0.5 flex items-start gap-1 rounded-lg px-1 py-1.5 transition ${selected ? "bg-navy/10 ring-1 ring-navy/5" : "hover:bg-white/80"}`}>
-        {/* Grip DnD */}
-        <span
-          {...attributes}
-          {...listeners}
-          className="mt-0.5 flex-shrink-0 cursor-grab touch-none p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </span>
+        {canEdit && (
+          <span
+            {...attributes}
+            {...listeners}
+            className="mt-0.5 flex-shrink-0 cursor-grab touch-none p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
+        )}
 
         <div className="flex flex-1 items-start gap-1.5 min-w-0">
           <button
@@ -947,17 +961,19 @@ function SortableTreeNode({
           </button>
         </div>
 
-        <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
-          <button onClick={(e) => { e.stopPropagation(); onAdd(node.id); }} className="rounded p-1 text-gray-400 hover:bg-navy/10 hover:text-navy" title="Ajouter">
-            <Plus className="h-3 w-3" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500" title="Modifier">
-            <Pencil className="h-3 w-3" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500" title="Supprimer">
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
+        {canEdit && (
+          <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
+            <button onClick={(e) => { e.stopPropagation(); onAdd(node.id); }} className="rounded p-1 text-gray-400 hover:bg-navy/10 hover:text-navy" title="Ajouter">
+              <Plus className="h-3 w-3" />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500" title="Modifier">
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500" title="Supprimer">
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Enfants récursifs avec DnD */}
@@ -973,6 +989,7 @@ function SortableTreeNode({
                   expandedIds={expandedIds}
                   depth={depth + 1}
                   sensors={sensors}
+                  canEdit={canEdit}
                   onSelect={onSelect}
                   onToggle={onToggle}
                   onAdd={onAdd}
@@ -1005,7 +1022,7 @@ const CARD_STYLES: Record<string, { icon: typeof Folder; gradient: string; iconB
   generic:    { icon: Folder,        gradient: "linear-gradient(145deg, #151f2e 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(255,255,255,0.06)", iconColor: "#94A3B8", badgeBg: "rgba(255,255,255,0.06)", badgeText: "#94A3B8", border: "rgba(255,255,255,0.08)" },
 };
 
-function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossier: Dossier; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
+function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossier: Dossier; onClick: () => void; onEdit?: () => void; onDelete?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dossier.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 10 : undefined };
   const cs = CARD_STYLES[dossier.dossier_type] ?? CARD_STYLES.generic;
@@ -1013,13 +1030,13 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
 
   return (
     <div ref={setNodeRef} style={style} className="group relative cursor-pointer rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_8px_30px_rgba(201,168,76,0.12)]">
-      {/* Grip */}
-      <span {...attributes} {...listeners} className="absolute left-2 top-2 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-10">
-        <GripVertical className="h-4 w-4" />
-      </span>
+      {(onEdit || onDelete) && (
+        <span {...attributes} {...listeners} className="absolute left-2 top-2 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-10">
+          <GripVertical className="h-4 w-4" />
+        </span>
+      )}
 
       <button onClick={onClick} className="relative flex flex-col items-center gap-2.5 w-full p-6 pb-5 text-center rounded-2xl overflow-hidden" style={{ background: cs.gradient, border: `1px solid ${cs.border}` }}>
-        {/* Subtle gold glow on hover */}
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: "radial-gradient(circle at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 70%)" }} />
 
         <div className="relative flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden backdrop-blur-sm" style={{ backgroundColor: cs.iconBg }}>
@@ -1033,10 +1050,12 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
         </span>
       </button>
 
-      <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-10">
-        <button onClick={onEdit} className="rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70 transition"><Pencil className="h-3 w-3" /></button>
-        <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>
-      </div>
+      {(onEdit || onDelete) && (
+        <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-10">
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70 transition"><Pencil className="h-3 w-3" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1052,17 +1071,18 @@ const TYPE_META: Record<string, { label: string; color: string; icon: React.Reac
   lien:  { label: "Lien",  color: "text-green-600 bg-green-50", icon: <LinkIcon className="h-4 w-4" /> },
 };
 
-function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ressource; onEdit: () => void; onDelete: () => void }) {
+function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ressource; onEdit?: () => void; onDelete?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ressource.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const meta = TYPE_META[ressource.type] ?? TYPE_META.lien;
 
   return (
     <div ref={setNodeRef} style={style} className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-gray-200 hover:shadow">
-      {/* Grip */}
-      <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
-        <GripVertical className="h-4 w-4" />
-      </span>
+      {(onEdit || onDelete) && (
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+          <GripVertical className="h-4 w-4" />
+        </span>
+      )}
       <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${meta.color}`}>{meta.icon}</span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-gray-800">{ressource.titre}</p>
@@ -1072,10 +1092,12 @@ function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ress
           {!ressource.visible && <span className="text-xs text-gray-400">Masqué</span>}
         </div>
       </div>
-      <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-        <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
-        <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-      </div>
+      {(onEdit || onDelete) && (
+        <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1094,7 +1116,7 @@ function DiplomaLogoMini() {
   );
 }
 
-function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: { cours: Cours; matiereLabel?: string; onSelect?: () => void; onEdit: () => void; onDelete: () => void }) {
+function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: { cours: Cours; matiereLabel?: string; onSelect?: () => void; onEdit?: () => void; onDelete?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cours.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 10 : undefined };
 
@@ -1109,10 +1131,11 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
       }}
       className="group relative rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_32px_rgba(212,171,80,0.18)] hover:border-[rgba(212,171,80,0.45)]"
     >
-      {/* Grip */}
-      <span {...attributes} {...listeners} className="absolute left-2 top-2 z-20 cursor-grab touch-none text-white/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
-        <GripVertical className="h-3 w-3" />
-      </span>
+      {(onEdit || onDelete) && (
+        <span {...attributes} {...listeners} className="absolute left-2 top-2 z-20 cursor-grab touch-none text-white/20 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+          <GripVertical className="h-3 w-3" />
+        </span>
+      )}
 
       <div onClick={onSelect} className="block cursor-pointer">
         <div className="relative overflow-hidden" style={{ minHeight: 130 }}>
@@ -1176,15 +1199,20 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
         </div>
       </div>
 
-      {/* Actions hover */}
-      <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-20">
-        <button onClick={onEdit} className="rounded-lg p-1 text-white/50 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
-          <Pencil className="h-3 w-3" />
-        </button>
-        <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
-          <Trash2 className="h-3 w-3" />
-        </button>
-      </div>
+      {(onEdit || onDelete) && (
+        <div className="absolute right-1.5 top-1.5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-20">
+          {onEdit && (
+            <button onClick={onEdit} className="rounded-lg p-1 text-white/50 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1193,19 +1221,21 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
 // EMPTY STATE
 // =============================================
 
-function EmptyDossier({ onAdd }: { onAdd: () => void }) {
+function EmptyDossier({ onAdd }: { onAdd?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
       <Plus className="mb-3 h-10 w-10 text-gray-200" />
       <p className="text-sm font-medium text-gray-400">Dossier vide</p>
-      <p className="mt-1 text-xs text-gray-300">Ajoutez des sous-dossiers ou du contenu</p>
-      <button
-        onClick={onAdd}
-        className="mt-4 flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy-light transition-colors"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Ajouter
-      </button>
+      <p className="mt-1 text-xs text-gray-300">{onAdd ? "Ajoutez des sous-dossiers ou du contenu" : "Aucun contenu disponible"}</p>
+      {onAdd && (
+        <button
+          onClick={onAdd}
+          className="mt-4 flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy-light transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter
+        </button>
+      )}
     </div>
   );
 }
