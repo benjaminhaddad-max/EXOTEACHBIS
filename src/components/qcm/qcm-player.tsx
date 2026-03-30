@@ -39,11 +39,14 @@ function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
 
       {/* Fullscreen overlay */}
       {fullscreen && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setFullscreen(false)}>
-          <button type="button" className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
-            <X size={20} />
+        <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
+          onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}
+            className="absolute top-4 right-4 z-[10000] p-3 rounded-full bg-white/20 text-white hover:bg-white/40">
+            <X size={24} />
           </button>
-          <img src={src} alt="" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+          <img src={src} alt="" className="max-w-[90vw] max-h-[90vh] object-contain"
+            onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </>
