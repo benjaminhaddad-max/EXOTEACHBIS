@@ -4,18 +4,15 @@ import { useUser } from "@/hooks/use-user";
 import {
   LayoutDashboard,
   GraduationCap,
-  Settings,
   Users,
-  CreditCard,
   Calendar,
   HelpCircle,
   Trophy,
   MessageSquare,
-  Layers,
   MessageCircleQuestion,
   Handshake,
-  BookOpen,
   Eye,
+  Brain,
 } from "lucide-react";
 import { SidebarShell } from "./sidebar-shell";
 import { SidebarItem } from "./sidebar-item";
@@ -30,6 +27,10 @@ const adminNavItems = [
   { href: "/admin/utilisateurs", label: "Administration", icon: Users },
   { href: "/admin/planning", label: "Planning", icon: Calendar },
   { href: "/admin/aide", label: "Aide", icon: HelpCircle },
+];
+
+const superAdminExtraItems = [
+  { href: "/admin/knowledge-base", label: "Knowledge Base", icon: Brain },
 ];
 
 const profNavItems = [
@@ -47,11 +48,10 @@ const coachNavItems = [
 ];
 
 export function AdminSidebar() {
-  const { profile, loading } = useUser();
+  const { profile } = useUser();
 
-  const navItems = loading
-    ? []
-    : !profile
+  const baseItems =
+    !profile
       ? adminNavItems
       : profile.role === "coach"
       ? coachNavItems
@@ -59,18 +59,15 @@ export function AdminSidebar() {
         ? profNavItems
         : adminNavItems;
 
+  const navItems = profile?.role === "superadmin"
+    ? [...baseItems, ...superAdminExtraItems]
+    : baseItems;
+
   return (
     <SidebarShell>
-      {loading
-        ? Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-11 rounded-xl bg-white/6 animate-pulse"
-            />
-          ))
-        : navItems.map((item) => (
-            <SidebarItem key={item.href} {...item} />
-          ))}
+      {navItems.map((item) => (
+        <SidebarItem key={item.href} {...item} />
+      ))}
     </SidebarShell>
   );
 }

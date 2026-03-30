@@ -737,3 +737,80 @@ export interface AdminStats {
   total_answers: number;
   total_groupes: number;
 }
+
+// =============================================
+// Knowledge Base
+// =============================================
+
+export type KbArticleStatus = "draft" | "submitted" | "approved" | "rejected";
+export type KbArticleVisibility = "all" | "staff_only" | "formation" | "classe";
+export type KbArticleSource = "manual" | "auto_platform" | "auto_sync";
+
+export interface KbCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  parent_id: string | null;
+  icon: string | null;
+  color: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KbArticle {
+  id: string;
+  category_id: string | null;
+  title: string;
+  content: string;
+  content_html: string | null;
+  summary: string | null;
+  tags: string[];
+  visibility: KbArticleVisibility;
+  formation_dossier_ids: string[];
+  groupe_ids: string[];
+  allowed_roles: string[];
+  status: KbArticleStatus;
+  submitted_by: string | null;
+  reviewed_by: string | null;
+  review_comment: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  published_at: string | null;
+  source: KbArticleSource;
+  source_ref: string | null;
+  attachments: { name: string; url: string; type: string; size: number }[];
+  author_id: string | null;
+  view_count: number;
+  created_at: string;
+  updated_at: string;
+  // joined
+  category?: KbCategory | null;
+  author?: Pick<Profile, "id" | "first_name" | "last_name" | "role"> | null;
+  reviewer?: Pick<Profile, "id" | "first_name" | "last_name"> | null;
+}
+
+export interface KbArticleVersion {
+  id: string;
+  article_id: string;
+  version_number: number;
+  title: string;
+  content: string;
+  content_html: string | null;
+  author_id: string | null;
+  change_note: string | null;
+  created_at: string;
+}
+
+export interface KbChatLog {
+  id: string;
+  user_id: string | null;
+  user_role: string | null;
+  question: string;
+  answer: string | null;
+  article_ids: string[];
+  confidence: number | null;
+  had_answer: boolean;
+  created_at: string;
+}
