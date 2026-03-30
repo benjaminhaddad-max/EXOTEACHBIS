@@ -207,6 +207,7 @@ function AdminFormationNode({
 interface QaDashboardProps {
   initialThreads: QaThread[];
   userId: string;
+  userRole?: string;
   initialThreadId?: string;
   qaDossiers: Dossier[];
   qaMatieres: Matiere[];
@@ -218,6 +219,7 @@ interface QaDashboardProps {
 export function QaDashboard({
   initialThreads,
   userId,
+  userRole,
   initialThreadId,
   qaDossiers,
   qaMatieres,
@@ -228,7 +230,9 @@ export function QaDashboard({
   const supabase = createClient();
 
   const [threads, setThreads] = useState<QaThread[]>(initialThreads);
+  const isProf = userRole === "prof";
   const [topTab, setTopTab] = useState<TopTab>(() => {
+    if (isProf) return "profs"; // Profs always see their Q&A, no admin tab
     const initial = initialThreadId ? initialThreads.find((t) => t.id === initialThreadId) : null;
     return initial?.context_type === "general" ? "admin" : "profs";
   });
@@ -532,8 +536,8 @@ export function QaDashboard({
         </div>
       )}
 
-      {/* ═══════════ TOP TAB BAR ═══════════ */}
-      <div className="shrink-0 mb-4 flex items-center gap-1 rounded-2xl border border-gray-200 bg-white p-1.5">
+      {/* ═══════════ TOP TAB BAR (hidden for profs) ═══════════ */}
+      {!isProf && <div className="shrink-0 mb-4 flex items-center gap-1 rounded-2xl border border-gray-200 bg-white p-1.5">
         {[
           {
             id: "profs" as TopTab,
@@ -577,13 +581,13 @@ export function QaDashboard({
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {/* ═══════════ PROF TAB ═══════════ */}
       {topTab === "profs" && (
         <>
-          {/* Stats cards */}
-          <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-4 mb-4">
+          {/* Stats cards (hidden for profs — they ARE the ones being relanced) */}
+          {!isProf && <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Pilotage Q/R Professeurs</p>
@@ -626,7 +630,7 @@ export function QaDashboard({
                 );
               })}
             </div>
-          </div>
+          </div>}
 
           {/* Main content: tree + thread list + chat */}
           <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex">

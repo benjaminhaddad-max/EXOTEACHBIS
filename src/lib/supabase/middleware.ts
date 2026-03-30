@@ -32,7 +32,13 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = pathname === "/login" || pathname === "/register";
   const isApiRoute = pathname.startsWith("/api/");
   const isAdminRoute = pathname.startsWith("/admin");
-  const isScopedStaffAllowedAdminRoute = pathname === "/admin/annonces" || pathname === "/admin/coaching";
+  // Coach: only coaching + vue-eleve
+  // Prof: most admin pages except coaching, administration, aide
+  const profAllowedAdminRoutes = ["/admin/dashboard", "/admin/pedagogie", "/admin/examens", "/admin/questions-reponses", "/admin/communication", "/admin/annonces", "/admin/planning", "/admin/cours", "/admin/exercices", "/admin/flashcards", "/admin/configuration"];
+  const coachAllowedAdminRoutes = ["/admin/coaching"];
+  const isScopedStaffAllowedAdminRoute =
+    (pathname.startsWith("/admin") && profAllowedAdminRoutes.some((r) => pathname.startsWith(r))) ||
+    coachAllowedAdminRoutes.some((r) => pathname.startsWith(r));
 
   // Routes API publiques (seed, migrate)
   if (isApiRoute) return supabaseResponse;
@@ -57,7 +63,7 @@ export async function updateSession(request: NextRequest) {
     // Connecté sur page auth → rediriger
     if (isAuthRoute) {
       const url = request.nextUrl.clone();
-      url.pathname = isAdmin ? "/admin/dashboard" : role === "coach" ? "/admin/coaching" : role === "prof" ? "/admin/annonces" : "/dashboard";
+      url.pathname = isAdmin ? "/admin/dashboard" : role === "coach" ? "/admin/coaching" : role === "prof" ? "/admin/dashboard" : "/dashboard";
       return NextResponse.redirect(url);
     }
 

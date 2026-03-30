@@ -96,6 +96,7 @@ export default async function QuestionsReponsesPage({ searchParams }: Props) {
       <QaDashboard
         initialThreads={(threadsRes.data ?? []) as unknown as QaThread[]}
         userId={user.id}
+        userRole={role}
         initialThreadId={params.thread}
         qaDossiers={availableDossiers}
         qaMatieres={qaMatieres}
