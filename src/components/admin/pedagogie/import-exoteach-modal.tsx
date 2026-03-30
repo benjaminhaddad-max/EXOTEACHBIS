@@ -35,254 +35,136 @@ function buildScript(ids: string[], coursId: string, serieType: string, matiereI
   const saveUrl = "https://exoteachbis.vercel.app/api/save-exoteach-data";
   const idsJson = JSON.stringify(ids);
 
-  // The script navigates question-by-question in the ExoTeach player
-  // and precisely captures images for each question (énoncé vs items)
-  // using DOM position relative to answer labels A/B/C/D/E
-  return `(async()=>{
-var client=window.__APOLLO_CLIENT__;
-if(!client){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
-function F(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;}
-function A(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};}
+  // Script that navigates to each serie's print page on ExoTeach,
+  // switches to "Corrigé" mode, clicks "Exporter en Word",
+  // intercepts the generated blob, and sends it to our import-word API
+  const importUrl = "https://exoteachbis.vercel.app/api/import-word";
 
+  return `(async()=>{
+if(!window.location.href.includes('exoteach.com')){alert('Ouvre cette page sur diploma.exoteach.com !');return;}
 function wait(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
-/* Fetch image as base64 via credentials */
-async function imgToB64(src){
-  try{
-    var url=src.startsWith('http')?src:'https://diploma.exoteach.com'+src;
-    var resp=await fetch(url,{credentials:'include'});
-    if(!resp.ok)return null;
-    var blob=await resp.blob();
-    if(blob.size<100)return null;
-    return await new Promise(function(ok){var rd=new FileReader();rd.onloadend=function(){ok(rd.result);};rd.readAsDataURL(blob);});
-  }catch(e){return null;}
-}
+var ids=${idsJson};
+var ok=0,fail=0;
 
-/* DOM img → base64 (canvas then fetch fallback) */
-async function domImgToB64(imgEl){
+for(var i=0;i<ids.length;i++){
+  var id=ids[i];
+  console.log('📥 Série '+id+' ('+(i+1)+'/'+ids.length+')...');
+
+  /* 1. Navigate to print page */
+  window.location.hash='#/serie/print/'+id;
+  await wait(3000);
+
+  /* 2. Switch to Corrigé mode — find and click the "Corrigé" option */
+  var typeSelect=document.querySelector('select');
+  if(typeSelect){
+    /* Try to select "Corrigé" in the dropdown */
+    var opts=typeSelect.querySelectorAll('option');
+    for(var oi=0;oi<opts.length;oi++){
+      if((opts[oi].textContent||'').toLowerCase().includes('corrig')){
+        typeSelect.value=opts[oi].value;
+        typeSelect.dispatchEvent(new Event('change',{bubbles:true}));
+        console.log('  ✅ Mode Corrigé sélectionné');
+        break;
+      }
+    }
+    await wait(2000);
+  }
+
+  /* Also try clicking a "Corrigé" button/tab if no select */
+  var corrBtn=Array.from(document.querySelectorAll('button,label,div')).find(function(el){
+    return(el.textContent||'').trim().toLowerCase()==='corrigé';
+  });
+  if(corrBtn){corrBtn.click();await wait(1500);}
+
+  /* 3. Find and click "Exporter en Word" button */
+  /* Intercept the blob download by overriding the click temporarily */
+  var wordBlob=null;
+  var origCreateObjectURL=URL.createObjectURL;
+  var origRevokeObjectURL=URL.revokeObjectURL;
+
+  /* Intercept blob creation to capture the Word file */
+  URL.createObjectURL=function(blob){
+    if(blob&&blob.size>1000){wordBlob=blob;console.log('  📄 Word intercepté ('+Math.round(blob.size/1024)+'KB)');}
+    return origCreateObjectURL.call(URL,blob);
+  };
+
+  /* Also intercept <a> downloads */
+  var origClick=HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click=function(){
+    if(this.download&&this.href&&this.href.startsWith('blob:')){
+      console.log('  📎 Download intercepté: '+this.download);
+      return;/* Prevent actual download */
+    }
+    return origClick.call(this);
+  };
+
+  var wordBtn=Array.from(document.querySelectorAll('button')).find(function(b){
+    var t=(b.textContent||'').toLowerCase();
+    return t.includes('word')||t.includes('exporter en w');
+  });
+  if(wordBtn){
+    wordBtn.click();
+    console.log('  ⏳ Génération Word...');
+    await wait(5000);
+  }else{
+    console.log('  ❌ Bouton "Exporter en Word" non trouvé');
+    /* Restore */
+    URL.createObjectURL=origCreateObjectURL;
+    HTMLAnchorElement.prototype.click=origClick;
+    fail++;
+    continue;
+  }
+
+  /* Restore original functions */
+  URL.createObjectURL=origCreateObjectURL;
+  HTMLAnchorElement.prototype.click=origClick;
+
+  if(!wordBlob){
+    console.log('  ❌ Word non capturé');
+    fail++;
+    continue;
+  }
+
+  /* 4. Get serie title from page */
+  var title='ExoTeach #'+id;
+  var titleEl=document.querySelector('h1,h2,[class*="title"]');
+  if(titleEl){
+    var tt=(titleEl.textContent||'').trim();
+    if(tt.length>5)title=tt;
+  }
+  /* Also try from Apollo */
   try{
-    var c=document.createElement('canvas');
-    c.width=imgEl.naturalWidth||imgEl.width;
-    c.height=imgEl.naturalHeight||imgEl.height;
-    if(c.width>0&&c.height>0){
-      c.getContext('2d').drawImage(imgEl,0,0);
-      var d=c.toDataURL('image/jpeg',0.7);
-      if(d&&d.length>200)return d;
+    var client=window.__APOLLO_CLIENT__;
+    if(client){
+      var F=function(n,a,s){var f={kind:'Field',name:{kind:'Name',value:n}};if(a)f.arguments=a;if(s)f.selectionSet={kind:'SelectionSet',selections:s};return f;};
+      var A=function(n,v){return{kind:'Argument',name:{kind:'Name',value:n},value:{kind:'StringValue',value:v}};};
+      var r=await client.query({fetchPolicy:'cache-first',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',String(id))],[F('titre')])]}}]}});
+      if(r.data&&r.data.qcm&&r.data.qcm.titre)title=r.data.qcm.titre;
     }
   }catch(e){}
-  return await imgToB64(imgEl.src);
-}
 
-/* Get all content images (real schematic/diagram images, not icons/avatars) */
-function getContentImages(){
-  return Array.from(document.querySelectorAll('img')).filter(function(i){
-    if(!i.src||i.naturalWidth<50||i.naturalHeight<50)return false;
-    /* Must be from medibox2-api/files (real content) */
-    if(!i.src.includes('/medibox2-api/files/'))return false;
-    /* Exclude avatars */
-    if(i.src.includes('/avatars/'))return false;
-    /* Exclude GIF icons (matière icons are .gif) */
-    if(i.src.match(/\\.gif/i))return false;
-    /* Must be a schematic/diagram — wider than tall typically, or large enough */
-    if(i.naturalWidth<200&&i.naturalHeight<200)return false;
-    return true;
-  });
-}
-
-var ids=${idsJson};
-var series=[];var errs=[];
-
-for(var id of ids){
+  /* 5. Send to ExoTeachBIS API */
+  console.log('  📤 Envoi "'+title+'" à ExoTeachBIS...');
   try{
-    console.log('📥 Récupération série '+id+'...');
-    var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',id)],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
-    if(!r.data||!r.data.qcm){errs.push(id);continue;}
-    var qcm=JSON.parse(JSON.stringify(r.data.qcm));
-    var nbQ=qcm.questions.length;
-
-    /* Navigate to the EDIT page where all questions + images are displayed properly */
-    console.log('🖼️ Navigation vers la page d\\'édition (toutes les questions)...');
-    window.location.hash='#/admin-series/edit/'+id;
-    await wait(4000);
-
-    /* DEBUG: Analyze DOM structure of exercise containers */
-    await wait(1000);
-    var exEls=[];
-    document.querySelectorAll('*').forEach(function(el){
-      var ownText='';
-      for(var ci=0;ci<el.childNodes.length;ci++){if(el.childNodes[ci].nodeType===3)ownText+=el.childNodes[ci].textContent;}
-      if(/^Exercice\s+\d+/i.test(ownText.trim())){exEls.push(el);}
-    });
-    if(exEls.length>0){
-      var ex1=exEls[0];
-      console.log('  DEBUG Exercice 1: tag='+ex1.tagName+' class='+ex1.className);
-      /* Walk up to find the container */
-      var p=ex1.parentElement;
-      for(var d=0;d<5&&p;d++){
-        var imgs=p.querySelectorAll('img');
-        console.log('  parent['+d+']: tag='+p.tagName+' class='+(p.className||'').slice(0,60)+' imgs='+imgs.length);
-        if(imgs.length>0&&imgs.length<10){
-          console.log('  >>> CONTAINER FOUND at parent['+d+'] with '+imgs.length+' imgs');
-          break;
-        }
-        p=p.parentElement;
-      }
+    var formData=new FormData();
+    formData.append('file',wordBlob,title+'.docx');
+    formData.append('name',title);
+    formData.append('type','${serieType}');
+    ${coursId ? "formData.append('coursId','" + coursId + "');" : ""}
+    ${matiereId ? "formData.append('matiereId','" + matiereId + "');" : ""}
+    var res=await fetch('${importUrl}',{method:'POST',body:formData});
+    var out=await res.json();
+    if(out.success){
+      ok++;
+      console.log('  ✅ '+out.imported+' questions importées');
     }else{
-      console.log('  DEBUG: no Exercice headers found in DOM');
+      fail++;
+      console.log('  ❌ '+out.error);
     }
-
-    /* Scroll the entire page slowly to load all lazy images */
-    var sc=document.querySelector('[class*="scroll"]')||document.querySelector('main')||document.documentElement;
-    for(var scrollStep=0;scrollStep<20;scrollStep++){
-      if(sc)sc.scrollTop=(scrollStep+1)*500;
-      await wait(400);
-    }
-    if(sc)sc.scrollTop=0;
-    await wait(2000);
-
-    /* Collect ALL content images on the page */
-    var allPageImgs=getContentImages();
-    console.log('  '+allPageImgs.length+' image(s) de contenu trouvée(s)');
-
-    /* Find exercise sections on the edit page.
-       Each exercise has a header like "Exercice N" or "QCM N°X" or just a container.
-       We look for ALL text nodes matching exercise/QCM patterns. */
-    var exSections=[];
-    var allEls=document.querySelectorAll('*');
-    for(var ei=0;ei<allEls.length;ei++){
-      var el=allEls[ei];
-      var t=(el.textContent||'').trim();
-      /* Match "Exercice N", "QCM N", "QCM N°X" in element's OWN text (not children) */
-      var ownText='';
-      for(var ci=0;ci<el.childNodes.length;ci++){
-        if(el.childNodes[ci].nodeType===3)ownText+=el.childNodes[ci].textContent;
-      }
-      ownText=ownText.trim();
-      var m=ownText.match(/^Exercice\s+(\d+)/i);
-      if(m){
-        var r=el.getBoundingClientRect();
-        if(r.height>5)exSections.push({num:parseInt(m[1]),y:r.top});
-      }
-    }
-    /* Deduplicate */
-    var seen={};
-    exSections=exSections.filter(function(h){if(seen[h.num])return false;seen[h.num]=true;return true;});
-    exSections.sort(function(a,b){return a.y-b.y;});
-    console.log('  '+exSections.length+' sections Exercice trouvées');
-
-    /* Map images to exercises by Y position */
-    var imgsByEx={};
-    /* Sort images by Y position */
-    var sortedImgs=allPageImgs.map(function(img){return{img:img,y:img.getBoundingClientRect().top};}).sort(function(a,b){return a.y-b.y;});
-
-    for(var si=0;si<sortedImgs.length;si++){
-      var imgY=sortedImgs[si].y;
-      var exNum=null;
-      for(var hi=exSections.length-1;hi>=0;hi--){
-        if(exSections[hi].y<=imgY+30){exNum=exSections[hi].num;break;}
-      }
-      if(exNum){
-        if(!imgsByEx[exNum])imgsByEx[exNum]=[];
-        imgsByEx[exNum].push(sortedImgs[si].img);
-      }
-    }
-
-    /* If no exercise headers found, try sequential assignment:
-       each image goes to the next question that doesn't have one yet */
-    var useSequential=(exSections.length===0&&allPageImgs.length>0);
-    if(useSequential)console.log('  ⚠️ Pas de headers Exercice — attribution séquentielle');
-
-    /* Assign images to questions */
-    var seqIdx=0;
-    for(var qi=0;qi<nbQ;qi++){
-      var q=qcm.questions[qi];
-      var exNum=qi+1;
-      var exImgs=useSequential?[]:(imgsByEx[exNum]||[]);
-
-      /* Sequential fallback: take next available image */
-      if(useSequential&&seqIdx<allPageImgs.length){
-        exImgs=[allPageImgs[seqIdx]];
-        seqIdx++;
-      }
-
-      if(exImgs.length===0){
-        /* Fetch url_image from Apollo if present */
-        for(var ai=0;ai<(q.answers||[]).length;ai++){
-          var ans=q.answers[ai];
-          if(ans.url_image&&!ans.image_url_scraped){
-            var ab=await imgToB64(ans.url_image);
-            if(ab){ans.image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item (API)');}
-          }
-        }
-        if(!q.url_image_q)console.log('  Q'+exNum+' — pas d\\'image');
-        continue;
-      }
-
-      /* First image = question/énoncé image */
-      if(!q.url_image_q&&!q.image_url_scraped){
-        var b64=await domImgToB64(exImgs[0]);
-        if(b64){
-          q.image_url_scraped=b64;
-          console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)');
-        }
-      }
-
-      /* Remaining images = item images */
-      for(var ii=1,ai=0;ii<exImgs.length&&ai<(q.answers||[]).length;ai++){
-        var ans=q.answers[ai];
-        if(!ans.url_image&&!ans.image_url_scraped){
-          var ab=await domImgToB64(exImgs[ii]);
-          if(ab){
-            ans.image_url_scraped=ab;
-            console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
-          }
-          ii++;
-        }
-      }
-
-      /* Fetch url_image from Apollo if present */
-      for(var ai=0;ai<(q.answers||[]).length;ai++){
-        var ans=q.answers[ai];
-        if(ans.url_image&&!ans.image_url_scraped){
-          var ab=await imgToB64(ans.url_image);
-          if(ab){ans.image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item (API)');}
-        }
-      }
-    }
-    series.push(qcm);
-  }catch(e){console.error('❌ Erreur série '+id+':',e);errs.push(id);}
+  }catch(e){fail++;console.log('  ❌ Erreur réseau: '+e.message);}
 }
-if(!series.length){alert('Aucune série trouvée.');return;}
-var ok=0,fail=0;
-for(var si=0;si<series.length;si++){
-  var qcm=series[si];
-  console.log('📤 Envoi série '+(si+1)+'/'+series.length+': '+qcm.titre+'...');
-  var allQ=qcm.questions||[];
-  var batches=[];
-  for(var bi=0;bi<allQ.length;bi+=2){batches.push(allQ.slice(bi,bi+2));}
-  if(batches.length===0)batches=[[]];
-  var serieId=null,serieOk=true,totalQ=0;
-  for(var bti=0;bti<batches.length;bti++){
-    var batch=batches[bti];
-    var payload;
-    if(bti===0){
-      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}};
-    }else{
-      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'},appendToSerieId:serieId};
-    }
-    try{
-      var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      var out=await res.json();
-      if(out.success){
-        totalQ+=(out.results&&out.results[0]&&out.results[0].questions)||batch.length;
-        if(bti===0&&out.results&&out.results[0])serieId=out.results[0].newId;
-        if(batches.length>1)console.log('  📦 batch '+(bti+1)+'/'+batches.length+' OK');
-      }else{serieOk=false;console.log('  ❌ batch '+(bti+1)+': '+(out.error||'erreur'));}
-    }catch(e){serieOk=false;console.log('  ❌ Erreur réseau: '+e.message);}
-  }
-  if(serieOk){ok++;console.log('  ✅ OK ('+totalQ+'Q)');}else{fail++;}
-}
-alert('✅ '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'')+'\\n(Rafraîchis ExoTeachBIS pour voir les séries)');
+alert('✅ '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'')+'\\n(Rafraîchis ExoTeachBIS)');
 })();`;
 }
 
