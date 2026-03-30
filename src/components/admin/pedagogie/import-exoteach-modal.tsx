@@ -247,6 +247,8 @@ export function ImportExoteachModal({
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState("");
   const [results, setResults] = useState<Result[]>([]);
+  const [mode, setMode] = useState<"server" | "script">("script");
+  const [copied, setCopied] = useState(false);
 
   const parsedIds = parseIds(idsInput);
   const ok = results.filter((r) => r.status === "ok").length;
@@ -283,6 +285,14 @@ export function ImportExoteachModal({
     }
     setImporting(false);
     setProgress("");
+  };
+
+  const handleCopy = async () => {
+    if (parsedIds.length === 0) return;
+    const script = buildScript(parsedIds, coursId, serieType, matiereId);
+    await navigator.clipboard.writeText(script);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   return (
@@ -337,18 +347,55 @@ export function ImportExoteachModal({
             </select>
           </div>
 
-          {/* Import button */}
-          <button
-            onClick={handleImport}
-            disabled={parsedIds.length === 0 || importing}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35] disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            {importing ? (
-              <><span className="w-4 h-4 border-2 border-[#0e1e35]/30 border-t-[#0e1e35] rounded-full animate-spin" /> {progress}</>
-            ) : (
-              <><Download size={15} /> Importer {parsedIds.length > 0 ? `${parsedIds.length} série${parsedIds.length > 1 ? "s" : ""}` : ""}</>
-            )}
-          </button>
+          {/* Mode toggle */}
+          <div className="flex rounded-lg border border-white/15 overflow-hidden">
+            <button type="button" onClick={() => setMode("script")}
+              className={`flex-1 py-2 text-[11px] font-semibold transition-colors ${mode === "script" ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/40 hover:text-white/60"}`}>
+              Avec images (console)
+            </button>
+            <button type="button" onClick={() => setMode("server")}
+              className={`flex-1 py-2 text-[11px] font-semibold transition-colors ${mode === "server" ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/40 hover:text-white/60"}`}>
+              Rapide sans images
+            </button>
+          </div>
+
+          {mode === "server" ? (
+            <button
+              onClick={handleImport}
+              disabled={parsedIds.length === 0 || importing}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {importing ? (
+                <><span className="w-4 h-4 border-2 border-[#0e1e35]/30 border-t-[#0e1e35] rounded-full animate-spin" /> {progress}</>
+              ) : (
+                <><Download size={15} /> Importer {parsedIds.length > 0 ? `${parsedIds.length} série${parsedIds.length > 1 ? "s" : ""}` : ""}</>
+              )}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleCopy}
+                disabled={parsedIds.length === 0}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
+                  copied ? "bg-green-500/20 border border-green-400/40 text-green-300" : "bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35]"
+                } disabled:opacity-30 disabled:cursor-not-allowed`}
+              >
+                {copied ? <><Check size={15} /> Script copié !</> : <><Copy size={15} /> Copier le script d&apos;import</>}
+              </button>
+              {copied && (
+                <div className="rounded-xl border border-green-400/20 bg-green-500/5 p-4 space-y-2">
+                  <p className="text-xs font-bold text-green-300">Maintenant :</p>
+                  <ol className="text-[12px] text-white/70 space-y-2 list-decimal list-inside">
+                    <li>Va sur <a href="https://diploma.exoteach.com" target="_blank" rel="noreferrer" className="text-[#C9A84C] underline">diploma.exoteach.com</a></li>
+                    <li>Console : <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">F12</kbd> → Console</li>
+                    <li>Tape <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">allow pasting</kbd> + Entrée</li>
+                    <li>Colle + Entrée — attends les ✅</li>
+                    <li>Reviens ici et ferme ✓</li>
+                  </ol>
+                </div>
+              )}
+            </>
+          )}
 
           {/* Résultats */}
           {results.length > 0 && (
