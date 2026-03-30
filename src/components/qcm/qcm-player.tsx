@@ -2,11 +2,53 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Clock, Check, X, RotateCcw, BookOpen, Lightbulb, AlertTriangle, MessageCircleQuestion } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Check, X, RotateCcw, BookOpen, Lightbulb, AlertTriangle, MessageCircleQuestion, ZoomIn, ZoomOut, Minus, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Question, Serie } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
 import { AskQuestionFab } from "@/components/qa/ask-question-fab";
+
+// ─── ZoomableImage ────────────────────────────────────────────────────────
+
+function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
+  const [zoom, setZoom] = useState(100);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  return (
+    <>
+      <div className={`mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden ${small ? "" : ""}`}>
+        <div className="overflow-auto" style={{ maxHeight: small ? 200 : 400 }}>
+          <img
+            src={src}
+            alt=""
+            className="mx-auto cursor-zoom-in"
+            style={{ width: `${zoom}%`, maxWidth: "none" }}
+            onClick={() => setFullscreen(true)}
+          />
+        </div>
+        <div className="flex items-center justify-center gap-2 py-1.5 border-t border-gray-100 bg-white">
+          <button type="button" onClick={() => setZoom((z) => Math.max(50, z - 25))} disabled={zoom <= 50}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-30"><Minus size={14} /></button>
+          <span className="text-[11px] font-semibold text-gray-500 w-12 text-center tabular-nums">{zoom}%</span>
+          <button type="button" onClick={() => setZoom((z) => Math.min(300, z + 25))} disabled={zoom >= 300}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-30"><Plus size={14} /></button>
+          <button type="button" onClick={() => setZoom(100)}
+            className="ml-1 px-2 py-0.5 rounded text-[10px] text-gray-400 hover:bg-gray-100 hover:text-gray-600">Reset</button>
+        </div>
+      </div>
+
+      {/* Fullscreen overlay */}
+      {fullscreen && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setFullscreen(false)}>
+          <button type="button" className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
+            <X size={20} />
+          </button>
+          <img src={src} alt="" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -229,9 +271,7 @@ function PropositionRow({
       }`}>
         <MathText text={option.text} />
         {(option as any).image_url && (
-          <div className="flex justify-center mt-2 p-2 bg-white rounded-lg border border-gray-100">
-            <img src={(option as any).image_url} alt="" className="max-h-40 object-contain" />
-          </div>
+          <ZoomableImage src={(option as any).image_url} small />
         )}
       </div>
     </div>
@@ -453,9 +493,7 @@ function PlayingScreen({
                     <div className="text-sm font-medium text-gray-800 leading-relaxed">
                       <MathText text={q.text} />
                       {(q as any).image_url && (
-                        <div className="flex justify-center mt-3 mb-1 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <img src={(q as any).image_url} alt="" className="max-h-56 object-contain" />
-                        </div>
+                        <ZoomableImage src={(q as any).image_url} />
                       )}
                     </div>
                   </div>
@@ -742,7 +780,7 @@ function ResultsScreen({
                     {/* Question image if present */}
                     {q.image_url && (
                       <div className="pb-2">
-                        <img src={q.image_url} alt="" className="rounded-lg max-h-60 object-contain" />
+                        <ZoomableImage src={q.image_url} />
                       </div>
                     )}
                     {opts.map((opt) => (
