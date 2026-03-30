@@ -85,7 +85,7 @@ function parseQuestionsFromHtml(html: string): ParsedQuestion[] {
     }
 
     // Extract options: ☐ A : text
-    const optionPattern = /☐\s*<strong>([A-E])<\/strong>\s*:\s*(.*?)(?=(?:☐\s*<strong>[A-E]|<p>\s*<strong>Réponse|$))/gs;
+    const optionPattern = /☐\s*<strong>([A-E])<\/strong>\s*:\s*([\s\S]*?)(?=(?:☐\s*<strong>[A-E]|<p>\s*<strong>Réponse|$))/g;
     const options: { label: string; text: string; isCorrect: boolean; explanation: string | null; image: string | null }[] = [];
     let optMatch;
     while ((optMatch = optionPattern.exec(section)) !== null) {
@@ -124,7 +124,7 @@ function parseQuestionsFromHtml(html: string): ParsedQuestion[] {
       const afterCorr = section.slice(corrIdx);
       for (const opt of options) {
         // Match: <strong>A</strong> : explanation text
-        const explPattern = new RegExp(`<strong>${opt.label}</strong>\\s*:\\s*(.*?)(?=<strong>[A-E]</strong>\\s*:|<p>\\s*<strong>\\d+\\)|$)`, "s");
+        const explPattern = new RegExp(`<strong>${opt.label}</strong>\\s*:\\s*([\\s\\S]*?)(?=<strong>[A-E]</strong>\\s*:|<p>\\s*<strong>\\d+\\)|$)`);
         const explMatch = explPattern.exec(afterCorr);
         if (explMatch) {
           const explText = cleanText(explMatch[1]).trim();
