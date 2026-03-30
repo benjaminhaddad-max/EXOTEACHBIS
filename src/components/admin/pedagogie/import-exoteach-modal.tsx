@@ -135,23 +135,53 @@ for(var id of ids){
       if(exImgs.length===0){
         console.log('  Q'+exNum+' — pas d\\'image');
       }else{
-        /* First image = énoncé */
-        if(!q.url_image_q&&!q.image_url_scraped){
-          var b64=await imgToB64(exImgs[0].src);
+        /* Find answer labels A-E within this exercise section to separate énoncé from items */
+        var exLabels=[];
+        document.querySelectorAll('*').forEach(function(el){
+          var t=el.textContent.trim();
+          var r=el.getBoundingClientRect();
+          if(/^[A-E]$/.test(t)&&r.height>10&&r.height<40&&r.width<30&&r.top>=ex.y&&r.top<nextY){
+            exLabels.push({letter:t,y:r.top});
+          }
+        });
+        /* Deduplicate: keep first A only */
+        var seenL={};
+        exLabels=exLabels.filter(function(l){if(seenL[l.letter])return false;seenL[l.letter]=true;return true;});
+        exLabels.sort(function(a,b){return a.y-b.y;});
+        var firstLabelY=exLabels.length>0?exLabels[0].y:nextY;
+
+        /* Images ABOVE first label A = énoncé images (can be multiple!) */
+        var enonceImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top<firstLabelY-20;});
+        /* Images AT/BELOW first label = item images */
+        var itemImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top>=firstLabelY-20;});
+
+        /* Capture ALL énoncé images (concatenate if multiple) */
+        if(enonceImgs.length>0&&!q.url_image_q&&!q.image_url_scraped){
+          /* Take the largest image as primary énoncé */
+          enonceImgs.sort(function(a,b){return(b.naturalWidth*b.naturalHeight)-(a.naturalWidth*a.naturalHeight);});
+          var b64=await imgToB64(enonceImgs[0].src);
           if(b64){
             q.image_url_scraped=b64;
-            console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)');
+            console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)'+(enonceImgs.length>1?' [+' +(enonceImgs.length-1)+' autres dans énoncé]':''));
           }
         }
-        /* Remaining images = item images */
-        for(var ii=1,ai=0;ii<exImgs.length&&ai<(q.answers||[]).length;ai++){
-          if(!q.answers[ai].url_image&&!q.answers[ai].image_url_scraped){
-            var ab=await imgToB64(exImgs[ii].src);
-            if(ab){
-              q.answers[ai].image_url_scraped=ab;
-              console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
+
+        /* Capture item images — assign to nearest label above */
+        for(var ii=0;ii<itemImgs.length;ii++){
+          var imgY=itemImgs[ii].getBoundingClientRect().top;
+          var bestLetter=null;
+          for(var li=exLabels.length-1;li>=0;li--){
+            if(exLabels[li].y<=imgY+30){bestLetter=exLabels[li].letter;break;}
+          }
+          if(bestLetter){
+            var ansIdx='ABCDE'.indexOf(bestLetter);
+            if(ansIdx>=0&&ansIdx<(q.answers||[]).length&&!q.answers[ansIdx].url_image&&!q.answers[ansIdx].image_url_scraped){
+              var ab=await imgToB64(itemImgs[ii].src);
+              if(ab){
+                q.answers[ansIdx].image_url_scraped=ab;
+                console.log('  Q'+exNum+'.'+bestLetter+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
+              }
             }
-            ii++;
           }
         }
       }
