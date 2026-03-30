@@ -87,48 +87,113 @@ async function mergeImagesVertically(imgEls){
   return c.toDataURL('image/jpeg',0.85);
 }
 
-/* ── Overlay UI ── */
+/* ── Overlay UI (full-screen dashboard) ── */
+var existingOv=document.getElementById('exo-import-overlay');
+if(existingOv)existingOv.remove();
 var ov=document.createElement('div');
 ov.id='exo-import-overlay';
-ov.innerHTML='<div style="font:bold 13px -apple-system,sans-serif;color:#C9A84C;margin-bottom:8px">📥 Import ExoTeachBIS</div><div id="exo-ov-status" style="font-size:12px;color:#fff;margin-bottom:6px">Initialisation...</div><div style="background:rgba(255,255,255,0.1);border-radius:6px;height:8px;margin-bottom:6px;overflow:hidden"><div id="exo-ov-bar" style="height:100%;width:0%;background:#C9A84C;border-radius:6px;transition:width 0.3s"></div></div><div id="exo-ov-detail" style="font-size:11px;color:rgba(255,255,255,0.5);max-height:180px;overflow-y:auto"></div><div id="exo-ov-stats" style="font-size:11px;margin-top:6px;color:rgba(255,255,255,0.6)"></div>';
-ov.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99999;background:#0e1e35;border:2px solid rgba(201,168,76,0.5);border-radius:16px;padding:20px 24px;width:500px;max-height:80vh;box-shadow:0 12px 48px rgba(0,0,0,0.7);';
+ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(14,30,53,0.97);display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
+ov.innerHTML=\`
+<div style="padding:20px 28px;border-bottom:1px solid rgba(201,168,76,0.2);display:flex;align-items:center;justify-content:space-between">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:22px">📥</span>
+    <div>
+      <div style="font-size:16px;font-weight:800;color:#C9A84C">Import ExoTeachBIS</div>
+      <div id="exo-ov-subtitle" style="font-size:12px;color:rgba(255,255,255,0.4)">0 / \${${idsJson}.length} séries</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div id="exo-ov-timer" style="font-size:13px;color:rgba(255,255,255,0.4);font-variant-numeric:tabular-nums">00:00</div>
+    <div style="display:flex;gap:12px">
+      <div id="exo-ov-ok-count" style="font-size:14px;font-weight:700;color:#4ade80">✅ 0</div>
+      <div id="exo-ov-err-count" style="font-size:14px;font-weight:700;color:#f87171">❌ 0</div>
+    </div>
+  </div>
+</div>
+<div style="padding:0 28px;margin-top:12px">
+  <div style="background:rgba(255,255,255,0.08);border-radius:8px;height:10px;overflow:hidden">
+    <div id="exo-ov-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#C9A84C,#E3C286);border-radius:8px;transition:width 0.4s"></div>
+  </div>
+  <div id="exo-ov-status" style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:6px">Initialisation...</div>
+</div>
+<div style="flex:1;overflow-y:auto;padding:12px 28px;margin-top:8px">
+  <div id="exo-ov-series" style="display:flex;flex-direction:column;gap:4px"></div>
+</div>
+<div id="exo-ov-log" style="border-top:1px solid rgba(255,255,255,0.08);padding:10px 28px;max-height:120px;overflow-y:auto;font-size:11px;color:rgba(255,255,255,0.4)"></div>
+\`;
 document.body.appendChild(ov);
-var ovStatus=document.getElementById('exo-ov-status');
+
 var ovBar=document.getElementById('exo-ov-bar');
-var ovDetail=document.getElementById('exo-ov-detail');
-var ovStats=document.getElementById('exo-ov-stats');
-var ovLogs=[];
-function ovLog(msg,type){
-  var color=type==='ok'?'#4ade80':type==='err'?'#f87171':type==='img'?'#60a5fa':'rgba(255,255,255,0.5)';
-  ovLogs.push('<div style="color:'+color+';padding:1px 0">'+msg+'</div>');
-  if(ovLogs.length>50)ovLogs.shift();
-  ovDetail.innerHTML=ovLogs.join('');
-  ovDetail.scrollTop=ovDetail.scrollHeight;
-}
-function ovProgress(current,total,label){
-  ovStatus.textContent=label;
-  ovBar.style.width=Math.round((current/total)*100)+'%';
-}
+var ovStatus=document.getElementById('exo-ov-status');
+var ovSubtitle=document.getElementById('exo-ov-subtitle');
+var ovTimer=document.getElementById('exo-ov-timer');
+var ovOkCount=document.getElementById('exo-ov-ok-count');
+var ovErrCount=document.getElementById('exo-ov-err-count');
+var ovSeriesContainer=document.getElementById('exo-ov-series');
+var ovLogEl=document.getElementById('exo-ov-log');
 
 var ids=${idsJson};
-var series=[];var errs=[];
 var totalIds=ids.length;
 var globalOk=0,globalFail=0;
+var startTime=Date.now();
+
+/* Timer */
+var timerInterval=setInterval(function(){
+  var elapsed=Math.floor((Date.now()-startTime)/1000);
+  var min=Math.floor(elapsed/60);
+  var sec=elapsed%60;
+  ovTimer.textContent=(min<10?'0':'')+min+':'+(sec<10?'0':'')+sec;
+},1000);
+
+/* Create a row for each serie */
+var serieRows={};
+ids.forEach(function(id,idx){
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.03);';
+  row.innerHTML='<span style="color:rgba(255,255,255,0.3);font-size:11px;width:30px;text-align:right">#'+id+'</span><span id="exo-s-status-'+id+'" style="font-size:13px">⏳</span><span id="exo-s-title-'+id+'" style="flex:1;font-size:12px;color:rgba(255,255,255,0.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">En attente...</span><span id="exo-s-imgs-'+id+'" style="font-size:11px;color:rgba(255,255,255,0.3)"></span>';
+  ovSeriesContainer.appendChild(row);
+  serieRows[id]={row:row};
+});
+
+function setSerieStatus(id,status,title,detail){
+  var statusEl=document.getElementById('exo-s-status-'+id);
+  var titleEl=document.getElementById('exo-s-title-'+id);
+  var imgsEl=document.getElementById('exo-s-imgs-'+id);
+  if(statusEl)statusEl.textContent=status;
+  if(titleEl&&title){titleEl.textContent=title;titleEl.style.color=status==='✅'?'#4ade80':status==='❌'?'#f87171':'rgba(255,255,255,0.7)';}
+  if(imgsEl&&detail)imgsEl.textContent=detail;
+}
+
+var logLines=[];
+function ovLog(msg,type){
+  var color=type==='ok'?'#4ade80':type==='err'?'#f87171':type==='img'?'#60a5fa':'rgba(255,255,255,0.4)';
+  logLines.push('<div style="color:'+color+'">'+msg+'</div>');
+  if(logLines.length>80)logLines.shift();
+  ovLogEl.innerHTML=logLines.join('');
+  ovLogEl.scrollTop=ovLogEl.scrollHeight;
+}
+
+function updateCounts(){
+  ovOkCount.textContent='✅ '+globalOk;
+  ovErrCount.textContent='❌ '+globalFail;
+  ovSubtitle.textContent=(globalOk+globalFail)+' / '+totalIds+' séries';
+  ovBar.style.width=Math.round(((globalOk+globalFail)/totalIds)*100)+'%';
+}
 
 var serieIdx=0;
 for(var id of ids){
   serieIdx++;
   try{
-    ovProgress(serieIdx,totalIds,'Série '+serieIdx+'/'+totalIds+' — Récupération #'+id+'...');
+    ovStatus.textContent='Série '+serieIdx+'/'+totalIds+' — Récupération #'+id+'...';
+    setSerieStatus(id,'🔄','Récupération...');
     ovLog('📥 Série #'+id+' ('+serieIdx+'/'+totalIds+')...');
     var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',String(id))],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
-    if(!r.data||!r.data.qcm){errs.push(id);ovLog('❌ Série #'+id+' non trouvée','err');continue;}
+    if(!r.data||!r.data.qcm){globalFail++;setSerieStatus(id,'❌','Non trouvée sur ExoTeach');ovLog('❌ Série #'+id+' non trouvée','err');updateCounts();continue;}
     var qcm=JSON.parse(JSON.stringify(r.data.qcm));
     var nbQ=qcm.questions.length;
 
-    /* 1. Navigate to edit page */
-    ovLog('🖼️ '+qcm.titre+' ('+nbQ+'Q)');
-    ovProgress(serieIdx,totalIds,'Série '+serieIdx+'/'+totalIds+' — Chargement images...');
+    setSerieStatus(id,'🖼️',qcm.titre+' ('+nbQ+'Q)','Scraping...');
+    ovStatus.textContent='Série '+serieIdx+'/'+totalIds+' — '+qcm.titre;
     window.location.hash='#/admin-series/edit/'+id;
     await wait(3000);
 
@@ -265,48 +330,48 @@ for(var id of ids){
       }
     }
 
-    series.push(qcm);
-    ovLog('✅ '+qcm.titre+' — scraping terminé','ok');
-  }catch(e){errs.push(id);ovLog('❌ Erreur série #'+id+': '+e.message,'err');}
-}
-if(!series.length){ovStatus.textContent='❌ Aucune série trouvée';return;}
-var ok=0,fail=0;
-ovLog('');
-ovLog('📤 Envoi vers ExoTeachBIS...');
-for(var si=0;si<series.length;si++){
-  var qcm=series[si];
-  ovProgress(si+1,series.length,'Envoi '+(si+1)+'/'+series.length+': '+qcm.titre.slice(0,40)+'...');
-  ovLog('📤 '+(si+1)+'/'+series.length+' '+qcm.titre);
-  var allQ=qcm.questions||[];
-  var batches=[];
-  for(var bi=0;bi<allQ.length;bi+=2){batches.push(allQ.slice(bi,bi+2));}
-  if(batches.length===0)batches=[[]];
-  var serieId=null,serieOk=true,totalQ=0;
-  for(var bti=0;bti<batches.length;bti++){
-    var batch=batches[bti];
-    var payload;
-    if(bti===0){
-      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}};
-    }else{
-      payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'},appendToSerieId:serieId};
+    /* ── Send immediately after scraping ── */
+    ovLog('📤 Envoi '+qcm.titre+'...');
+    setSerieStatus(id,'📤',qcm.titre,'Envoi...');
+    var imgCount=qcm.questions.filter(function(q){return q.image_url_scraped;}).length;
+    var allSendQ=qcm.questions||[];
+    var batches=[];
+    for(var bi=0;bi<allSendQ.length;bi+=2){batches.push(allSendQ.slice(bi,bi+2));}
+    if(batches.length===0)batches=[[]];
+    var sendSerieId=null,serieOk=true,totalQ=0;
+    for(var bti=0;bti<batches.length;bti++){
+      var batch=batches[bti];
+      var payload;
+      if(bti===0){
+        payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'}};
+      }else{
+        payload={series:[{id_qcm:qcm.id_qcm,titre:qcm.titre,questions:batch}],coursId:${coursId ? `'${coursId}'` : 'null'},serieType:'${serieType}',matiereId:${matiereId ? `'${matiereId}'` : 'null'},appendToSerieId:sendSerieId};
+      }
+      try{
+        var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        var out=await res.json();
+        if(out.success){
+          totalQ+=(out.results&&out.results[0]&&out.results[0].questions)||batch.length;
+          if(bti===0&&out.results&&out.results[0])sendSerieId=out.results[0].newId;
+        }else{serieOk=false;ovLog('  ❌ '+out.error,'err');}
+      }catch(e){serieOk=false;ovLog('  ❌ Réseau: '+e.message,'err');}
     }
-    try{
-      var res=await fetch('${saveUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      var out=await res.json();
-      if(out.success){
-        totalQ+=(out.results&&out.results[0]&&out.results[0].questions)||batch.length;
-        if(bti===0&&out.results&&out.results[0])serieId=out.results[0].newId;
-      }else{serieOk=false;ovLog('  ❌ erreur envoi: '+(out.error||'erreur'),'err');}
-    }catch(e){serieOk=false;ovLog('  ❌ Erreur réseau: '+e.message,'err');}
-  }
-  if(serieOk){ok++;globalOk++;ovLog('  ✅ Envoyée ('+totalQ+'Q)','ok');}else{fail++;globalFail++;}
-  ovStats.innerHTML='<span style="color:#4ade80">✅ '+globalOk+'</span> importée'+(globalOk>1?'s':'')+' — <span style="color:#f87171">❌ '+globalFail+'</span> erreur'+(globalFail>1?'s':'');
+    if(serieOk){
+      globalOk++;
+      setSerieStatus(id,'✅',qcm.titre,totalQ+'Q · '+imgCount+' img');
+      ovLog('✅ '+qcm.titre+' ('+totalQ+'Q, '+imgCount+' images)','ok');
+    }else{
+      globalFail++;
+      setSerieStatus(id,'❌',qcm.titre,'Erreur envoi');
+    }
+    updateCounts();
+  }catch(e){globalFail++;setSerieStatus(id,'❌','Erreur: '+e.message);ovLog('❌ #'+id+': '+e.message,'err');updateCounts();}
 }
-ovProgress(1,1,'✅ Import terminé !');
-ovStatus.textContent='✅ Import terminé — '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'');
+clearInterval(timerInterval);
+ovStatus.textContent='✅ Import terminé — '+globalOk+' série(s) importée(s)'+(globalFail?' — '+globalFail+' erreur(s)':'');
 ovStatus.style.color='#4ade80';
 ovBar.style.width='100%';
-ovBar.style.background='#4ade80';
+ovBar.style.background='linear-gradient(90deg,#4ade80,#22c55e)';
 })();`;
 }
 
