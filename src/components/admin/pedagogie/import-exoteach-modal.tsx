@@ -91,7 +91,7 @@ async function mergeImagesVertically(imgEls){
 var ov=document.createElement('div');
 ov.id='exo-import-overlay';
 ov.innerHTML='<div style="font:bold 13px -apple-system,sans-serif;color:#C9A84C;margin-bottom:8px">📥 Import ExoTeachBIS</div><div id="exo-ov-status" style="font-size:12px;color:#fff;margin-bottom:6px">Initialisation...</div><div style="background:rgba(255,255,255,0.1);border-radius:6px;height:8px;margin-bottom:6px;overflow:hidden"><div id="exo-ov-bar" style="height:100%;width:0%;background:#C9A84C;border-radius:6px;transition:width 0.3s"></div></div><div id="exo-ov-detail" style="font-size:11px;color:rgba(255,255,255,0.5);max-height:180px;overflow-y:auto"></div><div id="exo-ov-stats" style="font-size:11px;margin-top:6px;color:rgba(255,255,255,0.6)"></div>';
-ov.style.cssText='position:fixed;bottom:16px;right:16px;z-index:99999;background:#0e1e35;border:1px solid rgba(201,168,76,0.3);border-radius:12px;padding:14px 18px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
+ov.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99999;background:#0e1e35;border:2px solid rgba(201,168,76,0.5);border-radius:16px;padding:20px 24px;width:500px;max-height:80vh;box-shadow:0 12px 48px rgba(0,0,0,0.7);';
 document.body.appendChild(ov);
 var ovStatus=document.getElementById('exo-ov-status');
 var ovBar=document.getElementById('exo-ov-bar');
