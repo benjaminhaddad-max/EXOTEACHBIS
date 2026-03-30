@@ -712,10 +712,8 @@ export function QaDashboard({
           return true;
         });
 
-        // Matières with overdue threads (for matiere filter dropdown)
-        const overdueMatIds = new Set(allOverdueThreads.filter((t) => t.matiere_id).map((t) => t.matiere_id!));
-        const overdueMatieres = qaMatieres.filter((m) => {
-          if (!overdueMatIds.has(m.id)) return false;
+        // All matières available for current formation/university selection
+        const availableMatieres = qaMatieres.filter((m) => {
           if (filterFormation !== "all" && matiereToOfferId.get(m.id) !== filterFormation) return false;
           if (filterUni !== "all" && matiereToUniId.get(m.id) !== filterUni) return false;
           return true;
@@ -818,12 +816,12 @@ export function QaDashboard({
                 </div>
               )}
               {/* Matière */}
-              {overdueMatieres.length > 0 && (
+              {availableMatieres.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 shrink-0">Matière</span>
                   <button type="button" onClick={() => setFilterMatiere("all")}
                     className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === "all" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
-                  {overdueMatieres.map((mat) => (
+                  {availableMatieres.map((mat) => (
                     <button key={mat.id} type="button" onClick={() => setFilterMatiere(filterMatiere === mat.id ? "all" : mat.id)}
                       className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === mat.id ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{mat.name}</button>
                   ))}
