@@ -19,10 +19,24 @@ export default async function CommunicationPage() {
   const isAdmin = ["admin", "superadmin"].includes(role);
   const scope = await getAccessScopeForUser(supabase as any, user.id);
   const admin = createAdminClient();
+  const addDossierAncestors = (sourceIds: Iterable<string>, dossiers: Dossier[]) => {
+    const dossierMap = new Map(dossiers.map((d) => [d.id, d]));
+    const allowed = new Set<string>();
+
+    const visit = (id: string) => {
+      if (allowed.has(id)) return;
+      allowed.add(id);
+      const dossier = dossierMap.get(id);
+      if (dossier?.parent_id) visit(dossier.parent_id);
+    };
+
+    for (const id of sourceIds) visit(id);
+    return allowed;
+  };
 
   // Fetch all data in parallel
   const [
-    annoncesRes, groupesRes, dossiersRes, matieresRes, profMatieresRes,
+    annoncesRes, groupesRes, dossiersRes, matieresRes, profMatieresRes, coachAssignmentsRes,
     templatesRes, fieldsRes, formDossiersRes, studentsRes, responsesRes,
   ] = await Promise.all([
     // Annonces
@@ -33,6 +47,7 @@ export default async function CommunicationPage() {
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("matieres").select("*").eq("visible", true).order("name"),
     role === "prof" ? supabase.from("prof_matieres").select("matiere_id").eq("prof_id", user.id) : Promise.resolve({ data: [] }),
+    role === "coach" ? supabase.from("coach_groupe_assignments").select("groupe_id").eq("coach_id", user.id) : Promise.resolve({ data: [] }),
     // Formulaires (admin only)
     isAdmin ? admin.from("form_templates").select("*").order("updated_at", { ascending: false }) : Promise.resolve({ data: [] }),
     isAdmin ? admin.from("form_fields").select("*").order("order_index").order("created_at") : Promise.resolve({ data: [] }),
@@ -45,10 +60,34 @@ export default async function CommunicationPage() {
   const allMatieres = (matieresRes.data ?? []) as Matiere[];
   const allGroupes = (groupesRes.data ?? []) as Groupe[];
   const profMatiereIds = new Set((profMatieresRes.data ?? []).map((i: any) => i.matiere_id).filter(Boolean));
+  const coachGroupeIds = new Set((coachAssignmentsRes.data ?? []).map((i: any) => i.groupe_id).filter(Boolean));
 
-  // Scope for prof/coach
-  const availableGroupes = (role === "prof" || role === "coach") ? allGroupes.filter(g => g.id === profile.groupe_id) : allGroupes;
-  const availableDossiers = (role === "prof" || role === "coach") ? allDossiers.filter(d => scope.allowedDossierIds.has(d.id)) : allDossiers;
+  const profFormationDossierIds = addDossierAncestors(
+    allMatieres
+      .filter((matiere) => profMatiereIds.has(matiere.id))
+      .map((matiere) => matiere.dossier_id)
+      .filter(Boolean) as string[],
+    allDossiers
+  );
+
+  const availableGroupes =
+    role === "prof"
+      ? allGroupes.filter((groupe) => groupe.formation_dossier_id && profFormationDossierIds.has(groupe.formation_dossier_id))
+      : role === "coach"
+        ? allGroupes.filter((groupe) => coachGroupeIds.has(groupe.id))
+        : allGroupes;
+
+  const availableDossierIds =
+    role === "prof" || role === "coach"
+      ? addDossierAncestors(
+          availableGroupes.map((groupe) => groupe.formation_dossier_id).filter(Boolean) as string[],
+          allDossiers
+        )
+      : new Set(allDossiers.map((dossier) => dossier.id));
+
+  const availableDossiers = (role === "prof" || role === "coach")
+    ? allDossiers.filter((d) => availableDossierIds.has(d.id) || scope.allowedDossierIds.has(d.id))
+    : allDossiers;
   const availableMatieres = role === "prof" ? allMatieres.filter(m => profMatiereIds.has(m.id)) : allMatieres;
 
   return (

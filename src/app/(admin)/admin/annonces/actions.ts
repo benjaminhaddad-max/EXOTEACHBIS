@@ -26,6 +26,24 @@ type NormalizedAnnonceTarget = {
   matiere_id: string | null;
 };
 
+function collectDossierAncestors(
+  rootIds: string[],
+  dossiers: Array<{ id: string; parent_id: string | null }>
+) {
+  const dossierMap = new Map(dossiers.map((dossier) => [dossier.id, dossier]));
+  const allowed = new Set<string>();
+
+  const visit = (id: string) => {
+    if (allowed.has(id)) return;
+    allowed.add(id);
+    const dossier = dossierMap.get(id);
+    if (dossier?.parent_id) visit(dossier.parent_id);
+  };
+
+  for (const id of rootIds) visit(id);
+  return allowed;
+}
+
 async function getAnnonceActorContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,9 +61,44 @@ async function getAnnonceActorContext() {
   }
 
   const scope = await getAccessScopeForUser(supabase as any, user.id);
-  const { data: profAssignments } = role === "prof"
-    ? await supabase.from("prof_matieres").select("matiere_id").eq("prof_id", user.id)
-    : { data: [] };
+  const [profAssignmentsRes, coachAssignmentsRes, groupesRes, dossiersRes, matieresRes] = await Promise.all([
+    role === "prof"
+      ? supabase.from("prof_matieres").select("matiere_id").eq("prof_id", user.id)
+      : Promise.resolve({ data: [] }),
+    role === "coach"
+      ? supabase.from("coach_groupe_assignments").select("groupe_id").eq("coach_id", user.id)
+      : Promise.resolve({ data: [] }),
+    role === "prof" || role === "coach"
+      ? supabase.from("groupes").select("id, formation_dossier_id")
+      : Promise.resolve({ data: [] }),
+    role === "prof" ? supabase.from("dossiers").select("id, parent_id") : Promise.resolve({ data: [] }),
+    role === "prof" ? supabase.from("matieres").select("id, dossier_id") : Promise.resolve({ data: [] }),
+  ]);
+
+  const profMatiereIds = new Set((profAssignmentsRes.data ?? []).map((item: any) => item.matiere_id).filter(Boolean));
+  const coachGroupeIds = new Set((coachAssignmentsRes.data ?? []).map((item: any) => item.groupe_id).filter(Boolean));
+
+  const profAllowedDossierIds =
+    role === "prof"
+      ? collectDossierAncestors(
+          ((matieresRes.data ?? []) as any[])
+            .filter((matiere) => profMatiereIds.has(matiere.id))
+            .map((matiere) => matiere.dossier_id)
+            .filter(Boolean),
+          (dossiersRes.data ?? []) as Array<{ id: string; parent_id: string | null }>
+        )
+      : new Set<string>();
+
+  const accessibleGroupeIds = new Set<string>();
+  for (const groupe of (groupesRes.data ?? []) as Array<{ id: string; formation_dossier_id: string | null }>) {
+    if (role === "coach" && coachGroupeIds.has(groupe.id)) {
+      accessibleGroupeIds.add(groupe.id);
+      continue;
+    }
+    if (role === "prof" && groupe.formation_dossier_id && profAllowedDossierIds.has(groupe.formation_dossier_id)) {
+      accessibleGroupeIds.add(groupe.id);
+    }
+  }
 
   return {
     supabase,
@@ -53,7 +106,8 @@ async function getAnnonceActorContext() {
     profile: profile ?? { id: user.id, role, groupe_id: null },
     role,
     scope,
-    profMatiereIds: new Set((profAssignments ?? []).map((item: any) => item.matiere_id).filter(Boolean)),
+    profMatiereIds,
+    accessibleGroupeIds,
   };
 }
 
@@ -79,8 +133,8 @@ async function validateAnnonceAudience(data: NormalizedAnnonceTarget, actor: Awa
   if ("error" in actor) return;
   if (actor.role === "admin" || actor.role === "superadmin") return;
 
-  if (data.groupe_id && actor.profile.groupe_id !== data.groupe_id) {
-    return { error: "Vous ne pouvez publier que pour votre propre classe." };
+  if (data.groupe_id && !actor.accessibleGroupeIds.has(data.groupe_id)) {
+    return { error: "Vous ne pouvez publier que pour une classe sur laquelle vous intervenez." };
   }
 
   if (data.dossier_id && !actor.scope.allowedDossierIds.has(data.dossier_id)) {
