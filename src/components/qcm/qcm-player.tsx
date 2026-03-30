@@ -38,6 +38,22 @@ function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
   );
 }
 
+/** Parse image_url — supports single URL string or JSON array of URLs */
+function parseImageUrls(imageUrl: string | null | undefined): string[] {
+  if (!imageUrl) return [];
+  const trimmed = imageUrl.trim();
+  if (trimmed.startsWith("[")) {
+    try { const arr = JSON.parse(trimmed); if (Array.isArray(arr)) return arr.filter(Boolean); } catch {}
+  }
+  return [trimmed];
+}
+
+function QuestionImages({ imageUrl, small }: { imageUrl: string | null | undefined; small?: boolean }) {
+  const urls = parseImageUrls(imageUrl);
+  if (urls.length === 0) return null;
+  return <>{urls.map((url, i) => <ZoomableImage key={i} src={url} small={small} />)}</>;
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 interface QOption {
@@ -481,7 +497,7 @@ function PlayingScreen({
                     <div className="text-sm font-medium text-gray-800 leading-relaxed">
                       <MathText text={q.text} />
                       {(q as any).image_url && (
-                        <ZoomableImage src={(q as any).image_url} />
+                        <QuestionImages imageUrl={(q as any).image_url} />
                       )}
                     </div>
                   </div>
@@ -768,7 +784,7 @@ function ResultsScreen({
                     {/* Question image if present */}
                     {q.image_url && (
                       <div className="pb-2">
-                        <ZoomableImage src={q.image_url} />
+                        <QuestionImages imageUrl={q.image_url} />
                       </div>
                     )}
                     {opts.map((opt) => (

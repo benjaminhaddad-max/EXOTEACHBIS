@@ -56,6 +56,37 @@ async function imgToB64(src){
   }catch(e){return null;}
 }
 
+/* Merge multiple images vertically into one using a hidden canvas */
+async function mergeImagesVertically(imgEls){
+  if(imgEls.length===0)return null;
+  if(imgEls.length===1)return await imgToB64(imgEls[0].src);
+  /* Load all images as Image objects */
+  var loaded=[];
+  for(var i=0;i<imgEls.length;i++){
+    var b64=await imgToB64(imgEls[i].src);
+    if(!b64)continue;
+    var img=new Image();
+    await new Promise(function(ok){img.onload=ok;img.onerror=ok;img.src=b64;});
+    if(img.width>0)loaded.push(img);
+  }
+  if(loaded.length===0)return null;
+  if(loaded.length===1)return loaded[0].src;
+  /* Create canvas with combined height */
+  var maxW=Math.max.apply(null,loaded.map(function(i){return i.width;}));
+  var totalH=loaded.reduce(function(s,i){return s+i.height;},0)+((loaded.length-1)*10);
+  var c=document.createElement('canvas');
+  c.width=maxW;c.height=totalH;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,maxW,totalH);
+  var y=0;
+  for(var i=0;i<loaded.length;i++){
+    var x=Math.floor((maxW-loaded[i].width)/2);
+    ctx.drawImage(loaded[i],x,y);
+    y+=loaded[i].height+10;
+  }
+  return c.toDataURL('image/jpeg',0.85);
+}
+
 var ids=${idsJson};
 var series=[];var errs=[];
 
@@ -165,14 +196,23 @@ for(var id of ids){
         /* Images AT/BELOW first option = item images */
         var itemImgs=exImgs.filter(function(img){return img.getBoundingClientRect().top>=firstOptionY-20;});
 
-        /* Capture ALL énoncé images (concatenate if multiple) */
+        /* Capture ALL énoncé images */
         if(enonceImgs.length>0&&!q.url_image_q&&!q.image_url_scraped){
-          /* Take the largest image as primary énoncé */
-          enonceImgs.sort(function(a,b){return(b.naturalWidth*b.naturalHeight)-(a.naturalWidth*a.naturalHeight);});
-          var b64=await imgToB64(enonceImgs[0].src);
-          if(b64){
-            q.image_url_scraped=b64;
-            console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)'+(enonceImgs.length>1?' [+' +(enonceImgs.length-1)+' autres dans énoncé]':''));
+          enonceImgs.sort(function(a,b){return a.getBoundingClientRect().top-b.getBoundingClientRect().top;});
+          if(enonceImgs.length===1){
+            var b64=await imgToB64(enonceImgs[0].src);
+            if(b64){q.image_url_scraped=b64;console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)');}
+          }else{
+            /* Multiple images → store as JSON array */
+            var imgArr=[];
+            for(var ei=0;ei<enonceImgs.length;ei++){
+              var b64=await imgToB64(enonceImgs[ei].src);
+              if(b64)imgArr.push(b64);
+            }
+            if(imgArr.length>0){
+              q.image_url_scraped=imgArr.length===1?imgArr[0]:JSON.stringify(imgArr);
+              console.log('  Q'+exNum+' ✅ '+imgArr.length+' image(s) énoncé ('+Math.round(q.image_url_scraped.length/1024)+'KB)');
+            }
           }
         }
 
