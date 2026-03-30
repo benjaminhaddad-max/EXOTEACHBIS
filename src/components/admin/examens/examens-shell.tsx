@@ -535,8 +535,8 @@ export function ExamensShell({
                           </div>
                         )}
 
-                        {/* Prof: Generate grid button for upcoming exams */}
-                        {isProf && profSubTab === "upcoming" && (e.examen_series?.length ?? 0) > 0 && (
+                        {/* Generate grid button for upcoming exams */}
+                        {(isProf ? profSubTab === "upcoming" : true) && (e.examen_series?.length ?? 0) > 0 && (
                           <div className="mt-3" onClick={ev => ev.stopPropagation()}>
                             <button
                               onClick={() => {
