@@ -368,10 +368,35 @@ for(var id of ids){
   }catch(e){globalFail++;setSerieStatus(id,'❌','Erreur: '+e.message);ovLog('❌ #'+id+': '+e.message,'err');updateCounts();}
 }
 clearInterval(timerInterval);
-ovStatus.textContent='✅ Import terminé — '+globalOk+' série(s) importée(s)'+(globalFail?' — '+globalFail+' erreur(s)':'');
-ovStatus.style.color='#4ade80';
 ovBar.style.width='100%';
-ovBar.style.background='linear-gradient(90deg,#4ade80,#22c55e)';
+if(globalFail===0){
+  ovStatus.textContent='✅ Import terminé — '+globalOk+' série(s) importée(s)';
+  ovStatus.style.color='#4ade80';
+  ovBar.style.background='linear-gradient(90deg,#4ade80,#22c55e)';
+}else{
+  ovStatus.style.color='#fbbf24';
+  ovStatus.textContent='⚠️ Import terminé — '+globalOk+' OK, '+globalFail+' erreur(s)';
+  ovBar.style.background='linear-gradient(90deg,#fbbf24,#f59e0b)';
+  /* Collect failed IDs */
+  var failedIds=[];
+  ids.forEach(function(fid){
+    var statusEl=document.getElementById('exo-s-status-'+fid);
+    if(statusEl&&statusEl.textContent==='❌')failedIds.push(fid);
+  });
+  if(failedIds.length>0){
+    var retryDiv=document.createElement('div');
+    retryDiv.style.cssText='margin-top:12px;padding:12px 16px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;';
+    retryDiv.innerHTML='<div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:8px">'+failedIds.length+' série(s) échouée(s) :</div>'
+      +'<div style="font-size:13px;color:#fff;font-family:monospace;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;margin-bottom:8px;user-select:all">'+failedIds.join(', ')+'</div>'
+      +'<button id="exo-retry-btn" style="background:#C9A84C;color:#0e1e35;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📋 Copier les IDs pour relancer</button>';
+    ovSeriesContainer.parentElement.appendChild(retryDiv);
+    document.getElementById('exo-retry-btn').onclick=function(){
+      navigator.clipboard.writeText(failedIds.join(', '));
+      this.textContent='✅ Copié !';
+      this.style.background='#4ade80';
+    };
+  }
+}
 })();`;
 }
 
