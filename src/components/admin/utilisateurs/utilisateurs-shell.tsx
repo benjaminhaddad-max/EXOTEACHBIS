@@ -3377,7 +3377,12 @@ function EditUserModal({
   // Role-type specific matiere assignments (2 sections: cours + qa/contenu merged)
   const [coursMatIds, setCoursMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "cours" || !r.role_type).map((r) => r.matiere_id));
   const [qaContenuMatIds, setQaContenuMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "qa" || r.role_type === "contenu").map((r) => r.matiere_id));
-  const [coursGroupeId, setCoursGroupeId] = useState<string>(user.groupe_id ?? groupes[0]?.id ?? "");
+  // Cascade filters per section
+  const [coursFormation, setCoursFormation] = useState("");
+  const [coursUni, setCoursUni] = useState("");
+  const [coursGroupeId, setCoursGroupeId] = useState<string>("");
+  const [qaFormation, setQaFormation] = useState("");
+  const [qaUni, setQaUni] = useState("");
   const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
   const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
   const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
@@ -3818,129 +3823,161 @@ function EditUserModal({
             </div>
           )}
 
-          {role === "prof" && (
+          {role === "prof" && (() => {
+            // Build formation offers & universities from dossiers
+            const offers = dossiers.filter((d) => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
+
+            const getUnisForOffer = (offerId: string) =>
+              dossiers.filter((d) => d.dossier_type === "university" && d.parent_id === offerId).sort((a, b) => a.order_index - b.order_index);
+
+            const getGroupesForUni = (uniId: string) =>
+              groupes.filter((g) => g.formation_dossier_id === uniId);
+
+            const getMatieresForUni = (uniId: string) => {
+              const descendantIds = new Set<string>();
+              const walk = (pid: string) => { descendantIds.add(pid); dossiers.filter((d) => d.parent_id === pid).forEach((d) => walk(d.id)); };
+              walk(uniId);
+              return dossiers
+                .filter((d) => descendantIds.has(d.id) && (matieresByDossier.get(d.id)?.length ?? 0) > 0)
+                .flatMap((d) => (matieresByDossier.get(d.id) ?? []).map((m) => ({ ...m, dossierLabel: getDossierPathLabel(d.id, dossiers) })));
+            };
+
+            // Group matières by their dossier label for display
+            const groupByDossierLabel = (mats: { dossierLabel: string; id: string; name: string; color: string }[]) => {
+              const map = new Map<string, typeof mats>();
+              for (const m of mats) { const arr = map.get(m.dossierLabel) ?? []; arr.push(m); map.set(m.dossierLabel, arr); }
+              return [...map.entries()];
+            };
+
+            const PillFilter = ({ items, value, onChange, color }: { items: { id: string; name: string }[]; value: string; onChange: (v: string) => void; color: string }) => (
+              <div className="flex flex-wrap gap-1">
+                {items.map((item) => {
+                  const active = value === item.id;
+                  return (
+                    <button key={item.id} type="button" onClick={() => onChange(active ? "" : item.id)}
+                      className="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
+                      style={{
+                        borderColor: active ? color + "99" : "rgba(255,255,255,0.08)",
+                        backgroundColor: active ? color + "22" : "rgba(255,255,255,0.02)",
+                        color: active ? color : "rgba(255,255,255,0.45)",
+                      }}>
+                      {item.name.replace("Université ", "")}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+
+            const coursUnis = coursFormation ? getUnisForOffer(coursFormation) : [];
+            const coursGroupes = coursUni ? getGroupesForUni(coursUni) : [];
+            const coursMats = coursUni ? getMatieresForUni(coursUni) : [];
+
+            const qaUnis = qaFormation ? getUnisForOffer(qaFormation) : [];
+            const qaMats = qaUni ? getMatieresForUni(qaUni) : [];
+
+            return (
             <div className="space-y-5">
-              {/* ── Section 1: Donne cours (Classe > Matière) ── */}
+              {/* ── Section 1: Donne cours ── */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#60A5FA" }} />
-                  <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
-                    Donne cours
-                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Donne cours</label>
                   <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— Emploi du temps & planning</span>
                 </div>
-                <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  {/* Classe picker */}
-                  <div>
-                    <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>Classe</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {groupes.map((g) => {
-                        const selected = coursGroupeId === g.id;
-                        return (
-                          <button
-                            key={g.id}
-                            type="button"
-                            onClick={() => setCoursGroupeId(g.id)}
-                            className="rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
-                            style={{
-                              borderColor: selected ? "#60A5FA99" : "rgba(255,255,255,0.08)",
-                              backgroundColor: selected ? "#60A5FA22" : "rgba(255,255,255,0.02)",
-                              color: selected ? "#60A5FA" : "rgba(255,255,255,0.55)",
-                            }}
-                          >
-                            {g.name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                <div className="rounded-xl p-3 space-y-2.5" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {/* Formation */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
+                    <PillFilter items={offers} value={coursFormation} onChange={(v) => { setCoursFormation(v); setCoursUni(""); setCoursGroupeId(""); }} color="#60A5FA" />
                   </div>
-                  {/* Matières de la classe */}
-                  {coursGroupeId && (() => {
-                    const selectedGroupe = groupes.find((g) => g.id === coursGroupeId);
-                    const formationId = selectedGroupe?.formation_dossier_id;
-                    // Find all dossier descendants of this formation
-                    const relevantDossierIds = new Set<string>();
-                    if (formationId) {
-                      const addDescendants = (parentId: string) => {
-                        relevantDossierIds.add(parentId);
-                        dossiers.filter((d) => d.parent_id === parentId).forEach((d) => addDescendants(d.id));
-                      };
-                      addDescendants(formationId);
-                    }
-                    const filteredDossiers = dossiers.filter((d) => relevantDossierIds.has(d.id) && (matieresByDossier.get(d.id)?.length ?? 0) > 0);
-                    return filteredDossiers.length > 0 ? filteredDossiers.map((dossier) => (
-                      <div key={dossier.id}>
-                        <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
-                          {getDossierPathLabel(dossier.id, dossiers)}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
-                            const checked = coursMatIds.includes(matiere.id);
-                            return (
-                              <button key={matiere.id} type="button" onClick={() => toggleRoleMatiere("cours", matiere.id)}
-                                className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
-                                style={{
-                                  borderColor: checked ? "#60A5FA99" : "rgba(255,255,255,0.08)",
-                                  backgroundColor: checked ? "#60A5FA22" : "rgba(255,255,255,0.02)",
-                                  color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)",
-                                }}>
-                                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#60A5FA" : matiere.color }} />
-                                {matiere.name}
-                              </button>
-                            );
-                          })}
+                  {/* Université */}
+                  {coursFormation && coursUnis.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
+                      <PillFilter items={coursUnis} value={coursUni} onChange={(v) => { setCoursUni(v); setCoursGroupeId(""); }} color="#60A5FA" />
+                    </div>
+                  )}
+                  {/* Classe */}
+                  {coursUni && coursGroupes.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
+                      <PillFilter items={coursGroupes} value={coursGroupeId} onChange={setCoursGroupeId} color="#60A5FA" />
+                    </div>
+                  )}
+                  {/* Matières */}
+                  {coursUni && coursMats.length > 0 && (
+                    <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      {groupByDossierLabel(coursMats).map(([label, mats]) => (
+                        <div key={label} className="mb-2">
+                          <p className="mb-1 text-[9px] font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {mats.map((m) => {
+                              const checked = coursMatIds.includes(m.id);
+                              return (
+                                <button key={m.id} type="button" onClick={() => toggleRoleMatiere("cours", m.id)}
+                                  className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors"
+                                  style={{ borderColor: checked ? "#60A5FA99" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#60A5FA22" : "rgba(255,255,255,0.02)", color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>
+                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#60A5FA" : m.color }} />{m.name}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )) : (
-                      <p className="text-[11px] py-2 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Sélectionnez une classe</p>
-                    );
-                  })()}
+                      ))}
+                    </div>
+                  )}
+                  {!coursFormation && <p className="text-[11px] py-1 text-center" style={{ color: "rgba(255,255,255,0.25)" }}>Sélectionnez une formation</p>}
                 </div>
               </div>
 
-              {/* ── Section 2: Q&A & Contenu (Matière, pas de classe) ── */}
+              {/* ── Section 2: Q&A & Contenu ── */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#FBBF24" }} />
-                  <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
-                    Q&A & Contenu
-                  </label>
-                  <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— Répond aux questions & crée du contenu pédagogique</span>
+                  <label className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>Q&A & Contenu</label>
+                  <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>— Répond aux questions & crée du contenu</span>
                 </div>
-                <div className="rounded-xl p-3 space-y-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  {dossiers
-                    .filter((dossier) => (matieresByDossier.get(dossier.id)?.length ?? 0) > 0)
-                    .map((dossier) => (
-                      <div key={dossier.id}>
-                        <p className="mb-1.5 text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.35)" }}>
-                          {getDossierPathLabel(dossier.id, dossiers)}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(matieresByDossier.get(dossier.id) ?? []).map((matiere) => {
-                            const checked = qaContenuMatIds.includes(matiere.id);
-                            return (
-                              <button key={matiere.id} type="button" onClick={() => toggleRoleMatiere("qa_contenu", matiere.id)}
-                                className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors"
-                                style={{
-                                  borderColor: checked ? "#FBBF2499" : "rgba(255,255,255,0.08)",
-                                  backgroundColor: checked ? "#FBBF2422" : "rgba(255,255,255,0.02)",
-                                  color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)",
-                                }}>
-                                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#FBBF24" : matiere.color }} />
-                                {matiere.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  {dossiers.filter((d) => (matieresByDossier.get(d.id)?.length ?? 0) > 0).length === 0 && (
-                    <p className="text-[11px] py-2 text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune matière disponible</p>
+                <div className="rounded-xl p-3 space-y-2.5" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {/* Formation */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
+                    <PillFilter items={offers} value={qaFormation} onChange={(v) => { setQaFormation(v); setQaUni(""); }} color="#FBBF24" />
+                  </div>
+                  {/* Université */}
+                  {qaFormation && qaUnis.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
+                      <PillFilter items={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" />
+                    </div>
                   )}
+                  {/* Matières */}
+                  {qaUni && qaMats.length > 0 && (
+                    <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      {groupByDossierLabel(qaMats).map(([label, mats]) => (
+                        <div key={label} className="mb-2">
+                          <p className="mb-1 text-[9px] font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {mats.map((m) => {
+                              const checked = qaContenuMatIds.includes(m.id);
+                              return (
+                                <button key={m.id} type="button" onClick={() => toggleRoleMatiere("qa_contenu", m.id)}
+                                  className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors"
+                                  style={{ borderColor: checked ? "#FBBF2499" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#FBBF2422" : "rgba(255,255,255,0.02)", color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>
+                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#FBBF24" : m.color }} />{m.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!qaFormation && <p className="text-[11px] py-1 text-center" style={{ color: "rgba(255,255,255,0.25)" }}>Sélectionnez une formation</p>}
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {role !== "prof" && selectedMatiereIds.length > 0 && (
             <div className="rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)" }}>
