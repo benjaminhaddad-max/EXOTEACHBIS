@@ -107,6 +107,13 @@ for(var id of ids){
     window.location.hash='#/admin-series/edit/'+id;
     await wait(4000);
 
+    /* DEBUG: Log ALL images on page to find the right filter */
+    var debugImgs=Array.from(document.querySelectorAll('img'));
+    console.log('  DEBUG: '+debugImgs.length+' <img> total sur la page');
+    debugImgs.slice(0,10).forEach(function(i,idx){
+      console.log('  img['+idx+'] src='+i.src.slice(0,100)+' size='+i.naturalWidth+'x'+i.naturalHeight);
+    });
+
     /* Scroll the entire page to load all images */
     var sc=document.querySelector('[class*="scroll"]')||document.querySelector('main')||document.documentElement;
     for(var scrollStep=0;scrollStep<10;scrollStep++){
