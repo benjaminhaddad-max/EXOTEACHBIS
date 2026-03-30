@@ -115,7 +115,7 @@ export function EleveCoursShell({
   const [childDossiers, setChildDossiers] = useState<Dossier[]>([]);
   const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"cours" | "exercices">("cours");
+  const [activeTab, setActiveTab] = useState<"cours" | "exercices" | "revisions" | "flashcards">("cours");
   const [qaDrawer, setQaDrawer] = useState<{
     contextType: "matiere" | "cours";
     dossierId?: string;
@@ -340,6 +340,28 @@ export function EleveCoursShell({
                       >
                         Exercices
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("revisions")}
+                        className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+                          activeTab === "revisions"
+                            ? "bg-white text-[#0e1e35] shadow-sm"
+                            : "bg-white/10 text-white/70 hover:bg-white/15 hover:text-white"
+                        }`}
+                      >
+                        Révisions
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("flashcards")}
+                        className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+                          activeTab === "flashcards"
+                            ? "bg-white text-[#0e1e35] shadow-sm"
+                            : "bg-white/10 text-white/70 hover:bg-white/15 hover:text-white"
+                        }`}
+                      >
+                        Flashcards
+                      </button>
                     </div>
                   )}
                 </div>
@@ -436,9 +458,28 @@ export function EleveCoursShell({
                   </div>
                 )}
 
-                {activeTab === "cours" && filteredFlashcardDecks.length > 0 && (
-                  <div>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#90A0B2]">Flashcards</p>
+
+                {activeTab === "exercices" && selectedDossier && (() => {
+                  const mIds = new Set(matiereIdsByDossier.get(selectedDossier.id) ?? []);
+                  const cIds = new Set(coursList.map((c) => c.id));
+                  const filtered = initialSeries.filter((s) =>
+                    (s.matiere_id && mIds.has(s.matiere_id)) || (s.cours_id && cIds.has(s.cours_id))
+                  );
+                  return <MatiereExercicesView series={filtered} />;
+                })()}
+
+                {activeTab === "revisions" && selectedDossier && (() => {
+                  const mIds = new Set(matiereIdsByDossier.get(selectedDossier.id) ?? []);
+                  const cIds = new Set(coursList.map((c) => c.id));
+                  const filtered = initialSeries.filter((s) =>
+                    s.type === "revision" &&
+                    ((s.matiere_id && mIds.has(s.matiere_id)) || (s.cours_id && cIds.has(s.cours_id)))
+                  );
+                  return <MatiereExercicesView series={filtered} />;
+                })()}
+
+                {activeTab === "flashcards" && (
+                  filteredFlashcardDecks.length > 0 ? (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {filteredFlashcardDecks.map((deck) => (
                         <button
@@ -485,19 +526,16 @@ export function EleveCoursShell({
                         </button>
                       ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
+                      <Layers size={40} className="mb-3 text-[#D0D9E4]" />
+                      <p className="text-sm font-medium text-[#7D8C9E]">Aucune flashcard disponible</p>
+                      <p className="mt-1 text-xs text-[#A2AEBC]">Les flashcards seront ajoutées prochainement.</p>
+                    </div>
+                  )
                 )}
 
-                {activeTab === "exercices" && selectedDossier && (() => {
-                  const mIds = new Set(matiereIdsByDossier.get(selectedDossier.id) ?? []);
-                  const cIds = new Set(coursList.map((c) => c.id));
-                  const filtered = initialSeries.filter((s) =>
-                    (s.matiere_id && mIds.has(s.matiere_id)) || (s.cours_id && cIds.has(s.cours_id))
-                  );
-                  return <MatiereExercicesView series={filtered} />;
-                })()}
-
-                {activeTab === "cours" && filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && filteredFlashcardDecks.length === 0 && (
+                {activeTab === "cours" && filteredChildDossiers.length === 0 && filteredCoursList.length === 0 && (
                   <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[#D7E2EF] bg-white/70 py-16 text-center">
                     <FolderOpen size={40} className="mb-3 text-[#D0D9E4]" />
                     <p className="text-sm font-medium text-[#7D8C9E]">

@@ -9,7 +9,7 @@ import {
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument } from "pdf-lib";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 type UploadedChapter = {
   file: File;
@@ -97,21 +97,32 @@ export function AccFabricator({ dossierId, dossierName }: { dossierId: string; d
   const [error, setError] = useState("");
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const pdfs: UploadedChapter[] = [];
     for (const file of Array.from(files)) {
-      if (file.type !== "application/pdf") continue;
-      const buffer = await file.arrayBuffer();
-      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
-      const rawName = file.name
-        .replace(/\.pdf$/i, "")
-        .replace(/^ACC\s*\(SUJET\)\s*-\s*N°\d+\s*-\s*(Chapitre\s+)?/i, "")
-        .trim();
-      pdfs.push({ file, name: rawName || file.name, pageCount: doc.numPages, pdfBytes: buffer });
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) continue;
+      try {
+        const buffer = await file.arrayBuffer();
+        const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+        const rawName = file.name
+          .replace(/\.pdf$/i, "")
+          .replace(/^ACC\s*\(SUJET\)\s*-\s*N°\d+\s*-\s*(Chapitre\s+)?/i, "")
+          .trim();
+        pdfs.push({ file, name: rawName || file.name, pageCount: doc.numPages, pdfBytes: buffer });
+      } catch (err) {
+        console.error("Erreur lecture PDF:", file.name, err);
+      }
     }
     pdfs.sort((a, b) => a.name.localeCompare(b.name, "fr", { numeric: true }));
-    setChapters(pdfs);
+    setChapters((prev) => {
+      const existing = new Set(prev.map((c) => c.file.name));
+      const newOnes = pdfs.filter((p) => !existing.has(p.file.name));
+      return [...prev, ...newOnes].sort((a, b) => a.name.localeCompare(b.name, "fr", { numeric: true }));
+    });
   }, []);
 
   const analyze = useCallback(async () => {
@@ -346,23 +357,29 @@ export function AccFabricator({ dossierId, dossierName }: { dossierId: string; d
       {step === "upload" && (
         <>
           <div
-            className="rounded-xl border-2 border-dashed border-white/15 hover:border-orange-400/40 p-8 text-center transition-colors cursor-pointer group"
+            className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer group ${
+              dragging
+                ? "border-orange-400 bg-orange-500/10"
+                : "border-white/15 hover:border-orange-400/40"
+            }`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleFiles(e.dataTransfer.files); }}
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); dragCounter.current++; setDragging(true); }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); } }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dragCounter.current = 0; setDragging(false); if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files); }}
           >
-            <Upload size={24} className="mx-auto text-white/20 group-hover:text-orange-400/60 mb-3 transition-colors" />
-            <p className="text-xs font-semibold text-white/40 group-hover:text-white/60">
-              Glissez vos PDFs par chapitre ici
+            <Upload size={24} className={`mx-auto mb-3 transition-colors ${dragging ? "text-orange-400" : "text-white/20 group-hover:text-orange-400/60"}`} />
+            <p className={`text-xs font-semibold transition-colors ${dragging ? "text-orange-300" : "text-white/40 group-hover:text-white/60"}`}>
+              {dragging ? "Relâchez pour ajouter les fichiers" : "Glissez vos PDFs par chapitre ici"}
             </p>
             <p className="text-[10px] text-white/25 mt-1">ou cliquez pour sélectionner</p>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf"
+              accept=".pdf,application/pdf"
               className="hidden"
-              onChange={(e) => e.target.files && handleFiles(e.target.files)}
+              onChange={(e) => { if (e.target.files && e.target.files.length > 0) { handleFiles(e.target.files); e.target.value = ""; } }}
             />
           </div>
 
