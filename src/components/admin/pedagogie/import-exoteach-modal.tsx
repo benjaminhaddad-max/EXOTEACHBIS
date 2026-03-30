@@ -73,20 +73,18 @@ async function domImgToB64(imgEl){
   return await imgToB64(imgEl.src);
 }
 
-/* Get all content images on current view (exclude thumbnails/avatars/icons) */
+/* Get all content images (real schematic/diagram images, not icons/avatars) */
 function getContentImages(){
   return Array.from(document.querySelectorAll('img')).filter(function(i){
-    if(!i.src||i.naturalWidth<30)return false;
-    if(!i.src.includes('/files/'))return false;
-    var r=i.getBoundingClientRect();
-    if(r.width<25||r.height<25)return false;
-    /* Exclude small thumbnails by class */
-    if(i.closest('.w-8,.w-10,.w-12,.w-14,.h-8,.h-10,.h-12,.h-14'))return false;
-    /* Exclude header/nav logos */
-    if(i.closest('header,nav'))return false;
-    /* Exclude small square icons (matière icon = square ~80-120px) */
-    var aspect=i.naturalWidth/i.naturalHeight;
-    if(aspect>0.85&&aspect<1.15&&i.naturalWidth<200&&i.naturalHeight<200)return false;
+    if(!i.src||i.naturalWidth<50||i.naturalHeight<50)return false;
+    /* Must be from medibox2-api/files (real content) */
+    if(!i.src.includes('/medibox2-api/files/'))return false;
+    /* Exclude avatars */
+    if(i.src.includes('/avatars/'))return false;
+    /* Exclude GIF icons (matière icons are .gif) */
+    if(i.src.match(/\\.gif/i))return false;
+    /* Must be a schematic/diagram — wider than tall typically, or large enough */
+    if(i.naturalWidth<200&&i.naturalHeight<200)return false;
     return true;
   });
 }
@@ -114,55 +112,79 @@ for(var id of ids){
       console.log('  img['+idx+'] src='+i.src.slice(0,100)+' size='+i.naturalWidth+'x'+i.naturalHeight);
     });
 
-    /* Scroll the entire page to load all images */
+    /* Scroll the entire page slowly to load all lazy images */
     var sc=document.querySelector('[class*="scroll"]')||document.querySelector('main')||document.documentElement;
-    for(var scrollStep=0;scrollStep<10;scrollStep++){
-      if(sc)sc.scrollTop=(scrollStep+1)*800;
-      await wait(500);
+    for(var scrollStep=0;scrollStep<20;scrollStep++){
+      if(sc)sc.scrollTop=(scrollStep+1)*500;
+      await wait(400);
     }
     if(sc)sc.scrollTop=0;
-    await wait(1000);
+    await wait(2000);
 
     /* Collect ALL content images on the page */
     var allPageImgs=getContentImages();
-    console.log('  '+allPageImgs.length+' image(s) trouvée(s) sur la page');
+    console.log('  '+allPageImgs.length+' image(s) de contenu trouvée(s)');
 
-    /* Find all "Exercice N" headers to map images to questions */
-    var exerciceHeaders=[];
-    document.querySelectorAll('*').forEach(function(el){
+    /* Find exercise sections on the edit page.
+       Each exercise has a header like "Exercice N" or "QCM N°X" or just a container.
+       We look for ALL text nodes matching exercise/QCM patterns. */
+    var exSections=[];
+    var allEls=document.querySelectorAll('*');
+    for(var ei=0;ei<allEls.length;ei++){
+      var el=allEls[ei];
       var t=(el.textContent||'').trim();
-      var m=t.match(/^(?:Exercice|QCM)\s+(\d+)/i);
-      if(m&&el.children.length<5){
-        var r=el.getBoundingClientRect();
-        if(r.height>5&&r.height<80)exerciceHeaders.push({num:parseInt(m[1]),y:r.top,el:el});
+      /* Match "Exercice N", "QCM N", "QCM N°X" in element's OWN text (not children) */
+      var ownText='';
+      for(var ci=0;ci<el.childNodes.length;ci++){
+        if(el.childNodes[ci].nodeType===3)ownText+=el.childNodes[ci].textContent;
       }
-    });
-    /* Deduplicate by number */
-    var seenNums={};
-    exerciceHeaders=exerciceHeaders.filter(function(h){if(seenNums[h.num])return false;seenNums[h.num]=true;return true;});
-    exerciceHeaders.sort(function(a,b){return a.y-b.y;});
+      ownText=ownText.trim();
+      var m=ownText.match(/^Exercice\s+(\d+)/i);
+      if(m){
+        var r=el.getBoundingClientRect();
+        if(r.height>5)exSections.push({num:parseInt(m[1]),y:r.top});
+      }
+    }
+    /* Deduplicate */
+    var seen={};
+    exSections=exSections.filter(function(h){if(seen[h.num])return false;seen[h.num]=true;return true;});
+    exSections.sort(function(a,b){return a.y-b.y;});
+    console.log('  '+exSections.length+' sections Exercice trouvées');
 
-    /* Map images to exercise sections by Y position */
+    /* Map images to exercises by Y position */
     var imgsByEx={};
-    for(var imgIdx=0;imgIdx<allPageImgs.length;imgIdx++){
-      var imgEl=allPageImgs[imgIdx];
-      var imgY=imgEl.getBoundingClientRect().top;
-      /* Find which exercise this image belongs to */
+    /* Sort images by Y position */
+    var sortedImgs=allPageImgs.map(function(img){return{img:img,y:img.getBoundingClientRect().top};}).sort(function(a,b){return a.y-b.y;});
+
+    for(var si=0;si<sortedImgs.length;si++){
+      var imgY=sortedImgs[si].y;
       var exNum=null;
-      for(var hi=exerciceHeaders.length-1;hi>=0;hi--){
-        if(exerciceHeaders[hi].y<=imgY+20){exNum=exerciceHeaders[hi].num;break;}
+      for(var hi=exSections.length-1;hi>=0;hi--){
+        if(exSections[hi].y<=imgY+30){exNum=exSections[hi].num;break;}
       }
       if(exNum){
         if(!imgsByEx[exNum])imgsByEx[exNum]=[];
-        imgsByEx[exNum].push(imgEl);
+        imgsByEx[exNum].push(sortedImgs[si].img);
       }
     }
 
+    /* If no exercise headers found, try sequential assignment:
+       each image goes to the next question that doesn't have one yet */
+    var useSequential=(exSections.length===0&&allPageImgs.length>0);
+    if(useSequential)console.log('  ⚠️ Pas de headers Exercice — attribution séquentielle');
+
     /* Assign images to questions */
+    var seqIdx=0;
     for(var qi=0;qi<nbQ;qi++){
       var q=qcm.questions[qi];
       var exNum=qi+1;
-      var exImgs=imgsByEx[exNum]||[];
+      var exImgs=useSequential?[]:(imgsByEx[exNum]||[]);
+
+      /* Sequential fallback: take next available image */
+      if(useSequential&&seqIdx<allPageImgs.length){
+        exImgs=[allPageImgs[seqIdx]];
+        seqIdx++;
+      }
 
       if(exImgs.length===0){
         /* Fetch url_image from Apollo if present */
@@ -186,7 +208,7 @@ for(var id of ids){
         }
       }
 
-      /* Remaining images = item images (assigned in order to answers that need them) */
+      /* Remaining images = item images */
       for(var ii=1,ai=0;ii<exImgs.length&&ai<(q.answers||[]).length;ai++){
         var ans=q.answers[ai];
         if(!ans.url_image&&!ans.image_url_scraped){
