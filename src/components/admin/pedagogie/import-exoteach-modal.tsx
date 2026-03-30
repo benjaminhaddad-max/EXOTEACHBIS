@@ -111,6 +111,18 @@ for(var id of ids){
     var startBtn=Array.from(document.querySelectorAll('button')).find(function(b){return(b.textContent||'').match(/d[eé]marrer|commencer|start|lancer/i);});
     if(startBtn){startBtn.click();await wait(2000);}
 
+    /* First pass: detect static/decorative images that appear on every question */
+    var imgSrcCount={};
+    var samplesToCheck=Math.min(3,nbQ);
+    for(var si=0;si<samplesToCheck;si++){
+      var sBtn=Array.from(document.querySelectorAll('button,a,div[role="button"],li')).find(function(b){return(b.textContent||'').trim()===String(si+1);});
+      if(sBtn){sBtn.click();await wait(800);}
+      getContentImages().forEach(function(img){imgSrcCount[img.src]=(imgSrcCount[img.src]||0)+1;});
+    }
+    var staticSrcs=new Set();
+    Object.keys(imgSrcCount).forEach(function(src){if(imgSrcCount[src]>=samplesToCheck)staticSrcs.add(src);});
+    if(staticSrcs.size>0)console.log('  🚫 '+staticSrcs.size+' image(s) statique(s) ignorée(s) (décor/logo)');
+
     /* For each question: click to navigate, then capture images */
     for(var qi=0;qi<nbQ;qi++){
       var q=qcm.questions[qi];
@@ -134,8 +146,8 @@ for(var id of ids){
       }
       await wait(1200);
 
-      /* Get images on current view */
-      var imgs=getContentImages();
+      /* Get images on current view, excluding static decorative ones */
+      var imgs=getContentImages().filter(function(i){return !staticSrcs.has(i.src);});
       if(imgs.length===0){
         console.log('  Q'+exNum+' — pas d\\'image');
         continue;
