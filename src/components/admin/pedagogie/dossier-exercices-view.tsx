@@ -15,6 +15,7 @@ import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieA
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
 import { FlashcardsSection } from "./flashcards-section";
 import { ImportExoteachModal } from "./import-exoteach-modal";
+import { AccFabricator } from "./acc-fabricator";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -723,7 +724,7 @@ export function DossierExercicesView({
   allDossiers: Dossier[];
   onNewSerie?: (type: SerieType) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<SerieType | "flashcards">("annales");
+  const [activeTab, setActiveTab] = useState<SerieType | "flashcards" | "acc_fabricator">("annales");
   const [series, setSeries] = useState<SerieSummary[]>([]);
   const [cours, setCours] = useState<CoursBasic[]>([]);
   const [matiereId, setMatiereId] = useState<string | null>(null);
@@ -879,6 +880,12 @@ export function DossierExercicesView({
           <Layers size={14} />
           <span className="text-[9px] font-bold mt-1 leading-tight">Flashcards</span>
         </button>
+        {/* ACC Fabricator tab */}
+        <button onClick={() => setActiveTab("acc_fabricator")}
+          className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === "acc_fabricator" ? "border-current text-orange-300" : "border-transparent text-white/30 hover:text-white/50"}`}>
+          <FileUp size={14} />
+          <span className="text-[9px] font-bold mt-1 leading-tight">Fabricateur</span>
+        </button>
       </div>
 
       {/* Bulk actions bar */}
@@ -904,7 +911,9 @@ export function DossierExercicesView({
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === "flashcards" ? (
+        {activeTab === "acc_fabricator" ? (
+          <AccFabricator dossierId={dossierId} dossierName={dossierName} />
+        ) : activeTab === "flashcards" ? (
           <FlashcardsSection dossierId={dossierId} cours={cours.map(c => ({ id: c.id, name: c.name }))} dossierName={dossierName} />
         ) : loading ? (
           <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-white/30" /></div>
