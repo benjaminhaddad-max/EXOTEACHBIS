@@ -311,7 +311,7 @@ export function ImportExoteachModal({
             <input
               type="text"
               value={idsInput}
-              onChange={(e) => { setIdsInput(e.target.value); setCopied(false); }}
+              onChange={(e) => { setIdsInput(e.target.value); }}
               placeholder="418, 419, 420-425, 430"
               autoFocus
               className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-[#C9A84C]/60"
@@ -328,7 +328,7 @@ export function ImportExoteachModal({
             <label className="block text-xs font-semibold text-white/60 mb-1.5">Type de série</label>
             <select
               value={serieType}
-              onChange={(e) => { setSerieType(e.target.value); setCopied(false); }}
+              onChange={(e) => { setSerieType(e.target.value); }}
               className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#C9A84C]/60"
             >
               {TYPE_OPTIONS.map((o) => (
