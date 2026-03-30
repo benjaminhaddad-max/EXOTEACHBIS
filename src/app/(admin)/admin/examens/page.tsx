@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import { ExamensShell, type ExamenWithSeries } from "@/components/admin/examens/examens-shell";
 import type { Serie, Filiere, Dossier, Groupe, Matiere } from "@/types/database";
 
@@ -6,6 +7,27 @@ export const dynamic = "force-dynamic";
 
 export default async function ExamensAdminPage() {
   const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) redirect("/login");
+  const userRole = profile.role as string;
+
+  let profMatiereIds: Set<string> | null = null;
+  if (userRole === "prof") {
+    const { data: profMatiereRows } = await supabase
+      .from("prof_matieres")
+      .select("matiere_id")
+      .eq("prof_id", user.id);
+    profMatiereIds = new Set((profMatiereRows ?? []).map((r: any) => r.matiere_id));
+  }
 
   const [examensRes, seriesRes, filieresRes, dossiersRes, allDossiersRes, groupesRes, exGroupesRes, matieresRes] = await Promise.all([
     supabase
@@ -32,14 +54,12 @@ export default async function ExamensAdminPage() {
     examens_series: undefined,
   }));
 
-  // Build a map of examen_id -> groupe_ids
   const examenGroupesMap: Record<string, string[]> = {};
   for (const eg of (exGroupesRes.data ?? [])) {
     if (!examenGroupesMap[eg.examen_id]) examenGroupesMap[eg.examen_id] = [];
     examenGroupesMap[eg.examen_id].push(eg.groupe_id);
   }
 
-  // Attach groupe_ids to each examen
   const examensWithGroupes = examens.map(e => ({
     ...e,
     groupe_ids: examenGroupesMap[e.id] ?? [],
@@ -61,6 +81,8 @@ export default async function ExamensAdminPage() {
         allDossiers={(allDossiersRes.data ?? []) as Dossier[]}
         groupes={groupes}
         matieres={matieres}
+        userRole={userRole}
+        profMatiereIds={profMatiereIds ? Array.from(profMatiereIds) : undefined}
       />
     </div>
   );

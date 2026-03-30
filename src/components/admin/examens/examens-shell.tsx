@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2,
   Calendar, Clock, Eye, EyeOff, Layers,
-  BarChart3, Settings2,
+  BarChart3, Settings2, Upload, FileDown,
   GraduationCap, Building2, ChevronDown, Users,
 } from "lucide-react";
 import type { Serie, Filiere, Dossier, Groupe, Matiere } from "@/types/database";
@@ -97,6 +97,8 @@ export function ExamensShell({
   allDossiers,
   groupes,
   matieres,
+  userRole = "admin",
+  profMatiereIds,
 }: {
   initialExamens: ExamenWithSeries[];
   allSeries: Serie[];
@@ -105,7 +107,11 @@ export function ExamensShell({
   allDossiers: Dossier[];
   groupes: Groupe[];
   matieres: Matiere[];
+  userRole?: string;
+  profMatiereIds?: string[];
 }) {
+  const isProf = userRole === "prof";
+  const profMatiereSet = useMemo(() => profMatiereIds ? new Set(profMatiereIds) : null, [profMatiereIds]);
   const router = useRouter();
   const [examens, setExamens] = useState<ExamenWithSeries[]>(() => orderExamens(initialExamens));
   const [modal, setModal] = useState<Modal>(null);
@@ -114,6 +120,9 @@ export function ExamensShell({
   const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"examens" | "parametrage">("examens");
   const [visibilityPendingKey, setVisibilityPendingKey] = useState<string | null>(null);
+  const [profSubTab, setProfSubTab] = useState<"passed" | "upcoming">("upcoming");
+  const [uploadingSerieId, setUploadingSerieId] = useState<string | null>(null);
+  const [generatingGridExamId, setGeneratingGridExamId] = useState<string | null>(null);
 
   useEffect(() => {
     setExamens(orderExamens(initialExamens));
@@ -135,6 +144,81 @@ export function ExamensShell({
       return e.groupe_ids.some(gid => selectedGroupeIds.has(gid));
     });
   }, [examens, selectedGroupeIds]);
+
+  // For profs: filter examens that have at least one série linked to their matières
+  const profFilteredExamens = useMemo(() => {
+    if (!isProf || !profMatiereSet) return filteredExamens;
+    return filteredExamens.filter(e => {
+      const series = e.examen_series ?? [];
+      return series.some(es => es.series?.matiere_id && profMatiereSet.has(es.series.matiere_id));
+    });
+  }, [filteredExamens, isProf, profMatiereSet]);
+
+  const profPassedExamens = useMemo(() =>
+    profFilteredExamens.filter(e => getStatus(e.debut_at, e.fin_at) === "ended"),
+    [profFilteredExamens]
+  );
+
+  const profUpcomingExamens = useMemo(() =>
+    profFilteredExamens.filter(e => getStatus(e.debut_at, e.fin_at) !== "ended"),
+    [profFilteredExamens]
+  );
+
+  const displayExamens = isProf
+    ? (profSubTab === "passed" ? profPassedExamens : profUpcomingExamens)
+    : filteredExamens;
+
+  // Handle Word upload for a specific série (prof)
+  const handleProfUploadWord = async (serieId: string, file: File) => {
+    setUploadingSerieId(serieId);
+    try {
+      const formData = new FormData();
+      formData.append("serieId", serieId);
+      formData.append("file", file);
+      const importRes = await fetch("/api/import-serie", { method: "POST", body: formData });
+      const importData = await importRes.json();
+      if (!importRes.ok || importData.error) {
+        showToast(importData.error || "Erreur d'import", "error");
+      } else {
+        showToast(importData.message || "Sujet importé", "success");
+        router.refresh();
+      }
+    } finally {
+      setUploadingSerieId(null);
+    }
+  };
+
+  const handleGenerateGrid = async (examen: ExamenWithSeries, nbQuestions: number) => {
+    setGeneratingGridExamId(examen.id);
+    try {
+      const res = await fetch("/api/generate-grid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: examen.name,
+          institution: "",
+          nb_questions: nbQuestions,
+          nb_choices: 5,
+          has_remorse: true,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        showToast(data.error || "Erreur de génération", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `grille-${examen.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Grille PDF téléchargée", "success");
+    } finally {
+      setGeneratingGridExamId(null);
+    }
+  };
 
   // Get groupe names for display
   const groupeMap = useMemo(() => {
@@ -236,16 +320,31 @@ export function ExamensShell({
       {/* Tab bar */}
       <div className="flex items-center justify-between px-5 border-b border-white/10 shrink-0" style={{ backgroundColor: "rgba(0,0,0,0.15)" }}>
         <div className="flex items-center gap-0">
-          {(["examens", "parametrage"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className="relative px-5 py-3 text-xs font-semibold transition-colors"
-              style={{ color: tab === t ? "#C9A84C" : "rgba(255,255,255,0.35)" }}>
-              {t === "examens" ? "Examens blancs" : "Paramétrage"}
-              {tab === t && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ backgroundColor: "#C9A84C" }} />}
-            </button>
-          ))}
+          {isProf ? (
+            <>
+              {(["upcoming", "passed"] as const).map(t => (
+                <button key={t} onClick={() => setProfSubTab(t)}
+                  className="relative px-5 py-3 text-xs font-semibold transition-colors"
+                  style={{ color: profSubTab === t ? "#C9A84C" : "rgba(255,255,255,0.35)" }}>
+                  {t === "upcoming" ? "Examens à venir" : "Examens passés"}
+                  {profSubTab === t && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ backgroundColor: "#C9A84C" }} />}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              {(["examens", "parametrage"] as const).map(t => (
+                <button key={t} onClick={() => setTab(t)}
+                  className="relative px-5 py-3 text-xs font-semibold transition-colors"
+                  style={{ color: tab === t ? "#C9A84C" : "rgba(255,255,255,0.35)" }}>
+                  {t === "examens" ? "Examens blancs" : "Paramétrage"}
+                  {tab === t && <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t" style={{ backgroundColor: "#C9A84C" }} />}
+                </button>
+              ))}
+            </>
+          )}
         </div>
-        {tab === "examens" && (
+        {!isProf && tab === "examens" && (
           <div className="flex items-center gap-2 py-2">
             {selectedGroupeIds.size === 0 && (
               <span className="text-[11px] italic font-medium" style={{ color: "#C9A84C" }}>← Sélectionne les classes cibles</span>
@@ -267,7 +366,7 @@ export function ExamensShell({
       </div>
 
       {/* Tab content */}
-      {tab === "parametrage" ? (
+      {!isProf && tab === "parametrage" ? (
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <ParametrageShell
             dossiers={dossiers}
@@ -279,35 +378,37 @@ export function ExamensShell({
         </div>
       ) : (
       <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* Sidebar */}
-      <ExamensSidebar
-        dossiers={dossiers}
-        groupes={groupes}
-        selectedGroupeIds={selectedGroupeIds}
-        onToggle={toggleGroupe}
-        onSelectAll={selectAll}
-      />
+      {/* Sidebar — hidden for profs (they see all their matières directly) */}
+      {!isProf && (
+        <ExamensSidebar
+          dossiers={dossiers}
+          groupes={groupes}
+          selectedGroupeIds={selectedGroupeIds}
+          onToggle={toggleGroupe}
+          onSelectAll={selectAll}
+        />
+      )}
 
       {/* Right content */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
         {/* Sub-header with count */}
         <div className="flex items-center gap-3 px-5 py-2.5 border-b border-white/5 shrink-0">
-          <span className="text-xs font-semibold text-white/60">Examens blancs</span>
-          {selectedGroupeIds.size > 0 && (
-            <>
-              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
-                {filteredExamens.length} examen{filteredExamens.length !== 1 ? "s" : ""}
-              </span>
-              <span className="text-[10px] px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>
-                {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""}
-              </span>
-            </>
+          <span className="text-xs font-semibold text-white/60">
+            {isProf ? (profSubTab === "passed" ? "Examens passés" : "Examens à venir") : "Examens blancs"}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
+            {displayExamens.length} examen{displayExamens.length !== 1 ? "s" : ""}
+          </span>
+          {!isProf && selectedGroupeIds.size > 0 && (
+            <span className="text-[10px] px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C" }}>
+              {selectedGroupeIds.size} classe{selectedGroupeIds.size > 1 ? "s" : ""}
+            </span>
           )}
         </div>
 
         {/* List */}
         <div className="flex-1 overflow-auto p-5">
-          {selectedGroupeIds.size === 0 ? (
+          {!isProf && selectedGroupeIds.size === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
                 <GraduationCap size={26} style={{ color: "rgba(255,255,255,0.15)" }} />
@@ -317,40 +418,50 @@ export function ExamensShell({
                 <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.2)" }}>dans le menu à gauche pour voir ses examens blancs</p>
               </div>
             </div>
-          ) : filteredExamens.length === 0 ? (
+          ) : displayExamens.length === 0 ? (
             <div className="text-center py-16 text-white/30">
               <Calendar size={40} className="mx-auto mb-3 opacity-30" />
-              <p>Aucun examen pour ces classes</p>
+              <p>{isProf ? (profSubTab === "passed" ? "Aucun examen passé" : "Aucun examen à venir") : "Aucun examen pour ces classes"}</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredExamens.map((e) => {
+              {displayExamens.map((e) => {
                 const status = getStatus(e.debut_at, e.fin_at);
                 const nbSeries = e.series?.length ?? 0;
                 const targetGroupes = (e.groupe_ids ?? []).map(gid => groupeMap.get(gid)).filter(Boolean) as Groupe[];
                 const examVisibilityPending = visibilityPendingKey === `exam:${e.id}`;
                 const resultsVisibilityPending = visibilityPendingKey === `results:${e.id}`;
+
+                const profSeries = isProf && profMatiereSet
+                  ? (e.examen_series ?? []).filter(es => es.series?.matiere_id && profMatiereSet.has(es.series.matiere_id))
+                  : (e.examen_series ?? []);
+
                 return (
-                  <Link key={e.id} href={`/admin/examens/${e.id}`} className="block bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/[0.07] transition-colors cursor-pointer">
+                  <div key={e.id} className="bg-white/5 border border-white/10 rounded-xl p-5 transition-colors">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-semibold text-white">{e.name}</h3>
+                          <Link href={`/admin/examens/${e.id}`} className="text-sm font-semibold text-white hover:underline">
+                            {e.name}
+                          </Link>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status]}`}>
                             {STATUS_LABELS[status]}
                           </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.visible ? "bg-green-500/10 text-green-400" : "bg-white/10 text-white/45"}`}>
-                            {e.visible ? "Visible aux élèves" : "Masqué aux élèves"}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.results_visible ? "bg-sky-500/10 text-sky-300" : "bg-white/10 text-white/45"}`}>
-                            {e.results_visible ? "Résultats visibles" : "Résultats masqués"}
-                          </span>
+                          {!isProf && (
+                            <>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.visible ? "bg-green-500/10 text-green-400" : "bg-white/10 text-white/45"}`}>
+                                {e.visible ? "Visible aux élèves" : "Masqué aux élèves"}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${e.results_visible ? "bg-sky-500/10 text-sky-300" : "bg-white/10 text-white/45"}`}>
+                                {e.results_visible ? "Résultats visibles" : "Résultats masqués"}
+                              </span>
+                            </>
+                          )}
                         </div>
                         {e.description && (
                           <p className="text-xs text-white/50 mt-1">{e.description}</p>
                         )}
-                        {/* Target groupes pills */}
-                        {targetGroupes.length > 0 && (
+                        {!isProf && targetGroupes.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {targetGroupes.map(g => (
                               <span key={g.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium" style={{ backgroundColor: g.color + "20", color: g.color, border: `1px solid ${g.color}30` }}>
@@ -373,8 +484,84 @@ export function ExamensShell({
                             {nbSeries} série{nbSeries !== 1 ? "s" : ""}
                           </span>
                         </div>
-                        {/* Serie pills with coefficients */}
-                        {(e.examen_series?.length ?? 0) > 0 && (
+
+                        {/* Prof: show their matières' séries with upload button */}
+                        {isProf && profSeries.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Vos épreuves</p>
+                            {profSeries.map(es => {
+                              const serieName = getSerieDisplayName(es.series, matiereMap);
+                              const isUploading = uploadingSerieId === es.series_id;
+                              return (
+                                <div key={es.series_id} className="flex items-center gap-3 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2.5">
+                                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: es.series?.matiere_id ? (matieres.find(m => m.id === es.series?.matiere_id)?.color ?? "#C9A84C") : "#C9A84C" }} />
+                                  <span className="flex-1 text-xs font-medium text-white/70 truncate">{serieName}</span>
+
+                                  {profSubTab === "upcoming" && (
+                                    <div className="flex items-center gap-1.5 shrink-0" onClick={ev => ev.stopPropagation()}>
+                                      {isUploading ? (
+                                        <Loader2 size={13} className="animate-spin text-[#C9A84C]" />
+                                      ) : (
+                                        <label className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold cursor-pointer transition-all hover:bg-[#C9A84C]/20"
+                                          style={{ backgroundColor: "rgba(201,168,76,0.1)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.2)" }}>
+                                          <Upload size={10} />
+                                          Déposer le sujet
+                                          <input type="file" accept=".docx,.doc" className="hidden" onChange={ev => { const f = ev.target.files?.[0]; if (f) handleProfUploadWord(es.series_id, f); ev.target.value = ""; }} />
+                                        </label>
+                                      )}
+                                      <button
+                                        onClick={() => window.open(`/api/export-serie?serieId=${es.series_id}&corrections=0`, "_blank")}
+                                        className="p-1 rounded text-white/30 hover:text-white/60 transition-colors"
+                                        title="Exporter le sujet"
+                                      >
+                                        <FileDown size={12} />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {profSubTab === "passed" && (
+                                    <Link
+                                      href={`/admin/examens/${e.id}/resultats`}
+                                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all hover:bg-sky-500/20"
+                                      style={{ backgroundColor: "rgba(56,189,248,0.1)", color: "#38BDF8", border: "1px solid rgba(56,189,248,0.2)" }}
+                                    >
+                                      <BarChart3 size={10} />
+                                      Voir résultats
+                                    </Link>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Prof: Generate grid button for upcoming exams */}
+                        {isProf && profSubTab === "upcoming" && (e.examen_series?.length ?? 0) > 0 && (
+                          <div className="mt-3" onClick={ev => ev.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                const totalQ = (e.examen_series ?? []).reduce((sum, es) => {
+                                  return sum + (es.series as any)?.questions_count || 0;
+                                }, 0);
+                                const nb = totalQ > 0 ? totalQ : 30;
+                                const input = prompt(`Nombre de questions pour la grille (défaut: ${nb}) :`, String(nb));
+                                if (input === null) return;
+                                const n = parseInt(input, 10);
+                                if (isNaN(n) || n < 1) return;
+                                handleGenerateGrid(e, n);
+                              }}
+                              disabled={generatingGridExamId === e.id}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50"
+                              style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.2)" }}
+                            >
+                              {generatingGridExamId === e.id ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+                              Générer la grille d&apos;examen (PDF)
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Admin: Serie pills */}
+                        {!isProf && (e.examen_series?.length ?? 0) > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-3">
                             {e.examen_series!.map((es) => (
                               <span key={es.series_id} className="inline-flex items-center px-2 py-0.5 bg-white/5 border border-white/10 rounded-md text-xs text-white/60">
@@ -388,7 +575,7 @@ export function ExamensShell({
                           <div className="mt-3 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-2">
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1.5 flex items-center gap-1"><Calendar size={9} /> Planning</p>
                             <div className="space-y-1">
-                              {e.examen_series!.filter(es => es.debut_at).sort((a, b) => new Date(a.debut_at!).getTime() - new Date(b.debut_at!).getTime()).map(es => (
+                              {(isProf ? profSeries : e.examen_series!).filter(es => es.debut_at).sort((a, b) => new Date(a.debut_at!).getTime() - new Date(b.debut_at!).getTime()).map(es => (
                                 <div key={es.series_id} className="flex items-center gap-2 text-[10px]">
                                   <span className="text-white/30 w-28 shrink-0">
                                     {new Date(es.debut_at!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
@@ -403,50 +590,54 @@ export function ExamensShell({
                           </div>
                         )}
 
-                        <div
-                          className="mt-3 grid gap-2 md:grid-cols-2"
-                          onClick={(ev) => ev.preventDefault()}
-                        >
-                          <VisibilityControlCard
-                            title="Examen visible aux élèves"
-                            description="Affiche l'examen et ses séries dans l'espace élève."
-                            enabled={e.visible}
-                            enabledLabel="Visible"
-                            disabledLabel="Masqué"
-                            colorClassName={e.visible ? "bg-green-500" : "bg-white/15"}
-                            pending={examVisibilityPending}
-                            onToggle={() => handleToggleExamVisibility(e)}
-                          />
-                          <VisibilityControlCard
-                            title="Résultats / classement visibles"
-                            description={e.visible
-                              ? "Affiche la note et le classement aux élèves."
-                              : "Sans effet tant que l'examen reste masqué côté élève."}
-                            enabled={e.results_visible}
-                            enabledLabel="Affichés"
-                            disabledLabel="Masqués"
-                            colorClassName={e.results_visible ? "bg-sky-500" : "bg-white/15"}
-                            pending={resultsVisibilityPending}
-                            onToggle={() => handleToggleResults(e)}
-                          />
+                        {!isProf && (
+                          <div
+                            className="mt-3 grid gap-2 md:grid-cols-2"
+                            onClick={(ev) => ev.preventDefault()}
+                          >
+                            <VisibilityControlCard
+                              title="Examen visible aux élèves"
+                              description="Affiche l'examen et ses séries dans l'espace élève."
+                              enabled={e.visible}
+                              enabledLabel="Visible"
+                              disabledLabel="Masqué"
+                              colorClassName={e.visible ? "bg-green-500" : "bg-white/15"}
+                              pending={examVisibilityPending}
+                              onToggle={() => handleToggleExamVisibility(e)}
+                            />
+                            <VisibilityControlCard
+                              title="Résultats / classement visibles"
+                              description={e.visible
+                                ? "Affiche la note et le classement aux élèves."
+                                : "Sans effet tant que l'examen reste masqué côté élève."}
+                              enabled={e.results_visible}
+                              enabledLabel="Affichés"
+                              disabledLabel="Masqués"
+                              colorClassName={e.results_visible ? "bg-sky-500" : "bg-white/15"}
+                              pending={resultsVisibilityPending}
+                              onToggle={() => handleToggleResults(e)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {!isProf && (
+                        <div className="flex gap-1 shrink-0" onClick={(ev) => ev.preventDefault()}>
+                          <button
+                            onClick={(ev) => { ev.preventDefault(); setModal({ type: "edit", examen: e }); }}
+                            className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={(ev) => { ev.preventDefault(); handleDeleteExamen(e.id); }}
+                            className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
-                      </div>
-                      <div className="flex gap-1 shrink-0" onClick={(ev) => ev.preventDefault()}>
-                        <button
-                          onClick={(ev) => { ev.preventDefault(); setModal({ type: "edit", examen: e }); }}
-                          className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={(ev) => { ev.preventDefault(); handleDeleteExamen(e.id); }}
-                          className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                      )}
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -454,8 +645,8 @@ export function ExamensShell({
         </div>
       </div>
 
-      {/* Modals */}
-      {modal && (
+      {/* Modals — admin only */}
+      {!isProf && modal && (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={() => setModal(null)}
