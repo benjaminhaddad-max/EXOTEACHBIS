@@ -3591,7 +3591,7 @@ function EditUserModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {role !== "prof" && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Classe</label>
               {(() => {
@@ -3661,7 +3661,7 @@ function EditUserModal({
             </div>
 
             {/* Filière santé — masqué pour l'instant */}
-          </div>
+          </div>}
 
           {/* Accès individuels — checkbox tree like classes */}
           {groupeId && (() => {
