@@ -87,19 +87,48 @@ async function mergeImagesVertically(imgEls){
   return c.toDataURL('image/jpeg',0.85);
 }
 
+/* ── Overlay UI ── */
+var ov=document.createElement('div');
+ov.id='exo-import-overlay';
+ov.innerHTML='<div style="font:bold 13px -apple-system,sans-serif;color:#C9A84C;margin-bottom:8px">📥 Import ExoTeachBIS</div><div id="exo-ov-status" style="font-size:12px;color:#fff;margin-bottom:6px">Initialisation...</div><div style="background:rgba(255,255,255,0.1);border-radius:6px;height:8px;margin-bottom:6px;overflow:hidden"><div id="exo-ov-bar" style="height:100%;width:0%;background:#C9A84C;border-radius:6px;transition:width 0.3s"></div></div><div id="exo-ov-detail" style="font-size:11px;color:rgba(255,255,255,0.5);max-height:180px;overflow-y:auto"></div><div id="exo-ov-stats" style="font-size:11px;margin-top:6px;color:rgba(255,255,255,0.6)"></div>';
+ov.style.cssText='position:fixed;bottom:16px;right:16px;z-index:99999;background:#0e1e35;border:1px solid rgba(201,168,76,0.3);border-radius:12px;padding:14px 18px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
+document.body.appendChild(ov);
+var ovStatus=document.getElementById('exo-ov-status');
+var ovBar=document.getElementById('exo-ov-bar');
+var ovDetail=document.getElementById('exo-ov-detail');
+var ovStats=document.getElementById('exo-ov-stats');
+var ovLogs=[];
+function ovLog(msg,type){
+  var color=type==='ok'?'#4ade80':type==='err'?'#f87171':type==='img'?'#60a5fa':'rgba(255,255,255,0.5)';
+  ovLogs.push('<div style="color:'+color+';padding:1px 0">'+msg+'</div>');
+  if(ovLogs.length>50)ovLogs.shift();
+  ovDetail.innerHTML=ovLogs.join('');
+  ovDetail.scrollTop=ovDetail.scrollHeight;
+}
+function ovProgress(current,total,label){
+  ovStatus.textContent=label;
+  ovBar.style.width=Math.round((current/total)*100)+'%';
+}
+
 var ids=${idsJson};
 var series=[];var errs=[];
+var totalIds=ids.length;
+var globalOk=0,globalFail=0;
 
+var serieIdx=0;
 for(var id of ids){
+  serieIdx++;
   try{
-    console.log('📥 Récupération série '+id+'...');
+    ovProgress(serieIdx,totalIds,'Série '+serieIdx+'/'+totalIds+' — Récupération #'+id+'...');
+    ovLog('📥 Série #'+id+' ('+serieIdx+'/'+totalIds+')...');
     var r=await client.query({fetchPolicy:'network-only',query:{kind:'Document',definitions:[{kind:'OperationDefinition',operation:'query',selectionSet:{kind:'SelectionSet',selections:[F('qcm',[A('id',String(id))],[F('id_qcm'),F('titre'),F('questions',null,[F('id_question'),F('question'),F('explications'),F('url_image_q'),F('answers',null,[F('id'),F('isTrue'),F('text'),F('explanation'),F('url_image')])])])]}}]}});
-    if(!r.data||!r.data.qcm){errs.push(id);continue;}
+    if(!r.data||!r.data.qcm){errs.push(id);ovLog('❌ Série #'+id+' non trouvée','err');continue;}
     var qcm=JSON.parse(JSON.stringify(r.data.qcm));
     var nbQ=qcm.questions.length;
 
     /* 1. Navigate to edit page */
-    console.log('🖼️ Navigation vers Aperçu/Correction ('+nbQ+'Q)...');
+    ovLog('🖼️ '+qcm.titre+' ('+nbQ+'Q)');
+    ovProgress(serieIdx,totalIds,'Série '+serieIdx+'/'+totalIds+' — Chargement images...');
     window.location.hash='#/admin-series/edit/'+id;
     await wait(3000);
 
@@ -133,7 +162,7 @@ for(var id of ids){
       if(i.src.match(/\\.gif/i))return false;
       return true;
     });
-    console.log('  '+allImgs.length+' image(s) de contenu trouvée(s)');
+    ovLog('  '+allImgs.length+' image(s) trouvée(s), '+exHeaders.length+' exercices','img');
 
     /* 6. Find Exercice N headers */
     var exHeaders=[];
@@ -146,14 +175,13 @@ for(var id of ids){
     var seen={};
     exHeaders=exHeaders.filter(function(h){if(seen[h.num])return false;seen[h.num]=true;return true;});
     exHeaders.sort(function(a,b){return a.y-b.y;});
-    console.log('  '+exHeaders.length+' headers Exercice trouvés');
 
     /* 7. Map images to exercises by Y position */
     for(var qi=0;qi<nbQ;qi++){
       var q=qcm.questions[qi];
       var exNum=qi+1;
       var ex=exHeaders.find(function(h){return h.num===exNum;});
-      if(!ex){console.log('  Q'+exNum+' — header non trouvé');continue;}
+      if(!ex){continue;}
       var nextEx=exHeaders.find(function(h){return h.num>exNum;});
       var nextY=nextEx?nextEx.y:999999;
 
@@ -164,7 +192,6 @@ for(var id of ids){
       });
 
       if(exImgs.length===0){
-        console.log('  Q'+exNum+' — pas d\\'image');
       }else{
         /* Find the start of answer options by looking for checkboxes or option containers.
            On ExoTeach Correction view, each option starts with a checkbox input or a label container.
@@ -201,7 +228,7 @@ for(var id of ids){
           enonceImgs.sort(function(a,b){return a.getBoundingClientRect().top-b.getBoundingClientRect().top;});
           if(enonceImgs.length===1){
             var b64=await imgToB64(enonceImgs[0].src);
-            if(b64){q.image_url_scraped=b64;console.log('  Q'+exNum+' ✅ image énoncé ('+Math.round(b64.length/1024)+'KB)');}
+            if(b64){q.image_url_scraped=b64;ovLog('  Q'+exNum+' ✅ image énoncé','img');}
           }else{
             /* Multiple images → store as JSON array */
             var imgArr=[];
@@ -211,7 +238,7 @@ for(var id of ids){
             }
             if(imgArr.length>0){
               q.image_url_scraped=imgArr.length===1?imgArr[0]:JSON.stringify(imgArr);
-              console.log('  Q'+exNum+' ✅ '+imgArr.length+' image(s) énoncé ('+Math.round(q.image_url_scraped.length/1024)+'KB)');
+              ovLog('  Q'+exNum+' ✅ '+imgArr.length+' images énoncé','img');
             }
           }
         }
@@ -222,7 +249,7 @@ for(var id of ids){
             var ab=await imgToB64(itemImgs[ii].src);
             if(ab){
               q.answers[ai].image_url_scraped=ab;
-              console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item ('+Math.round(ab.length/1024)+'KB)');
+              ovLog('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item','img');
             }
             ii++;
           }
@@ -234,19 +261,23 @@ for(var id of ids){
         var ans=q.answers[ai];
         if(ans.url_image&&!ans.image_url_scraped){
           var ab=await imgToB64(ans.url_image);
-          if(ab){ans.image_url_scraped=ab;console.log('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item (API)');}
+          if(ab){ans.image_url_scraped=ab;ovLog('  Q'+exNum+'.'+String.fromCharCode(65+ai)+' ✅ image item','img');}
         }
       }
     }
 
     series.push(qcm);
-  }catch(e){console.error('❌ Erreur série '+id+':',e);errs.push(id);}
+    ovLog('✅ '+qcm.titre+' — scraping terminé','ok');
+  }catch(e){errs.push(id);ovLog('❌ Erreur série #'+id+': '+e.message,'err');}
 }
-if(!series.length){alert('Aucune série trouvée.');return;}
+if(!series.length){ovStatus.textContent='❌ Aucune série trouvée';return;}
 var ok=0,fail=0;
+ovLog('');
+ovLog('📤 Envoi vers ExoTeachBIS...');
 for(var si=0;si<series.length;si++){
   var qcm=series[si];
-  console.log('📤 Envoi série '+(si+1)+'/'+series.length+': '+qcm.titre+'...');
+  ovProgress(si+1,series.length,'Envoi '+(si+1)+'/'+series.length+': '+qcm.titre.slice(0,40)+'...');
+  ovLog('📤 '+(si+1)+'/'+series.length+' '+qcm.titre);
   var allQ=qcm.questions||[];
   var batches=[];
   for(var bi=0;bi<allQ.length;bi+=2){batches.push(allQ.slice(bi,bi+2));}
@@ -266,13 +297,17 @@ for(var si=0;si<series.length;si++){
       if(out.success){
         totalQ+=(out.results&&out.results[0]&&out.results[0].questions)||batch.length;
         if(bti===0&&out.results&&out.results[0])serieId=out.results[0].newId;
-        if(batches.length>1)console.log('  📦 batch '+(bti+1)+'/'+batches.length+' OK');
-      }else{serieOk=false;console.log('  ❌ batch '+(bti+1)+': '+(out.error||'erreur'));}
-    }catch(e){serieOk=false;console.log('  ❌ Erreur réseau: '+e.message);}
+      }else{serieOk=false;ovLog('  ❌ erreur envoi: '+(out.error||'erreur'),'err');}
+    }catch(e){serieOk=false;ovLog('  ❌ Erreur réseau: '+e.message,'err');}
   }
-  if(serieOk){ok++;console.log('  ✅ OK ('+totalQ+'Q)');}else{fail++;}
+  if(serieOk){ok++;globalOk++;ovLog('  ✅ Envoyée ('+totalQ+'Q)','ok');}else{fail++;globalFail++;}
+  ovStats.innerHTML='<span style="color:#4ade80">✅ '+globalOk+'</span> importée'+(globalOk>1?'s':'')+' — <span style="color:#f87171">❌ '+globalFail+'</span> erreur'+(globalFail>1?'s':'');
 }
-alert('✅ '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'')+'\\n(Rafraîchis ExoTeachBIS)');
+ovProgress(1,1,'✅ Import terminé !');
+ovStatus.textContent='✅ Import terminé — '+ok+' série(s) importée(s)'+(fail?' — '+fail+' erreur(s)':'');
+ovStatus.style.color='#4ade80';
+ovBar.style.width='100%';
+ovBar.style.background='#4ade80';
 })();`;
 }
 
