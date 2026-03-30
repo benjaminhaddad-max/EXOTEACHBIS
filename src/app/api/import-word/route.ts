@@ -46,8 +46,8 @@ interface ParsedQuestion {
 function parseQuestionsFromHtml(html: string): ParsedQuestion[] {
   const questions: ParsedQuestion[] = [];
 
-  // Split by QCM headers: "N) QCM N°X" pattern
-  const qcmPattern = /(?:^|<p>)\s*<strong>\s*\d+\)\s*QCM\s*N°?\s*\d+/gi;
+  // Split by question headers: "N) QCM N°X ..." or "N) question text..."
+  const qcmPattern = /(?:^|<p>)\s*<strong>\s*\d+\)\s*/gi;
   const splits: number[] = [];
   let m;
   while ((m = qcmPattern.exec(html)) !== null) {
@@ -73,8 +73,8 @@ function parseQuestionsFromHtml(html: string): ParsedQuestion[] {
 
     // Remove images from énoncé text (they're captured separately)
     const enonceClean = enonceHtml.replace(/<img[^>]+>/g, "");
-    // Remove the "N) QCM N°X" prefix
-    let enonceText = cleanText(enonceClean).replace(/^\d+\)\s*QCM\s*N°?\s*\d+\s*/i, "").trim();
+    // Remove the "N) QCM N°X" or "N)" prefix
+    let enonceText = cleanText(enonceClean).replace(/^\d+\)\s*(?:QCM\s*N°?\s*\d+\s*)?/i, "").trim();
 
     // Find the image that's in the énoncé (before checkboxes)
     let enonceImage: string | null = null;
