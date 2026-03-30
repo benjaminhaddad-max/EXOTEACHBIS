@@ -27,8 +27,10 @@ type Props = {
   groupes: Groupe[];
   recurringAvailability?: CoachRecurringAvailability[];
 };
+type BookableCoachSlotType = Exclude<CoachSlotType, "chat">;
 
 const DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const PHYSICAL_SITES = ["Quai de la Rapée", "Ledru-Rollin", "Lauriston"] as const;
 const SLOT_TYPE_CONFIG: Record<CoachSlotType, { label: string; color: string; bg: string }> = {
   rdv_physique: { label: "Présentiel", color: "text-blue-700", bg: "bg-blue-100" },
   rdv_visio: { label: "Visio", color: "text-purple-700", bg: "bg-purple-100" },
@@ -71,7 +73,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
   const [activeSection, setActiveSection] = useState<"recurring" | "ponctual">("recurring");
 
   // Recurring state
-  const [recurring, setRecurring] = useState(recurringAvailability);
+  const [recurring, setRecurring] = useState(() => recurringAvailability.filter((item) => item.slot_type !== "chat"));
   const [recDay, setRecDay] = useState(0);
   const [recStart, setRecStart] = useState("09:00");
   const [recEnd, setRecEnd] = useState("10:00");
@@ -84,6 +86,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
   const [formDate, setFormDate] = useState("");
   const [formStartTime, setFormStartTime] = useState("09:00");
   const [formEndTime, setFormEndTime] = useState("09:30");
+  const [formSlotType, setFormSlotType] = useState<BookableCoachSlotType>("rdv_visio");
   const [formLocation, setFormLocation] = useState("");
   const [formGroupeId, setFormGroupeId] = useState(groupes[0]?.id ?? "");
   const [formRepeatWeeks, setFormRepeatWeeks] = useState(0);
@@ -102,6 +105,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
     () =>
       slots
         .filter((s) => {
+          if (s.slot_type === "chat") return false;
           const d = new Date(s.start_at);
           return d >= weekStart && d < weekEnd;
         })
@@ -148,6 +152,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
           groupe_id: formGroupeId,
           start_at: startAt.toISOString(),
           end_at: endAt.toISOString(),
+          slot_type: formSlotType,
           location: formLocation || undefined,
         });
 
@@ -161,6 +166,8 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
       } else {
         setShowForm(false);
         setFormRepeatWeeks(0);
+        setFormLocation("");
+        setFormSlotType("rdv_visio");
       }
     });
   };
@@ -252,7 +259,7 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
             <div>
               <label className="block text-[10px] font-semibold uppercase text-gray-400 mb-1">Types</label>
               <div className="flex gap-1.5 flex-wrap">
-                {Object.entries(SLOT_TYPE_CONFIG).map(([k, v]) => {
+                {(Object.entries(SLOT_TYPE_CONFIG).filter(([k]) => k !== "chat")).map(([k, v]) => {
                   const checked = recTypes.has(k as CoachSlotType);
                   return (
                     <button key={k} type="button" onClick={() => toggleRecType(k as CoachSlotType)}
@@ -402,14 +409,42 @@ export function CoachAvailability({ coachId, slots, bookings, groupes, recurring
               />
             </div>
             <div>
-              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Lieu / Lien</label>
-              <input
-                type="text"
-                value={formLocation}
-                onChange={(e) => setFormLocation(e.target.value)}
-                placeholder="Zoom, salle..."
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Type</label>
+              <select
+                value={formSlotType}
+                onChange={(e) => {
+                  const nextType = e.target.value as BookableCoachSlotType;
+                  setFormSlotType(nextType);
+                  setFormLocation(nextType === "rdv_physique" ? PHYSICAL_SITES[0] : "");
+                }}
                 className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
-              />
+              >
+                <option value="rdv_visio">Visio</option>
+                <option value="rdv_tel">Téléphone</option>
+                <option value="rdv_physique">Présentiel</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-[#8a98a8]">Lieu / Lien</label>
+              {formSlotType === "rdv_physique" ? (
+                <select
+                  value={formLocation || PHYSICAL_SITES[0]}
+                  onChange={(e) => setFormLocation(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+                >
+                  {PHYSICAL_SITES.map((site) => (
+                    <option key={site} value={site}>{site}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={formLocation}
+                  onChange={(e) => setFormLocation(e.target.value)}
+                  placeholder={formSlotType === "rdv_visio" ? "Zoom, Meet..." : "Numéro ou précision"}
+                  className="mt-1 w-full rounded-lg border border-[#dbe5f0] px-3 py-2 text-sm"
+                />
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

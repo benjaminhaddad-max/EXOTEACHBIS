@@ -20,6 +20,8 @@ import type {
 
 const STUDENT_PATH = "/coaching";
 const ADMIN_PATH = "/admin/coaching";
+const ALLOWED_COACH_SLOT_TYPES = ["rdv_physique", "rdv_visio", "rdv_tel"] as const;
+const PHYSICAL_RDV_SITES = ["Quai de la Rapée", "Ledru-Rollin", "Lauriston"] as const;
 
 async function getAuthenticatedProfile() {
   const supabase = await createClient();
@@ -219,6 +221,7 @@ export async function createCoachCallSlot(data: {
   groupe_id?: string;
   start_at: string;
   end_at: string;
+  slot_type?: "rdv_physique" | "rdv_visio" | "rdv_tel";
   location?: string;
   notes?: string;
 }) {
@@ -229,9 +232,13 @@ export async function createCoachCallSlot(data: {
   const isCoach = auth.profile.role === "coach";
   const coachId = isCoach ? auth.user.id : data.coach_id;
   const groupeId = isCoach ? data.groupe_id : data.groupe_id;
+  const slotType = data.slot_type ?? "rdv_visio";
 
   if (!coachId || !groupeId) {
     return { error: "Coach et classe requis pour créer un créneau." };
+  }
+  if (!ALLOWED_COACH_SLOT_TYPES.includes(slotType)) {
+    return { error: "Type de rendez-vous invalide." };
   }
 
   const startAt = new Date(data.start_at);
@@ -257,6 +264,11 @@ export async function createCoachCallSlot(data: {
     }
   }
 
+  const normalizedLocation = data.location?.trim() || null;
+  if (slotType === "rdv_physique" && normalizedLocation && !PHYSICAL_RDV_SITES.includes(normalizedLocation as any)) {
+    return { error: "Le site physique sélectionné est invalide." };
+  }
+
   const { data: slot, error } = await admin
     .from("coaching_call_slots")
     .insert({
@@ -264,8 +276,9 @@ export async function createCoachCallSlot(data: {
       groupe_id: groupeId,
       start_at: startAt.toISOString(),
       end_at: endAt.toISOString(),
-      location: data.location?.trim() || null,
+      location: normalizedLocation,
       notes: data.notes?.trim() || null,
+      slot_type: slotType,
       created_by: auth.user.id,
       updated_at: new Date().toISOString(),
     })
@@ -748,6 +761,9 @@ export async function saveCoachRecurringAvailability(data: {
   }
 
   const admin = createAdminClient();
+  const sanitizedItems = data.items.filter((item) =>
+    ALLOWED_COACH_SLOT_TYPES.includes(item.slot_type as (typeof ALLOWED_COACH_SLOT_TYPES)[number])
+  );
 
   // Delete existing for this coach
   const { error: deleteErr } = await admin
@@ -757,10 +773,10 @@ export async function saveCoachRecurringAvailability(data: {
   if (deleteErr) return { error: deleteErr.message };
 
   // Insert new
-  if (data.items.length > 0) {
+  if (sanitizedItems.length > 0) {
     const { error: insertErr } = await admin
       .from("coach_recurring_availability")
-      .insert(data.items.map(item => ({
+      .insert(sanitizedItems.map(item => ({
         coach_id: data.coach_id,
         day_of_week: item.day_of_week,
         start_time: item.start_time,
