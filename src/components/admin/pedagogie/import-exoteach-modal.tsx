@@ -186,7 +186,7 @@ export function ImportExoteachModal({
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState("");
   const [results, setResults] = useState<Result[]>([]);
-  const [mode, setMode] = useState<"word" | "server" | "script">("word");
+  const [mode, setMode] = useState<"word" | "server" | "script">("script");
   const [copied, setCopied] = useState(false);
   const [wordFile, setWordFile] = useState<File | null>(null);
   const [wordName, setWordName] = useState("");
