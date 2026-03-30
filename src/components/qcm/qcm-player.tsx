@@ -11,30 +11,15 @@ import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 // ─── ZoomableImage ────────────────────────────────────────────────────────
 
 function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
-  const [zoom, setZoom] = useState(100);
   const [fullscreen, setFullscreen] = useState(false);
 
   return (
     <>
-      <div className={`mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden ${small ? "" : ""}`}>
-        <div className="overflow-auto" style={{ maxHeight: small ? 200 : 400 }}>
-          <img
-            src={src}
-            alt=""
-            className="mx-auto cursor-zoom-in"
-            style={{ width: `${zoom}%`, maxWidth: "none" }}
-            onClick={() => setFullscreen(true)}
-          />
-        </div>
-        <div className="flex items-center justify-center gap-2 py-1.5 border-t border-gray-100 bg-white">
-          <button type="button" onClick={() => setZoom((z) => Math.max(50, z - 25))} disabled={zoom <= 50}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-30"><Minus size={14} /></button>
-          <span className="text-[11px] font-semibold text-gray-500 w-12 text-center tabular-nums">{zoom}%</span>
-          <button type="button" onClick={() => setZoom((z) => Math.min(300, z + 25))} disabled={zoom >= 300}
-            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 disabled:opacity-30"><Plus size={14} /></button>
-          <button type="button" onClick={() => setZoom(100)}
-            className="ml-1 px-2 py-0.5 rounded text-[10px] text-gray-400 hover:bg-gray-100 hover:text-gray-600">Reset</button>
-        </div>
+      <div className="mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 p-3 cursor-pointer" onClick={() => setFullscreen(true)}>
+        <img src={src} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }} />
+        <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
+          <ZoomIn size={11} /> Cliquer pour agrandir
+        </p>
       </div>
 
       {/* Fullscreen overlay */}
