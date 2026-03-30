@@ -3841,9 +3841,9 @@ function EditUserModal({
               const descendantIds = new Set<string>();
               const walk = (pid: string) => { descendantIds.add(pid); dossiers.filter((d) => d.parent_id === pid).forEach((d) => walk(d.id)); };
               walk(uniId);
-              descendantIds.delete(uniId);
+              // Only keep dossiers of type "subject" (actual matière containers), skip filière/semester/generic dossiers that contain non-teaching items like LAS/PASS
               return dossiers
-                .filter((d) => descendantIds.has(d.id) && (matieresByDossier.get(d.id)?.length ?? 0) > 0)
+                .filter((d) => descendantIds.has(d.id) && d.dossier_type === "subject" && (matieresByDossier.get(d.id)?.length ?? 0) > 0)
                 .flatMap((d) => (matieresByDossier.get(d.id) ?? []).map((m) => ({ ...m, dossierLabel: getDossierPathLabel(d.id, dossiers) })));
             };
 
