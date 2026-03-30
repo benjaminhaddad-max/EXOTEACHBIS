@@ -246,6 +246,7 @@ export function QaDashboard({
   );
   const [filterMatiere, setFilterMatiere] = useState("all");
   const [filterFormation, setFilterFormation] = useState("all");
+  const [filterUni, setFilterUni] = useState("all");
   const [queuePreset, setQueuePreset] = useState<QueuePreset>("unresolved");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -687,10 +688,38 @@ export function QaDashboard({
         // All overdue threads (not archived, escalated, over threshold)
         const allOverdueThreads = profThreads.filter((t) => !t.archived_at && isThreadOverdue(t, overdueThreshold));
 
-        // Filter by formation if selected
-        const overdueFiltered = filterFormation === "all"
-          ? allOverdueThreads
-          : allOverdueThreads.filter((t) => t.matiere_id && matiereToOfferId.get(t.matiere_id) === filterFormation);
+        // Build matiere → university mapping
+        const matiereToUniId = new Map<string, string>();
+        const dossierById = new Map(qaDossiers.map((d) => [d.id, d]));
+        for (const mat of qaMatieres) {
+          let cur = dossierById.get(mat.dossier_id);
+          while (cur) {
+            if (cur.dossier_type === "university") { matiereToUniId.set(mat.id, cur.id); break; }
+            cur = cur.parent_id ? dossierById.get(cur.parent_id) : undefined;
+          }
+        }
+
+        // Universities for selected formation
+        const unisForFormation = filterFormation === "all" ? [] :
+          qaDossiers.filter((d) => d.dossier_type === "university" && d.parent_id === filterFormation).sort((a, b) => a.order_index - b.order_index);
+
+        // Filter by formation, university, matiere
+        const overdueFiltered = allOverdueThreads.filter((t) => {
+          if (!t.matiere_id) return filterFormation === "all";
+          if (filterFormation !== "all" && matiereToOfferId.get(t.matiere_id) !== filterFormation) return false;
+          if (filterUni !== "all" && matiereToUniId.get(t.matiere_id) !== filterUni) return false;
+          if (filterMatiere !== "all" && t.matiere_id !== filterMatiere) return false;
+          return true;
+        });
+
+        // Matières with overdue threads (for matiere filter dropdown)
+        const overdueMatIds = new Set(allOverdueThreads.filter((t) => t.matiere_id).map((t) => t.matiere_id!));
+        const overdueMatieres = qaMatieres.filter((m) => {
+          if (!overdueMatIds.has(m.id)) return false;
+          if (filterFormation !== "all" && matiereToOfferId.get(m.id) !== filterFormation) return false;
+          if (filterUni !== "all" && matiereToUniId.get(m.id) !== filterUni) return false;
+          return true;
+        });
 
         // Build prof → matiere mapping from profMatieres
         const profToMatiereIds = new Map<string, Set<string>>();
@@ -762,18 +791,45 @@ export function QaDashboard({
               </div>
             </div>
 
-            {/* Formation filter */}
-            {availableOffers.length > 1 && (
-              <div className="shrink-0 flex flex-wrap gap-1.5 mb-4">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 self-center mr-1">Formation</span>
-                <button type="button" onClick={() => setFilterFormation("all")}
-                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === "all" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
-                {availableOffers.map((offer) => (
-                  <button key={offer.id} type="button" onClick={() => setFilterFormation(filterFormation === offer.id ? "all" : offer.id)}
-                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === offer.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{offer.name}</button>
-                ))}
-              </div>
-            )}
+            {/* Filters: Formation → Université → Matière */}
+            <div className="shrink-0 rounded-2xl border border-gray-200 bg-white p-3 mb-4 space-y-2">
+              {/* Formation */}
+              {availableOffers.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 shrink-0">Formation</span>
+                  <button type="button" onClick={() => { setFilterFormation("all"); setFilterUni("all"); setFilterMatiere("all"); }}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === "all" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
+                  {availableOffers.map((offer) => (
+                    <button key={offer.id} type="button" onClick={() => { setFilterFormation(filterFormation === offer.id ? "all" : offer.id); setFilterUni("all"); setFilterMatiere("all"); }}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterFormation === offer.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{offer.name}</button>
+                  ))}
+                </div>
+              )}
+              {/* Université */}
+              {filterFormation !== "all" && unisForFormation.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 shrink-0">Université</span>
+                  <button type="button" onClick={() => { setFilterUni("all"); setFilterMatiere("all"); }}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterUni === "all" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
+                  {unisForFormation.map((uni) => (
+                    <button key={uni.id} type="button" onClick={() => { setFilterUni(filterUni === uni.id ? "all" : uni.id); setFilterMatiere("all"); }}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterUni === uni.id ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{uni.name.replace("Université ", "")}</button>
+                  ))}
+                </div>
+              )}
+              {/* Matière */}
+              {overdueMatieres.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 w-20 shrink-0">Matière</span>
+                  <button type="button" onClick={() => setFilterMatiere("all")}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === "all" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>Toutes</button>
+                  {overdueMatieres.map((mat) => (
+                    <button key={mat.id} type="button" onClick={() => setFilterMatiere(filterMatiere === mat.id ? "all" : mat.id)}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${filterMatiere === mat.id ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>{mat.name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Prof list grouped */}
             <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
