@@ -636,8 +636,9 @@ export function FullSerieEditor({
 
 // ─── Annale Serie Card with year picker ────────────────────────────────────
 
-function AnnaleSerieCard({ serie, anneesList, coursNameStr, onOpen, onEdit, onDelete, onAnneeChange }: {
+function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, onOpen, onEdit, onDelete, onAnneeChange }: {
   serie: SerieSummary; anneesList: string[]; coursNameStr: string;
+  checked?: boolean; onCheck?: () => void;
   onOpen: () => void; onEdit: () => void; onDelete: () => void;
   onAnneeChange: (annee: string | null) => Promise<void>;
 }) {
@@ -651,6 +652,8 @@ function AnnaleSerieCard({ serie, anneesList, coursNameStr, onOpen, onEdit, onDe
 
   return (
     <div className="rounded-xl border border-white/8 bg-white/3 p-3 flex items-start gap-3 hover:bg-white/5 transition-colors">
+      {onCheck && <input type="checkbox" checked={!!checked} onChange={onCheck}
+        className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />}
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
         <div className="flex items-center gap-2">
           <p className="text-xs font-semibold text-white truncate">{serie.name}</p>
@@ -736,6 +739,8 @@ export function DossierExercicesView({
   const [showAddAnnee, setShowAddAnnee] = useState(false);
   const [newAnnee, setNewAnnee] = useState("");
   const [showImportExoteach, setShowImportExoteach] = useState(false);
+  const [checkedSerieIds, setCheckedSerieIds] = useState<Set<string>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -773,10 +778,40 @@ export function DossierExercicesView({
     showToast("Série supprimée", true);
   };
 
-  const totalSeries = series.length;
+  const toggleCheckedSerie = (id: string) => setCheckedSerieIds((prev) => {
+    const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next;
+  });
+
+  const handleBulkArchive = async () => {
+    if (checkedSerieIds.size === 0) return;
+    for (const id of checkedSerieIds) await toggleSerieVisible(id, false);
+    setSeries((prev) => prev.map((s) => checkedSerieIds.has(s.id) ? { ...s, visible: false } : s));
+    showToast(`${checkedSerieIds.size} série(s) archivée(s)`, true);
+    setCheckedSerieIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (checkedSerieIds.size === 0) return;
+    if (!confirm(`Supprimer définitivement ${checkedSerieIds.size} série(s) ?`)) return;
+    for (const id of checkedSerieIds) await deleteSerie(id);
+    setSeries((prev) => prev.filter((s) => !checkedSerieIds.has(s.id)));
+    showToast(`${checkedSerieIds.size} série(s) supprimée(s)`, true);
+    setCheckedSerieIds(new Set());
+  };
+
+  const handleBulkRestore = async () => {
+    if (checkedSerieIds.size === 0) return;
+    for (const id of checkedSerieIds) await toggleSerieVisible(id, true);
+    setSeries((prev) => prev.map((s) => checkedSerieIds.has(s.id) ? { ...s, visible: true } : s));
+    showToast(`${checkedSerieIds.size} série(s) restaurée(s)`, true);
+    setCheckedSerieIds(new Set());
+  };
+
+  const totalSeries = series.filter((s) => s.visible).length;
   const totalQuestions = series.reduce((a, s) => a + (s.nb_questions ?? 0), 0);
   const chapters = buildChapters(dossierId, allDossiers, cours);
-  const seriesByType = (type: SerieType) => series.filter((s) => s.type === type);
+  const seriesByType = (type: SerieType) => series.filter((s) => s.type === type && s.visible);
+  const archivedSeries = series.filter((s) => !s.visible);
   const coursName = (id: string | null) => cours.find((c) => c.id === id)?.name ?? "";
 
   // Year bubbles for annales
@@ -846,6 +881,27 @@ export function DossierExercicesView({
         </button>
       </div>
 
+      {/* Bulk actions bar */}
+      {checkedSerieIds.size > 0 && (
+        <div className="shrink-0 flex items-center gap-3 mx-4 mt-3 px-3 py-2 rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/10">
+          <span className="text-[11px] font-bold text-[#C9A84C]">{checkedSerieIds.size} sélectionnée{checkedSerieIds.size > 1 ? "s" : ""}</span>
+          <button type="button" onClick={handleBulkArchive}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
+            <EyeOff size={11} /> Archiver
+          </button>
+          <button type="button" onClick={handleBulkRestore}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
+            <Eye size={11} /> Restaurer
+          </button>
+          <button type="button" onClick={handleBulkDelete}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors">
+            <Trash2 size={11} /> Supprimer
+          </button>
+          <button type="button" onClick={() => setCheckedSerieIds(new Set())}
+            className="ml-auto text-[10px] text-white/40 hover:text-white/60">Désélectionner</button>
+        </div>
+      )}
+
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === "flashcards" ? (
@@ -904,6 +960,7 @@ export function DossierExercicesView({
               <div className="space-y-2">
                 {filteredAnnales.map((s) => (
                   <AnnaleSerieCard key={s.id} serie={s} anneesList={anneesList} coursNameStr={coursName(s.cours_id)}
+                    checked={checkedSerieIds.has(s.id)} onCheck={() => toggleCheckedSerie(s.id)}
                     onOpen={() => window.open(`/serie/${s.id}`, "_blank")}
                     onEdit={() => setComposeSerie(s)}
                     onDelete={() => handleDelete(s.id)}
@@ -936,6 +993,8 @@ export function DossierExercicesView({
               <div className="space-y-2">
                 {seriesByType(activeTab).map((s) => (
                   <div key={s.id} className="rounded-xl border border-white/8 bg-white/3 p-3 flex items-start gap-3 hover:bg-white/5 transition-colors">
+                    <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
+                      className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(`/serie/${s.id}`, "_blank")}>
                       <p className="text-xs font-semibold text-white truncate">{s.name}</p>
                       <p className="text-[10px] text-white/40 mt-0.5">
@@ -965,6 +1024,40 @@ export function DossierExercicesView({
               </div>
             )}
           </>
+        )}
+
+        {/* ── Archives ── */}
+        {activeTab !== "flashcards" && archivedSeries.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-white/8">
+            <button onClick={() => setShowArchived(!showArchived)}
+              className="flex items-center gap-2 text-[11px] font-semibold text-white/30 hover:text-white/50 transition-colors mb-2">
+              <EyeOff size={12} />
+              Archives ({archivedSeries.length})
+              <ChevronDown size={12} className={`transition-transform ${showArchived ? "rotate-180" : ""}`} />
+            </button>
+            {showArchived && (
+              <div className="space-y-2">
+                {archivedSeries.map((s) => (
+                  <div key={s.id} className="rounded-xl border border-white/5 bg-white/2 p-3 flex items-start gap-3 opacity-60">
+                    <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
+                      className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-white/60 truncate">{s.name}</p>
+                      <p className="text-[10px] text-white/30 mt-0.5">{s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""} · {TYPE_CONFIG[s.type as SerieType]?.label ?? s.type}</p>
+                    </div>
+                    <button onClick={() => { toggleSerieVisible(s.id, true); setSeries((prev) => prev.map((x) => x.id === s.id ? { ...x, visible: true } : x)); }}
+                      className="shrink-0 p-1.5 rounded-lg hover:bg-white/10 text-white/30 hover:text-white/60 transition-colors" title="Restaurer">
+                      <Eye size={12} />
+                    </button>
+                    <button onClick={() => handleDelete(s.id)}
+                      className="shrink-0 p-1.5 rounded-lg hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-colors" title="Supprimer">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
