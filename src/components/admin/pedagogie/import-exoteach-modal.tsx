@@ -244,19 +244,45 @@ export function ImportExoteachModal({
 }) {
   const [idsInput, setIdsInput] = useState("");
   const [serieType, setSerieType] = useState(defaultType || "entrainement");
-  const [copied, setCopied] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState("");
   const [results, setResults] = useState<Result[]>([]);
 
   const parsedIds = parseIds(idsInput);
   const ok = results.filter((r) => r.status === "ok").length;
   const errors = results.filter((r) => r.status !== "ok").length;
 
-  const handleCopy = async () => {
-    if (parsedIds.length === 0) return;
-    const script = buildScript(parsedIds, coursId, serieType, matiereId);
-    await navigator.clipboard.writeText(script);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
+  const handleImport = async () => {
+    if (parsedIds.length === 0 || importing) return;
+    setImporting(true);
+    setResults([]);
+    const allResults: Result[] = [];
+
+    // Send one by one to avoid timeout
+    for (let i = 0; i < parsedIds.length; i++) {
+      const id = parsedIds[i];
+      setProgress(`Import ${i + 1}/${parsedIds.length}...`);
+      try {
+        const res = await fetch("/api/import-exoteach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serieIds: [id],
+            coursId: coursId || null,
+            serieType,
+            matiereId: matiereId || null,
+          }),
+        });
+        const out = await res.json();
+        if (out.results) allResults.push(...out.results);
+        else allResults.push({ id, status: "error", error: out.error || "Erreur" });
+      } catch (e: any) {
+        allResults.push({ id, status: "error", error: e.message });
+      }
+      setResults([...allResults]);
+    }
+    setImporting(false);
+    setProgress("");
   };
 
   return (
@@ -311,32 +337,18 @@ export function ImportExoteachModal({
             </select>
           </div>
 
-          {/* Bouton copier */}
+          {/* Import button */}
           <button
-            onClick={handleCopy}
-            disabled={parsedIds.length === 0}
-            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-              copied
-                ? "bg-green-500/20 border border-green-400/40 text-green-300"
-                : "bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35]"
-            } disabled:opacity-30 disabled:cursor-not-allowed`}
+            onClick={handleImport}
+            disabled={parsedIds.length === 0 || importing}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35] disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            {copied ? <><Check size={15} /> Script copié !</> : <><Copy size={15} /> Copier le script d&apos;import</>}
+            {importing ? (
+              <><span className="w-4 h-4 border-2 border-[#0e1e35]/30 border-t-[#0e1e35] rounded-full animate-spin" /> {progress}</>
+            ) : (
+              <><Download size={15} /> Importer {parsedIds.length > 0 ? `${parsedIds.length} série${parsedIds.length > 1 ? "s" : ""}` : ""}</>
+            )}
           </button>
-
-          {/* Instructions */}
-          {copied && (
-            <div className="rounded-xl border border-green-400/20 bg-green-500/5 p-4 space-y-2 animate-in fade-in">
-              <p className="text-xs font-bold text-green-300">Maintenant :</p>
-              <ol className="text-[12px] text-white/70 space-y-2 list-decimal list-inside">
-                <li>Va sur <a href="https://diploma.exoteach.com" target="_blank" rel="noreferrer" className="text-[#C9A84C] underline">diploma.exoteach.com</a> (n&apos;importe quelle page, connecté)</li>
-                <li>Ouvre la console : <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">F12</kbd> → onglet <span className="font-semibold">Console</span></li>
-                <li>Tape <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">allow pasting</kbd> + Entrée (1ère fois)</li>
-                <li>Colle avec <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Cmd+V</kbd> puis <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-[11px] font-mono">Entrée</kbd></li>
-                <li>Reviens ici et rafraîchis ✓</li>
-              </ol>
-            </div>
-          )}
 
           {/* Résultats */}
           {results.length > 0 && (
