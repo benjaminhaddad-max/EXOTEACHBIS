@@ -761,10 +761,12 @@ export function QaDashboard({
           return true;
         });
 
-        // All matières available for current formation/university selection
-        const availableMatieres = qaMatieres.filter((m) => {
-          if (filterFormation !== "all" && matiereToOfferId.get(m.id) !== filterFormation) return false;
-          if (filterUni !== "all" && matiereToUniId.get(m.id) !== filterUni) return false;
+        // Matières for selected formation+university (only shown when both are selected)
+        const availableMatieres = (filterFormation === "all" || filterUni === "all") ? [] : qaMatieres.filter((m) => {
+          const n = m.name.trim().toUpperCase();
+          if (n === "PASS" || n === "LAS" || n === "LSPS" || n.startsWith("PASS ") || n.startsWith("LAS ") || n.startsWith("LSPS ")) return false;
+          if (matiereToOfferId.get(m.id) !== filterFormation) return false;
+          if (matiereToUniId.get(m.id) !== filterUni) return false;
           return true;
         });
 
