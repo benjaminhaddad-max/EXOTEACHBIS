@@ -105,12 +105,31 @@ for(var id of ids){
     window.location.hash='#/admin-series/edit/'+id;
     await wait(4000);
 
-    /* DEBUG: Log ALL images on page to find the right filter */
-    var debugImgs=Array.from(document.querySelectorAll('img'));
-    console.log('  DEBUG: '+debugImgs.length+' <img> total sur la page');
-    debugImgs.slice(0,10).forEach(function(i,idx){
-      console.log('  img['+idx+'] src='+i.src.slice(0,100)+' size='+i.naturalWidth+'x'+i.naturalHeight);
+    /* DEBUG: Analyze DOM structure of exercise containers */
+    await wait(1000);
+    var exEls=[];
+    document.querySelectorAll('*').forEach(function(el){
+      var ownText='';
+      for(var ci=0;ci<el.childNodes.length;ci++){if(el.childNodes[ci].nodeType===3)ownText+=el.childNodes[ci].textContent;}
+      if(/^Exercice\s+\d+/i.test(ownText.trim())){exEls.push(el);}
     });
+    if(exEls.length>0){
+      var ex1=exEls[0];
+      console.log('  DEBUG Exercice 1: tag='+ex1.tagName+' class='+ex1.className);
+      /* Walk up to find the container */
+      var p=ex1.parentElement;
+      for(var d=0;d<5&&p;d++){
+        var imgs=p.querySelectorAll('img');
+        console.log('  parent['+d+']: tag='+p.tagName+' class='+(p.className||'').slice(0,60)+' imgs='+imgs.length);
+        if(imgs.length>0&&imgs.length<10){
+          console.log('  >>> CONTAINER FOUND at parent['+d+'] with '+imgs.length+' imgs');
+          break;
+        }
+        p=p.parentElement;
+      }
+    }else{
+      console.log('  DEBUG: no Exercice headers found in DOM');
+    }
 
     /* Scroll the entire page slowly to load all lazy images */
     var sc=document.querySelector('[class*="scroll"]')||document.querySelector('main')||document.documentElement;
@@ -285,8 +304,10 @@ export function ImportExoteachModal({
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState("");
   const [results, setResults] = useState<Result[]>([]);
-  const [mode, setMode] = useState<"server" | "script">("script");
+  const [mode, setMode] = useState<"word" | "server" | "script">("word");
   const [copied, setCopied] = useState(false);
+  const [wordFile, setWordFile] = useState<File | null>(null);
+  const [wordName, setWordName] = useState("");
 
   const parsedIds = parseIds(idsInput);
   const ok = results.filter((r) => r.status === "ok").length;
@@ -324,6 +345,35 @@ export function ImportExoteachModal({
     setProgress("");
   };
 
+  const handleWordImport = async () => {
+    if (!wordFile || importing) return;
+    setImporting(true);
+    setResults([]);
+    setProgress("Upload et parsing...");
+    try {
+      const formData = new FormData();
+      formData.append("file", wordFile);
+      formData.append("name", wordName || wordFile.name.replace(/\.docx?$/i, ""));
+      formData.append("type", serieType);
+      if (coursId) formData.append("coursId", coursId);
+      if (matiereId) formData.append("matiereId", matiereId);
+
+      const res = await fetch("/api/import-word", { method: "POST", body: formData });
+      const out = await res.json();
+      if (out.success) {
+        setResults([{ id: "word", status: "ok", titre: out.serieName }]);
+        setProgress(`✅ ${out.imported} questions importées`);
+      } else {
+        setResults([{ id: "word", status: "error", error: out.error }]);
+        setProgress("");
+      }
+    } catch (e: any) {
+      setResults([{ id: "word", status: "error", error: e.message }]);
+      setProgress("");
+    }
+    setImporting(false);
+  };
+
   const handleCopy = async () => {
     if (parsedIds.length === 0) return;
     const script = buildScript(parsedIds, coursId, serieType, matiereId);
@@ -350,7 +400,8 @@ export function ImportExoteachModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-          {/* IDs */}
+          {/* IDs (hidden in Word mode) */}
+          {mode !== "word" && (
           <div>
             <label className="block text-xs font-semibold text-white/60 mb-1.5">
               IDs des séries ExoTeach
@@ -369,6 +420,7 @@ export function ImportExoteachModal({
               </p>
             )}
           </div>
+          )}
 
           {/* Type */}
           <div>
@@ -386,17 +438,49 @@ export function ImportExoteachModal({
 
           {/* Mode toggle */}
           <div className="flex rounded-lg border border-white/15 overflow-hidden">
+            <button type="button" onClick={() => setMode("word")}
+              className={`flex-1 py-2 text-[11px] font-semibold transition-colors ${mode === "word" ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/40 hover:text-white/60"}`}>
+              Import Word
+            </button>
             <button type="button" onClick={() => setMode("script")}
               className={`flex-1 py-2 text-[11px] font-semibold transition-colors ${mode === "script" ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/40 hover:text-white/60"}`}>
-              Avec images (console)
+              Script console
             </button>
             <button type="button" onClick={() => setMode("server")}
               className={`flex-1 py-2 text-[11px] font-semibold transition-colors ${mode === "server" ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/40 hover:text-white/60"}`}>
-              Rapide sans images
+              Sans images
             </button>
           </div>
 
-          {mode === "server" ? (
+          {mode === "word" ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-white/60 mb-1.5">Fichier Word (.docx)</label>
+                <input type="file" accept=".docx"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) { setWordFile(f); setWordName(f.name.replace(/\.docx?$/i, "")); }
+                  }}
+                  className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white file:mr-3 file:rounded-lg file:border-0 file:bg-[#C9A84C]/20 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[#C9A84C] hover:file:bg-[#C9A84C]/30"
+                />
+              </div>
+              {wordFile && (
+                <div>
+                  <label className="block text-xs font-semibold text-white/60 mb-1.5">Nom de la série</label>
+                  <input type="text" value={wordName} onChange={(e) => setWordName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-[#C9A84C]/60" />
+                </div>
+              )}
+              <button onClick={handleWordImport} disabled={!wordFile || importing}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-[#C9A84C] hover:bg-[#A8892E] text-[#0e1e35] disabled:opacity-30 disabled:cursor-not-allowed">
+                {importing ? (
+                  <><span className="w-4 h-4 border-2 border-[#0e1e35]/30 border-t-[#0e1e35] rounded-full animate-spin" /> {progress}</>
+                ) : (
+                  <><Download size={15} /> Importer le Word</>
+                )}
+              </button>
+            </div>
+          ) : mode === "server" ? (
             <button
               onClick={handleImport}
               disabled={parsedIds.length === 0 || importing}
