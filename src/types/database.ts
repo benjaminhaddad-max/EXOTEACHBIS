@@ -49,6 +49,7 @@ export interface Dossier {
   etiquettes: string[];
   order_index: number;
   visible: boolean;
+  link_rules: { sections: Record<string, string[]> } | null;
   created_at: string;
   updated_at: string;
   // Relations

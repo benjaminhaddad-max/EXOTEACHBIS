@@ -442,6 +442,82 @@ export async function getCourssByDossier(dossierId: string) {
   return { data: data ?? [] };
 }
 
+// =============================================
+// UNIVERSITY LINK RULES
+// =============================================
+
+export async function updateUniversityLinkRules(
+  dossierId: string,
+  linkRules: { sections: Record<string, string[]> } | null,
+) {
+  "use server";
+  const supabase = await createClient();
+  const { data: dossier } = await supabase
+    .from("dossiers")
+    .select("dossier_type")
+    .eq("id", dossierId)
+    .single();
+  if (!dossier || dossier.dossier_type !== "university")
+    return { error: "Ce dossier n'est pas une université." };
+  const { error } = await supabase
+    .from("dossiers")
+    .update({ link_rules: linkRules })
+    .eq("id", dossierId);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function getUniversityLinkRulesForDossier(dossierId: string) {
+  "use server";
+  const supabase = await createClient();
+  const { data: allDossiers } = await supabase
+    .from("dossiers")
+    .select("id, name, parent_id, dossier_type, link_rules, formation_offer")
+    .order("order_index");
+  if (!allDossiers) return null;
+  const byId = new Map(allDossiers.map((d: any) => [d.id, d]));
+  // Walk up to find university ancestor
+  let cur: string | null = dossierId;
+  while (cur) {
+    const d = byId.get(cur);
+    if (!d) break;
+    if (d.dossier_type === "university" && d.link_rules) {
+      return d.link_rules as { sections: Record<string, string[]> };
+    }
+    cur = d.parent_id;
+  }
+  return null;
+}
+
+/** Find which offers contain a university with the given name */
+export async function getOffersForUniversity(universityName: string) {
+  "use server";
+  const supabase = await createClient();
+  const { data: allDossiers } = await supabase
+    .from("dossiers")
+    .select("id, name, parent_id, dossier_type, formation_offer")
+    .order("order_index");
+  if (!allDossiers) return [];
+  const byId = new Map(allDossiers.map((d: any) => [d.id, d]));
+  const unis = allDossiers.filter((d: any) => d.dossier_type === "university" && d.name === universityName);
+  const offers: { code: string; label: string; offerId: string }[] = [];
+  for (const uni of unis) {
+    let cur: string | null = uni.parent_id;
+    while (cur) {
+      const p = byId.get(cur);
+      if (!p) break;
+      if (p.dossier_type === "offer") {
+        const code = p.formation_offer ?? p.name;
+        offers.push({ code, label: p.name, offerId: p.id });
+        break;
+      }
+      cur = p.parent_id;
+    }
+  }
+  return offers;
+}
+
 export async function createCoursInDossier(data: {
   dossier_id: string;
   name: string;
@@ -454,7 +530,7 @@ export async function createCoursInDossier(data: {
   etiquettes?: string[];
 }) {
   const supabase = await createClient();
-  const { error } = await supabase.from("cours").insert({
+  const { data: created, error } = await supabase.from("cours").insert({
     dossier_id: data.dossier_id,
     matiere_id: null,
     name: data.name,
@@ -467,10 +543,93 @@ export async function createCoursInDossier(data: {
     order_index: data.order_index ?? 0,
     visible: data.visible,
     version: 1,
-  });
+  }).select("id").single();
   if (error) return { error: error.message };
+
+  // Auto-link based on university link_rules
+  const section = data.etiquettes?.[0];
+  if (section && created?.id) {
+    try {
+      await autoLinkCoursByRules(supabase, created.id, data.dossier_id, section);
+    } catch {
+      // Auto-link is best-effort, don't fail the creation
+    }
+  }
+
   revalidatePath(PATH);
   return { success: true };
+}
+
+async function autoLinkCoursByRules(
+  supabase: any,
+  coursId: string,
+  dossierId: string,
+  section: string,
+) {
+  // Get all dossiers to walk the tree
+  const { data: allDossiers } = await supabase
+    .from("dossiers")
+    .select("id, name, parent_id, dossier_type, formation_offer, link_rules")
+    .order("order_index");
+  if (!allDossiers) return;
+
+  type DossierRow = { id: string; name: string; parent_id: string | null; dossier_type: string; formation_offer: string | null; link_rules: any };
+  const byId = new Map((allDossiers as DossierRow[]).map((d) => [d.id, d]));
+
+  // Walk up from dossierId to find: subject name, university (with link_rules), current offer code
+  let subjectName: string | null = null;
+  let uniName: string | null = null;
+  let uniLinkRules: { sections: Record<string, string[]> } | null = null;
+  let currentOfferCode: string | null = null;
+  let cur: string | null = dossierId;
+  while (cur) {
+    const d = byId.get(cur);
+    if (!d) break;
+    if (d.dossier_type === "subject" && !subjectName) subjectName = d.name;
+    if (d.dossier_type === "university" && !uniName) {
+      uniName = d.name;
+      if (d.link_rules) uniLinkRules = d.link_rules;
+    }
+    if (d.dossier_type === "offer") {
+      currentOfferCode = d.formation_offer ?? null;
+      break;
+    }
+    cur = d.parent_id;
+  }
+
+  if (!uniLinkRules || !subjectName || !uniName || !currentOfferCode) return;
+
+  // Check if this section has target offers
+  const targetOfferCodes = uniLinkRules.sections[section];
+  if (!targetOfferCodes || targetOfferCodes.length === 0) return;
+
+  // Filter to offers different from current
+  const otherOfferCodes = targetOfferCodes.filter((c) => c !== currentOfferCode);
+  if (otherOfferCodes.length === 0) return;
+
+  // Find target subject dossiers (same university name + same subject name in target offers)
+  for (const targetOfferCode of otherOfferCodes) {
+    // Find universities with same name under offers with matching formation_offer
+    for (const d of allDossiers as DossierRow[]) {
+      if (d.dossier_type !== "subject" || d.name !== subjectName) continue;
+      // Walk up to check university name and offer code
+      let dUni: string | null = null;
+      let dOfferCode: string | null = null;
+      let c: string | null = d.parent_id;
+      while (c) {
+        const p = byId.get(c);
+        if (!p) break;
+        if (p.dossier_type === "university" && !dUni) dUni = p.name;
+        if (p.dossier_type === "offer") { dOfferCode = p.formation_offer ?? null; break; }
+        c = p.parent_id;
+      }
+      if (dUni === uniName && dOfferCode === targetOfferCode) {
+        // Found the target subject — link the course there
+        await linkCoursToOtherDossier([coursId], d.id);
+        break; // Only one match per offer
+      }
+    }
+  }
 }
 
 export async function updateCoursInDossier(

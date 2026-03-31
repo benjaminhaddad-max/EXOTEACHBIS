@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useMemo, useRef, useCallback } from
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  Plus, Pencil, Trash2, ChevronRight, ChevronDown, ChevronUp,
+  Plus, Pencil, Trash2, ChevronRight, ChevronDown, ChevronUp, Settings,
   Folder, FolderOpen, X, Eye, EyeOff, Upload,
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
@@ -45,6 +45,7 @@ import {
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
+  updateUniversityLinkRules, getUniversityLinkRulesForDossier, getOffersForUniversity,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -113,7 +114,7 @@ export function PedagogieShell({
   const [allDossiers, setAllDossiers] = useState<Dossier[]>(initialDossiers);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedCours, setSelectedCours] = useState<Cours | null>(null);
-  const [dossierTab, setDossierTab] = useState<"contenu" | "exercices">("contenu");
+  const [dossierTab, setDossierTab] = useState<"contenu" | "exercices" | "parametrage">("contenu");
   const [allCoursFlat, setAllCoursFlat] = useState<Cours[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [ressourcesMap, setRessourcesMap] = useState<Record<string, Ressource[]>>({});
@@ -200,7 +201,27 @@ export function PedagogieShell({
     return groups;
   }, [childDossiers]);
   const contentCreationLabel = getContentCreationLabel(selectedDossier?.dossier_type);
-  const availableCourseSections = coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined;
+
+  // Check if university ancestor has link_rules → force sections from there
+  const universityLinkRules = useMemo(() => {
+    if (!selectedId) return null;
+    let cur: string | null = selectedId;
+    while (cur) {
+      const d = allDossiers.find((dd) => dd.id === cur);
+      if (!d) break;
+      if (d.dossier_type === "university" && d.link_rules) {
+        return d.link_rules as { sections: Record<string, string[]> };
+      }
+      cur = d.parent_id;
+    }
+    return null;
+  }, [selectedId, allDossiers]);
+
+  const linkRulesSections = universityLinkRules ? Object.keys(universityLinkRules.sections) : null;
+
+  // If link_rules exist, they define the mandatory sections. Otherwise fall back to coursGroups.
+  const availableCourseSections = linkRulesSections
+    ?? (coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined);
 
   const moveSectionByLabel = useCallback((label: string, direction: "up" | "down") => {
     const labels = coursGroups?.map((g) => g.label) ?? [];
@@ -627,11 +648,27 @@ export function PedagogieShell({
                     </span>
                   </button>
                 )}
+                {selectedDossier.dossier_type === "university" && canEdit && (
+                  <button
+                    onClick={() => setDossierTab("parametrage")}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "parametrage" ? "border-purple-500 text-purple-700" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    Paramétrage
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Exercices tab */}
-            {dossierTab === "exercices" ? (
+            {/* Paramétrage tab */}
+            {dossierTab === "parametrage" && selectedDossier.dossier_type === "university" ? (
+              <div className="flex-1 overflow-y-auto p-5">
+                <UniversitySettingsTab
+                  university={selectedDossier}
+                  onSaved={refreshAll}
+                />
+              </div>
+            ) : dossierTab === "exercices" ? (
               <div className="flex flex-col flex-1 overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
                 <DossierExercicesView
                   dossierId={selectedDossier.id}
@@ -3428,6 +3465,161 @@ function IconPicker({ value, onChange }: { value: string; onChange: (url: string
 // =============================================
 // UI PRIMITIVES
 // =============================================
+
+// =============================================
+// UNIVERSITY SETTINGS TAB
+// =============================================
+
+function UniversitySettingsTab({ university, onSaved }: { university: Dossier; onSaved: () => void }) {
+  const [linkRules, setLinkRules] = useState<{ sections: Record<string, string[]> }>(
+    (university.link_rules as any) ?? { sections: {} }
+  );
+  const [availableOffers, setAvailableOffers] = useState<{ code: string; label: string; offerId: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [newSectionName, setNewSectionName] = useState("");
+
+  useEffect(() => {
+    getOffersForUniversity(university.name).then((offers) => {
+      setAvailableOffers(offers);
+      setLoading(false);
+    });
+  }, [university.name]);
+
+  // Reset when university changes
+  useEffect(() => {
+    setLinkRules((university.link_rules as any) ?? { sections: {} });
+  }, [university.id, university.link_rules]);
+
+  const sectionNames = Object.keys(linkRules.sections);
+
+  const toggleOffer = (section: string, offerCode: string) => {
+    setLinkRules((prev) => {
+      const current = prev.sections[section] ?? [];
+      const updated = current.includes(offerCode)
+        ? current.filter((c) => c !== offerCode)
+        : [...current, offerCode];
+      return { sections: { ...prev.sections, [section]: updated } };
+    });
+  };
+
+  const addSection = () => {
+    const trimmed = newSectionName.trim();
+    if (!trimmed || linkRules.sections[trimmed]) return;
+    setLinkRules((prev) => ({ sections: { ...prev.sections, [trimmed]: [] } }));
+    setNewSectionName("");
+  };
+
+  const removeSection = (name: string) => {
+    setLinkRules((prev) => {
+      const { [name]: _, ...rest } = prev.sections;
+      return { sections: rest };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const result = await updateUniversityLinkRules(
+      university.id,
+      sectionNames.length > 0 ? linkRules : null,
+    );
+    setSaving(false);
+    if (result.error) alert(result.error);
+    else onSaved();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="mb-6">
+        <h3 className="text-lg font-bold text-navy">Paramétrage — {university.name}</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Configurez les sections de cours et leurs règles de liaison entre offres.
+        </p>
+      </div>
+
+      {availableOffers.length === 0 ? (
+        <div className="rounded-xl bg-gray-50 p-6 text-center text-sm text-gray-500">
+          Cette université n&apos;apparaît dans aucune offre. Créez d&apos;abord la même université dans d&apos;autres offres.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-xs font-medium text-gray-500">
+            Offres contenant &quot;{university.name}&quot; : {availableOffers.map((o) => o.label).join(", ")}
+          </p>
+
+          {sectionNames.map((section) => (
+            <div key={section} className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-bold text-gray-800">{section}</h4>
+                <button
+                  onClick={() => removeSection(section)}
+                  className="rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <p className="mb-2 text-[11px] text-gray-400">
+                Un cours &quot;{section}&quot; sera automatiquement lié dans :
+              </p>
+              <div className="space-y-1.5">
+                {availableOffers.map((offer) => (
+                  <label key={offer.code} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(linkRules.sections[section] ?? []).includes(offer.code)}
+                      onChange={() => toggleOffer(section, offer.code)}
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 accent-purple-600"
+                    />
+                    <span className="text-sm text-gray-700">{offer.label}</span>
+                  </label>
+                ))}
+              </div>
+              {(linkRules.sections[section] ?? []).length === 0 && (
+                <p className="mt-2 text-[11px] text-gray-400 italic">
+                  Aucune offre cochée → cours local uniquement (pas de liaison)
+                </p>
+              )}
+            </div>
+          ))}
+
+          <div className="flex items-center gap-2">
+            <input
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addSection(); }}
+              placeholder="Nouvelle section..."
+              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
+            />
+            <button
+              onClick={addSection}
+              disabled={!newSectionName.trim()}
+              className="rounded-lg bg-purple-100 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-200 transition disabled:opacity-40"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full rounded-lg bg-navy py-2.5 text-sm font-semibold text-white hover:bg-navy/90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Sauvegarder
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // =============================================
 // MISSING COURS MODAL (cours manquants depuis les autres offres)
