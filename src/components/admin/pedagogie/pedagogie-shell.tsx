@@ -1808,7 +1808,9 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
   const [result, setResult] = useState<{ ok: number; errors: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const childType = getDefaultChildType(parentDossier);
+  const allowedTypes = getAllowedChildTypes(parentDossier);
+  const defaultChildType = getDefaultChildType(parentDossier);
+  const [childType, setChildType] = useState(defaultChildType);
   const childLabel = DOSSIER_TYPE_META[childType]?.shortLabel ?? "Dossier";
 
   const names = input
@@ -1887,10 +1889,31 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
   return (
     <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-md">
       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-        <h3 className="text-sm font-semibold text-gray-900">Créer plusieurs {childLabel.toLowerCase()}s</h3>
+        <h3 className="text-sm font-semibold text-gray-900">Créer plusieurs dossiers</h3>
         <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
       </div>
       <div className="p-5 space-y-4">
+        {/* Type selector */}
+        {allowedTypes.length > 1 && (
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700">Type de dossier</label>
+            <div className="flex flex-wrap gap-1.5">
+              {allowedTypes.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setChildType(t)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                    childType === t
+                      ? "border-navy bg-navy/5 text-navy"
+                      : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                  }`}
+                >{DOSSIER_TYPE_META[t]?.shortLabel ?? t}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Screenshot upload zone */}
         <div
           onDragOver={(e) => e.preventDefault()}
