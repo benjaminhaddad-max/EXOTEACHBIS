@@ -790,10 +790,13 @@ export function PedagogieShell({
                                         canEdit={canEdit}
                                         onRenamed={refreshAll}
                                         onDeleteSection={canEdit && group.label ? (mode) => {
-                                          const ids = group.cours.map((c) => c.id);
-                                          if (mode === "delete_cours") {
-                                            setConfirmDelete({ label: `les ${ids.length} cours de "${group.label}"`, onConfirm: () => handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; }) });
-                                          } else { handleAction(() => bulkSetEtiquettes(ids, [])); }
+                                          const coursInGroup = group.cours;
+                                          const ids = coursInGroup.map((c) => c.id);
+                                          if (mode === "remove_tag") {
+                                            handleAction(() => bulkSetEtiquettes(ids, []));
+                                          } else {
+                                            setSectionDeleteChoice({ label: group.label, cours: coursInGroup });
+                                          }
                                         } : undefined}
                                       />
                                       {group.cours.map((c) => (
