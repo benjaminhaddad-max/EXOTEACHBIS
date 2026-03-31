@@ -31,6 +31,7 @@ export async function createDossier(data: {
   parent_id?: string | null;
   order_index?: number;
   visible: boolean;
+  etiquette?: string | null;
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("dossiers").insert({
@@ -43,6 +44,7 @@ export async function createDossier(data: {
     parent_id: data.parent_id || null,
     order_index: data.order_index ?? 0,
     visible: data.visible,
+    etiquette: data.etiquette || null,
   });
   if (error) return { error: error.message };
   revalidatePath(PATH);
@@ -61,6 +63,7 @@ export async function updateDossier(
     icon_url?: string | null;
     visible: boolean;
     order_index?: number;
+    etiquette?: string | null;
   }
 ) {
   const supabase = await createClient();
@@ -147,6 +150,7 @@ export async function updateDossier(
       icon_url: data.icon_url || null,
       visible: data.visible,
       order_index: nextOrderIndex,
+      etiquette: data.etiquette ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
