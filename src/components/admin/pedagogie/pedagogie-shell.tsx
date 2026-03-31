@@ -677,29 +677,65 @@ export function PedagogieShell({
                           <button type="button" onClick={() => setSelectedDossierIds(new Set(childDossiers.map((d) => d.id)))} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Tout sélectionner</button>
                           <button type="button" onClick={() => setSelectedDossierIds(new Set())} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Désélectionner</button>
                           <div className="ml-auto relative">
-                            <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition">Étiquettes</button>
+                            <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition">Section</button>
                             {showBulkDossierPopover && (
-                              <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
-                                <p className="mb-2 text-xs font-semibold text-gray-700">Attribuer des étiquettes</p>
-                                <TagInput
-                                  value={bulkDossierEtiquettes}
-                                  onChange={setBulkDossierEtiquettes}
-                                  suggestions={[...new Set(childDossiers.flatMap((d) => d.etiquettes ?? []))].sort()}
-                                  placeholder="Taper puis Enter..."
-                                />
-                                <div className="mt-2 flex justify-end gap-2">
-                                  <button type="button" onClick={() => { setShowBulkDossierPopover(false); setBulkDossierEtiquettes([]); }} className="rounded-lg px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100">Annuler</button>
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      await handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], bulkDossierEtiquettes));
-                                      setShowBulkDossierPopover(false);
-                                      setBulkDossierEtiquettes([]);
-                                      setSelectedDossierIds(new Set());
-                                    }}
-                                    className="rounded-lg bg-navy px-3 py-1 text-xs font-semibold text-white hover:bg-navy/90"
-                                  >Appliquer</button>
-                                </div>
+                              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+                                <p className="mb-2 text-xs font-semibold text-gray-700">Placer dans la section</p>
+                                {(() => {
+                                  const existingSections = [...new Set(childDossiers.flatMap((d) => d.etiquettes ?? []).filter(Boolean))].sort();
+                                  return (
+                                    <div className="space-y-1.5">
+                                      {existingSections.map((s) => (
+                                        <button
+                                          key={s}
+                                          type="button"
+                                          onClick={async () => {
+                                            await handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], [s]));
+                                            setShowBulkDossierPopover(false);
+                                            setSelectedDossierIds(new Set());
+                                          }}
+                                          className="w-full rounded-lg border border-gray-100 px-3 py-2 text-left text-sm font-medium text-gray-800 hover:bg-gold/5 hover:border-gold/30 transition"
+                                        >{s}</button>
+                                      ))}
+                                      <div className="flex gap-1.5 pt-1">
+                                        <input
+                                          value={bulkDossierEtiquettes[0] ?? ""}
+                                          onChange={(e) => setBulkDossierEtiquettes(e.target.value ? [e.target.value] : [])}
+                                          placeholder="Nouvelle section..."
+                                          className="flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" && bulkDossierEtiquettes[0]?.trim()) {
+                                              handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], [bulkDossierEtiquettes[0].trim()]));
+                                              setShowBulkDossierPopover(false);
+                                              setBulkDossierEtiquettes([]);
+                                              setSelectedDossierIds(new Set());
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            if (!bulkDossierEtiquettes[0]?.trim()) return;
+                                            await handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], [bulkDossierEtiquettes[0].trim()]));
+                                            setShowBulkDossierPopover(false);
+                                            setBulkDossierEtiquettes([]);
+                                            setSelectedDossierIds(new Set());
+                                          }}
+                                          className="rounded-lg bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy/90"
+                                        >OK</button>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          await handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], []));
+                                          setShowBulkDossierPopover(false);
+                                          setSelectedDossierIds(new Set());
+                                        }}
+                                        className="w-full rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                                      >Retirer de toute section</button>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>
