@@ -1291,9 +1291,10 @@ function AddPickerModal({
   onClose: () => void;
 }) {
   const allowedChildTypes = getAllowedChildTypes(parentDossier);
-  const primaryChildType = allowedChildTypes[0];
   const canCreateChildren = !parentDossier || allowedChildTypes.length > 0;
-  const childLabel = primaryChildType ? DOSSIER_TYPE_META[primaryChildType].label : "Dossier";
+  const childLabel = allowedChildTypes.length === 1
+    ? DOSSIER_TYPE_META[allowedChildTypes[0]].label
+    : "sous-dossier";
   const childDescription = allowedChildTypes.length > 0
     ? allowedChildTypes.map((type) => DOSSIER_TYPE_META[type].shortLabel).join(" / ")
     : "Aucun sous-niveau prévu";
