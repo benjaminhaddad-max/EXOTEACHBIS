@@ -122,6 +122,9 @@ export function PedagogieShell({
     if (typeof window !== "undefined") return (localStorage.getItem("pedagogie-cours-view") as "cards" | "list") || "cards";
     return "cards";
   });
+  const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(new Set());
+  const [bulkEtiquettes, setBulkEtiquettes] = useState<string[]>([]);
+  const [showBulkPopover, setShowBulkPopover] = useState(false);
   const [treeWidth, setTreeWidth] = useState(360);
   const [isResizingTree, setIsResizingTree] = useState(false);
   const treeWidthRef = useRef(treeWidth);
@@ -265,6 +268,8 @@ export function PedagogieShell({
     setSelectedId(dossier.id);
     setSelectedCours(null);
     setDossierTab("contenu");
+    setSelectedCoursIds(new Set());
+    setShowBulkPopover(false);
     setExpandedIds((prev) => new Set([...prev, dossier.id]));
     // Toujours refetch (pas de cache stale après deploy)
     setLoadingRessources(true);
@@ -485,11 +490,9 @@ export function PedagogieShell({
                   <span className="rounded-full bg-navy/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-navy/70">
                     {DOSSIER_TYPE_META[selectedDossier.dossier_type]?.shortLabel ?? "Dossier"}
                   </span>
-                  {selectedDossier.etiquettes?.length > 0 && (
-                    <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-medium text-gold-dark">
-                      {selectedDossier.etiquettes.join(", ")}
-                    </span>
-                  )}
+                  {selectedDossier.etiquettes?.map((tag) => (
+                    <span key={tag} className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-medium text-gold-dark">{tag}</span>
+                  ))}
                   {selectedDossier.formation_offer && (
                     <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gold-dark">
                       {getOfferLabel(selectedDossier.formation_offer)}
@@ -631,23 +634,80 @@ export function PedagogieShell({
                           </SortableContext>
                         </DndContext>
                       ) : (
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
-                          <SortableContext items={coursList.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                            <div className="space-y-1.5">
-                              {coursList.map((c) => (
-                                <SortableCoursRow
-                                  key={c.id}
-                                  cours={c}
-                                  dossierId={selectedDossier?.id ?? ""}
-                                  onSelect={() => setSelectedCours(c)}
-                                  onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                  onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
-                                  onPdfUploaded={refreshAll}
-                                />
-                              ))}
+                        <>
+                          {/* Bulk action bar */}
+                          {canEdit && selectedCoursIds.size > 0 && (
+                            <div className="mb-2 flex items-center gap-2 rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
+                              <span className="text-xs font-semibold text-gold-dark">{selectedCoursIds.size} cours sélectionné{selectedCoursIds.size > 1 ? "s" : ""}</span>
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedCoursIds(new Set(coursList.map((c) => c.id))); }}
+                                className="text-[10px] font-medium text-navy/60 hover:text-navy underline"
+                              >Tout sélectionner</button>
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedCoursIds(new Set()); }}
+                                className="text-[10px] font-medium text-navy/60 hover:text-navy underline"
+                              >Désélectionner</button>
+                              <div className="ml-auto relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowBulkPopover(!showBulkPopover)}
+                                  className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition"
+                                >Étiquettes</button>
+                                {showBulkPopover && (
+                                  <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+                                    <p className="mb-2 text-xs font-semibold text-gray-700">Attribuer des étiquettes</p>
+                                    <TagInput
+                                      value={bulkEtiquettes}
+                                      onChange={setBulkEtiquettes}
+                                      suggestions={[...new Set(coursList.flatMap((c) => c.etiquettes ?? []))].sort()}
+                                      placeholder="Taper puis Enter..."
+                                    />
+                                    <div className="mt-2 flex justify-end gap-2">
+                                      <button type="button" onClick={() => { setShowBulkPopover(false); setBulkEtiquettes([]); }} className="rounded-lg px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100">Annuler</button>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          await handleAction(() => bulkSetEtiquettes([...selectedCoursIds], bulkEtiquettes));
+                                          setShowBulkPopover(false);
+                                          setBulkEtiquettes([]);
+                                          setSelectedCoursIds(new Set());
+                                        }}
+                                        className="rounded-lg bg-navy px-3 py-1 text-xs font-semibold text-white hover:bg-navy/90"
+                                      >Appliquer</button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </SortableContext>
-                        </DndContext>
+                          )}
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
+                            <SortableContext items={coursList.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                              <div className="space-y-1.5">
+                                {coursList.map((c) => (
+                                  <SortableCoursRow
+                                    key={c.id}
+                                    cours={c}
+                                    dossierId={selectedDossier?.id ?? ""}
+                                    selected={selectedCoursIds.has(c.id)}
+                                    onToggleSelect={canEdit ? () => {
+                                      setSelectedCoursIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                                        return next;
+                                      });
+                                    } : undefined}
+                                    onSelect={() => setSelectedCours(c)}
+                                    onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                    onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                    onPdfUploaded={refreshAll}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
+                        </>
                       )}
                     </div>
                   ) : null}
@@ -1597,9 +1657,11 @@ function DiplomaLogoMini() {
   );
 }
 
-function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfUploaded }: {
+function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect, onEdit, onDelete, onPdfUploaded }: {
   cours: Cours;
   dossierId: string;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onSelect?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -1663,9 +1725,17 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
       onDragLeave={() => setDragOver(false)}
       onDrop={handleFileDrop}
       className={`group flex items-center gap-3 rounded-xl border bg-white p-2.5 shadow-sm transition ${
-        dragOver ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200" : "border-gray-100 hover:border-gray-200 hover:shadow"
+        selected ? "border-gold/40 bg-gold/5 ring-1 ring-gold/20" : dragOver ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200" : "border-gray-100 hover:border-gray-200 hover:shadow"
       }`}
     >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={onToggleSelect}
+          className="h-3.5 w-3.5 flex-shrink-0 rounded border-gray-300 text-gold accent-gold cursor-pointer"
+        />
+      )}
       {(onEdit || onDelete) && (
         <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
@@ -1891,8 +1961,12 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
   const [color, setColor] = useState(initialData?.color ?? "#0e1e35");
   const [iconUrl, setIconUrl] = useState(initialData?.icon_url ?? "");
   const [visible, setVisible] = useState(initialData?.visible ?? true);
-  const [etiquette, setEtiquette] = useState((initialData?.etiquettes ?? []).join(", "));
+  const [etiquettes, setEtiquettes] = useState<string[]>(initialData?.etiquettes ?? []);
   const activeFormationOffers = formationOffers.filter((offer) => offer.enabled);
+  const etiquetteSuggestions = useMemo(
+    () => [...new Set(allDossiers.flatMap((d) => d.etiquettes ?? []))].sort(),
+    [allDossiers]
+  );
   const nameSuggestions = useMemo(
     () => getDossierSuggestions(dossierNamePresets, formationOffer, dossierType),
     [dossierNamePresets, formationOffer, dossierType]
@@ -1972,7 +2046,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
         color,
         icon_url: iconUrl,
         visible,
-        etiquettes: etiquette.trim() ? etiquette.split(",").map((s) => s.trim()).filter(Boolean) : [],
+        etiquettes,
       })}
       isPending={isPending}
     >
@@ -2072,8 +2146,8 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
       <FormField label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte..." className={inputCls} />
       </FormField>
-      <FormField label="Etiquette">
-        <input value={etiquette} onChange={(e) => setEtiquette(e.target.value)} placeholder="Ex: UE1, Tronc commun, Optionnel..." className={inputCls} />
+      <FormField label="Etiquettes">
+        <TagInput value={etiquettes} onChange={setEtiquettes} suggestions={etiquetteSuggestions} placeholder="Ex: UE1, Tronc commun..." />
       </FormField>
       <IconPicker value={iconUrl} onChange={setIconUrl} />
       <ColorPicker value={color} onChange={setColor} />
@@ -2206,7 +2280,7 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   const [pdfPath, setPdfPath] = useState(initialData?.pdf_path ?? "");
   const [nbPages, setNbPages] = useState(initialData?.nb_pages ?? 0);
   const [visible, setVisible] = useState(initialData?.visible ?? true);
-  const [etiquette, setEtiquette] = useState((initialData?.etiquettes ?? []).join(", "));
+  const [etiquettes, setEtiquettes] = useState<string[]>(initialData?.etiquettes ?? []);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
 
@@ -2225,15 +2299,15 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   };
 
   return (
-    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes: etiquette.trim() ? etiquette.split(",").map((s) => s.trim()).filter(Boolean) : [] })} isPending={isPending}>
+    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes })} isPending={isPending}>
       <FormField label="Nom du cours *">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Biochimie Structurale" required className={inputCls} />
       </FormField>
       <FormField label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte du cours..." className={inputCls} />
       </FormField>
-      <FormField label="Etiquette">
-        <input value={etiquette} onChange={(e) => setEtiquette(e.target.value)} placeholder="Ex: Chapitre 1, Introduction, Annales..." className={inputCls} />
+      <FormField label="Etiquettes">
+        <TagInput value={etiquettes} onChange={setEtiquettes} placeholder="Ex: Socle, Approfondissement..." />
       </FormField>
       <div>
         <label className="mb-1.5 block text-xs font-medium text-gray-700">Fiche PDF <span className="text-gray-400 font-normal">(optionnel)</span></label>

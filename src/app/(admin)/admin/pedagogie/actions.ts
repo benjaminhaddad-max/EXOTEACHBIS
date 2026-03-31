@@ -501,6 +501,17 @@ export async function updateCoursInDossier(
   return { success: true };
 }
 
+export async function bulkSetEtiquettes(coursIds: string[], etiquettes: string[]) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cours")
+    .update({ etiquettes, updated_at: new Date().toISOString() })
+    .in("id", coursIds);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function deleteCoursFromDossier(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("cours").delete().eq("id", id);

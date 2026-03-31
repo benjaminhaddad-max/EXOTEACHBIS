@@ -7,6 +7,7 @@ export type FormationOffer = string;
 export type DossierType =
   | "generic"
   | "offer"
+  | "sub_offer"
   | "university"
   | "semester"
   | "option"

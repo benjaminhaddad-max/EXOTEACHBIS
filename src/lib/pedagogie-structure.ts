@@ -70,6 +70,11 @@ export const DOSSIER_TYPE_META: Record<
     shortLabel: "Offre",
     description: "Racine business: PREPA PASS, LAS, LSPS, etc.",
   },
+  sub_offer: {
+    label: "Sous-offre",
+    shortLabel: "Sous-offre",
+    description: "Sous-niveau d'une offre (ex: LSPS1, LSPS2, LSPS3).",
+  },
   university: {
     label: "Université",
     shortLabel: "Université",
@@ -143,12 +148,14 @@ export function getAllowedChildTypes(
   switch (parent.dossier_type) {
     case "offer":
       if (["prepa_pass", "prepa_las", "prepa_lsps"].includes(parent.formation_offer ?? "")) {
-        return ["university"];
+        return ["sub_offer", "university", "subject", "module"];
       }
       if (parent.formation_offer === "premiere_elite") {
         return ["subject"];
       }
-      return ["period", "module", "subject"];
+      return ["sub_offer", "period", "module", "subject"];
+    case "sub_offer":
+      return ["university", "subject", "module", "period"];
     case "university":
       return ["semester", "option", "subject", "module"];
     case "semester":
