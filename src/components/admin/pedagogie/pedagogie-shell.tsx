@@ -59,6 +59,7 @@ type ModalState =
   | { type: "create_ressource"; dossierId: string; ressourceType: string }
   | { type: "edit_ressource"; ressource: Ressource }
   | { type: "create_cours"; dossierId: string }
+  | { type: "bulk_create_cours"; dossierId: string }
   | { type: "edit_cours"; cours: Cours }
   | null;
 
