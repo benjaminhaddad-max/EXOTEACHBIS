@@ -86,6 +86,7 @@ export interface Cours {
   version: number;
   nb_pages: number;
   etiquettes: string[];
+  linked_cours_id: string | null;
   order_index: number;
   visible: boolean;
   tags: string[];

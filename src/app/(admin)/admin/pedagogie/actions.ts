@@ -785,3 +785,158 @@ export async function updateQuestionCoursId(questionId: string, coursId: string 
   if (error) return { error: error.message };
   return { success: true };
 }
+
+// =============================================
+// CLONE DOSSIER TREE (avec cours liés)
+// =============================================
+
+export async function cloneDossierTree(sourceDossierId: string, targetParentId: string) {
+  const supabase = await createClient();
+
+  // 1. Fetch all dossiers recursively from source
+  const { data: allDossiers } = await supabase.from("dossiers").select("*");
+  if (!allDossiers) return { error: "Impossible de charger les dossiers" };
+
+  // Build subtree from source (BFS)
+  const subtreeDossiers: typeof allDossiers = [];
+  const queue = [sourceDossierId];
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    for (const d of allDossiers) {
+      if (d.parent_id === currentId) {
+        subtreeDossiers.push(d);
+        queue.push(d.id);
+      }
+    }
+  }
+
+  // 2. Fetch all cours in these dossiers
+  const dossierIds = subtreeDossiers.map((d) => d.id);
+  const { data: allCours } = await supabase
+    .from("cours")
+    .select("*")
+    .in("dossier_id", dossierIds.length > 0 ? dossierIds : ["__none__"]);
+
+  // 3. Clone dossiers with ID mapping
+  const idMap = new Map<string, string>(); // sourceId → newId
+  // Sort by depth (parents first) — use parent_id chain
+  const sorted = sortByDepth(subtreeDossiers, sourceDossierId);
+
+  for (const source of sorted) {
+    const newParentId = source.parent_id === sourceDossierId
+      ? targetParentId
+      : idMap.get(source.parent_id!) ?? targetParentId;
+
+    const { data: created, error } = await supabase
+      .from("dossiers")
+      .insert({
+        name: source.name,
+        description: source.description,
+        dossier_type: source.dossier_type,
+        formation_offer: source.formation_offer,
+        color: source.color,
+        icon_url: source.icon_url,
+        etiquettes: source.etiquettes ?? [],
+        order_index: source.order_index,
+        visible: source.visible,
+        parent_id: newParentId,
+      })
+      .select("id")
+      .single();
+
+    if (error || !created) continue;
+    idMap.set(source.id, created.id);
+  }
+
+  // 4. Clone cours with linked_cours_id
+  let coursCount = 0;
+  for (const source of allCours ?? []) {
+    const newDossierId = idMap.get(source.dossier_id);
+    if (!newDossierId) continue;
+
+    // Set linked_cours_id on source if not already set
+    const linkId = source.linked_cours_id ?? source.id;
+    if (!source.linked_cours_id) {
+      await supabase.from("cours").update({ linked_cours_id: linkId }).eq("id", source.id);
+    }
+
+    const { error } = await supabase.from("cours").insert({
+      dossier_id: newDossierId,
+      matiere_id: null,
+      name: source.name,
+      description: source.description,
+      pdf_url: source.pdf_url,
+      pdf_path: source.pdf_path,
+      nb_pages: source.nb_pages ?? 0,
+      etiquettes: source.etiquettes ?? [],
+      tags: source.tags ?? [],
+      order_index: source.order_index,
+      visible: source.visible,
+      version: 1,
+      linked_cours_id: linkId,
+    });
+    if (!error) coursCount++;
+  }
+
+  revalidatePath(PATH);
+  return { success: true, dossiersCreated: idMap.size, coursCreated: coursCount };
+}
+
+function sortByDepth(dossiers: any[], rootId: string): any[] {
+  const result: any[] = [];
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    for (const d of dossiers) {
+      if (d.parent_id === parentId) {
+        result.push(d);
+        queue.push(d.id);
+      }
+    }
+  }
+  return result;
+}
+
+// =============================================
+// UPDATE LINKED COURS (propager ou détacher)
+// =============================================
+
+export async function updateLinkedCours(
+  coursId: string,
+  data: Record<string, any>,
+  propagate: boolean
+) {
+  const supabase = await createClient();
+
+  if (propagate) {
+    // Get linked_cours_id
+    const { data: cours } = await supabase.from("cours").select("linked_cours_id").eq("id", coursId).single();
+    if (cours?.linked_cours_id) {
+      // Update all linked cours
+      const { error } = await supabase
+        .from("cours")
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq("linked_cours_id", cours.linked_cours_id);
+      if (error) return { error: error.message };
+    }
+  } else {
+    // Detach: remove linked_cours_id and update only this one
+    const { error } = await supabase
+      .from("cours")
+      .update({ ...data, linked_cours_id: null, updated_at: new Date().toISOString() })
+      .eq("id", coursId);
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function getLinkedCoursCount(linkedCoursId: string) {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("cours")
+    .select("id", { count: "exact", head: true })
+    .eq("linked_cours_id", linkedCoursId);
+  return count ?? 0;
+}

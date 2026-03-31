@@ -9,7 +9,7 @@ import {
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
   FolderPlus, Home, GripVertical, BookOpen, Layers, Sparkles,
-  Building2, Calendar, Clock, GraduationCap, ImagePlus, LayoutGrid,
+  Building2, Calendar, Clock, GraduationCap, ImagePlus, LayoutGrid, Link2,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -44,6 +44,7 @@ import {
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
+  cloneDossierTree, updateLinkedCours, getLinkedCoursCount,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -63,6 +64,8 @@ type ModalState =
   | { type: "bulk_create_cours"; dossierId: string }
   | { type: "bulk_create_dossiers"; parentId: string | null }
   | { type: "edit_cours"; cours: Cours }
+  | { type: "clone_proposal"; sourceDossier: Dossier; targetDossierId: string; offerLabel: string }
+  | { type: "linked_edit_confirm"; cours: Cours; data: any; linkedCount: number }
   | null;
 
 const COLORS = [
@@ -874,7 +877,41 @@ export function PedagogieShell({
               title={modal.parentId ? "Nouveau sous-dossier" : "Nouveau dossier"}
               allDossiers={allDossiers}
               parentDossier={modal.parentId ? allDossiers.find((d) => d.id === modal.parentId) ?? null : null}
-              onSubmit={(data) => handleAction(() => createDossier({ ...data, parent_id: modal.parentId }))}
+              onSubmit={(data) => {
+                const parentId = modal.parentId;
+                startTransition(async () => {
+                  const result = await createDossier({ ...data, parent_id: parentId });
+                  if (result.error) { showToast(result.error, "error"); return; }
+                  showToast("Sauvegardé", "success");
+                  setModal(null);
+                  await refreshAll();
+                  // Detect duplicate university for clone proposal
+                  if (data.dossier_type === "university" && data.name) {
+                    const refreshed = await getAllDossiers();
+                    const parentDoss = allDossiers.find((d) => d.id === parentId);
+                    const parentOffer = parentDoss ? inferOfferFromAncestors(parentDoss, allDossiers) : null;
+                    const newDossier = (refreshed.data as Dossier[]).find(
+                      (d) => d.name === data.name && d.parent_id === parentId && d.dossier_type === "university"
+                    );
+                    const duplicate = (refreshed.data as Dossier[]).find(
+                      (d) =>
+                        d.id !== newDossier?.id &&
+                        d.name.toLowerCase() === data.name.toLowerCase() &&
+                        d.dossier_type === "university" &&
+                        inferOfferFromAncestors(d, refreshed.data as Dossier[]) !== parentOffer
+                    );
+                    if (duplicate && newDossier) {
+                      const dupOffer = inferOfferFromAncestors(duplicate, refreshed.data as Dossier[]);
+                      setModal({
+                        type: "clone_proposal",
+                        sourceDossier: duplicate,
+                        targetDossierId: newDossier.id,
+                        offerLabel: getOfferLabel(dupOffer ?? ""),
+                      });
+                    }
+                  }
+                });
+              }}
               onClose={() => setModal(null)}
               isPending={isPending}
               formationOffers={formationOffers}
@@ -950,10 +987,109 @@ export function PedagogieShell({
               title="Modifier le cours"
               dossierId={modal.cours.dossier_id ?? ""}
               initialData={modal.cours}
-              onSubmit={(data) => handleAction(() => updateCoursInDossier(modal.cours.id, data))}
+              onSubmit={(data) => {
+                const cours = modal.cours;
+                if (cours.linked_cours_id) {
+                  // Has linked courses → ask before saving
+                  startTransition(async () => {
+                    const count = await getLinkedCoursCount(cours.linked_cours_id!);
+                    if (count > 1) {
+                      setModal({ type: "linked_edit_confirm", cours, data, linkedCount: count });
+                    } else {
+                      await handleAction(() => updateCoursInDossier(cours.id, data));
+                    }
+                  });
+                } else {
+                  handleAction(() => updateCoursInDossier(cours.id, data));
+                }
+              }}
               onClose={() => setModal(null)}
               isPending={isPending}
             />
+          )}
+
+          {modal.type === "clone_proposal" && (
+            <div className="space-y-4 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gold/10">
+                <Link2 className="h-7 w-7 text-gold-dark" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-navy">Fac déjà existante</h3>
+                <p className="mt-2 text-sm text-gray-600">
+                  <strong>{modal.sourceDossier.name}</strong> existe déjà dans <strong>{modal.offerLabel}</strong>.
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Voulez-vous importer toute son arborescence (semestres, matières, cours) ?
+                </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Les cours seront liés — vous pourrez les modifier indépendamment ou propager les changements.
+                </p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => setModal(null)}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >Non merci</button>
+                <button
+                  onClick={() => {
+                    const source = modal.sourceDossier;
+                    const target = modal.targetDossierId;
+                    startTransition(async () => {
+                      const result = await cloneDossierTree(source.id, target);
+                      if (result.error) { showToast(result.error, "error"); }
+                      else { showToast(`Importé : ${result.dossiersCreated} dossiers, ${result.coursCreated} cours`, "success"); }
+                      setModal(null);
+                      await refreshAll();
+                    });
+                  }}
+                  disabled={isPending}
+                  className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy/90 disabled:opacity-50"
+                >{isPending ? "Import en cours..." : "Importer l'arborescence"}</button>
+              </div>
+            </div>
+          )}
+
+          {modal.type === "linked_edit_confirm" && (
+            <div className="space-y-4 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+                <Link2 className="h-7 w-7 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-navy">Cours lié</h3>
+                <p className="mt-2 text-sm text-gray-600">
+                  Ce cours est lié à <strong>{modal.linkedCount - 1} autre{modal.linkedCount > 2 ? "s" : ""} offre{modal.linkedCount > 2 ? "s" : ""}</strong>.
+                </p>
+                <p className="mt-1 text-sm text-gray-500">Appliquer les modifications partout ou seulement ici ?</p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => {
+                    const { cours, data } = modal;
+                    startTransition(async () => {
+                      await updateLinkedCours(cours.id, data, false);
+                      showToast("Modifié ici uniquement (détaché)", "success");
+                      setModal(null);
+                      await refreshAll();
+                    });
+                  }}
+                  disabled={isPending}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                >Juste ici</button>
+                <button
+                  onClick={() => {
+                    const { cours, data } = modal;
+                    startTransition(async () => {
+                      await updateLinkedCours(cours.id, data, true);
+                      showToast("Modifié partout", "success");
+                      setModal(null);
+                      await refreshAll();
+                    });
+                  }}
+                  disabled={isPending}
+                  className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy/90 disabled:opacity-50"
+                >Appliquer partout</button>
+              </div>
+            </div>
           )}
         </ModalOverlay>
       )}
@@ -1840,7 +1976,10 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           className="min-w-0 flex-1 text-left flex items-center gap-2"
           title="Double-clic pour renommer"
         >
-          <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
+          <p className="truncate text-sm font-semibold text-gray-800">
+            {cours.linked_cours_id && <Link2 className="mr-1 inline h-3 w-3 text-blue-400" />}
+            {cours.name}
+          </p>
           {cours.etiquettes?.map((tag) => (
             <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
           ))}
