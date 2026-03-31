@@ -447,7 +447,7 @@ export function PedagogieShell({
       {/* ── RIGHT: Contenu du dossier sélectionné ou cours détail ── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {selectedCours ? (
-          <CoursDetailPanel cours={selectedCours} onBack={() => setSelectedCours(null)} />
+          <CoursDetailPanel cours={selectedCours} onBack={() => setSelectedCours(null)} onCoursUpdated={refreshAll} />
         ) : selectedDossier ? (
           <>
             {/* Header */}

@@ -21,6 +21,7 @@ import {
   getSeriesForCours, getQuestionsForCours,
   getSerieQuestions, getBankQuestionsForSerie,
   getCoursForMatiere, updateQuestionCoursId, getSiblingCours,
+  updateCoursInDossier,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { createDeck, deleteDeck, createCard, deleteCard } from "@/app/(admin)/admin/flashcards/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -1112,9 +1113,11 @@ function ChapterFlashcards({ coursId, coursName }: { coursId: string; coursName:
 export function CoursDetailPanel({
   cours,
   onBack,
+  onCoursUpdated,
 }: {
   cours: Cours;
   onBack: () => void;
+  onCoursUpdated?: () => void;
 }) {
   const [series, setSeries] = useState<SerieFull[]>([]);
   const [questions, setQuestions] = useState<QuestionFull[]>([]);
@@ -1234,6 +1237,25 @@ export function CoursDetailPanel({
               {questions.length} question{questions.length !== 1 ? "s" : ""} · {series.length} série{series.length !== 1 ? "s" : ""}
             </p>
           </div>
+          {cours.pdf_url && (
+            <button
+              onClick={async () => {
+                if (!confirm("Supprimer la fiche PDF de ce cours ?")) return;
+                await updateCoursInDossier(cours.id, {
+                  name: cours.name,
+                  visible: cours.visible,
+                  pdf_url: "",
+                  pdf_path: "",
+                  nb_pages: 0,
+                });
+                onCoursUpdated?.();
+                onBack();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg transition-colors"
+            >
+              <Trash2 size={12} /> Supprimer PDF
+            </button>
+          )}
           <button onClick={() => setShowAI(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 text-[#C9A84C] text-xs font-semibold rounded-lg transition-colors">
             <Sparkles size={12} /> IA
