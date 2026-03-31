@@ -2772,9 +2772,9 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           className="min-w-0 flex-1 text-left flex items-center gap-2"
           title="Double-clic pour renommer"
         >
-          <p className="truncate text-sm font-semibold text-gray-800">
-            {cours.linked_cours_id && <Link2 className="mr-1 inline h-3 w-3 text-blue-400" />}
-            {cours.name}
+          <p className="truncate text-sm font-semibold text-gray-800 flex items-center gap-1">
+            {cours.linked_cours_id && <LinkedCoursIndicator cours={cours} />}
+            <span className="truncate">{cours.name}</span>
           </p>
           {cours.etiquettes?.map((tag) => (
             <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
@@ -3464,6 +3464,68 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
 // =============================================
 // ADD CATEGORY BUTTON
 // =============================================
+
+function LinkedCoursIndicator({ cours }: { cours: Cours }) {
+  const [show, setShow] = useState(false);
+  const [linkedOffers, setLinkedOffers] = useState<string[] | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (show) { setShow(false); return; }
+    if (!linkedOffers && cours.linked_cours_id) {
+      // Fetch linked courses to find their offer names
+      try {
+        const res = await fetch(`/api/linked-cours-offers?linkedId=${cours.linked_cours_id}&currentId=${cours.id}`);
+        const data = await res.json();
+        setLinkedOffers(data.offers ?? []);
+      } catch {
+        setLinkedOffers([]);
+      }
+    }
+    setShow(true);
+  };
+
+  useEffect(() => {
+    if (!show) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [show]);
+
+  return (
+    <div className="relative inline-flex" ref={ref}>
+      <button
+        onClick={handleClick}
+        className="flex-shrink-0 rounded-full bg-blue-50 p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-600 transition"
+        title="Cours lié — cliquer pour voir les détails"
+      >
+        <Link2 className="h-3 w-3" />
+      </button>
+      {show && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+          <p className="text-xs font-semibold text-gray-800 mb-1.5">🔗 Cours lié</p>
+          {linkedOffers === null ? (
+            <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+          ) : linkedOffers.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-[11px] text-gray-500">Également présent dans :</p>
+              {linkedOffers.map((offer) => (
+                <p key={offer} className="text-[11px] font-medium text-blue-700">• {offer}</p>
+              ))}
+              <p className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-100">Les modifications se répercutent automatiquement.</p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-400">Aucune autre offre liée</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AddCoursInlineButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
