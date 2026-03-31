@@ -473,6 +473,11 @@ export function PedagogieShell({
                   <span className="rounded-full bg-navy/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-navy/70">
                     {DOSSIER_TYPE_META[selectedDossier.dossier_type]?.shortLabel ?? "Dossier"}
                   </span>
+                  {selectedDossier.etiquette && (
+                    <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-medium text-gold-dark">
+                      {selectedDossier.etiquette}
+                    </span>
+                  )}
                   {selectedDossier.formation_offer && (
                     <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gold-dark">
                       {getOfferLabel(selectedDossier.formation_offer)}
@@ -1091,13 +1096,19 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
     let ok = 0;
     const errors: string[] = [];
 
+    // Fetch existing cours to start order_index after the last one
+    const existing = await getCourssByDossier(dossierId);
+    const startIndex = ("data" in existing && existing.data.length > 0)
+      ? Math.max(...existing.data.map((c: any) => c.order_index ?? 0)) + 1
+      : 0;
+
     for (let i = 0; i < courseNames.length; i++) {
       try {
         const res = await createCoursInDossier({
           dossier_id: dossierId,
           name: courseNames[i],
           visible: true,
-          order_index: i,
+          order_index: startIndex + i,
         });
         if ("error" in res) errors.push(`${courseNames[i]}: ${res.error}`);
         else ok++;
@@ -1399,8 +1410,15 @@ function SortableTreeNode({
               <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
                 {node.name}
               </span>
-              <span className="mt-1 inline-flex rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
-                {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+              <span className="mt-1 inline-flex items-center gap-1.5">
+                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                  {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+                </span>
+                {node.etiquette && (
+                  <span className="rounded-full bg-gold/10 px-1.5 py-0.5 text-[9px] font-medium text-gold-dark">
+                    {node.etiquette}
+                  </span>
+                )}
               </span>
             </span>
             {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
@@ -1494,6 +1512,11 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
         <span className="relative rounded-full px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-widest" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
+        {dossier.etiquette && (
+          <span className="relative mt-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium text-white/70">
+            {dossier.etiquette}
+          </span>
+        )}
       </button>
 
       {(onEdit || onDelete) && (
@@ -1846,6 +1869,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
   const [color, setColor] = useState(initialData?.color ?? "#0e1e35");
   const [iconUrl, setIconUrl] = useState(initialData?.icon_url ?? "");
   const [visible, setVisible] = useState(initialData?.visible ?? true);
+  const [etiquette, setEtiquette] = useState(initialData?.etiquette ?? "");
   const activeFormationOffers = formationOffers.filter((offer) => offer.enabled);
   const nameSuggestions = useMemo(
     () => getDossierSuggestions(dossierNamePresets, formationOffer, dossierType),
@@ -1926,6 +1950,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
         color,
         icon_url: iconUrl,
         visible,
+        etiquette: etiquette.trim() || null,
       })}
       isPending={isPending}
     >
@@ -2024,6 +2049,9 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
       )}
       <FormField label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte..." className={inputCls} />
+      </FormField>
+      <FormField label="Etiquette">
+        <input value={etiquette} onChange={(e) => setEtiquette(e.target.value)} placeholder="Ex: UE1, Tronc commun, Optionnel..." className={inputCls} />
       </FormField>
       <IconPicker value={iconUrl} onChange={setIconUrl} />
       <ColorPicker value={color} onChange={setColor} />
