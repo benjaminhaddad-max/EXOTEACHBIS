@@ -1286,6 +1286,7 @@ export function PedagogieShell({
           {modal.type === "bulk_create_cours" && (
             <BulkCreateCoursModal
               dossierId={modal.dossierId}
+              existingSections={coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined}
               onCreated={() => { setModal(null); refreshAll(); }}
               onClose={() => setModal(null)}
             />
@@ -1778,8 +1779,9 @@ const CONTENT_TYPES = [
   { type: "lien",  label: "Lien",  icon: <LinkIcon className="h-8 w-8" />,      color: "text-green-500",bg: "hover:bg-green-50 hover:border-green-200" },
 ];
 
-function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
+function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose }: {
   dossierId: string;
+  existingSections?: string[];
   onCreated: () => void;
   onClose: () => void;
 }) {
@@ -1787,6 +1789,7 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
   const [creating, setCreating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<{ ok: number; errors: string[] } | null>(null);
+  const [selectedSection, setSelectedSection] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const courseNames = input
@@ -1836,6 +1839,7 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
 
   const handleCreate = async () => {
     if (courseNames.length === 0 || creating) return;
+    if (existingSections && !selectedSection) return;
     setCreating(true);
     let ok = 0;
     const errors: string[] = [];
@@ -1853,6 +1857,7 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
           name: courseNames[i],
           visible: true,
           order_index: startIndex + i,
+          ...(selectedSection ? { etiquettes: [selectedSection] } : {}),
         });
         if ("error" in res) errors.push(`${courseNames[i]}: ${res.error}`);
         else ok++;
@@ -1933,13 +1938,29 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
           </div>
         )}
 
+        {existingSections && (
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-700">Section *</label>
+            <select
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">— Choisir une section —</option>
+              {existingSections.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
             Fermer
           </button>
           <button
             onClick={handleCreate}
-            disabled={courseNames.length === 0 || creating}
+            disabled={courseNames.length === 0 || creating || (!!existingSections && !selectedSection)}
             className="flex-1 py-2 rounded-xl bg-[#0e1e35] text-white text-sm font-semibold hover:bg-[#1a2d4a] disabled:opacity-40 transition-colors"
           >
             {creating ? "Création..." : `Créer ${courseNames.length} cours`}
