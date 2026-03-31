@@ -586,7 +586,8 @@ export function PedagogieShell({
                         d.id !== selectedDossier.id &&
                         d.name.toLowerCase() === selectedDossier.name.toLowerCase() &&
                         d.dossier_type === "university" &&
-                        inferOfferFromAncestors(d, allDossiers) !== thisOffer
+                        inferOfferFromAncestors(d, allDossiers) !== thisOffer &&
+                        allDossiers.some((child) => child.parent_id === d.id)
                     );
                     if (!dup) return undefined;
                     const dupOffer = inferOfferFromAncestors(dup, allDossiers);
@@ -918,12 +919,14 @@ export function PedagogieShell({
                     const newDossier = (refreshed.data as Dossier[]).find(
                       (d) => d.name === data.name && d.parent_id === parentId && d.dossier_type === "university"
                     );
-                    const duplicate = (refreshed.data as Dossier[]).find(
+                    const refreshedDossiers = refreshed.data as Dossier[];
+                    const duplicate = refreshedDossiers.find(
                       (d) =>
                         d.id !== newDossier?.id &&
                         d.name.toLowerCase() === data.name.toLowerCase() &&
                         d.dossier_type === "university" &&
-                        inferOfferFromAncestors(d, refreshed.data as Dossier[]) !== parentOffer
+                        inferOfferFromAncestors(d, refreshedDossiers) !== parentOffer &&
+                        refreshedDossiers.some((child) => child.parent_id === d.id)
                     );
                     if (duplicate && newDossier) {
                       const dupOffer = inferOfferFromAncestors(duplicate, refreshed.data as Dossier[]);
