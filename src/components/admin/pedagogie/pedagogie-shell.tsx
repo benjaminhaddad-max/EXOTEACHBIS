@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useMemo, useRef } from "react";
+import { useState, useTransition, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -9,7 +9,7 @@ import {
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
   FolderPlus, Home, GripVertical, BookOpen, Layers, Sparkles,
-  Building2, Calendar, Clock, GraduationCap,
+  Building2, Calendar, Clock, GraduationCap, ImagePlus,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -808,12 +808,51 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
 }) {
   const [input, setInput] = useState("");
   const [creating, setCreating] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<{ ok: number; errors: string[] } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const courseNames = input
     .split("\n")
     .map((line) => line.replace(/^\s*[-•●◦▪▸▹►]\s*/, "").replace(/^\d+[.)]\s*/, "").trim())
     .filter((name) => name.length > 1);
+
+  const handleImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setAnalyzing(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      const res = await fetch("/api/extract-cours-from-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mediaType: file.type }),
+      });
+      const data = await res.json();
+      if (data.courses && data.courses.length > 0) {
+        setInput((prev) => {
+          const existing = prev.trim();
+          const newNames = data.courses.join("\n");
+          return existing ? `${existing}\n${newNames}` : newNames;
+        });
+      } else if (data.error) {
+        alert(`Erreur: ${data.error}`);
+      } else {
+        alert("Aucun nom de cours trouvé dans l'image.");
+      }
+    } catch {
+      alert("Erreur lors de l'analyse de l'image.");
+    } finally {
+      setAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleImageFile(file);
+  }, [handleImageFile]);
 
   const handleCreate = async () => {
     if (courseNames.length === 0 || creating) return;
@@ -848,6 +887,44 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
         <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
       </div>
       <div className="p-5 space-y-4">
+        {/* Screenshot upload zone */}
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          onClick={() => !analyzing && fileInputRef.current?.click()}
+          className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-4 cursor-pointer transition-colors ${
+            analyzing
+              ? "border-blue-300 bg-blue-50"
+              : "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/50"
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageFile(file);
+            }}
+          />
+          {analyzing ? (
+            <>
+              <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+              <p className="text-xs text-blue-600 font-medium">Analyse du screenshot en cours...</p>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-6 w-6 text-gray-400" />
+              <p className="text-xs text-gray-500 text-center">
+                <span className="font-medium text-gray-700">Importer un screenshot</span>
+                <br />
+                Glissez une image ou cliquez pour extraire les noms de cours
+              </p>
+            </>
+          )}
+        </div>
+
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Noms des cours (un par ligne)</label>
           <textarea
@@ -865,8 +942,8 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
 
         {result && (
           <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
-            <p className="font-semibold">✅ {result.ok} cours créé{result.ok > 1 ? "s" : ""}</p>
-            {result.errors.map((e, i) => <p key={i} className="text-red-600 mt-1">❌ {e}</p>)}
+            <p className="font-semibold">{result.ok} cours créé{result.ok > 1 ? "s" : ""}</p>
+            {result.errors.map((e, i) => <p key={i} className="text-red-600 mt-1">{e}</p>)}
           </div>
         )}
 
