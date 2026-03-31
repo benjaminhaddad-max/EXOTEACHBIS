@@ -2993,27 +2993,88 @@ function RattacherCoursModal({
 }) {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  const byId = useMemo(() => new Map(allDossiers.map((d) => [d.id, d])), [allDossiers]);
+
+  // Walk up from source dossier to find university and offer ancestors
+  const { sourceUniversityName, sourceOfferId } = useMemo(() => {
+    let uniName: string | null = null;
+    let offerId: string | null = null;
+    let cur: string | null = sourceDossierId;
+    while (cur) {
+      const d = byId.get(cur);
+      if (!d) break;
+      if (d.dossier_type === "university" && !uniName) uniName = d.name;
+      if (d.dossier_type === "offer") { offerId = d.id; break; }
+      cur = d.parent_id;
+    }
+    return { sourceUniversityName: uniName, sourceOfferId: offerId };
+  }, [sourceDossierId, byId]);
+
+  // Collect IDs of all dossiers that are descendants of a matching university (same name, different offer)
+  const relevantIds = useMemo(() => {
+    if (!sourceUniversityName) return null; // no university found → show everything
+    const relevant = new Set<string>();
+    // Find all university dossiers with the same name in OTHER offers
+    const matchingUnis = allDossiers.filter(
+      (d) => d.dossier_type === "university" && d.name === sourceUniversityName
+    );
+    // For each matching uni, check it's under a different offer
+    for (const uni of matchingUnis) {
+      let offerId: string | null = null;
+      let cur: string | null = uni.parent_id;
+      while (cur) {
+        const p = byId.get(cur);
+        if (!p) break;
+        if (p.dossier_type === "offer") { offerId = p.id; break; }
+        cur = p.parent_id;
+      }
+      if (offerId === sourceOfferId) continue; // skip same offer
+      // Add this uni and all its descendants
+      const queue = [uni.id];
+      while (queue.length > 0) {
+        const id = queue.shift()!;
+        relevant.add(id);
+        for (const child of allDossiers) {
+          if (child.parent_id === id) queue.push(child.id);
+        }
+      }
+      // Add ancestors up to root (offer included) for tree display
+      let anc: string | null = uni.parent_id;
+      while (anc) {
+        relevant.add(anc);
+        anc = byId.get(anc)?.parent_id ?? null;
+      }
+    }
+    return relevant.size > 0 ? relevant : null;
+  }, [allDossiers, byId, sourceUniversityName, sourceOfferId]);
+
+  const tree = useMemo(() => buildTree(allDossiers, null), [allDossiers]);
+
+  // Auto-expand all relevant non-subject nodes
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
-    // Auto-expand offer-level dossiers
     const set = new Set<string>();
-    for (const d of allDossiers) {
-      if (d.dossier_type === "offer") set.add(d.id);
+    if (relevantIds) {
+      for (const id of relevantIds) {
+        const d = byId.get(id);
+        if (d && d.dossier_type !== "subject") set.add(id);
+      }
+    } else {
+      for (const d of allDossiers) {
+        if (d.dossier_type === "offer") set.add(d.id);
+      }
     }
     return set;
   });
 
-  const tree = useMemo(() => buildTree(allDossiers, null), [allDossiers]);
-
   const searchLower = search.toLowerCase().trim();
 
-  // Find all dossier IDs that match search or have a descendant that matches
-  const matchingIds = useMemo(() => {
+  // Search filter: find nodes matching search + their ancestors
+  const searchMatchIds = useMemo(() => {
     if (!searchLower) return null;
     const matches = new Set<string>();
-    const byId = new Map(allDossiers.map((d) => [d.id, d]));
     for (const d of allDossiers) {
       if (d.name.toLowerCase().includes(searchLower)) {
-        // Add this node and all ancestors
         let cur: string | null = d.id;
         while (cur) {
           matches.add(cur);
@@ -3022,7 +3083,7 @@ function RattacherCoursModal({
       }
     }
     return matches;
-  }, [allDossiers, searchLower]);
+  }, [allDossiers, byId, searchLower]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -3037,8 +3098,10 @@ function RattacherCoursModal({
     : null;
 
   const renderNode = (node: DossierNode, depth: number): React.ReactNode => {
-    // If searching and this node isn't in the match set, skip it
-    if (matchingIds && !matchingIds.has(node.id)) return null;
+    // Filter by university context
+    if (relevantIds && !relevantIds.has(node.id)) return null;
+    // Filter by search
+    if (searchMatchIds && !searchMatchIds.has(node.id)) return null;
 
     const isSubject = node.dossier_type === "subject";
     const isSource = node.id === sourceDossierId;
@@ -3046,6 +3109,13 @@ function RattacherCoursModal({
     const hasChildren = node.children.length > 0;
     const isExpanded = expandedIds.has(node.id);
     const meta = DOSSIER_TYPE_META[node.dossier_type as keyof typeof DOSSIER_TYPE_META];
+
+    // Check if any children would render (for showing chevron)
+    const hasVisibleChildren = hasChildren && node.children.some((c) => {
+      if (relevantIds && !relevantIds.has(c.id)) return false;
+      if (searchMatchIds && !searchMatchIds.has(c.id)) return false;
+      return true;
+    });
 
     return (
       <div key={node.id}>
@@ -3064,12 +3134,12 @@ function RattacherCoursModal({
             if (isSource) return;
             if (isSubject) {
               setSelectedTarget(node.id);
-            } else if (hasChildren) {
+            } else if (hasVisibleChildren) {
               toggleExpand(node.id);
             }
           }}
         >
-          {hasChildren ? (
+          {hasVisibleChildren ? (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
@@ -3101,7 +3171,7 @@ function RattacherCoursModal({
             <span className="flex-shrink-0 text-[10px] text-gray-400">(actuel)</span>
           )}
         </div>
-        {hasChildren && isExpanded && (
+        {hasVisibleChildren && isExpanded && (
           <div>
             {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
@@ -3117,9 +3187,16 @@ function RattacherCoursModal({
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
             <Link2 className="h-4 w-4 text-purple-600" />
           </div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            Rattacher {coursIds.length} cours à une autre matière
-          </h3>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">
+              Rattacher {coursIds.length} cours
+            </h3>
+            {sourceUniversityName && (
+              <p className="text-xs text-gray-500">
+                {sourceUniversityName} dans les autres offres
+              </p>
+            )}
+          </div>
         </div>
         <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
           <X className="h-4 w-4 text-gray-500" />
@@ -3141,6 +3218,11 @@ function RattacherCoursModal({
 
       <div className="flex-1 overflow-y-auto px-3 py-3" style={{ maxHeight: "50vh" }}>
         {tree.map((node) => renderNode(node, 0))}
+        {relevantIds === null && !sourceUniversityName && (
+          <p className="px-2 py-4 text-center text-xs text-gray-400">
+            Aucune université parente détectée — tous les dossiers sont affichés.
+          </p>
+        )}
       </div>
 
       {pathLabel && (
