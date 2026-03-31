@@ -145,6 +145,21 @@ export function PedagogieShell({
     .sort((a, b) => a.order_index - b.order_index);
   const ressources = selectedId ? (ressourcesMap[selectedId] ?? []) : [];
   const coursList = selectedId ? (coursMap[selectedId] ?? []) : [];
+  const coursGroups = useMemo(() => {
+    const hasAnyEtiquette = coursList.some((c) => c.etiquettes?.length > 0);
+    if (!hasAnyEtiquette) return null; // pas de groupement si aucun cours n'a d'etiquette
+    const groups: { label: string; cours: Cours[] }[] = [];
+    const seen = new Map<string, number>();
+    for (const c of coursList) {
+      const label = c.etiquettes?.[0] ?? "";
+      if (!seen.has(label)) {
+        seen.set(label, groups.length);
+        groups.push({ label, cours: [] });
+      }
+      groups[seen.get(label)!].cours.push(c);
+    }
+    return groups;
+  }, [coursList]);
   const contentCreationLabel = getContentCreationLabel(selectedDossier?.dossier_type);
 
   // Breadcrumb
@@ -619,18 +634,44 @@ export function PedagogieShell({
                       {coursViewMode === "cards" ? (
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
                           <SortableContext items={coursList.map((c) => c.id)} strategy={rectSortingStrategy}>
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                              {coursList.map((c) => (
-                                <SortableCoursCard
-                                  key={c.id}
-                                  cours={c}
-                                  matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
-                                  onSelect={() => setSelectedCours(c)}
-                                  onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                  onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
-                                />
-                              ))}
-                            </div>
+                            {coursGroups ? (
+                              coursGroups.map((group) => (
+                                <div key={group.label || "__none__"}>
+                                  <p className="mt-3 mb-2 first:mt-0 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                                    <span className="h-px flex-1 bg-navy/10" />
+                                    {group.label ? (
+                                      <span className="rounded-full bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold-dark">{group.label}</span>
+                                    ) : "Autres"}
+                                    <span className="h-px flex-1 bg-navy/10" />
+                                  </p>
+                                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                    {group.cours.map((c) => (
+                                      <SortableCoursCard
+                                        key={c.id}
+                                        cours={c}
+                                        matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
+                                        onSelect={() => setSelectedCours(c)}
+                                        onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                        onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                {coursList.map((c) => (
+                                  <SortableCoursCard
+                                    key={c.id}
+                                    cours={c}
+                                    matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
+                                    onSelect={() => setSelectedCours(c)}
+                                    onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                    onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </SortableContext>
                         </DndContext>
                       ) : (
@@ -685,25 +726,65 @@ export function PedagogieShell({
                           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
                             <SortableContext items={coursList.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                               <div className="space-y-1.5">
-                                {coursList.map((c) => (
-                                  <SortableCoursRow
-                                    key={c.id}
-                                    cours={c}
-                                    dossierId={selectedDossier?.id ?? ""}
-                                    selected={selectedCoursIds.has(c.id)}
-                                    onToggleSelect={canEdit ? () => {
-                                      setSelectedCoursIds((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
-                                        return next;
-                                      });
-                                    } : undefined}
-                                    onSelect={() => setSelectedCours(c)}
-                                    onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                    onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
-                                    onPdfUploaded={refreshAll}
-                                  />
-                                ))}
+                                {coursGroups ? (
+                                  coursGroups.map((group) => (
+                                    <div key={group.label || "__none__"}>
+                                      {group.label ? (
+                                        <p className="mt-3 mb-1.5 first:mt-0 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                                          <span className="h-px flex-1 bg-navy/10" />
+                                          <span className="rounded-full bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold-dark">{group.label}</span>
+                                          <span className="h-px flex-1 bg-navy/10" />
+                                        </p>
+                                      ) : (
+                                        <p className="mt-3 mb-1.5 first:mt-0 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                                          <span className="h-px flex-1 bg-navy/10" />
+                                          Autres
+                                          <span className="h-px flex-1 bg-navy/10" />
+                                        </p>
+                                      )}
+                                      {group.cours.map((c) => (
+                                        <div key={c.id} className="mb-1.5">
+                                          <SortableCoursRow
+                                            cours={c}
+                                            dossierId={selectedDossier?.id ?? ""}
+                                            selected={selectedCoursIds.has(c.id)}
+                                            onToggleSelect={canEdit ? () => {
+                                              setSelectedCoursIds((prev) => {
+                                                const next = new Set(prev);
+                                                if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                                                return next;
+                                              });
+                                            } : undefined}
+                                            onSelect={() => setSelectedCours(c)}
+                                            onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                            onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                            onPdfUploaded={refreshAll}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))
+                                ) : (
+                                  coursList.map((c) => (
+                                    <SortableCoursRow
+                                      key={c.id}
+                                      cours={c}
+                                      dossierId={selectedDossier?.id ?? ""}
+                                      selected={selectedCoursIds.has(c.id)}
+                                      onToggleSelect={canEdit ? () => {
+                                        setSelectedCoursIds((prev) => {
+                                          const next = new Set(prev);
+                                          if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                                          return next;
+                                        });
+                                      } : undefined}
+                                      onSelect={() => setSelectedCours(c)}
+                                      onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                      onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                      onPdfUploaded={refreshAll}
+                                    />
+                                  ))
+                                )}
                               </div>
                             </SortableContext>
                           </DndContext>

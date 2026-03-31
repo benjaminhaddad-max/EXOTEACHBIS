@@ -192,6 +192,19 @@ export function EleveCoursShell({
     return coursList.filter((cours) => cours.name.toLowerCase().includes(normalizedSearch));
   }, [coursList, normalizedSearch]);
 
+  const coursGroupsEleve = useMemo(() => {
+    const hasAny = filteredCoursList.some((c) => (c as any).etiquettes?.length > 0);
+    if (!hasAny) return null;
+    const groups: { label: string; cours: typeof filteredCoursList }[] = [];
+    const seen = new Map<string, number>();
+    for (const c of filteredCoursList) {
+      const label = (c as any).etiquettes?.[0] ?? "";
+      if (!seen.has(label)) { seen.set(label, groups.length); groups.push({ label, cours: [] }); }
+      groups[seen.get(label)!].cours.push(c);
+    }
+    return groups;
+  }, [filteredCoursList]);
+
   const filteredFlashcardDecks = useMemo(() => {
     if (!normalizedSearch) return flashcardDecks;
     return flashcardDecks.filter((deck) => {
@@ -423,45 +436,98 @@ export function EleveCoursShell({
 
                 {activeTab === "cours" && filteredCoursList.length > 0 && (
                   <div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {filteredCoursList.map((c) => (
-                        <div
-                          key={c.id}
-                          onClick={() => router.push(`/cours/${c.id}`)}
-                          className="group cursor-pointer rounded-[24px] border border-[#DCE7F3] bg-white p-4 text-left shadow-[0_10px_30px_rgba(18,49,77,0.05)] transition hover:-translate-y-1 hover:border-[#4FABDB]/45 hover:shadow-[0_18px_40px_rgba(18,49,77,0.10)]"
-                        >
-                          <div className="mb-3 flex items-center justify-between">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#4FABDB]/10 text-[#4FABDB]">
-                              <BookOpen size={18} />
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const mat = allMatieres.find((m) => m.id === c.matiere_id) ?? allMatieres.find((m) => m.dossier_id === c.dossier_id);
-                                setQaDrawer({
-                                  contextType: "cours",
-                                  dossierId: c.dossier_id ?? undefined,
-                                  matiereId: mat?.id ?? c.matiere_id ?? undefined,
-                                  coursId: c.id,
-                                  contextLabel: c.name,
-                                });
-                              }}
-                              title="Poser une question"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#B0BACA] transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB]"
-                            >
-                              <MessageCircleQuestion size={16} />
-                            </button>
-                          </div>
-                          <h3 className="text-[15px] font-semibold leading-snug text-[#0e1e35]">{c.name}</h3>
-                          <div className="mt-3 flex items-center justify-end">
-                            <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#4FABDB] transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-[#4FABDB]/40 group-hover:bg-[#4FABDB] group-hover:text-white group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.25)] group-active:scale-[0.97]">
-                              <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Ouvrir</span>
-                              <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
-                            </span>
+                    {coursGroupsEleve ? (
+                      coursGroupsEleve.map((group) => (
+                        <div key={group.label || "__none__"}>
+                          <p className="mt-5 mb-3 first:mt-0 flex items-center gap-3 text-xs font-bold uppercase tracking-widest text-[#8A98A9]">
+                            <span className="h-px flex-1 bg-[#E2E8F0]" />
+                            {group.label ? (
+                              <span className="rounded-full bg-[#4FABDB]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#4FABDB]">{group.label}</span>
+                            ) : "Autres"}
+                            <span className="h-px flex-1 bg-[#E2E8F0]" />
+                          </p>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {group.cours.map((c) => (
+                              <div
+                                key={c.id}
+                                onClick={() => router.push(`/cours/${c.id}`)}
+                                className="group cursor-pointer rounded-[24px] border border-[#DCE7F3] bg-white p-4 text-left shadow-[0_10px_30px_rgba(18,49,77,0.05)] transition hover:-translate-y-1 hover:border-[#4FABDB]/45 hover:shadow-[0_18px_40px_rgba(18,49,77,0.10)]"
+                              >
+                                <div className="mb-3 flex items-center justify-between">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#4FABDB]/10 text-[#4FABDB]">
+                                    <BookOpen size={18} />
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const mat = allMatieres.find((m) => m.id === c.matiere_id) ?? allMatieres.find((m) => m.dossier_id === c.dossier_id);
+                                      setQaDrawer({
+                                        contextType: "cours",
+                                        dossierId: c.dossier_id ?? undefined,
+                                        matiereId: mat?.id ?? c.matiere_id ?? undefined,
+                                        coursId: c.id,
+                                        contextLabel: c.name,
+                                      });
+                                    }}
+                                    title="Poser une question"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[#B0BACA] transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB]"
+                                  >
+                                    <MessageCircleQuestion size={16} />
+                                  </button>
+                                </div>
+                                <h3 className="text-[15px] font-semibold leading-snug text-[#0e1e35]">{c.name}</h3>
+                                <div className="mt-3 flex items-center justify-end">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#4FABDB] transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-[#4FABDB]/40 group-hover:bg-[#4FABDB] group-hover:text-white group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.25)] group-active:scale-[0.97]">
+                                    <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Ouvrir</span>
+                                    <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      ))
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {filteredCoursList.map((c) => (
+                          <div
+                            key={c.id}
+                            onClick={() => router.push(`/cours/${c.id}`)}
+                            className="group cursor-pointer rounded-[24px] border border-[#DCE7F3] bg-white p-4 text-left shadow-[0_10px_30px_rgba(18,49,77,0.05)] transition hover:-translate-y-1 hover:border-[#4FABDB]/45 hover:shadow-[0_18px_40px_rgba(18,49,77,0.10)]"
+                          >
+                            <div className="mb-3 flex items-center justify-between">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#4FABDB]/10 text-[#4FABDB]">
+                                <BookOpen size={18} />
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const mat = allMatieres.find((m) => m.id === c.matiere_id) ?? allMatieres.find((m) => m.dossier_id === c.dossier_id);
+                                  setQaDrawer({
+                                    contextType: "cours",
+                                    dossierId: c.dossier_id ?? undefined,
+                                    matiereId: mat?.id ?? c.matiere_id ?? undefined,
+                                    coursId: c.id,
+                                    contextLabel: c.name,
+                                  });
+                                }}
+                                title="Poser une question"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#B0BACA] transition-all duration-200 hover:bg-[#4FABDB]/10 hover:text-[#4FABDB]"
+                              >
+                                <MessageCircleQuestion size={16} />
+                              </button>
+                            </div>
+                            <h3 className="text-[15px] font-semibold leading-snug text-[#0e1e35]">{c.name}</h3>
+                            <div className="mt-3 flex items-center justify-end">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-[#D7E8F6] bg-[#F6FBFF] px-3 py-1 text-xs font-semibold text-[#4FABDB] transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-[#4FABDB]/40 group-hover:bg-[#4FABDB] group-hover:text-white group-hover:shadow-[0_8px_18px_rgba(79,171,219,0.25)] group-active:scale-[0.97]">
+                                <span className="transition-transform duration-200 group-hover:-translate-x-0.5">Ouvrir</span>
+                                <ArrowRight size={12} className="transition-transform duration-200 group-hover:translate-x-1" />
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
