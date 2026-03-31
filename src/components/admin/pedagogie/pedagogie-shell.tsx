@@ -1043,6 +1043,7 @@ export function PedagogieShell({
             <CoursForm
               title={contentCreationLabel}
               dossierId={modal.dossierId}
+              existingSections={coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined}
               onSubmit={(data) => handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId }))}
               onClose={() => setModal(null)}
               isPending={isPending}
@@ -2725,10 +2726,11 @@ function RessourceForm({ title, dossierId, defaultType = "pdf", initialData, onS
 // COURS FORM
 // =============================================
 
-function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending }: {
+function CoursForm({ title, dossierId, initialData, existingSections, onSubmit, onClose, isPending }: {
   title: string;
   dossierId: string;
   initialData?: Partial<Cours>;
+  existingSections?: string[];
   onSubmit: (data: any) => void;
   onClose: () => void;
   isPending: boolean;
@@ -2758,15 +2760,32 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   };
 
   return (
-    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes })} isPending={isPending}>
+    <FormShell title={title} onClose={onClose} onSubmit={() => {
+      if (existingSections && etiquettes.length === 0) return;
+      onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes });
+    }} isPending={isPending}>
       <FormField label="Nom du cours *">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Biochimie Structurale" required className={inputCls} />
       </FormField>
       <FormField label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte du cours..." className={inputCls} />
       </FormField>
-      <FormField label="Etiquettes">
-        <TagInput value={etiquettes} onChange={setEtiquettes} placeholder="Ex: Socle, Approfondissement..." />
+      <FormField label={existingSections ? "Section *" : "Etiquettes"}>
+        {existingSections ? (
+          <select
+            value={etiquettes[0] ?? ""}
+            onChange={(e) => setEtiquettes(e.target.value ? [e.target.value] : [])}
+            className={inputCls}
+            required
+          >
+            <option value="">— Choisir une section —</option>
+            {existingSections.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        ) : (
+          <TagInput value={etiquettes} onChange={setEtiquettes} placeholder="Ex: Socle, Approfondissement..." />
+        )}
       </FormField>
       <div>
         <label className="mb-1.5 block text-xs font-medium text-gray-700">Fiche PDF <span className="text-gray-400 font-normal">(optionnel)</span></label>
