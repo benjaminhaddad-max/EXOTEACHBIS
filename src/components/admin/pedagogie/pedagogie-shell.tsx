@@ -1574,11 +1574,11 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const hasPdf = !!cours.pdf_url;
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || file.type !== "application/pdf") return;
+  const doUpload = async (file: File) => {
+    if (file.type !== "application/pdf") return;
     setUploading(true);
     try {
       const result = await uploadPdf(file, `cours/${dossierId}`);
@@ -1601,8 +1601,25 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
     }
   };
 
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) doUpload(file);
+  };
+
   return (
-    <div ref={setNodeRef} style={style} className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm transition hover:border-gray-200 hover:shadow">
+    <div
+      ref={setNodeRef}
+      style={style}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleFileDrop}
+      className={`group flex items-center gap-3 rounded-xl border bg-white p-2.5 shadow-sm transition ${
+        dragOver ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200" : "border-gray-100 hover:border-gray-200 hover:shadow"
+      }`}
+    >
       {(onEdit || onDelete) && (
         <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
@@ -1613,13 +1630,17 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
       </button>
 
       {/* PDF status / upload */}
-      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleUpload} />
+      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }} />
       {uploading ? (
         <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-blue-500" />
       ) : hasPdf ? (
-        <span className="flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600 hover:bg-green-100 transition"
+          title="Remplacer le PDF"
+        >
           <Check className="h-3 w-3" /> PDF
-        </span>
+        </button>
       ) : (
         <button
           onClick={() => fileRef.current?.click()}
