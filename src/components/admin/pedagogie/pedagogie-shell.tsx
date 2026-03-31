@@ -44,7 +44,7 @@ import {
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
-  cloneDossierTree, updateLinkedCours, getLinkedCoursCount,
+  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -380,6 +380,29 @@ export function PedagogieShell({
     });
   };
 
+  const [linkedDeleteChoice, setLinkedDeleteChoice] = useState<{ cours: Cours; count: number } | null>(null);
+
+  const handleDeleteCours = (c: Cours) => {
+    if (c.linked_cours_id) {
+      startTransition(async () => {
+        const count = await getLinkedCoursCount(c.linked_cours_id!);
+        if (count > 1) {
+          setLinkedDeleteChoice({ cours: c, count });
+        } else {
+          setConfirmDelete({
+            label: `le cours "${c.name}"`,
+            onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)),
+          });
+        }
+      });
+    } else {
+      setConfirmDelete({
+        label: `le cours "${c.name}"`,
+        onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)),
+      });
+    }
+  };
+
   return (
     <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
@@ -671,6 +694,12 @@ export function PedagogieShell({
                                     coursIds={group.cours.map((c) => c.id)}
                                     canEdit={canEdit}
                                     onRenamed={refreshAll}
+                                    onDeleteSection={canEdit && group.label ? (mode) => {
+                                      const ids = group.cours.map((c) => c.id);
+                                      if (mode === "delete_cours") {
+                                        setConfirmDelete({ label: `les ${ids.length} cours de "${group.label}"`, onConfirm: () => handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; }) });
+                                      } else { handleAction(() => bulkSetEtiquettes(ids, [])); }
+                                    } : undefined}
                                   />
                                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                                     {group.cours.map((c) => (
@@ -680,7 +709,7 @@ export function PedagogieShell({
                                         matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
                                         onSelect={() => setSelectedCours(c)}
                                         onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                        onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                        onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
                                       />
                                     ))}
                                   </div>
@@ -695,7 +724,7 @@ export function PedagogieShell({
                                     matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
                                     onSelect={() => setSelectedCours(c)}
                                     onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                    onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                    onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
                                   />
                                 ))}
                               </div>
@@ -762,6 +791,12 @@ export function PedagogieShell({
                                         coursIds={group.cours.map((c) => c.id)}
                                         canEdit={canEdit}
                                         onRenamed={refreshAll}
+                                        onDeleteSection={canEdit && group.label ? (mode) => {
+                                          const ids = group.cours.map((c) => c.id);
+                                          if (mode === "delete_cours") {
+                                            setConfirmDelete({ label: `les ${ids.length} cours de "${group.label}"`, onConfirm: () => handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; }) });
+                                          } else { handleAction(() => bulkSetEtiquettes(ids, [])); }
+                                        } : undefined}
                                       />
                                       {group.cours.map((c) => (
                                         <div key={c.id} className="mb-1.5">
@@ -778,7 +813,7 @@ export function PedagogieShell({
                                             } : undefined}
                                             onSelect={() => setSelectedCours(c)}
                                             onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                            onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                            onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
                                             onPdfUploaded={refreshAll}
                                           />
                                         </div>
@@ -801,7 +836,7 @@ export function PedagogieShell({
                                       } : undefined}
                                       onSelect={() => setSelectedCours(c)}
                                       onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                      onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                      onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
                                       onPdfUploaded={refreshAll}
                                     />
                                   ))
@@ -1155,6 +1190,50 @@ export function PedagogieShell({
                 className="flex-1 rounded-xl bg-red-500 py-2 text-sm font-semibold text-white hover:bg-red-600 transition"
               >
                 Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkedDeleteChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setLinkedDeleteChoice(null)}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-3 px-6 pt-6 pb-4 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+                <Link2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Cours lié</h3>
+              <p className="text-sm text-gray-500">
+                <span className="font-medium text-gray-700">{linkedDeleteChoice.cours.name}</span> est lié à <span className="font-medium text-gray-700">{linkedDeleteChoice.count - 1} autre{linkedDeleteChoice.count > 2 ? "s" : ""} offre{linkedDeleteChoice.count > 2 ? "s" : ""}</span>.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-gray-100 px-6 py-4">
+              <button
+                onClick={() => {
+                  const c = linkedDeleteChoice.cours;
+                  setLinkedDeleteChoice(null);
+                  handleAction(() => deleteCoursFromDossier(c.id));
+                }}
+                className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+              >
+                Supprimer juste ici
+              </button>
+              <button
+                onClick={() => {
+                  const c = linkedDeleteChoice.cours;
+                  setLinkedDeleteChoice(null);
+                  handleAction(() => deleteLinkedCours(c.linked_cours_id!));
+                }}
+                className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
+              >
+                Supprimer dans toutes les offres ({linkedDeleteChoice.count})
+              </button>
+              <button
+                onClick={() => setLinkedDeleteChoice(null)}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition"
+              >
+                Annuler
               </button>
             </div>
           </div>
@@ -2652,15 +2731,18 @@ function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
 // ETIQUETTE SECTION HEADER
 // =============================================
 
-function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed }: {
+function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteSection }: {
   label: string;
   coursIds: string[];
   canEdit: boolean;
   onRenamed: () => void;
+  onDeleteSection?: (mode: "remove_tag" | "delete_cours") => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(label);
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [saving, startSaving] = useTransition();
 
   const commitRename = () => {
@@ -2673,8 +2755,17 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed }: {
     });
   };
 
+  useEffect(() => {
+    if (!showDeleteMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowDeleteMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showDeleteMenu]);
+
   return (
-    <div className="mt-5 mb-2 first:mt-0">
+    <div className="mt-5 mb-2 first:mt-0 group/section">
       <div className="flex items-center gap-3">
         <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-navy/15 to-navy/15" />
         {editing ? (
@@ -2688,14 +2779,44 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed }: {
             autoFocus
           />
         ) : label ? (
-          <button
-            onClick={canEdit ? () => { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); } : undefined}
-            className={`rounded-lg px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${canEdit ? "cursor-pointer hover:bg-gold/15" : ""}`}
-            style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.15) 100%)", color: "#8B7030", border: "1px solid rgba(201,168,76,0.2)" }}
-            title={canEdit ? "Double-clic pour renommer" : undefined}
-          >
-            {saving ? "..." : label}
-          </button>
+          <div className="relative flex items-center gap-1">
+            <button
+              onClick={canEdit ? () => { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); } : undefined}
+              className={`rounded-lg px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${canEdit ? "cursor-pointer hover:bg-gold/15" : ""}`}
+              style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.15) 100%)", color: "#8B7030", border: "1px solid rgba(201,168,76,0.2)" }}
+            >
+              {saving ? "..." : label}
+              <span className="ml-1.5 text-[9px] font-normal opacity-60">({coursIds.length})</span>
+            </button>
+            {canEdit && onDeleteSection && (
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setShowDeleteMenu(!showDeleteMenu)}
+                  className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-red-50 hover:text-red-500 transition"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+                {showDeleteMenu && (
+                  <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                    <button
+                      onClick={() => { setShowDeleteMenu(false); onDeleteSection("remove_tag"); }}
+                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 transition"
+                    >
+                      <span className="font-semibold">Retirer l'étiquette</span>
+                      <span className="block text-[10px] text-gray-400">Les cours restent, sans catégorie</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowDeleteMenu(false); onDeleteSection("delete_cours"); }}
+                      className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 transition"
+                    >
+                      <span className="font-semibold">Supprimer les {coursIds.length} cours</span>
+                      <span className="block text-[10px] text-red-400">Suppression définitive</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <span className="px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-navy/30">Autres</span>
         )}

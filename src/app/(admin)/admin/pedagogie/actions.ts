@@ -543,6 +543,14 @@ export async function deleteCoursFromDossier(id: string) {
   return { success: true };
 }
 
+export async function deleteLinkedCours(linkedCoursId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("cours").delete().eq("linked_cours_id", linkedCoursId);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function reorderCours(updates: { id: string; order_index: number }[]) {
   const supabase = await createClient();
   await Promise.all(
