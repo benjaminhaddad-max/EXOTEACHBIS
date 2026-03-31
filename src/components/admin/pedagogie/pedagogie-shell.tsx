@@ -9,7 +9,7 @@ import {
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
   FolderPlus, Home, GripVertical, BookOpen, Layers, Sparkles,
-  Building2, Calendar, Clock, GraduationCap, ImagePlus,
+  Building2, Calendar, Clock, GraduationCap, ImagePlus, LayoutGrid,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -117,6 +117,10 @@ export function PedagogieShell({
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null);
+  const [coursViewMode, setCoursViewMode] = useState<"cards" | "list">(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("pedagogie-cours-view") as "cards" | "list") || "cards";
+    return "cards";
+  });
   const [treeWidth, setTreeWidth] = useState(360);
   const [isResizingTree, setIsResizingTree] = useState(false);
   const treeWidthRef = useRef(treeWidth);
@@ -563,34 +567,71 @@ export function PedagogieShell({
                     </div>
                   )}
 
-                  {/* Cours — drag & drop grille */}
+                  {/* Cours — drag & drop grille ou liste */}
                   {loadingRessources ? (
                     <div className="flex justify-center py-8">
                       <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
                     </div>
                   ) : coursList.length > 0 ? (
                     <div>
-                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                      <div className="mb-2 flex items-center gap-2">
                         <span className="h-px flex-1 bg-navy/10" />
-                        Cours
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Cours</span>
                         <span className="h-px flex-1 bg-navy/10" />
-                      </p>
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
-                        <SortableContext items={coursList.map((c) => c.id)} strategy={rectSortingStrategy}>
-                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                            {coursList.map((c) => (
-                              <SortableCoursCard
-                                key={c.id}
-                                cours={c}
-                                matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
-                                onSelect={() => setSelectedCours(c)}
-                                onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
-                              />
-                            ))}
-                          </div>
-                        </SortableContext>
-                      </DndContext>
+                        <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5">
+                          <button
+                            onClick={() => { setCoursViewMode("cards"); localStorage.setItem("pedagogie-cours-view", "cards"); }}
+                            className={`rounded-md p-1 transition ${coursViewMode === "cards" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            title="Vue cartes"
+                          >
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { setCoursViewMode("list"); localStorage.setItem("pedagogie-cours-view", "list"); }}
+                            className={`rounded-md p-1 transition ${coursViewMode === "list" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            title="Vue liste"
+                          >
+                            <LayoutList className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {coursViewMode === "cards" ? (
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
+                          <SortableContext items={coursList.map((c) => c.id)} strategy={rectSortingStrategy}>
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {coursList.map((c) => (
+                                <SortableCoursCard
+                                  key={c.id}
+                                  cours={c}
+                                  matiereLabel={selectedDossier?.dossier_type === "subject" ? "Chapitre" : selectedDossier?.name ?? ""}
+                                  onSelect={() => setSelectedCours(c)}
+                                  onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                  onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                />
+                              ))}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                      ) : (
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
+                          <SortableContext items={coursList.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                            <div className="space-y-1.5">
+                              {coursList.map((c) => (
+                                <SortableCoursRow
+                                  key={c.id}
+                                  cours={c}
+                                  dossierId={selectedDossier?.id ?? ""}
+                                  onSelect={() => setSelectedCours(c)}
+                                  onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                  onDelete={canEdit ? () => setConfirmDelete({ label: `le cours "${c.name}"`, onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)) }) : undefined}
+                                  onPdfUploaded={refreshAll}
+                                />
+                              ))}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                      )}
                     </div>
                   ) : null}
 
@@ -1518,6 +1559,83 @@ function DiplomaLogoMini() {
       alt="Diploma Santé"
       style={{ width: 78, height: "auto" }}
     />
+  );
+}
+
+function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfUploaded }: {
+  cours: Cours;
+  dossierId: string;
+  onSelect?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onPdfUploaded?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cours.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const hasPdf = !!cours.pdf_url;
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || file.type !== "application/pdf") return;
+    setUploading(true);
+    try {
+      const result = await uploadPdf(file, `cours/${dossierId}`);
+      if ("error" in result) {
+        alert(result.error);
+      } else {
+        await updateCoursInDossier(cours.id, {
+          name: cours.name,
+          visible: cours.visible,
+          pdf_url: result.url,
+          pdf_path: result.path,
+        });
+        onPdfUploaded?.();
+      }
+    } catch {
+      alert("Erreur lors de l'upload.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm transition hover:border-gray-200 hover:shadow">
+      {(onEdit || onDelete) && (
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+          <GripVertical className="h-4 w-4" />
+        </span>
+      )}
+      <button onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
+      </button>
+
+      {/* PDF status / upload */}
+      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleUpload} />
+      {uploading ? (
+        <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-blue-500" />
+      ) : hasPdf ? (
+        <span className="flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+          <Check className="h-3 w-3" /> PDF
+        </span>
+      ) : (
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex items-center gap-1 rounded-md bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600 hover:bg-orange-100 transition"
+        >
+          <Upload className="h-3 w-3" /> PDF
+        </button>
+      )}
+
+      {(onEdit || onDelete) && (
+        <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+        </div>
+      )}
+    </div>
   );
 }
 
