@@ -518,6 +518,53 @@ export async function getOffersForUniversity(universityName: string) {
   return offers;
 }
 
+/** Add a university dossier to an offer (creates a new university dossier under that offer) */
+export async function addUniversityToOffer(universityName: string, offerDossierId: string, sourceLinkRules: any) {
+  "use server";
+  const supabase = await createClient();
+  // Check the offer exists
+  const { data: offer } = await supabase.from("dossiers").select("id, dossier_type").eq("id", offerDossierId).single();
+  if (!offer || offer.dossier_type !== "offer") return { error: "Offre introuvable." };
+  // Check university doesn't already exist under this offer
+  const { data: existing } = await supabase
+    .from("dossiers")
+    .select("id")
+    .eq("parent_id", offerDossierId)
+    .eq("name", universityName)
+    .eq("dossier_type", "university")
+    .limit(1);
+  if (existing && existing.length > 0) return { error: "Cette université existe déjà dans cette offre." };
+  // Create it
+  const { error } = await supabase.from("dossiers").insert({
+    parent_id: offerDossierId,
+    name: universityName,
+    dossier_type: "university",
+    color: "#0e1e35",
+    etiquettes: [],
+    order_index: 99,
+    visible: true,
+    link_rules: sourceLinkRules ?? null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+/** Remove a university dossier from an offer (deletes the university dossier) */
+export async function removeUniversityFromOffer(universityDossierId: string) {
+  "use server";
+  const supabase = await createClient();
+  const { data: uni } = await supabase.from("dossiers").select("id, dossier_type").eq("id", universityDossierId).single();
+  if (!uni || uni.dossier_type !== "university") return { error: "Université introuvable." };
+  // Check if it has children
+  const { count } = await supabase.from("dossiers").select("id", { count: "exact", head: true }).eq("parent_id", universityDossierId);
+  if (count && count > 0) return { error: "Impossible de retirer cette université : elle contient des sous-dossiers." };
+  const { error } = await supabase.from("dossiers").delete().eq("id", universityDossierId);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function createCoursInDossier(data: {
   dossier_id: string;
   name: string;

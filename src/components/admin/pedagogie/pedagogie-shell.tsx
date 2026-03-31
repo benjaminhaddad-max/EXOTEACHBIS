@@ -46,6 +46,7 @@ import {
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
   updateUniversityLinkRules, getUniversityLinkRulesForDossier, getOffersForUniversity,
+  addUniversityToOffer, removeUniversityFromOffer,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -220,6 +221,14 @@ export function PedagogieShell({
 
   const linkRulesSections = universityLinkRules ? Object.keys(universityLinkRules.sections) : null;
 
+  // Compute section badges for child dossiers (subjects) based on their courses' etiquettes
+  const getSectionBadges = useCallback((dossierId: string) => {
+    const cours = coursMap[dossierId];
+    if (!cours || cours.length === 0) return undefined;
+    const sections = [...new Set(cours.map((c) => c.etiquettes?.[0]).filter(Boolean))] as string[];
+    return sections.length > 0 ? sections : undefined;
+  }, [coursMap]);
+
   // If link_rules exist, they define the mandatory sections. Otherwise fall back to coursGroups.
   const availableCourseSections = linkRulesSections
     ?? (coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined);
@@ -372,6 +381,17 @@ export function PedagogieShell({
       return [...prev, ...cours.filter((c) => !existingIds.has(c.id))];
     });
     setLoadingRessources(false);
+
+    // Preload courses for child subjects (for section badges)
+    const childSubjects = allDossiers.filter((d) => d.parent_id === dossier.id && d.dossier_type === "subject");
+    if (childSubjects.length > 0) {
+      Promise.all(childSubjects.map(async (sub) => {
+        if (coursMap[sub.id]) return; // already loaded
+        const result = await getCourssByDossier(sub.id);
+        const subCours = ((result.data ?? []) as Cours[]).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+        setCoursMap((prev) => ({ ...prev, [sub.id]: subCours }));
+      }));
+    }
   };
 
   const refreshAll = async () => {
@@ -875,6 +895,7 @@ export function PedagogieShell({
                                         <SortableSubDossierRow
                                           dossier={child}
                                           selected={selectedDossierIds.has(child.id)}
+                                          sectionBadges={child.dossier_type === "subject" ? getSectionBadges(child.id) : undefined}
                                           onToggleSelect={canEdit ? () => {
                                             setSelectedDossierIds((prev) => {
                                               const next = new Set(prev);
@@ -896,6 +917,7 @@ export function PedagogieShell({
                                     key={child.id}
                                     dossier={child}
                                     selected={selectedDossierIds.has(child.id)}
+                                    sectionBadges={child.dossier_type === "subject" ? getSectionBadges(child.id) : undefined}
                                     onToggleSelect={canEdit ? () => {
                                       setSelectedDossierIds((prev) => {
                                         const next = new Set(prev);
@@ -2324,9 +2346,10 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
   );
 }
 
-function SortableSubDossierRow({ dossier, selected, onToggleSelect, onClick, onEdit, onDelete }: {
+function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelect, onClick, onEdit, onDelete }: {
   dossier: Dossier;
   selected?: boolean;
+  sectionBadges?: string[];
   onToggleSelect?: () => void;
   onClick: () => void;
   onEdit?: () => void;
@@ -2365,6 +2388,9 @@ function SortableSubDossierRow({ dossier, selected, onToggleSelect, onClick, onE
             : <CardIcon className="h-4 w-4" style={{ color: cs.iconColor }} />}
         </div>
         <p className="truncate text-sm font-semibold text-gray-800">{dossier.name}</p>
+        {sectionBadges && sectionBadges.length > 0 && sectionBadges.map((badge) => (
+          <span key={badge} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{badge}</span>
+        ))}
         <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
@@ -3555,6 +3581,7 @@ function GlobalSettingsPanel({ allDossiers, onSaved, onClose }: {
           {selectedUni ? (
             <UniversitySettingsTab
               university={selectedUni}
+              allDossiers={allDossiers}
               onSaved={onSaved}
             />
           ) : (
@@ -3572,7 +3599,7 @@ function GlobalSettingsPanel({ allDossiers, onSaved, onClose }: {
 // UNIVERSITY SETTINGS TAB
 // =============================================
 
-function UniversitySettingsTab({ university, onSaved }: { university: Dossier; onSaved: () => void }) {
+function UniversitySettingsTab({ university, allDossiers, onSaved }: { university: Dossier; allDossiers: Dossier[]; onSaved: () => void }) {
   const [linkRules, setLinkRules] = useState<{ sections: Record<string, string[]> }>(
     (university.link_rules as any) ?? { sections: {} }
   );
@@ -3580,6 +3607,43 @@ function UniversitySettingsTab({ university, onSaved }: { university: Dossier; o
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
+  const [togglingOffer, setTogglingOffer] = useState<string | null>(null);
+
+  // All offers in the system
+  const allOffers = useMemo(() => allDossiers.filter((d) => d.dossier_type === "offer"), [allDossiers]);
+
+  // Which offers currently contain this university (by name)
+  const offersWithThisUni = useMemo(() => {
+    const unis = allDossiers.filter((d) => d.dossier_type === "university" && d.name === university.name);
+    const result: { offerId: string; offerName: string; uniDossierId: string }[] = [];
+    for (const u of unis) {
+      let cur: string | null = u.parent_id;
+      while (cur) {
+        const p = allDossiers.find((d) => d.id === cur);
+        if (!p) break;
+        if (p.dossier_type === "offer") {
+          result.push({ offerId: p.id, offerName: p.name, uniDossierId: u.id });
+          break;
+        }
+        cur = p.parent_id;
+      }
+    }
+    return result;
+  }, [allDossiers, university.name]);
+
+  const handleToggleOfferForUni = async (offer: Dossier) => {
+    setTogglingOffer(offer.id);
+    const existing = offersWithThisUni.find((o) => o.offerId === offer.id);
+    if (existing) {
+      const result = await removeUniversityFromOffer(existing.uniDossierId);
+      if (result.error) alert(result.error);
+    } else {
+      const result = await addUniversityToOffer(university.name, offer.id, university.link_rules);
+      if (result.error) alert(result.error);
+    }
+    setTogglingOffer(null);
+    onSaved();
+  };
 
   useEffect(() => {
     getOffersForUniversity(university.name).then((offers) => {
@@ -3647,9 +3711,35 @@ function UniversitySettingsTab({ university, onSaved }: { university: Dossier; o
         </p>
       </div>
 
+      {/* Offres rattachées */}
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
+        <h4 className="text-sm font-bold text-gray-800 mb-3">Offres rattachées</h4>
+        <div className="space-y-1.5">
+          {allOffers.map((offer) => {
+            const isAttached = offersWithThisUni.some((o) => o.offerId === offer.id);
+            const isToggling = togglingOffer === offer.id;
+            return (
+              <label key={offer.id} className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isAttached}
+                  disabled={isToggling}
+                  onChange={() => handleToggleOfferForUni(offer)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 accent-purple-600"
+                />
+                <span className={`text-sm ${isAttached ? "text-gray-800 font-medium" : "text-gray-500"}`}>
+                  {offer.name}
+                </span>
+                {isToggling && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
       {availableOffers.length === 0 ? (
         <div className="rounded-xl bg-gray-50 p-6 text-center text-sm text-gray-500">
-          Cette université n&apos;apparaît dans aucune offre. Créez d&apos;abord la même université dans d&apos;autres offres.
+          Cette université n&apos;apparaît dans aucune offre.
         </div>
       ) : (
         <div className="space-y-4">
