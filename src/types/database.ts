@@ -84,6 +84,7 @@ export interface Cours {
   pdf_url: string | null;
   version: number;
   nb_pages: number;
+  etiquette: string | null;
   order_index: number;
   visible: boolean;
   tags: string[];

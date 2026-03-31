@@ -448,6 +448,7 @@ export async function createCoursInDossier(data: {
   nb_pages?: number;
   order_index?: number;
   visible: boolean;
+  etiquette?: string | null;
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("cours").insert({
@@ -458,6 +459,7 @@ export async function createCoursInDossier(data: {
     pdf_url: data.pdf_url || null,
     pdf_path: data.pdf_path || null,
     nb_pages: data.nb_pages ?? 0,
+    etiquette: data.etiquette || null,
     tags: [],
     order_index: data.order_index ?? 0,
     visible: data.visible,
@@ -477,6 +479,7 @@ export async function updateCoursInDossier(
     pdf_path?: string;
     nb_pages?: number;
     visible: boolean;
+    etiquette?: string | null;
   }
 ) {
   const supabase = await createClient();
@@ -488,6 +491,7 @@ export async function updateCoursInDossier(
       pdf_url: data.pdf_url || null,
       pdf_path: data.pdf_path || null,
       nb_pages: data.nb_pages ?? 0,
+      etiquette: data.etiquette ?? null,
       visible: data.visible,
       updated_at: new Date().toISOString(),
     })

@@ -2195,6 +2195,7 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   const [pdfPath, setPdfPath] = useState(initialData?.pdf_path ?? "");
   const [nbPages, setNbPages] = useState(initialData?.nb_pages ?? 0);
   const [visible, setVisible] = useState(initialData?.visible ?? true);
+  const [etiquette, setEtiquette] = useState(initialData?.etiquette ?? "");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
 
@@ -2213,12 +2214,15 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   };
 
   return (
-    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible })} isPending={isPending}>
+    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquette: etiquette.trim() || null })} isPending={isPending}>
       <FormField label="Nom du cours *">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Biochimie Structurale" required className={inputCls} />
       </FormField>
       <FormField label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description courte du cours..." className={inputCls} />
+      </FormField>
+      <FormField label="Etiquette">
+        <input value={etiquette} onChange={(e) => setEtiquette(e.target.value)} placeholder="Ex: Chapitre 1, Introduction, Annales..." className={inputCls} />
       </FormField>
       <div>
         <label className="mb-1.5 block text-xs font-medium text-gray-700">Fiche PDF <span className="text-gray-400 font-normal">(optionnel)</span></label>
