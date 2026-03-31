@@ -1573,9 +1573,20 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cours.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const fileRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(cours.name);
   const hasPdf = !!cours.pdf_url;
+
+  const commitRename = async () => {
+    const trimmed = editName.trim();
+    setEditing(false);
+    if (!trimmed || trimmed === cours.name) { setEditName(cours.name); return; }
+    await updateCoursInDossier(cours.id, { name: trimmed, visible: cours.visible });
+    onPdfUploaded?.(); // reuse callback to refresh
+  };
 
   const doUpload = async (file: File) => {
     if (file.type !== "application/pdf") return;
@@ -1625,9 +1636,26 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
           <GripVertical className="h-4 w-4" />
         </span>
       )}
-      <button onClick={onSelect} className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
-      </button>
+      {editing ? (
+        <input
+          ref={nameInputRef}
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditName(cours.name); } }}
+          className="min-w-0 flex-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-sm font-semibold text-gray-800 outline-none ring-2 ring-blue-200"
+          autoFocus
+        />
+      ) : (
+        <button
+          onClick={onSelect}
+          onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
+          className="min-w-0 flex-1 text-left"
+          title="Double-clic pour renommer"
+        >
+          <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
+        </button>
+      )}
 
       {/* PDF status / upload */}
       <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }} />
