@@ -429,7 +429,8 @@ export async function getCourssByDossier(dossierId: string) {
     .from("cours")
     .select("*")
     .eq("dossier_id", dossierId)
-    .order("order_index");
+    .order("order_index")
+    .order("created_at");
   if (error) return { error: error.message, data: [] };
   return { data: data ?? [] };
 }
