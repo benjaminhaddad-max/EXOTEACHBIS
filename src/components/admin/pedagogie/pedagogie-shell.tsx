@@ -777,6 +777,14 @@ export function PedagogieShell({
                                     />
                                   ))
                                 )}
+                                {canEdit && coursList.length > 0 && (
+                                  <AddCategoryButton
+                                    onAdd={(name) => {
+                                      setBulkEtiquettes([name]);
+                                      setShowBulkPopover(true);
+                                    }}
+                                  />
+                                )}
                               </div>
                             </SortableContext>
                           </DndContext>
@@ -2401,6 +2409,60 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
       </FormField>
       <VisibleToggle value={visible} onChange={setVisible} />
     </FormShell>
+  );
+}
+
+// =============================================
+// ADD CATEGORY BUTTON
+// =============================================
+
+function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const submit = () => {
+    const trimmed = name.trim();
+    if (trimmed) {
+      onAdd(trimmed);
+      setName("");
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      {open ? (
+        <div className="flex items-center gap-2">
+          <div className="h-[2px] flex-1 bg-navy/10" />
+          <input
+            ref={inputRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") { setOpen(false); setName(""); } }}
+            onBlur={() => { if (!name.trim()) setOpen(false); }}
+            placeholder="Nom de la catégorie..."
+            className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-gold-dark outline-none ring-2 ring-gold/20 w-44 text-center"
+            autoFocus
+          />
+          <button onClick={submit} className="rounded-lg bg-navy px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-navy/90 transition">OK</button>
+          <button onClick={() => { setOpen(false); setName(""); }} className="text-[10px] text-gray-400 hover:text-gray-600">Annuler</button>
+          <div className="h-[2px] flex-1 bg-navy/10" />
+        </div>
+      ) : (
+        <button
+          onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
+          className="flex w-full items-center gap-2 group"
+        >
+          <div className="h-px flex-1 bg-navy/5 group-hover:bg-navy/10 transition" />
+          <span className="flex items-center gap-1.5 rounded-lg border border-dashed border-navy/15 px-3 py-1 text-[10px] font-semibold text-navy/30 transition group-hover:border-gold/30 group-hover:bg-gold/5 group-hover:text-gold-dark">
+            <Plus className="h-3 w-3" />
+            Ajouter une catégorie
+          </span>
+          <div className="h-px flex-1 bg-navy/5 group-hover:bg-navy/10 transition" />
+        </button>
+      )}
+    </div>
   );
 }
 
