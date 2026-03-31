@@ -701,12 +701,7 @@ export function PedagogieShell({
                                       if (mode === "remove_tag") {
                                         handleAction(() => bulkSetEtiquettes(ids, []));
                                       } else {
-                                        const hasLinked = coursInGroup.some((c) => c.linked_cours_id);
-                                        if (hasLinked) {
-                                          setSectionDeleteChoice({ label: group.label, cours: coursInGroup });
-                                        } else {
-                                          setConfirmDelete({ label: `les ${ids.length} cours de "${group.label}"`, onConfirm: () => handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; }) });
-                                        }
+                                        setSectionDeleteChoice({ label: group.label, cours: coursInGroup });
                                       }
                                     } : undefined}
                                   />
