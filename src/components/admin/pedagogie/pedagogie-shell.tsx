@@ -730,7 +730,7 @@ export function PedagogieShell({
           {modal.type === "bulk_create_cours" && (
             <BulkCreateCoursModal
               dossierId={modal.dossierId}
-              onCreated={() => { setModal(null); refreshTree(); }}
+              onCreated={() => { setModal(null); refreshAll(); }}
               onClose={() => setModal(null)}
             />
           )}
