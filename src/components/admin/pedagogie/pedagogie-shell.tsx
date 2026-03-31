@@ -43,7 +43,7 @@ import {
   createRessource, updateRessource, deleteRessource, getRessourcesByDossier,
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
-  installCanonicalOffers, bulkSetEtiquettes,
+  installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -637,13 +637,12 @@ export function PedagogieShell({
                             {coursGroups ? (
                               coursGroups.map((group) => (
                                 <div key={group.label || "__none__"}>
-                                  <p className="mt-3 mb-2 first:mt-0 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
-                                    <span className="h-px flex-1 bg-navy/10" />
-                                    {group.label ? (
-                                      <span className="rounded-full bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold-dark">{group.label}</span>
-                                    ) : "Autres"}
-                                    <span className="h-px flex-1 bg-navy/10" />
-                                  </p>
+                                  <EtiquetteSectionHeader
+                                    label={group.label}
+                                    coursIds={group.cours.map((c) => c.id)}
+                                    canEdit={canEdit}
+                                    onRenamed={refreshAll}
+                                  />
                                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                                     {group.cours.map((c) => (
                                       <SortableCoursCard
@@ -729,19 +728,12 @@ export function PedagogieShell({
                                 {coursGroups ? (
                                   coursGroups.map((group) => (
                                     <div key={group.label || "__none__"}>
-                                      {group.label ? (
-                                        <p className="mt-3 mb-1.5 first:mt-0 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
-                                          <span className="h-px flex-1 bg-navy/10" />
-                                          <span className="rounded-full bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold-dark">{group.label}</span>
-                                          <span className="h-px flex-1 bg-navy/10" />
-                                        </p>
-                                      ) : (
-                                        <p className="mt-3 mb-1.5 first:mt-0 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
-                                          <span className="h-px flex-1 bg-navy/10" />
-                                          Autres
-                                          <span className="h-px flex-1 bg-navy/10" />
-                                        </p>
-                                      )}
+                                      <EtiquetteSectionHeader
+                                        label={group.label}
+                                        coursIds={group.cours.map((c) => c.id)}
+                                        canEdit={canEdit}
+                                        onRenamed={refreshAll}
+                                      />
                                       {group.cours.map((c) => (
                                         <div key={c.id} className="mb-1.5">
                                           <SortableCoursRow
@@ -2409,6 +2401,63 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
       </FormField>
       <VisibleToggle value={visible} onChange={setVisible} />
     </FormShell>
+  );
+}
+
+// =============================================
+// ETIQUETTE SECTION HEADER
+// =============================================
+
+function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed }: {
+  label: string;
+  coursIds: string[];
+  canEdit: boolean;
+  onRenamed: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(label);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [saving, startSaving] = useTransition();
+
+  const commitRename = () => {
+    const trimmed = editValue.trim();
+    setEditing(false);
+    if (!trimmed || trimmed === label) { setEditValue(label); return; }
+    startSaving(async () => {
+      await renameEtiquette(coursIds, label, trimmed);
+      onRenamed();
+    });
+  };
+
+  return (
+    <div className="mt-5 mb-2 first:mt-0">
+      <div className="flex items-center gap-3">
+        <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-navy/15 to-navy/15" />
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditValue(label); } }}
+            className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-gold-dark outline-none ring-2 ring-gold/20 w-40 text-center"
+            autoFocus
+          />
+        ) : label ? (
+          <button
+            onClick={canEdit ? () => { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); } : undefined}
+            className={`rounded-lg px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${canEdit ? "cursor-pointer hover:bg-gold/15" : ""}`}
+            style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.15) 100%)", color: "#8B7030", border: "1px solid rgba(201,168,76,0.2)" }}
+            title={canEdit ? "Double-clic pour renommer" : undefined}
+          >
+            {saving ? "..." : label}
+          </button>
+        ) : (
+          <span className="px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-navy/30">Autres</span>
+        )}
+        <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent via-navy/15 to-navy/15" />
+      </div>
+    </div>
   );
 }
 

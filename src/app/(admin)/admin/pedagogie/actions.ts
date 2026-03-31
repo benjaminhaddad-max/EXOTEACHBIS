@@ -507,6 +507,23 @@ export async function updateCoursInDossier(
   return { success: true };
 }
 
+export async function renameEtiquette(coursIds: string[], oldName: string, newName: string) {
+  const supabase = await createClient();
+  // Fetch current etiquettes for these cours
+  const { data: rows, error: fetchErr } = await supabase
+    .from("cours")
+    .select("id, etiquettes")
+    .in("id", coursIds);
+  if (fetchErr) return { error: fetchErr.message };
+  // Replace old etiquette with new one in each cours
+  for (const row of rows ?? []) {
+    const updated = (row.etiquettes ?? []).map((e: string) => e === oldName ? newName.trim() : e);
+    await supabase.from("cours").update({ etiquettes: updated, updated_at: new Date().toISOString() }).eq("id", row.id);
+  }
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function bulkSetEtiquettes(coursIds: string[], etiquettes: string[]) {
   const supabase = await createClient();
   const { error } = await supabase
