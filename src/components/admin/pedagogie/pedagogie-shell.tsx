@@ -1070,9 +1070,17 @@ export function PedagogieShell({
                                 )}
                                 {canEdit && coursList.length > 0 && (
                                   <AddCategoryButton
-                                    onAdd={(name) => {
-                                      setBulkEtiquettes([name]);
-                                      setShowBulkPopover(true);
+                                    onAdd={async (name) => {
+                                      // Select all courses without etiquettes and assign them the new category
+                                      const untaggedIds = coursList.filter((c) => !c.etiquettes?.length || !c.etiquettes[0]).map((c) => c.id);
+                                      if (untaggedIds.length > 0) {
+                                        await handleAction(() => bulkSetEtiquettes(untaggedIds, [name]));
+                                      } else {
+                                        // All courses already have etiquettes — select all and open popover
+                                        setSelectedCoursIds(new Set(coursList.map((c) => c.id)));
+                                        setBulkEtiquettes([name]);
+                                        setShowBulkPopover(true);
+                                      }
                                     }}
                                   />
                                 )}
