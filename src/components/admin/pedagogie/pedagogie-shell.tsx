@@ -60,6 +60,7 @@ type ModalState =
   | { type: "edit_ressource"; ressource: Ressource }
   | { type: "create_cours"; dossierId: string }
   | { type: "bulk_create_cours"; dossierId: string }
+  | { type: "bulk_create_dossiers"; parentId: string | null }
   | { type: "edit_cours"; cours: Cours }
   | null;
 
@@ -642,6 +643,7 @@ export function PedagogieShell({
             <AddPickerModal
               parentDossier={modal.parentId ? allDossiers.find((d) => d.id === modal.parentId) ?? null : null}
               onCreateDossier={() => setModal({ type: "create_dossier", parentId: modal.parentId })}
+              onBulkCreateDossiers={() => setModal({ type: "bulk_create_dossiers", parentId: modal.parentId })}
               onCreateCours={() => {
                 if (modal.parentId) {
                   setModal({ type: "create_cours", dossierId: modal.parentId });
@@ -735,6 +737,15 @@ export function PedagogieShell({
             />
           )}
 
+          {modal.type === "bulk_create_dossiers" && (
+            <BulkCreateDossiersModal
+              parentId={modal.parentId}
+              parentDossier={modal.parentId ? allDossiers.find((d) => d.id === modal.parentId) ?? null : null}
+              onCreated={() => { setModal(null); refreshAll(); }}
+              onClose={() => setModal(null)}
+            />
+          )}
+
           {modal.type === "edit_cours" && (
             <CoursForm
               title="Modifier le cours"
@@ -786,6 +797,182 @@ export function PedagogieShell({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// =============================================
+// BULK CREATE DOSSIERS MODAL
+// =============================================
+
+function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }: {
+  parentId: string | null;
+  parentDossier: Dossier | null;
+  onCreated: () => void;
+  onClose: () => void;
+}) {
+  const [input, setInput] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [result, setResult] = useState<{ ok: number; errors: string[] } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const childType = getDefaultChildType(parentDossier);
+  const childLabel = DOSSIER_TYPE_META[childType]?.shortLabel ?? "Dossier";
+
+  const names = input
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-•●◦▪▸▹►]\s*/, "").replace(/^\d+[.)]\s*/, "").trim())
+    .filter((name) => name.length > 1);
+
+  const handleImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setAnalyzing(true);
+    try {
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/extract-cours-from-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mediaType: file.type }),
+      });
+      const data = await res.json();
+      if (data.courses && data.courses.length > 0) {
+        setInput((prev) => {
+          const existing = prev.trim();
+          const newNames = data.courses.join("\n");
+          return existing ? `${existing}\n${newNames}` : newNames;
+        });
+      } else if (data.error) {
+        alert(`Erreur: ${data.error}`);
+      } else {
+        alert("Aucun nom trouvé dans l'image.");
+      }
+    } catch {
+      alert("Erreur lors de l'analyse de l'image.");
+    } finally {
+      setAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleImageFile(file);
+  }, [handleImageFile]);
+
+  const handleCreate = async () => {
+    if (names.length === 0 || creating) return;
+    setCreating(true);
+    let ok = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < names.length; i++) {
+      try {
+        const res = await createDossier({
+          name: names[i],
+          dossier_type: childType,
+          color: COLORS[i % COLORS.length],
+          parent_id: parentId,
+          order_index: i,
+          visible: true,
+        });
+        if ("error" in res) errors.push(`${names[i]}: ${res.error}`);
+        else ok++;
+      } catch (e: any) {
+        errors.push(`${names[i]}: ${e.message}`);
+      }
+    }
+
+    setResult({ ok, errors });
+    setCreating(false);
+    if (ok > 0) onCreated();
+  };
+
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-md">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <h3 className="text-sm font-semibold text-gray-900">Créer plusieurs {childLabel.toLowerCase()}s</h3>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+      </div>
+      <div className="p-5 space-y-4">
+        {/* Screenshot upload zone */}
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          onClick={() => !analyzing && fileInputRef.current?.click()}
+          className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-4 cursor-pointer transition-colors ${
+            analyzing
+              ? "border-blue-300 bg-blue-50"
+              : "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/50"
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageFile(file);
+            }}
+          />
+          {analyzing ? (
+            <>
+              <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+              <p className="text-xs text-blue-600 font-medium">Analyse du screenshot en cours...</p>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-6 w-6 text-gray-400" />
+              <p className="text-xs text-gray-500 text-center">
+                <span className="font-medium text-gray-700">Importer un screenshot</span>
+                <br />
+                Glissez une image ou cliquez pour extraire les noms
+              </p>
+            </>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Noms (un par ligne)</label>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            rows={10}
+            placeholder={"Chimie générale\nBiologie cellulaire\nAnatomie\nPhysiologie\n..."}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+            autoFocus
+          />
+          {names.length > 0 && (
+            <p className="mt-1 text-xs text-gray-500">{names.length} {childLabel.toLowerCase()}{names.length > 1 ? "s" : ""} à créer</p>
+          )}
+        </div>
+
+        {result && (
+          <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
+            <p className="font-semibold">{result.ok} créé{result.ok > 1 ? "s" : ""}</p>
+            {result.errors.map((e, i) => <p key={i} className="text-red-600 mt-1">{e}</p>)}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+            Fermer
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={names.length === 0 || creating}
+            className="flex-1 py-2 rounded-xl bg-[#0e1e35] text-white text-sm font-semibold hover:bg-[#1a2d4a] disabled:opacity-40 transition-colors"
+          >
+            {creating ? "Création..." : `Créer ${names.length} ${childLabel.toLowerCase()}${names.length > 1 ? "s" : ""}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -968,10 +1155,11 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
 }
 
 function AddPickerModal({
-  parentDossier, onCreateDossier, onCreateCours, onBulkCreateCours, onCreateRessource, canAddContent, onClose,
+  parentDossier, onCreateDossier, onBulkCreateDossiers, onCreateCours, onBulkCreateCours, onCreateRessource, canAddContent, onClose,
 }: {
   parentDossier: Dossier | null;
   onCreateDossier: () => void;
+  onBulkCreateDossiers: () => void;
   onCreateCours: () => void;
   onBulkCreateCours: () => void;
   onCreateRessource: (type: string) => void;
@@ -1015,6 +1203,24 @@ function AddPickerModal({
             </p>
           </div>
         </button>
+
+        {/* Bulk create dossiers */}
+        {canCreateChildren && (
+          <button
+            onClick={onBulkCreateDossiers}
+            className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-orange-200 hover:bg-orange-50"
+          >
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 transition group-hover:bg-orange-100">
+              <ImagePlus className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Créer depuis un screenshot
+              </p>
+              <p className="text-xs text-gray-400">Extraire les noms depuis une capture d'écran</p>
+            </div>
+          </button>
+        )}
 
         {/* Cours */}
         {canAddContent && (
