@@ -200,6 +200,7 @@ export function PedagogieShell({
     return groups;
   }, [childDossiers]);
   const contentCreationLabel = getContentCreationLabel(selectedDossier?.dossier_type);
+  const availableCourseSections = coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined;
 
   const moveSectionByLabel = useCallback((label: string, direction: "up" | "down") => {
     const labels = coursGroups?.map((g) => g.label) ?? [];
@@ -1068,6 +1069,8 @@ export function PedagogieShell({
                                             onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
                                             onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
                                             onLink={canEdit && selectedDossier ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
+                                            availableSections={availableCourseSections}
+                                            onMoveToSection={canEdit ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
                                             onPdfUploaded={refreshAll}
                                           />
                                         </div>
@@ -1092,6 +1095,8 @@ export function PedagogieShell({
                                       onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
                                       onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
                                       onLink={canEdit && selectedDossier ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
+                                      availableSections={availableCourseSections}
+                                      onMoveToSection={canEdit ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
                                       onPdfUploaded={refreshAll}
                                     />
                                   ))
@@ -1276,7 +1281,7 @@ export function PedagogieShell({
             <CoursForm
               title={contentCreationLabel}
               dossierId={modal.dossierId}
-              existingSections={coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined}
+              existingSections={availableCourseSections}
               onSubmit={(data) => handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId }))}
               onClose={() => setModal(null)}
               isPending={isPending}
@@ -1286,7 +1291,7 @@ export function PedagogieShell({
           {modal.type === "bulk_create_cours" && (
             <BulkCreateCoursModal
               dossierId={modal.dossierId}
-              existingSections={coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined}
+              existingSections={availableCourseSections}
               onCreated={() => { setModal(null); refreshAll(); }}
               onClose={() => setModal(null)}
             />
@@ -2453,7 +2458,7 @@ function DiplomaLogoMini() {
   );
 }
 
-function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect, onEdit, onDelete, onLink, onPdfUploaded }: {
+function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect, onEdit, onDelete, onLink, availableSections, onMoveToSection, onPdfUploaded }: {
   cours: Cours;
   dossierId: string;
   selected?: boolean;
@@ -2462,6 +2467,8 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
   onEdit?: () => void;
   onDelete?: () => void;
   onLink?: () => void;
+  availableSections?: string[];
+  onMoveToSection?: (section: string) => void;
   onPdfUploaded?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cours.id });
@@ -2472,7 +2479,18 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
   const [dragOver, setDragOver] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(cours.name);
+  const [showSectionMenu, setShowSectionMenu] = useState(false);
+  const sectionMenuRef = useRef<HTMLDivElement>(null);
   const hasPdf = !!cours.pdf_url;
+
+  useEffect(() => {
+    if (!showSectionMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (sectionMenuRef.current && !sectionMenuRef.current.contains(e.target as Node)) setShowSectionMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSectionMenu]);
 
   const commitRename = async () => {
     const trimmed = editName.trim();
@@ -2586,8 +2604,24 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         </button>
       )}
 
-      {(onEdit || onDelete || onLink) && (
+      {(onEdit || onDelete || onLink || onMoveToSection) && (
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+          {onMoveToSection && availableSections && availableSections.length > 0 && (
+            <div className="relative" ref={sectionMenuRef}>
+              <button onClick={() => setShowSectionMenu(!showSectionMenu)} title="Déplacer dans une section" className="rounded-lg p-1.5 text-gray-400 hover:bg-gold/10 hover:text-gold-dark"><Layers className="h-4 w-4" /></button>
+              {showSectionMenu && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                  {availableSections.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { onMoveToSection(s); setShowSectionMenu(false); }}
+                      className={`w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 transition ${cours.etiquettes?.[0] === s ? "font-bold text-gold-dark" : "text-gray-700"}`}
+                    >{s}{cours.etiquettes?.[0] === s ? " ✓" : ""}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-50 hover:text-purple-600"><Link2 className="h-4 w-4" /></button>}
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
           {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
