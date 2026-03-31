@@ -254,6 +254,8 @@ export function PedagogieShell({
   const availableCourseSections = linkRulesSections
     ?? (coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined);
 
+  const isPrepaOffer = currentOfferCode ? ["prepa_pass", "prepa_las", "prepa_lsps"].includes(currentOfferCode) : false;
+
   // For EXERCISES/SERIES: only sections that actually have courses in this matière
   const exerciseSections = useMemo(() => {
     if (!linkRulesSections) return undefined;
@@ -1434,6 +1436,7 @@ export function PedagogieShell({
               title={contentCreationLabel}
               dossierId={modal.dossierId}
               existingSections={availableCourseSections}
+              showActualisation={isPrepaOffer}
               initialData={inlineCoursSection ? { etiquettes: [inlineCoursSection] } : undefined}
               onSubmit={(data) => { setInlineCoursSection(null); handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId })); }}
               onClose={() => { setInlineCoursSection(null); setModal(null); }}
@@ -1464,6 +1467,7 @@ export function PedagogieShell({
               title="Modifier le cours"
               dossierId={modal.cours.dossier_id ?? ""}
               initialData={modal.cours}
+              showActualisation={isPrepaOffer}
               onSubmit={(data) => {
                 const cours = modal.cours;
                 startTransition(async () => {
@@ -2748,6 +2752,24 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         </button>
       )}
 
+      {/* Actualisation badge */}
+      {cours.actualisation && cours.actualisation !== "non_actualisee" && (
+        <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+          cours.actualisation === "aucun_changement" ? "bg-gray-100 text-gray-500" :
+          cours.actualisation === "actualisation" ? "bg-blue-50 text-blue-600" :
+          cours.actualisation === "changements_notables" ? "bg-amber-50 text-amber-600" :
+          cours.actualisation === "nouvelle_fiche" ? "bg-green-50 text-green-600" : ""
+        }`}>
+          {cours.actualisation === "aucun_changement" ? "=" :
+           cours.actualisation === "actualisation" ? "↑" :
+           cours.actualisation === "changements_notables" ? "!!" :
+           cours.actualisation === "nouvelle_fiche" ? "★" : ""}
+        </span>
+      )}
+      {cours.actualisation === "non_actualisee" && (
+        <span className="flex-shrink-0 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-500" title="Pas encore actualisée">⏳</span>
+      )}
+
       {/* Visibility indicator */}
       {cours.visible ? (
         <span className="flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-green-500" title="Visible pour les élèves">
@@ -3292,11 +3314,12 @@ function RessourceForm({ title, dossierId, defaultType = "pdf", initialData, onS
 // COURS FORM
 // =============================================
 
-function CoursForm({ title, dossierId, initialData, existingSections, onSubmit, onClose, isPending }: {
+function CoursForm({ title, dossierId, initialData, existingSections, showActualisation, onSubmit, onClose, isPending }: {
   title: string;
   dossierId: string;
   initialData?: Partial<Cours>;
   existingSections?: string[];
+  showActualisation?: boolean;
   onSubmit: (data: any) => void;
   onClose: () => void;
   isPending: boolean;
@@ -3308,6 +3331,7 @@ function CoursForm({ title, dossierId, initialData, existingSections, onSubmit, 
   const [nbPages, setNbPages] = useState(initialData?.nb_pages ?? 0);
   const [visible, setVisible] = useState(initialData?.visible ?? true);
   const [etiquettes, setEtiquettes] = useState<string[]>(initialData?.etiquettes ?? []);
+  const [actualisation, setActualisation] = useState<string>(initialData?.actualisation ?? "non_actualisee");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
 
@@ -3328,7 +3352,7 @@ function CoursForm({ title, dossierId, initialData, existingSections, onSubmit, 
   return (
     <FormShell title={title} onClose={onClose} onSubmit={() => {
       if (existingSections && etiquettes.length === 0) return;
-      onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes });
+      onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes, ...(showActualisation ? { actualisation } : {}) });
     }} isPending={isPending}>
       <FormField label="Nom du cours *">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Biochimie Structurale" required className={inputCls} />
@@ -3361,15 +3385,49 @@ function CoursForm({ title, dossierId, initialData, existingSections, onSubmit, 
           <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={uploading} />
         </label>
         {pdfUrl && !uploading && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-blue-600 underline">Voir le PDF</a>}
-        <div className="mt-2">
-          <label className="mb-1 block text-xs text-gray-500">Ou URL directe</label>
-          <input value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+      </div>
+
+      {/* Actualisation (only for PREPA formations) */}
+      {showActualisation && (
+        <FormField label="Actualisation">
+          <div className="grid grid-cols-2 gap-1.5">
+            {([
+              ["non_actualisee", "Pas encore actualisée", "text-orange-600 bg-orange-50 border-orange-200"],
+              ["aucun_changement", "Aucun changement", "text-gray-600 bg-gray-50 border-gray-200"],
+              ["actualisation", "Actualisation", "text-blue-600 bg-blue-50 border-blue-200"],
+              ["changements_notables", "Changements notables", "text-amber-600 bg-amber-50 border-amber-200"],
+              ["nouvelle_fiche", "Nouvelle fiche", "text-green-600 bg-green-50 border-green-200"],
+            ] as const).map(([val, label, colors]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setActualisation(val)}
+                className={`rounded-lg border px-2.5 py-2 text-[11px] font-semibold transition ${
+                  actualisation === val ? colors + " ring-1 ring-current/20" : "border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-500"
+                }`}
+              >{label}</button>
+            ))}
+          </div>
+        </FormField>
+      )}
+
+      {/* Visible */}
+      <div
+        className={`flex items-center justify-between rounded-xl border px-4 py-3 cursor-pointer transition ${
+          visible ? "border-green-200 bg-green-50/50" : "border-red-200 bg-red-50/50"
+        }`}
+        onClick={() => setVisible(!visible)}
+      >
+        <div className="flex items-center gap-2.5">
+          {visible ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-red-400" />}
+          <span className={`text-sm font-medium ${visible ? "text-green-700" : "text-red-500"}`}>
+            {visible ? "Visible pour les étudiants" : "Masqué pour les étudiants"}
+          </span>
+        </div>
+        <div className={`h-5 w-9 rounded-full transition-colors ${visible ? "bg-green-500" : "bg-gray-300"}`}>
+          <div className={`h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-4" : "translate-x-0.5"}`} />
         </div>
       </div>
-      <FormField label="Nombre de pages">
-        <input type="number" min={0} value={nbPages} onChange={(e) => setNbPages(Number(e.target.value))} className={inputCls} />
-      </FormField>
-      <VisibleToggle value={visible} onChange={setVisible} />
     </FormShell>
   );
 }

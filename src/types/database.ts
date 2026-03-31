@@ -88,6 +88,7 @@ export interface Cours {
   nb_pages: number;
   etiquettes: string[];
   linked_cours_id: string | null;
+  actualisation: "non_actualisee" | "aucun_changement" | "actualisation" | "changements_notables" | "nouvelle_fiche";
   order_index: number;
   visible: boolean;
   tags: string[];
