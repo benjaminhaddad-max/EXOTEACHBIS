@@ -45,7 +45,7 @@ export interface Dossier {
   formation_offer: FormationOffer | null;
   icon_url: string | null;
   color: string;
-  etiquette: string | null;
+  etiquettes: string[];
   order_index: number;
   visible: boolean;
   created_at: string;
@@ -84,7 +84,7 @@ export interface Cours {
   pdf_url: string | null;
   version: number;
   nb_pages: number;
-  etiquette: string | null;
+  etiquettes: string[];
   order_index: number;
   visible: boolean;
   tags: string[];

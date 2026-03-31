@@ -31,7 +31,7 @@ export async function createDossier(data: {
   parent_id?: string | null;
   order_index?: number;
   visible: boolean;
-  etiquette?: string | null;
+  etiquettes?: string[];
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("dossiers").insert({
@@ -44,7 +44,7 @@ export async function createDossier(data: {
     parent_id: data.parent_id || null,
     order_index: data.order_index ?? 0,
     visible: data.visible,
-    etiquette: data.etiquette || null,
+    etiquettes: data.etiquettes ?? [],
   });
   if (error) return { error: error.message };
   revalidatePath(PATH);
@@ -63,7 +63,7 @@ export async function updateDossier(
     icon_url?: string | null;
     visible: boolean;
     order_index?: number;
-    etiquette?: string | null;
+    etiquettes?: string[];
   }
 ) {
   const supabase = await createClient();
@@ -150,7 +150,7 @@ export async function updateDossier(
       icon_url: data.icon_url || null,
       visible: data.visible,
       order_index: nextOrderIndex,
-      etiquette: data.etiquette ?? null,
+      etiquettes: data.etiquettes ?? [],
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -448,7 +448,7 @@ export async function createCoursInDossier(data: {
   nb_pages?: number;
   order_index?: number;
   visible: boolean;
-  etiquette?: string | null;
+  etiquettes?: string[];
 }) {
   const supabase = await createClient();
   const { error } = await supabase.from("cours").insert({
@@ -459,7 +459,7 @@ export async function createCoursInDossier(data: {
     pdf_url: data.pdf_url || null,
     pdf_path: data.pdf_path || null,
     nb_pages: data.nb_pages ?? 0,
-    etiquette: data.etiquette || null,
+    etiquettes: data.etiquettes ?? [],
     tags: [],
     order_index: data.order_index ?? 0,
     visible: data.visible,
@@ -479,7 +479,7 @@ export async function updateCoursInDossier(
     pdf_path?: string;
     nb_pages?: number;
     visible: boolean;
-    etiquette?: string | null;
+    etiquettes?: string[];
   }
 ) {
   const supabase = await createClient();
@@ -491,7 +491,7 @@ export async function updateCoursInDossier(
       pdf_url: data.pdf_url || null,
       pdf_path: data.pdf_path || null,
       nb_pages: data.nb_pages ?? 0,
-      etiquette: data.etiquette ?? null,
+      etiquettes: data.etiquettes ?? [],
       visible: data.visible,
       updated_at: new Date().toISOString(),
     })

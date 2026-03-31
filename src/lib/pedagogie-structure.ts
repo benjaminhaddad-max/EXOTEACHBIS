@@ -150,7 +150,7 @@ export function getAllowedChildTypes(
       }
       return ["period", "module", "subject"];
     case "university":
-      return ["semester", "option"];
+      return ["semester", "option", "subject", "module"];
     case "semester":
     case "option":
       return ["subject", "module"];
