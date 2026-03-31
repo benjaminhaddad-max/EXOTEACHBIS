@@ -576,7 +576,32 @@ export function PedagogieShell({
             /* Contenu tab */
             <div className="flex-1 overflow-y-auto p-5">
               {childDossiers.length === 0 && ressources.length === 0 && coursList.length === 0 && !loadingRessources ? (
-                <EmptyDossier onAdd={canEdit ? () => setModal({ type: "add_picker", parentId: selectedId }) : undefined} />
+                <EmptyDossier
+                  onAdd={canEdit ? () => setModal({ type: "add_picker", parentId: selectedId }) : undefined}
+                  cloneSource={(() => {
+                    if (!canEdit || !selectedDossier || selectedDossier.dossier_type !== "university") return undefined;
+                    const thisOffer = inferOfferFromAncestors(selectedDossier, allDossiers);
+                    const dup = allDossiers.find(
+                      (d) =>
+                        d.id !== selectedDossier.id &&
+                        d.name.toLowerCase() === selectedDossier.name.toLowerCase() &&
+                        d.dossier_type === "university" &&
+                        inferOfferFromAncestors(d, allDossiers) !== thisOffer
+                    );
+                    if (!dup) return undefined;
+                    const dupOffer = inferOfferFromAncestors(dup, allDossiers);
+                    return { sourceDossier: dup, offerLabel: getOfferLabel(dupOffer ?? "") };
+                  })()}
+                  onClone={canEdit ? (source) => {
+                    const srcOffer = inferOfferFromAncestors(source, allDossiers);
+                    setModal({
+                      type: "clone_proposal",
+                      sourceDossier: source,
+                      targetDossierId: selectedDossier!.id,
+                      offerLabel: getOfferLabel(srcOffer ?? ""),
+                    });
+                  } : undefined}
+                />
               ) : (
                 <div className="space-y-5">
                   {/* Sous-dossiers — drag & drop grille */}
@@ -2129,21 +2154,36 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
 // EMPTY STATE
 // =============================================
 
-function EmptyDossier({ onAdd }: { onAdd?: () => void }) {
+function EmptyDossier({ onAdd, cloneSource, onClone }: {
+  onAdd?: () => void;
+  cloneSource?: { sourceDossier: Dossier; offerLabel: string };
+  onClone?: (source: Dossier) => void;
+}) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
       <Plus className="mb-3 h-10 w-10 text-gray-200" />
       <p className="text-sm font-medium text-gray-400">Dossier vide</p>
       <p className="mt-1 text-xs text-gray-300">{onAdd ? "Ajoutez des sous-dossiers ou du contenu" : "Aucun contenu disponible"}</p>
-      {onAdd && (
-        <button
-          onClick={onAdd}
-          className="mt-4 flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy-light transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Ajouter
-        </button>
-      )}
+      <div className="mt-4 flex flex-col items-center gap-2">
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy-light transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter
+          </button>
+        )}
+        {cloneSource && onClone && (
+          <button
+            onClick={() => onClone(cloneSource.sourceDossier)}
+            className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-4 py-2 text-xs font-semibold text-gold-dark hover:bg-gold/10 transition-colors"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Importer depuis {cloneSource.offerLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
