@@ -402,9 +402,9 @@ export function EleveCoursShell({
                             </div>
                           </div>
                           <h3 className="mt-3 text-[15px] font-semibold text-[#0e1e35]">{child.name}</h3>
-                          {child.etiquette && (
+                          {child.etiquettes?.length > 0 && (
                             <span className="mt-1 inline-block rounded-full bg-[#4FABDB]/10 px-2 py-0.5 text-[10px] font-medium text-[#4FABDB]">
-                              {child.etiquette}
+                              {child.etiquettes.join(", ")}
                             </span>
                           )}
                           {child.description && (

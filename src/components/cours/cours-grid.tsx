@@ -71,12 +71,12 @@ function DossierCardItem({ dossier }: { dossier: DossierCard }) {
             >
               Dossier
             </span>
-            {dossier.etiquette && (
+            {dossier.etiquettes?.length > 0 && (
               <span
                 className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full"
                 style={{ backgroundColor: color + "15", color }}
               >
-                {dossier.etiquette}
+                {dossier.etiquettes.join(", ")}
               </span>
             )}
           </div>

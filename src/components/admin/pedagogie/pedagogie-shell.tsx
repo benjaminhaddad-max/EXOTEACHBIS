@@ -43,8 +43,9 @@ import {
   createRessource, updateRessource, deleteRessource, getRessourcesByDossier,
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
-  installCanonicalOffers,
+  installCanonicalOffers, bulkSetEtiquettes,
 } from "@/app/(admin)/admin/pedagogie/actions";
+import { TagInput } from "./tag-input";
 
 // =============================================
 // TYPES
@@ -484,9 +485,9 @@ export function PedagogieShell({
                   <span className="rounded-full bg-navy/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-navy/70">
                     {DOSSIER_TYPE_META[selectedDossier.dossier_type]?.shortLabel ?? "Dossier"}
                   </span>
-                  {selectedDossier.etiquette && (
+                  {selectedDossier.etiquettes?.length > 0 && (
                     <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-medium text-gold-dark">
-                      {selectedDossier.etiquette}
+                      {selectedDossier.etiquettes.join(", ")}
                     </span>
                   )}
                   {selectedDossier.formation_offer && (
@@ -1425,9 +1426,9 @@ function SortableTreeNode({
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
                   {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
                 </span>
-                {node.etiquette && (
+                {node.etiquettes?.length > 0 && (
                   <span className="rounded-full bg-gold/10 px-1.5 py-0.5 text-[9px] font-medium text-gold-dark">
-                    {node.etiquette}
+                    {node.etiquettes.join(", ")}
                   </span>
                 )}
               </span>
@@ -1523,9 +1524,9 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
         <span className="relative rounded-full px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-widest" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
-        {dossier.etiquette && (
+        {dossier.etiquettes?.length > 0 && (
           <span className="relative mt-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium text-white/70">
-            {dossier.etiquette}
+            {dossier.etiquettes.join(", ")}
           </span>
         )}
       </button>
@@ -1688,9 +1689,9 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
           title="Double-clic pour renommer"
         >
           <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
-          {cours.etiquette && (
+          {cours.etiquettes?.length > 0 && (
             <span className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">
-              {cours.etiquette}
+              {cours.etiquettes.join(", ")}
             </span>
           )}
         </button>
@@ -1805,9 +1806,9 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
               <p className="text-[12px] font-extrabold text-white leading-snug line-clamp-2 tracking-wide">
                 {cours.name}
               </p>
-              {cours.etiquette && (
+              {cours.etiquettes?.length > 0 && (
                 <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide" style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}>
-                  {cours.etiquette}
+                  {cours.etiquettes.join(", ")}
                 </span>
               )}
             </div>
@@ -1890,7 +1891,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
   const [color, setColor] = useState(initialData?.color ?? "#0e1e35");
   const [iconUrl, setIconUrl] = useState(initialData?.icon_url ?? "");
   const [visible, setVisible] = useState(initialData?.visible ?? true);
-  const [etiquette, setEtiquette] = useState(initialData?.etiquette ?? "");
+  const [etiquette, setEtiquette] = useState((initialData?.etiquettes ?? []).join(", "));
   const activeFormationOffers = formationOffers.filter((offer) => offer.enabled);
   const nameSuggestions = useMemo(
     () => getDossierSuggestions(dossierNamePresets, formationOffer, dossierType),
@@ -1971,7 +1972,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
         color,
         icon_url: iconUrl,
         visible,
-        etiquette: etiquette.trim() || null,
+        etiquettes: etiquette.trim() ? etiquette.split(",").map((s) => s.trim()).filter(Boolean) : [],
       })}
       isPending={isPending}
     >
@@ -2205,7 +2206,7 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   const [pdfPath, setPdfPath] = useState(initialData?.pdf_path ?? "");
   const [nbPages, setNbPages] = useState(initialData?.nb_pages ?? 0);
   const [visible, setVisible] = useState(initialData?.visible ?? true);
-  const [etiquette, setEtiquette] = useState(initialData?.etiquette ?? "");
+  const [etiquette, setEtiquette] = useState((initialData?.etiquettes ?? []).join(", "));
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
 
@@ -2224,7 +2225,7 @@ function CoursForm({ title, dossierId, initialData, onSubmit, onClose, isPending
   };
 
   return (
-    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquette: etiquette.trim() || null })} isPending={isPending}>
+    <FormShell title={title} onClose={onClose} onSubmit={() => onSubmit({ name, description, pdf_url: pdfUrl, pdf_path: pdfPath, nb_pages: nbPages, visible, etiquettes: etiquette.trim() ? etiquette.split(",").map((s) => s.trim()).filter(Boolean) : [] })} isPending={isPending}>
       <FormField label="Nom du cours *">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Biochimie Structurale" required className={inputCls} />
       </FormField>
