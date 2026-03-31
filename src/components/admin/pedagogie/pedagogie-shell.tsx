@@ -219,7 +219,26 @@ export function PedagogieShell({
     return null;
   }, [selectedId, allDossiers]);
 
-  const linkRulesSections = universityLinkRules ? Object.keys(universityLinkRules.sections) : null;
+  // Find current offer code from ancestors
+  const currentOfferCode = useMemo(() => {
+    if (!selectedId) return null;
+    let cur: string | null = selectedId;
+    while (cur) {
+      const d = allDossiers.find((dd) => dd.id === cur);
+      if (!d) break;
+      if (d.dossier_type === "offer") return d.formation_offer;
+      cur = d.parent_id;
+    }
+    return null;
+  }, [selectedId, allDossiers]);
+
+  // Filter sections to only those available for the current offer
+  const linkRulesSections = useMemo(() => {
+    if (!universityLinkRules || !currentOfferCode) return universityLinkRules ? Object.keys(universityLinkRules.sections) : null;
+    return Object.entries(universityLinkRules.sections)
+      .filter(([_, offers]) => offers.length === 0 || offers.includes(currentOfferCode))
+      .map(([name]) => name);
+  }, [universityLinkRules, currentOfferCode]);
 
   // Compute section badges for child dossiers (subjects) based on their courses' etiquettes
   const getSectionBadges = useCallback((dossierId: string) => {

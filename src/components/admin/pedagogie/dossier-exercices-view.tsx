@@ -1198,13 +1198,8 @@ function NewSerieModal({
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<SerieType>(initialType);
-  const [selectedSection, setSelectedSection] = useState<string>("");
+  const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set());
   const [coursId, setCoursId] = useState<string>("");
-
-  // Filter courses by selected section when sections are available
-  const filteredCoursList = availableSections && selectedSection
-    ? coursList.filter((c) => c.etiquettes?.[0] === selectedSection)
-    : coursList;
   const [annee, setAnnee] = useState(defaultAnnee ?? "");
   const [timed, setTimed] = useState(false);
   const [duration, setDuration] = useState("30");
@@ -1216,11 +1211,14 @@ function NewSerieModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError("Le nom est requis"); return; }
-    if (availableSections && !selectedSection) { setError("Choisissez une section"); return; }
+    if (availableSections && selectedSections.size === 0) { setError("Choisissez au moins une section"); return; }
     setSaving(true);
     setError("");
-    // Si "Toute la matière" (coursId vide), utiliser le 1er cours de la section (ou le 1er cours)
-    const effectiveCoursId = coursId || filteredCoursList[0]?.id || coursList[0]?.id || null;
+    // Use first cours of selected sections as fallback, or first cours overall
+    const sectionCours = availableSections && selectedSections.size > 0
+      ? coursList.filter((c) => selectedSections.has(c.etiquettes?.[0] ?? ""))
+      : coursList;
+    const effectiveCoursId = coursId || sectionCours[0]?.id || coursList[0]?.id || null;
     const res = await createSerie({
       name: name.trim(),
       type,
@@ -1282,36 +1280,23 @@ function NewSerieModal({
             </div>
           )}
 
-          {/* Section (si link_rules) */}
+          {/* Sections (si link_rules) — multi-select */}
           {availableSections && availableSections.length > 0 && (
             <div>
-              <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Section *</label>
-              <select
-                value={selectedSection}
-                onChange={(e) => { setSelectedSection(e.target.value); setCoursId(""); }}
-                className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/25"
-              >
-                <option value="">— Choisir une section —</option>
+              <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Section(s) *</label>
+              <div className="space-y-1.5 rounded-xl border border-white/10 p-2.5">
                 {availableSections.map((s) => (
-                  <option key={s} value={s} className="bg-[#0e1e35] text-white">{s}</option>
+                  <label key={s} className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 cursor-pointer transition ${selectedSections.has(s) ? "bg-[#C9A84C]/15 border border-[#C9A84C]/30" : "border border-transparent hover:bg-white/5"}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSections.has(s)}
+                      onChange={() => setSelectedSections((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; })}
+                      className="h-3.5 w-3.5 rounded accent-[#C9A84C]"
+                    />
+                    <span className={`text-sm font-medium ${selectedSections.has(s) ? "text-[#C9A84C]" : "text-white/60"}`}>{s}</span>
+                  </label>
                 ))}
-              </select>
-            </div>
-          )}
-
-          {/* Cours associé */}
-          {filteredCoursList.length > 0 && (
-            <div>
-              <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Cours associé <span className="font-normal text-white/30 normal-case">(optionnel)</span></label>
-              <select
-                value={coursId} onChange={(e) => setCoursId(e.target.value)}
-                className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/25"
-              >
-                <option value="">— Toute la {selectedSection || "matière"} —</option>
-                {filteredCoursList.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-[#0e1e35] text-white">{c.name}</option>
-                ))}
-              </select>
+              </div>
             </div>
           )}
 
