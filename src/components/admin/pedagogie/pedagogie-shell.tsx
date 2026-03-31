@@ -1486,11 +1486,9 @@ function SortableTreeNode({
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
                   {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
                 </span>
-                {node.etiquettes?.length > 0 && (
-                  <span className="rounded-full bg-gold/10 px-1.5 py-0.5 text-[9px] font-medium text-gold-dark">
-                    {node.etiquettes.join(", ")}
-                  </span>
-                )}
+                {node.etiquettes?.map((tag) => (
+                  <span key={tag} className="rounded-full bg-gold/10 px-1.5 py-0.5 text-[9px] font-medium text-gold-dark">{tag}</span>
+                ))}
               </span>
             </span>
             {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
@@ -1585,9 +1583,11 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
         {dossier.etiquettes?.length > 0 && (
-          <span className="relative mt-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium text-white/70">
-            {dossier.etiquettes.join(", ")}
-          </span>
+          <div className="relative mt-1 flex flex-wrap justify-center gap-1">
+            {dossier.etiquettes.map((tag) => (
+              <span key={tag} className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium text-white/70">{tag}</span>
+            ))}
+          </div>
         )}
       </button>
 
@@ -1759,11 +1759,9 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           title="Double-clic pour renommer"
         >
           <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
-          {cours.etiquettes?.length > 0 && (
-            <span className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">
-              {cours.etiquettes.join(", ")}
-            </span>
-          )}
+          {cours.etiquettes?.map((tag) => (
+            <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
+          ))}
         </button>
       )}
 
@@ -1877,9 +1875,11 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
                 {cours.name}
               </p>
               {cours.etiquettes?.length > 0 && (
-                <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide" style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}>
-                  {cours.etiquettes.join(", ")}
-                </span>
+                <div className="mt-1 flex flex-wrap justify-center gap-1">
+                  {cours.etiquettes.map((tag) => (
+                    <span key={tag} className="inline-block rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide" style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}>{tag}</span>
+                  ))}
+                </div>
               )}
             </div>
           </div>

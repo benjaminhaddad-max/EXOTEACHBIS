@@ -9,7 +9,7 @@ type DossierCard = {
   description?: string | null;
   color: string;
   icon_url?: string | null;
-  etiquette?: string | null;
+  etiquettes?: string[];
   nbCours: number;
   nbQuestions: number;
   progress: number;
@@ -71,14 +71,15 @@ function DossierCardItem({ dossier }: { dossier: DossierCard }) {
             >
               Dossier
             </span>
-            {dossier.etiquettes?.length > 0 && (
+            {dossier.etiquettes?.map((tag) => (
               <span
+                key={tag}
                 className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full"
                 style={{ backgroundColor: color + "15", color }}
               >
-                {dossier.etiquettes.join(", ")}
+                {tag}
               </span>
-            )}
+            ))}
           </div>
           <h3 className="text-base font-bold text-gray-900 leading-tight">{dossier.name}</h3>
           {dossier.description && (
