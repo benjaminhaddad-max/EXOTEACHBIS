@@ -245,7 +245,18 @@ export function PedagogieShell({
       getCourssByDossier(dossierId),
     ]);
     const ressources = ressResult.data ?? [];
-    const cours = (coursResult.data ?? []) as Cours[];
+    const cours = ((coursResult.data ?? []) as Cours[]).sort((a, b) => {
+      const oi = (a.order_index ?? 0) - (b.order_index ?? 0);
+      if (oi !== 0) return oi;
+      return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+    });
+    // Auto-fix: si tous les order_index sont identiques, normaliser en base
+    const allSameIndex = cours.length > 1 && cours.every((c) => c.order_index === cours[0].order_index);
+    if (allSameIndex) {
+      const updates = cours.map((c, i) => ({ id: c.id, order_index: i }));
+      reorderCours(updates).catch(() => {});
+      cours.forEach((c, i) => { c.order_index = i; });
+    }
     return { ressources, cours };
   };
 
