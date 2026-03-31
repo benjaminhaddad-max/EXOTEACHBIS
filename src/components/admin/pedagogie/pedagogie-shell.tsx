@@ -1019,15 +1019,6 @@ export function PedagogieShell({
                         <span className="h-px flex-1 bg-navy/10" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Cours</span>
                         <span className="h-px flex-1 bg-navy/10" />
-                        {canEdit && selectedDossier && !universityLinkRules && (
-                          <button
-                            onClick={() => setModal({ type: "missing_cours", dossierId: selectedDossier.id })}
-                            className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-semibold text-purple-600 hover:bg-purple-100 transition"
-                            title="Voir les cours disponibles dans les autres offres"
-                          >
-                            <Sparkles className="h-3 w-3" /> Autres offres
-                          </button>
-                        )}
                         <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5">
                           <button
                             onClick={() => { setCoursViewMode("cards"); localStorage.setItem("pedagogie-cours-view", "cards"); }}
