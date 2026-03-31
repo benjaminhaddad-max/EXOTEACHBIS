@@ -16,6 +16,7 @@ import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
 import { FlashcardsSection } from "./flashcards-section";
 import { ImportExoteachModal } from "./import-exoteach-modal";
 import { AccFabricator } from "./acc-fabricator";
+import { AccCheck } from "./acc-check";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -725,6 +726,7 @@ export function DossierExercicesView({
   onNewSerie?: (type: SerieType) => void;
 }) {
   const [activeTab, setActiveTab] = useState<SerieType | "flashcards" | "acc_fabricator">("annales");
+  const [showAccCheck, setShowAccCheck] = useState(false);
   const [series, setSeries] = useState<SerieSummary[]>([]);
   const [cours, setCours] = useState<CoursBasic[]>([]);
   const [matiereId, setMatiereId] = useState<string | null>(null);
@@ -953,6 +955,16 @@ export function DossierExercicesView({
               )}
             </div>
 
+            {/* Verify ACC button */}
+            <button
+              onClick={() => setShowAccCheck(true)}
+              className="w-full flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/6 px-3 py-2 hover:bg-blue-500/12 transition-colors"
+            >
+              <Search size={14} className="text-blue-400 shrink-0" />
+              <span className="text-xs font-bold text-blue-400">Vérifier les ACC</span>
+              <span className="text-[10px] text-white/30 ml-1 truncate">— comparer avec les chapitres bruts</span>
+            </button>
+
             {/* Series list */}
             {filteredAnnales.length === 0 ? (
               <div className="rounded-xl border-2 border-dashed border-white/8 p-6 text-center">
@@ -1112,6 +1124,27 @@ export function DossierExercicesView({
           onSaved={() => setRefreshKey((k) => k + 1)}
           onClose={() => { setComposeSerie(null); setRefreshKey((k) => k + 1); }}
         />
+      )}
+
+      {/* ACC Check Modal */}
+      {showAccCheck && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+          <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border border-white/10 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/8 shrink-0">
+              <div className="flex items-center gap-2">
+                <Search size={15} className="text-blue-400" />
+                <span className="text-sm font-bold text-white">Vérificateur ACC — {dossierName}</span>
+              </div>
+              <button onClick={() => setShowAccCheck(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/40"><X size={15} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <AccCheck
+                dossierName={dossierName}
+                existingSeries={seriesByType("annales")}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
