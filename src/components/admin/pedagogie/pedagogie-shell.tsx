@@ -3226,7 +3226,7 @@ function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") { setOpen(false); setName(""); } }}
-            onBlur={() => { if (!name.trim()) setOpen(false); }}
+            onBlur={() => { setTimeout(() => { if (!name.trim()) setOpen(false); }, 200); }}
             placeholder="Nom de la catégorie..."
             className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-gold-dark outline-none ring-2 ring-gold/20 w-44 text-center"
             autoFocus
