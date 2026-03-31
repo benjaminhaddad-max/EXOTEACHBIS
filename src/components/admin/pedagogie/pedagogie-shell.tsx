@@ -78,6 +78,8 @@ const COLORS = [
   "#C9A84C", "#6366F1", "#14B8A6", "#FB923C", "#A855F7",
 ];
 
+const SECTION_ORDER: Record<string, number> = { "Socle": 0, "Approfondissement": 1, "Perfectionnement": 2 };
+
 // =============================================
 // TREE HELPERS
 // =============================================
@@ -985,6 +987,34 @@ export function PedagogieShell({
                     </div>
                   ) : coursList.length > 0 ? (
                     <div>
+                      {/* Link rules info banner */}
+                      {universityLinkRules && currentOfferCode && canEdit && (
+                        <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
+                          <p className="text-xs font-semibold text-blue-800 mb-1.5">🔗 Synchronisation automatique</p>
+                          <div className="space-y-1">
+                            {Object.entries(universityLinkRules.sections)
+                              .filter(([_, offers]) => offers.includes(currentOfferCode!))
+                              .sort(([a], [b]) => (SECTION_ORDER[a] ?? 99) - (SECTION_ORDER[b] ?? 99))
+                              .map(([section, offers]) => {
+                                const otherOffers = offers.filter((o) => o !== currentOfferCode);
+                                if (otherOffers.length === 0) return (
+                                  <p key={section} className="text-[11px] text-blue-700">
+                                    <span className="font-semibold">{section}</span> — cours locaux, pas de synchronisation.
+                                  </p>
+                                );
+                                const offerLabels = otherOffers.map((o) =>
+                                  o === "prepa_pass" ? "PREPA PASS" : o === "prepa_las" ? "PREPA LAS" : o === "prepa_lsps" ? "PREPA LSPS" : o
+                                );
+                                return (
+                                  <p key={section} className="text-[11px] text-blue-700">
+                                    <span className="font-semibold">{section}</span> — synchronisé avec {offerLabels.join(" et ")}. Toute modification se répercute automatiquement.
+                                  </p>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mb-2 flex items-center gap-2">
                         <span className="h-px flex-1 bg-navy/10" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Cours</span>
@@ -4002,8 +4032,6 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
     </div>
   );
 }
-
-const SECTION_ORDER: Record<string, number> = { "Socle": 0, "Approfondissement": 1, "Perfectionnement": 2 };
 
 function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames, offersWithThisUni }: {
   universityName: string;
