@@ -43,7 +43,7 @@ import {
   createRessource, updateRessource, deleteRessource, getRessourcesByDossier,
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
-  installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette,
+  installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette, bulkSetCoursVisible, bulkDeleteCours, bulkArchiveCours,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
   updateUniversityLinkRules, getUniversityLinkRulesForDossier, getOffersForUniversity,
   addUniversityToOffer, removeUniversityFromOffer, getUniversitySubjectsSummary,
@@ -1082,13 +1082,49 @@ export function PedagogieShell({
                                 onClick={() => { setSelectedCoursIds(new Set()); }}
                                 className="text-[10px] font-medium text-navy/60 hover:text-navy underline"
                               >Désélectionner</button>
-                              {selectedDossier && (
+                              {selectedDossier && !universityLinkRules && (
                                 <button
                                   type="button"
                                   onClick={() => setModal({ type: "rattacher_cours", coursIds: [...selectedCoursIds], sourceDossierId: selectedDossier.id })}
                                   className="rounded-lg bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-200 transition flex items-center gap-1"
                                 ><Link2 className="h-3 w-3" /> Rattacher</button>
                               )}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const ids = [...selectedCoursIds];
+                                  const anyHidden = coursList.some((c) => ids.includes(c.id) && !c.visible);
+                                  await handleAction(() => bulkSetCoursVisible(ids, anyHidden));
+                                  setSelectedCoursIds(new Set());
+                                }}
+                                className="rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-200 transition flex items-center gap-1"
+                                title={coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? "Rendre visible" : "Masquer"}
+                              >
+                                {coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                                {coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? "Visible" : "Masquer"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await handleAction(() => bulkArchiveCours([...selectedCoursIds]));
+                                  showToast(`${selectedCoursIds.size} cours archivé${selectedCoursIds.size > 1 ? "s" : ""}`, "success");
+                                  setSelectedCoursIds(new Set());
+                                }}
+                                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition flex items-center gap-1"
+                              ><FolderOpen className="h-3 w-3" /> Archiver</button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDelete({
+                                    label: `${selectedCoursIds.size} cours${universityLinkRules ? " (dans toutes les offres)" : ""}`,
+                                    onConfirm: async () => {
+                                      await handleAction(() => bulkDeleteCours([...selectedCoursIds]));
+                                      setSelectedCoursIds(new Set());
+                                    },
+                                  });
+                                }}
+                                className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition flex items-center gap-1"
+                              ><Trash2 className="h-3 w-3" /> Supprimer</button>
                               <div className="ml-auto relative">
                                 <button
                                   type="button"

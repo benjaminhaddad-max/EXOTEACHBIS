@@ -804,6 +804,43 @@ export async function bulkSetEtiquettes(coursIds: string[], etiquettes: string[]
   return { success: true };
 }
 
+export async function bulkSetCoursVisible(coursIds: string[], visible: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cours")
+    .update({ visible, updated_at: new Date().toISOString() })
+    .in("id", coursIds);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function bulkDeleteCours(coursIds: string[]) {
+  const supabase = await createClient();
+  // For linked cours, delete all linked copies too
+  for (const id of coursIds) {
+    const { data: cours } = await supabase.from("cours").select("linked_cours_id").eq("id", id).single();
+    if (cours?.linked_cours_id) {
+      await supabase.from("cours").delete().eq("linked_cours_id", cours.linked_cours_id);
+    } else {
+      await supabase.from("cours").delete().eq("id", id);
+    }
+  }
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function bulkArchiveCours(coursIds: string[]) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cours")
+    .update({ visible: false, etiquettes: ["Archive"], updated_at: new Date().toISOString() })
+    .in("id", coursIds);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function bulkSetDossierEtiquettes(dossierIds: string[], etiquettes: string[]) {
   const supabase = await createClient();
   const { error } = await supabase
