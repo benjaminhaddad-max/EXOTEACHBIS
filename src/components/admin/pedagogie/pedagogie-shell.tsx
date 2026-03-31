@@ -2724,6 +2724,13 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         </button>
       )}
 
+      {/* Visibility indicator */}
+      {!cours.visible && (
+        <span className="flex items-center gap-0.5 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-400" title="Masqué pour les élèves">
+          <EyeOff className="h-3 w-3" />
+        </span>
+      )}
+
       {/* PDF status / upload */}
       <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }} />
       {uploading ? (
