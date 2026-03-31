@@ -1167,14 +1167,20 @@ export function PedagogieShell({
               sourceDossierId={modal.sourceDossierId}
               allDossiers={allDossiers as Dossier[]}
               isPending={isPending}
-              onConfirm={(targetId) => {
+              onConfirm={(targetIds) => {
                 startTransition(async () => {
-                  const result = await linkCoursToOtherDossier(modal.coursIds, targetId);
-                  if (result.error) {
-                    showToast(result.error, "error");
-                  } else {
-                    showToast(`${result.count} cours rattaché${(result.count ?? 0) > 1 ? "s" : ""} avec succès`, "success");
+                  let totalCount = 0;
+                  let lastError: string | undefined;
+                  for (const targetId of targetIds) {
+                    const result = await linkCoursToOtherDossier(modal.coursIds, targetId);
+                    if (result.error) lastError = result.error;
+                    else totalCount += result.count ?? 0;
+                  }
+                  if (totalCount > 0) {
+                    showToast(`${totalCount} cours rattaché${totalCount > 1 ? "s" : ""} dans ${targetIds.length} matière${targetIds.length > 1 ? "s" : ""}`, "success");
                     setSelectedCoursIds(new Set());
+                  } else if (lastError) {
+                    showToast(lastError, "error");
                   }
                   setModal(null);
                   await refreshAll();
@@ -2988,196 +2994,86 @@ function RattacherCoursModal({
   sourceDossierId: string;
   allDossiers: Dossier[];
   isPending: boolean;
-  onConfirm: (targetDossierId: string) => void;
+  onConfirm: (targetDossierIds: string[]) => void;
   onClose: () => void;
 }) {
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [checkedTargets, setCheckedTargets] = useState<Set<string>>(new Set());
 
   const byId = useMemo(() => new Map(allDossiers.map((d) => [d.id, d])), [allDossiers]);
 
-  // Walk up from source dossier to find university and offer ancestors
-  const { sourceUniversityName, sourceOfferId } = useMemo(() => {
+  // Walk up from source dossier to find subject name, university name, and offer ID
+  const { sourceSubjectName, sourceUniversityName, sourceOfferId } = useMemo(() => {
+    let subjectName: string | null = null;
     let uniName: string | null = null;
     let offerId: string | null = null;
+    // The sourceDossierId IS the subject dossier
+    const sourceDossier = byId.get(sourceDossierId);
+    if (sourceDossier?.dossier_type === "subject") subjectName = sourceDossier.name;
     let cur: string | null = sourceDossierId;
     while (cur) {
       const d = byId.get(cur);
       if (!d) break;
+      if (d.dossier_type === "subject" && !subjectName) subjectName = d.name;
       if (d.dossier_type === "university" && !uniName) uniName = d.name;
       if (d.dossier_type === "offer") { offerId = d.id; break; }
       cur = d.parent_id;
     }
-    return { sourceUniversityName: uniName, sourceOfferId: offerId };
+    return { sourceSubjectName: subjectName, sourceUniversityName: uniName, sourceOfferId: offerId };
   }, [sourceDossierId, byId]);
 
-  // Collect IDs of all dossiers that are descendants of a matching university (same name, different offer)
-  const relevantIds = useMemo(() => {
-    if (!sourceUniversityName) return null; // no university found → show everything
-    const relevant = new Set<string>();
-    // Find all university dossiers with the same name in OTHER offers
-    const matchingUnis = allDossiers.filter(
-      (d) => d.dossier_type === "university" && d.name === sourceUniversityName
+  // Find matching subject dossiers: same university name + same subject name, in other offers
+  const targetSubjects = useMemo(() => {
+    const results: { id: string; offerName: string; path: string }[] = [];
+    if (!sourceUniversityName || !sourceSubjectName) return results;
+
+    // Find all subject dossiers with the same name
+    const candidateSubjects = allDossiers.filter(
+      (d) => d.dossier_type === "subject" && d.name === sourceSubjectName && d.id !== sourceDossierId
     );
-    // For each matching uni, check it's under a different offer
-    for (const uni of matchingUnis) {
-      let offerId: string | null = null;
-      let cur: string | null = uni.parent_id;
+
+    for (const subj of candidateSubjects) {
+      // Walk up to find university and offer
+      let uniName: string | null = null;
+      let offerName: string | null = null;
+      let isInSameOffer = false;
+      let cur: string | null = subj.parent_id;
       while (cur) {
         const p = byId.get(cur);
         if (!p) break;
-        if (p.dossier_type === "offer") { offerId = p.id; break; }
+        if (p.dossier_type === "university" && !uniName) uniName = p.name;
+        if (p.dossier_type === "offer") {
+          offerName = p.name;
+          if (p.id === sourceOfferId) isInSameOffer = true;
+          break;
+        }
         cur = p.parent_id;
       }
-      if (offerId === sourceOfferId) continue; // skip same offer
-      // Add this uni and all its descendants
-      const queue = [uni.id];
-      while (queue.length > 0) {
-        const id = queue.shift()!;
-        relevant.add(id);
-        for (const child of allDossiers) {
-          if (child.parent_id === id) queue.push(child.id);
-        }
-      }
-      // Add ancestors up to root (offer included) for tree display
-      let anc: string | null = uni.parent_id;
-      while (anc) {
-        relevant.add(anc);
-        anc = byId.get(anc)?.parent_id ?? null;
+      // Only include if same university, different offer
+      if (uniName === sourceUniversityName && !isInSameOffer && offerName) {
+        results.push({
+          id: subj.id,
+          offerName,
+          path: getDossierPathLabel(subj.id, allDossiers),
+        });
       }
     }
-    return relevant.size > 0 ? relevant : null;
-  }, [allDossiers, byId, sourceUniversityName, sourceOfferId]);
+    return results;
+  }, [allDossiers, byId, sourceSubjectName, sourceUniversityName, sourceOfferId, sourceDossierId]);
 
-  const tree = useMemo(() => buildTree(allDossiers, null), [allDossiers]);
-
-  // Auto-expand all relevant non-subject nodes
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
-    const set = new Set<string>();
-    if (relevantIds) {
-      for (const id of relevantIds) {
-        const d = byId.get(id);
-        if (d && d.dossier_type !== "subject") set.add(id);
-      }
-    } else {
-      for (const d of allDossiers) {
-        if (d.dossier_type === "offer") set.add(d.id);
-      }
-    }
-    return set;
-  });
-
-  const searchLower = search.toLowerCase().trim();
-
-  // Search filter: find nodes matching search + their ancestors
-  const searchMatchIds = useMemo(() => {
-    if (!searchLower) return null;
-    const matches = new Set<string>();
-    for (const d of allDossiers) {
-      if (d.name.toLowerCase().includes(searchLower)) {
-        let cur: string | null = d.id;
-        while (cur) {
-          matches.add(cur);
-          cur = byId.get(cur)?.parent_id ?? null;
-        }
-      }
-    }
-    return matches;
-  }, [allDossiers, byId, searchLower]);
-
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
+  const toggleCheck = (id: string) => {
+    setCheckedTargets((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
-  const pathLabel = selectedTarget
-    ? getDossierPathLabel(selectedTarget, allDossiers)
-    : null;
-
-  const renderNode = (node: DossierNode, depth: number): React.ReactNode => {
-    // Filter by university context
-    if (relevantIds && !relevantIds.has(node.id)) return null;
-    // Filter by search
-    if (searchMatchIds && !searchMatchIds.has(node.id)) return null;
-
-    const isSubject = node.dossier_type === "subject";
-    const isSource = node.id === sourceDossierId;
-    const isSelected = node.id === selectedTarget;
-    const hasChildren = node.children.length > 0;
-    const isExpanded = expandedIds.has(node.id);
-    const meta = DOSSIER_TYPE_META[node.dossier_type as keyof typeof DOSSIER_TYPE_META];
-
-    // Check if any children would render (for showing chevron)
-    const hasVisibleChildren = hasChildren && node.children.some((c) => {
-      if (relevantIds && !relevantIds.has(c.id)) return false;
-      if (searchMatchIds && !searchMatchIds.has(c.id)) return false;
-      return true;
-    });
-
-    return (
-      <div key={node.id}>
-        <div
-          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition cursor-pointer ${
-            isSelected
-              ? "bg-purple-100 ring-1 ring-purple-300"
-              : isSource
-                ? "opacity-40 cursor-not-allowed"
-                : isSubject
-                  ? "hover:bg-purple-50"
-                  : "hover:bg-gray-50"
-          }`}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => {
-            if (isSource) return;
-            if (isSubject) {
-              setSelectedTarget(node.id);
-            } else if (hasVisibleChildren) {
-              toggleExpand(node.id);
-            }
-          }}
-        >
-          {hasVisibleChildren ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
-              className="flex-shrink-0 rounded p-0.5 hover:bg-gray-200"
-            >
-              {isExpanded
-                ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
-                : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
-            </button>
-          ) : (
-            <span className="w-[18px] flex-shrink-0" />
-          )}
-          {isSubject
-            ? <BookOpen className="h-4 w-4 flex-shrink-0 text-purple-500" />
-            : node.dossier_type === "offer"
-              ? <Layers className="h-4 w-4 flex-shrink-0 text-navy" />
-              : node.dossier_type === "university"
-                ? <Building2 className="h-4 w-4 flex-shrink-0 text-blue-500" />
-                : node.dossier_type === "semester"
-                  ? <Calendar className="h-4 w-4 flex-shrink-0 text-green-500" />
-                  : <Folder className="h-4 w-4 flex-shrink-0 text-gray-400" />}
-          <span className={`flex-1 truncate ${isSubject ? "font-medium" : ""} ${isSource ? "line-through" : ""}`}>
-            {node.name}
-          </span>
-          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-            {meta?.shortLabel ?? node.dossier_type}
-          </span>
-          {isSource && (
-            <span className="flex-shrink-0 text-[10px] text-gray-400">(actuel)</span>
-          )}
-        </div>
-        {hasVisibleChildren && isExpanded && (
-          <div>
-            {node.children.map((child) => renderNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
+  const toggleAll = () => {
+    if (checkedTargets.size === targetSubjects.length) {
+      setCheckedTargets(new Set());
+    } else {
+      setCheckedTargets(new Set(targetSubjects.map((t) => t.id)));
+    }
   };
 
   return (
@@ -3191,11 +3087,9 @@ function RattacherCoursModal({
             <h3 className="text-sm font-semibold text-gray-900">
               Rattacher {coursIds.length} cours
             </h3>
-            {sourceUniversityName && (
-              <p className="text-xs text-gray-500">
-                {sourceUniversityName} dans les autres offres
-              </p>
-            )}
+            <p className="text-xs text-gray-500">
+              {sourceSubjectName ?? "Matière"} — {sourceUniversityName ?? ""}
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
@@ -3203,49 +3097,75 @@ function RattacherCoursModal({
         </button>
       </div>
 
-      <div className="px-5 pt-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher une matière..."
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-3 py-3" style={{ maxHeight: "50vh" }}>
-        {tree.map((node) => renderNode(node, 0))}
-        {relevantIds === null && !sourceUniversityName && (
-          <p className="px-2 py-4 text-center text-xs text-gray-400">
-            Aucune université parente détectée — tous les dossiers sont affichés.
-          </p>
+      <div className="flex-1 overflow-y-auto px-5 py-4" style={{ maxHeight: "50vh" }}>
+        {targetSubjects.length > 0 ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-gray-500">
+                Sélectionnez les offres cibles
+              </p>
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-[10px] font-medium text-purple-600 hover:text-purple-800 underline"
+              >{checkedTargets.size === targetSubjects.length ? "Tout désélectionner" : "Tout sélectionner"}</button>
+            </div>
+            {targetSubjects.map((target) => (
+              <label
+                key={target.id}
+                className={`flex items-center gap-3 rounded-xl border p-3 transition cursor-pointer ${
+                  checkedTargets.has(target.id)
+                    ? "border-purple-300 bg-purple-50 ring-1 ring-purple-200"
+                    : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checkedTargets.has(target.id)}
+                  onChange={() => toggleCheck(target.id)}
+                  className="h-4 w-4 rounded border-gray-300 text-purple-600 accent-purple-600"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{target.offerName}</p>
+                  <p className="text-xs text-gray-500 truncate">{target.path}</p>
+                </div>
+                <Layers className="h-4 w-4 flex-shrink-0 text-gray-300" />
+              </label>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 text-center">
+            <Building2 className="mx-auto h-8 w-8 text-gray-300" />
+            <p className="mt-2 text-sm text-gray-500">
+              Aucune matière &quot;{sourceSubjectName}&quot; trouvée
+            </p>
+            <p className="text-xs text-gray-400">
+              dans {sourceUniversityName} pour les autres offres
+            </p>
+          </div>
         )}
       </div>
 
-      {pathLabel && (
-        <div className="border-t border-gray-100 px-5 py-2">
-          <p className="text-xs text-gray-500">
-            Cible : <span className="font-medium text-purple-700">{pathLabel}</span>
-          </p>
+      <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
+        <span className="text-xs text-gray-500">
+          {checkedTargets.size > 0
+            ? `${checkedTargets.size} offre${checkedTargets.size > 1 ? "s" : ""} sélectionnée${checkedTargets.size > 1 ? "s" : ""}`
+            : "Aucune sélection"}
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >Annuler</button>
+          <button
+            onClick={() => checkedTargets.size > 0 && onConfirm([...checkedTargets])}
+            disabled={checkedTargets.size === 0 || isPending}
+            className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-50"
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Rattacher
+          </button>
         </div>
-      )}
-
-      <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
-        <button
-          onClick={onClose}
-          className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-        >Annuler</button>
-        <button
-          onClick={() => selectedTarget && onConfirm(selectedTarget)}
-          disabled={!selectedTarget || isPending}
-          className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-50"
-        >
-          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Rattacher ici
-        </button>
       </div>
     </div>
   );
