@@ -509,7 +509,15 @@ export function PedagogieShell({
     startTransition(async () => {
       const count = await getLinkedCoursCount(c.id);
       if (count > 1) {
-        setLinkedDeleteChoice({ cours: c, count });
+        if (universityLinkRules) {
+          // With link_rules, always delete everywhere — just confirm
+          setConfirmDelete({
+            label: `le cours "${c.name}" dans toutes les offres (${count})`,
+            onConfirm: () => handleAction(() => deleteLinkedCoursByCoursId(c.id)),
+          });
+        } else {
+          setLinkedDeleteChoice({ cours: c, count });
+        }
       } else {
         setConfirmDelete({
           label: `le cours "${c.name}"`,
@@ -1401,7 +1409,15 @@ export function PedagogieShell({
                 startTransition(async () => {
                   const count = await getLinkedCoursCount(cours.id);
                   if (count > 1) {
-                    setModal({ type: "linked_edit_confirm", cours, data, linkedCount: count });
+                    if (universityLinkRules) {
+                      // With link_rules, always propagate
+                      await updateLinkedCours(cours.id, data, true);
+                      showToast("Modifié partout", "success");
+                      setModal(null);
+                      await refreshAll();
+                    } else {
+                      setModal({ type: "linked_edit_confirm", cours, data, linkedCount: count });
+                    }
                   } else {
                     await handleAction(() => updateCoursInDossier(cours.id, data));
                   }
