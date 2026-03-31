@@ -84,6 +84,7 @@ export function TagInput({
           value={input}
           onChange={(e) => { setInput(e.target.value); setShowSuggestions(true); }}
           onFocus={() => setShowSuggestions(true)}
+          onBlur={() => { if (input.trim()) addTag(input); }}
           onKeyDown={handleKeyDown}
           placeholder={value.length === 0 ? placeholder : ""}
           className="min-w-[120px] flex-1 border-none bg-transparent text-sm outline-none placeholder:text-gray-400"
