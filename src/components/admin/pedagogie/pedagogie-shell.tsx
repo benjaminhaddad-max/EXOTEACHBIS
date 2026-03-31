@@ -978,7 +978,7 @@ export function PedagogieShell({
                         <span className="h-px flex-1 bg-navy/10" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Cours</span>
                         <span className="h-px flex-1 bg-navy/10" />
-                        {canEdit && selectedDossier && (
+                        {canEdit && selectedDossier && !universityLinkRules && (
                           <button
                             onClick={() => setModal({ type: "missing_cours", dossierId: selectedDossier.id })}
                             className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-semibold text-purple-600 hover:bg-purple-100 transition"
@@ -1153,9 +1153,9 @@ export function PedagogieShell({
                                             onSelect={() => setSelectedCours(c)}
                                             onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
                                             onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
-                                            onLink={canEdit && selectedDossier ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
-                                            availableSections={availableCourseSections}
-                                            onMoveToSection={canEdit ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
+                                            onLink={canEdit && selectedDossier && !universityLinkRules ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
+                                            availableSections={!universityLinkRules ? availableCourseSections : undefined}
+                                            onMoveToSection={canEdit && !universityLinkRules ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
                                             onPdfUploaded={refreshAll}
                                           />
                                         </div>
@@ -1179,9 +1179,9 @@ export function PedagogieShell({
                                       onSelect={() => setSelectedCours(c)}
                                       onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
                                       onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
-                                      onLink={canEdit && selectedDossier ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
-                                      availableSections={availableCourseSections}
-                                      onMoveToSection={canEdit ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
+                                      onLink={canEdit && selectedDossier && !universityLinkRules ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
+                                      availableSections={!universityLinkRules ? availableCourseSections : undefined}
+                                      onMoveToSection={canEdit && !universityLinkRules ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
                                       onPdfUploaded={refreshAll}
                                     />
                                   ))
