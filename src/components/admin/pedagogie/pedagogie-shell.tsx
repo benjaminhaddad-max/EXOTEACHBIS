@@ -2766,20 +2766,20 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           autoFocus
         />
       ) : (
-        <button
-          onClick={onSelect}
-          onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
-          className="min-w-0 flex-1 text-left flex items-center gap-2"
-          title="Double-clic pour renommer"
-        >
-          <p className="truncate text-sm font-semibold text-gray-800 flex items-center gap-1">
-            {cours.linked_cours_id && <LinkedCoursIndicator cours={cours} />}
-            <span className="truncate">{cours.name}</span>
-          </p>
-          {cours.etiquettes?.map((tag) => (
-            <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
-          ))}
-        </button>
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          {cours.linked_cours_id && <LinkedCoursIndicator cours={cours} />}
+          <button
+            onClick={onSelect}
+            onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
+            className="min-w-0 flex-1 text-left flex items-center gap-2"
+            title="Double-clic pour renommer"
+          >
+            <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
+            {cours.etiquettes?.map((tag) => (
+              <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
+            ))}
+          </button>
+        </div>
       )}
 
       {/* Actualisation badge */}
