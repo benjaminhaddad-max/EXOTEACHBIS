@@ -535,6 +535,32 @@ export async function bulkSetEtiquettes(coursIds: string[], etiquettes: string[]
   return { success: true };
 }
 
+export async function bulkSetDossierEtiquettes(dossierIds: string[], etiquettes: string[]) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("dossiers")
+    .update({ etiquettes, updated_at: new Date().toISOString() })
+    .in("id", dossierIds);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function renameDossierEtiquette(dossierIds: string[], oldName: string, newName: string) {
+  const supabase = await createClient();
+  const { data: dossiers } = await supabase
+    .from("dossiers")
+    .select("id, etiquettes")
+    .in("id", dossierIds);
+  if (!dossiers) return { error: "Dossiers introuvables." };
+  for (const d of dossiers) {
+    const updated = (d.etiquettes ?? []).map((e: string) => (e === oldName ? newName : e));
+    await supabase.from("dossiers").update({ etiquettes: updated }).eq("id", d.id);
+  }
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function deleteCoursFromDossier(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("cours").delete().eq("id", id);

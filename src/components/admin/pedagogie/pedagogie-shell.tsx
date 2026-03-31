@@ -43,7 +43,7 @@ import {
   createRessource, updateRessource, deleteRessource, getRessourcesByDossier,
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
-  installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
+  installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
@@ -127,9 +127,16 @@ export function PedagogieShell({
     if (typeof window !== "undefined") return (localStorage.getItem("pedagogie-cours-view") as "cards" | "list") || "cards";
     return "cards";
   });
+  const [dossierViewMode, setDossierViewMode] = useState<"cards" | "list">(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("pedagogie-dossier-view") as "cards" | "list") || "cards";
+    return "cards";
+  });
   const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(new Set());
+  const [selectedDossierIds, setSelectedDossierIds] = useState<Set<string>>(new Set());
   const [bulkEtiquettes, setBulkEtiquettes] = useState<string[]>([]);
   const [showBulkPopover, setShowBulkPopover] = useState(false);
+  const [bulkDossierEtiquettes, setBulkDossierEtiquettes] = useState<string[]>([]);
+  const [showBulkDossierPopover, setShowBulkDossierPopover] = useState(false);
   const [treeWidth, setTreeWidth] = useState(360);
   const [isResizingTree, setIsResizingTree] = useState(false);
   const treeWidthRef = useRef(treeWidth);
@@ -165,6 +172,21 @@ export function PedagogieShell({
     }
     return groups;
   }, [coursList]);
+  const dossierGroups = useMemo(() => {
+    const hasAnyEtiquette = childDossiers.some((d) => d.etiquettes?.length > 0);
+    if (!hasAnyEtiquette) return null;
+    const groups: { label: string; dossiers: Dossier[] }[] = [];
+    const seen = new Map<string, number>();
+    for (const d of childDossiers) {
+      const label = d.etiquettes?.[0] ?? "";
+      if (!seen.has(label)) {
+        seen.set(label, groups.length);
+        groups.push({ label, dossiers: [] });
+      }
+      groups[seen.get(label)!].dossiers.push(d);
+    }
+    return groups;
+  }, [childDossiers]);
   const contentCreationLabel = getContentCreationLabel(selectedDossier?.dossier_type);
 
   // Breadcrumb
@@ -289,7 +311,9 @@ export function PedagogieShell({
     setSelectedCours(null);
     setDossierTab("contenu");
     setSelectedCoursIds(new Set());
+    setSelectedDossierIds(new Set());
     setShowBulkPopover(false);
+    setShowBulkDossierPopover(false);
     setExpandedIds((prev) => new Set([...prev, dossier.id]));
     // Toujours refetch (pas de cache stale après deploy)
     setLoadingRessources(true);
@@ -625,29 +649,175 @@ export function PedagogieShell({
                 />
               ) : (
                 <div className="space-y-5">
-                  {/* Sous-dossiers — drag & drop grille */}
+                  {/* Sous-dossiers — drag & drop grille ou liste */}
                   {childDossiers.length > 0 && (
                     <div>
-                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
+                      <div className="mb-2 flex items-center gap-2">
                         <span className="h-px flex-1 bg-navy/10" />
-                        Sous-dossiers
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Sous-dossiers</span>
                         <span className="h-px flex-1 bg-navy/10" />
-                      </p>
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndChildren}>
-                        <SortableContext items={childDossiers.map((d) => d.id)} strategy={rectSortingStrategy}>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                            {childDossiers.map((child) => (
-                              <SortableSubDossierCard
-                                key={child.id}
-                                dossier={child}
-                                onClick={() => selectDossier(child)}
-                                onEdit={canEdit ? () => setModal({ type: "edit_dossier", dossier: child }) : undefined}
-                                onDelete={canEdit ? () => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) }) : undefined}
-                              />
-                            ))}
+                        <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5">
+                          <button
+                            onClick={() => { setDossierViewMode("cards"); localStorage.setItem("pedagogie-dossier-view", "cards"); }}
+                            className={`rounded-md p-1 transition ${dossierViewMode === "cards" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            title="Vue cartes"
+                          ><LayoutGrid className="h-3.5 w-3.5" /></button>
+                          <button
+                            onClick={() => { setDossierViewMode("list"); localStorage.setItem("pedagogie-dossier-view", "list"); }}
+                            className={`rounded-md p-1 transition ${dossierViewMode === "list" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            title="Vue liste"
+                          ><LayoutList className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+
+                      {/* Bulk action bar for dossiers */}
+                      {canEdit && selectedDossierIds.size > 0 && (
+                        <div className="mb-2 flex items-center gap-2 rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
+                          <span className="text-xs font-semibold text-gold-dark">{selectedDossierIds.size} dossier{selectedDossierIds.size > 1 ? "s" : ""} sélectionné{selectedDossierIds.size > 1 ? "s" : ""}</span>
+                          <button type="button" onClick={() => setSelectedDossierIds(new Set(childDossiers.map((d) => d.id)))} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Tout sélectionner</button>
+                          <button type="button" onClick={() => setSelectedDossierIds(new Set())} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Désélectionner</button>
+                          <div className="ml-auto relative">
+                            <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition">Étiquettes</button>
+                            {showBulkDossierPopover && (
+                              <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+                                <p className="mb-2 text-xs font-semibold text-gray-700">Attribuer des étiquettes</p>
+                                <TagInput
+                                  value={bulkDossierEtiquettes}
+                                  onChange={setBulkDossierEtiquettes}
+                                  suggestions={[...new Set(childDossiers.flatMap((d) => d.etiquettes ?? []))].sort()}
+                                  placeholder="Taper puis Enter..."
+                                />
+                                <div className="mt-2 flex justify-end gap-2">
+                                  <button type="button" onClick={() => { setShowBulkDossierPopover(false); setBulkDossierEtiquettes([]); }} className="rounded-lg px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100">Annuler</button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], bulkDossierEtiquettes));
+                                      setShowBulkDossierPopover(false);
+                                      setBulkDossierEtiquettes([]);
+                                      setSelectedDossierIds(new Set());
+                                    }}
+                                    className="rounded-lg bg-navy px-3 py-1 text-xs font-semibold text-white hover:bg-navy/90"
+                                  >Appliquer</button>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </SortableContext>
-                      </DndContext>
+                        </div>
+                      )}
+
+                      {dossierViewMode === "cards" ? (
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndChildren}>
+                          <SortableContext items={childDossiers.map((d) => d.id)} strategy={rectSortingStrategy}>
+                            {dossierGroups ? (
+                              dossierGroups.map((group) => (
+                                <div key={group.label || "__none__"}>
+                                  <DossierEtiquetteSectionHeader
+                                    label={group.label}
+                                    dossierIds={group.dossiers.map((d) => d.id)}
+                                    canEdit={canEdit}
+                                    onRenamed={refreshAll}
+                                    onDeleteSection={canEdit && group.label ? (mode) => {
+                                      startTransition(async () => {
+                                        if (mode === "remove") {
+                                          await bulkSetDossierEtiquettes(group.dossiers.map((d) => d.id), []);
+                                        }
+                                        await refreshAll();
+                                      });
+                                    } : undefined}
+                                  />
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 mb-3">
+                                    {group.dossiers.map((child) => (
+                                      <SortableSubDossierCard
+                                        key={child.id}
+                                        dossier={child}
+                                        onClick={() => selectDossier(child)}
+                                        onEdit={canEdit ? () => setModal({ type: "edit_dossier", dossier: child }) : undefined}
+                                        onDelete={canEdit ? () => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) }) : undefined}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {childDossiers.map((child) => (
+                                  <SortableSubDossierCard
+                                    key={child.id}
+                                    dossier={child}
+                                    onClick={() => selectDossier(child)}
+                                    onEdit={canEdit ? () => setModal({ type: "edit_dossier", dossier: child }) : undefined}
+                                    onDelete={canEdit ? () => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) }) : undefined}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </SortableContext>
+                        </DndContext>
+                      ) : (
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndChildren}>
+                          <SortableContext items={childDossiers.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                            <div className="space-y-1.5">
+                              {dossierGroups ? (
+                                dossierGroups.map((group) => (
+                                  <div key={group.label || "__none__"}>
+                                    <DossierEtiquetteSectionHeader
+                                      label={group.label}
+                                      dossierIds={group.dossiers.map((d) => d.id)}
+                                      canEdit={canEdit}
+                                      onRenamed={refreshAll}
+                                      onDeleteSection={canEdit && group.label ? (mode) => {
+                                        startTransition(async () => {
+                                          if (mode === "remove") {
+                                            await bulkSetDossierEtiquettes(group.dossiers.map((d) => d.id), []);
+                                          }
+                                          await refreshAll();
+                                        });
+                                      } : undefined}
+                                    />
+                                    {group.dossiers.map((child) => (
+                                      <div key={child.id} className="mb-1.5">
+                                        <SortableSubDossierRow
+                                          dossier={child}
+                                          selected={selectedDossierIds.has(child.id)}
+                                          onToggleSelect={canEdit ? () => {
+                                            setSelectedDossierIds((prev) => {
+                                              const next = new Set(prev);
+                                              if (next.has(child.id)) next.delete(child.id); else next.add(child.id);
+                                              return next;
+                                            });
+                                          } : undefined}
+                                          onClick={() => selectDossier(child)}
+                                          onEdit={canEdit ? () => setModal({ type: "edit_dossier", dossier: child }) : undefined}
+                                          onDelete={canEdit ? () => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) }) : undefined}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                ))
+                              ) : (
+                                childDossiers.map((child) => (
+                                  <SortableSubDossierRow
+                                    key={child.id}
+                                    dossier={child}
+                                    selected={selectedDossierIds.has(child.id)}
+                                    onToggleSelect={canEdit ? () => {
+                                      setSelectedDossierIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(child.id)) next.delete(child.id); else next.add(child.id);
+                                        return next;
+                                      });
+                                    } : undefined}
+                                    onClick={() => selectDossier(child)}
+                                    onEdit={canEdit ? () => setModal({ type: "edit_dossier", dossier: child }) : undefined}
+                                    onDelete={canEdit ? () => setConfirmDelete({ label: `le dossier "${child.name}"`, onConfirm: () => handleAction(() => deleteDossier(child.id)) }) : undefined}
+                                  />
+                                ))
+                              )}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                      )}
                     </div>
                   )}
 
@@ -2037,6 +2207,121 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
           {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
         </div>
       )}
+    </div>
+  );
+}
+
+function SortableSubDossierRow({ dossier, selected, onToggleSelect, onClick, onEdit, onDelete }: {
+  dossier: Dossier;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  onClick: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dossier.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const cs = CARD_STYLES[dossier.dossier_type] ?? CARD_STYLES.generic;
+  const CardIcon = cs.icon;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center gap-3 rounded-xl border bg-white p-2.5 shadow-sm transition ${
+        selected ? "border-gold/40 bg-gold/5 ring-1 ring-gold/20" : "border-gray-100 hover:border-gray-200 hover:shadow"
+      }`}
+    >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={onToggleSelect}
+          className="h-3.5 w-3.5 flex-shrink-0 rounded border-gray-300 text-gold accent-gold cursor-pointer"
+        />
+      )}
+      {(onEdit || onDelete) && (
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+          <GripVertical className="h-4 w-4" />
+        </span>
+      )}
+      <button onClick={onClick} className="min-w-0 flex-1 text-left flex items-center gap-2">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: cs.iconBg }}>
+          {dossier.icon_url
+            ? <img src={dossier.icon_url} alt="" className="h-5 w-5 object-contain" />
+            : <CardIcon className="h-4 w-4" style={{ color: cs.iconColor }} />}
+        </div>
+        <p className="truncate text-sm font-semibold text-gray-800">{dossier.name}</p>
+        {dossier.etiquettes?.map((tag) => (
+          <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
+        ))}
+        <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+          {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
+        </span>
+      </button>
+      {(onEdit || onDelete) && (
+        <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DossierEtiquetteSectionHeader({ label, dossierIds, canEdit, onRenamed, onDeleteSection }: {
+  label: string;
+  dossierIds: string[];
+  canEdit: boolean;
+  onRenamed: () => void;
+  onDeleteSection?: (mode: "remove") => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const commitRename = async () => {
+    setEditing(false);
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === label) { setEditValue(label); return; }
+    await renameDossierEtiquette(dossierIds, label, trimmed);
+    onRenamed();
+  };
+
+  if (!label) return null;
+
+  return (
+    <div className="group mb-1.5 mt-3 flex items-center gap-2 first:mt-0">
+      <span className="h-px flex-1 bg-gold/20" />
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditValue(label); } }}
+          className="rounded border border-gold/30 bg-gold/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gold-dark outline-none ring-1 ring-gold/20"
+          autoFocus
+        />
+      ) : (
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gold-dark">{label}</span>
+      )}
+      <span className="text-[10px] text-gold-dark/50">({dossierIds.length})</span>
+      {canEdit && !editing && (
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition">
+          <button
+            onClick={() => { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }}
+            className="rounded p-0.5 text-gold-dark/40 hover:text-gold-dark"
+          ><Pencil className="h-3 w-3" /></button>
+          {onDeleteSection && (
+            <button
+              onClick={() => onDeleteSection("remove")}
+              className="rounded p-0.5 text-gold-dark/40 hover:text-red-500"
+            ><Trash2 className="h-3 w-3" /></button>
+          )}
+        </div>
+      )}
+      <span className="h-px flex-1 bg-gold/20" />
     </div>
   );
 }
