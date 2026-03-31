@@ -37,9 +37,11 @@ export async function POST(request: Request) {
             },
             {
               type: "text",
-              text: `Analyse ce screenshot d'une page listant des cours (probablement un site éducatif type ExoTeach).
+              text: `Analyse ce screenshot d'une page listant des cours d'un site éducatif (ExoTeach ou similaire).
 
-Extrais TOUS les noms de cours visibles dans l'image. Ignore les éléments de navigation, boutons, headers, etc. — ne garde que les noms de cours/chapitres.
+L'image peut être très large avec des cartes de cours disposées horizontalement. Examine attentivement TOUTE la largeur de l'image.
+
+Extrais TOUS les noms/titres de cours visibles. Chaque carte ou bloc représente un cours. Ignore les boutons, compteurs d'exercices, labels de navigation.
 
 Réponds UNIQUEMENT en JSON strict, un array de strings :
 ["Nom du cours 1", "Nom du cours 2", ...]

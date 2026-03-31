@@ -821,8 +821,11 @@ function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
     if (!file.type.startsWith("image/")) return;
     setAnalyzing(true);
     try {
-      const buffer = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.readAsDataURL(file);
+      });
       const res = await fetch("/api/extract-cours-from-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
