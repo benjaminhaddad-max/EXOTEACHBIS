@@ -138,21 +138,24 @@ export async function updateDossier(
       : 0;
   }
 
+  const dossierPayload: Record<string, any> = {
+    name: data.name,
+    description: data.description || null,
+    parent_id: nextParentId,
+    dossier_type: data.dossier_type ?? "generic",
+    formation_offer: data.formation_offer ?? null,
+    color: data.color,
+    icon_url: data.icon_url || null,
+    visible: data.visible,
+    order_index: nextOrderIndex,
+    updated_at: new Date().toISOString(),
+  };
+  if (data.etiquettes !== undefined) {
+    dossierPayload.etiquettes = data.etiquettes;
+  }
   const { error } = await supabase
     .from("dossiers")
-    .update({
-      name: data.name,
-      description: data.description || null,
-      parent_id: nextParentId,
-      dossier_type: data.dossier_type ?? "generic",
-      formation_offer: data.formation_offer ?? null,
-      color: data.color,
-      icon_url: data.icon_url || null,
-      visible: data.visible,
-      order_index: nextOrderIndex,
-      etiquettes: data.etiquettes ?? [],
-      updated_at: new Date().toISOString(),
-    })
+    .update(dossierPayload)
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(PATH);
@@ -483,18 +486,21 @@ export async function updateCoursInDossier(
   }
 ) {
   const supabase = await createClient();
+  const updatePayload: Record<string, any> = {
+    name: data.name,
+    description: data.description || null,
+    pdf_url: data.pdf_url || null,
+    pdf_path: data.pdf_path || null,
+    nb_pages: data.nb_pages ?? 0,
+    visible: data.visible,
+    updated_at: new Date().toISOString(),
+  };
+  if (data.etiquettes !== undefined) {
+    updatePayload.etiquettes = data.etiquettes;
+  }
   const { error } = await supabase
     .from("cours")
-    .update({
-      name: data.name,
-      description: data.description || null,
-      pdf_url: data.pdf_url || null,
-      pdf_path: data.pdf_path || null,
-      nb_pages: data.nb_pages ?? 0,
-      etiquettes: data.etiquettes ?? [],
-      visible: data.visible,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(PATH);
