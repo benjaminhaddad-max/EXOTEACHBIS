@@ -402,6 +402,11 @@ export function EleveCoursShell({
                             </div>
                           </div>
                           <h3 className="mt-3 text-[15px] font-semibold text-[#0e1e35]">{child.name}</h3>
+                          {child.etiquette && (
+                            <span className="mt-1 inline-block rounded-full bg-[#4FABDB]/10 px-2 py-0.5 text-[10px] font-medium text-[#4FABDB]">
+                              {child.etiquette}
+                            </span>
+                          )}
                           {child.description && (
                             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#8A98A9]">{child.description}</p>
                           )}

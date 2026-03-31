@@ -9,6 +9,7 @@ type DossierCard = {
   description?: string | null;
   color: string;
   icon_url?: string | null;
+  etiquette?: string | null;
   nbCours: number;
   nbQuestions: number;
   progress: number;
@@ -63,12 +64,22 @@ function DossierCardItem({ dossier }: { dossier: DossierCard }) {
         style={{ background: `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` }}
       >
         <div className="flex-1 min-w-0">
-          <span
-            className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2"
-            style={{ backgroundColor: color + "33", color }}
-          >
-            Dossier
-          </span>
+          <div className="flex items-center gap-1.5 mb-2">
+            <span
+              className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: color + "33", color }}
+            >
+              Dossier
+            </span>
+            {dossier.etiquette && (
+              <span
+                className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: color + "15", color }}
+              >
+                {dossier.etiquette}
+              </span>
+            )}
+          </div>
           <h3 className="text-base font-bold text-gray-900 leading-tight">{dossier.name}</h3>
           {dossier.description && (
             <p className="text-xs text-gray-500 mt-1 line-clamp-2">{dossier.description}</p>
