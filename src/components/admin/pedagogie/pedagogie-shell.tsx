@@ -249,9 +249,17 @@ export function PedagogieShell({
     return sections.length > 0 ? sections : undefined;
   }, [coursMap]);
 
-  // If link_rules exist, they define the mandatory sections. Otherwise fall back to coursGroups.
+  // For CREATING courses: all sections allowed by link_rules for this offer
   const availableCourseSections = linkRulesSections
     ?? (coursGroups && coursGroups.length >= 2 ? coursGroups.map((g) => g.label).filter(Boolean) : undefined);
+
+  // For EXERCISES/SERIES: only sections that actually have courses in this matière
+  const exerciseSections = useMemo(() => {
+    if (!linkRulesSections) return undefined;
+    const existingSections = [...new Set(coursList.map((c) => c.etiquettes?.[0]).filter(Boolean))] as string[];
+    const filtered = linkRulesSections.filter((s) => existingSections.includes(s));
+    return filtered.length > 0 ? filtered : undefined;
+  }, [linkRulesSections, coursList]);
 
   const moveSectionByLabel = useCallback((label: string, direction: "up" | "down") => {
     const labels = coursGroups?.map((g) => g.label) ?? [];
@@ -711,7 +719,7 @@ export function PedagogieShell({
                   dossierId={selectedDossier.id}
                   dossierName={selectedDossier.name}
                   allDossiers={allDossiers}
-                  availableSections={linkRulesSections ?? undefined}
+                  availableSections={exerciseSections}
                   onNewSerie={() => {}}
                 />
               </div>
