@@ -191,6 +191,7 @@ export async function createSerie(data: {
   matiere_id?: string | null;
   cours_id?: string | null;
   annee?: string | null;
+  sections?: string[];
 }) {
   const supabase = await createClient();
   const { data: serie, error } = await supabase
@@ -211,8 +212,168 @@ export async function createSerie(data: {
     .single();
 
   if (error) return { error: error.message };
+
+  // Auto-link serie to other offers based on university link_rules
+  if (serie?.id && (data.cours_id || data.matiere_id)) {
+    try {
+      await autoLinkSerieByRules(supabase, serie.id, data, data.sections);
+    } catch {
+      // Auto-link is best-effort
+    }
+  }
+
   revalidatePath(PATH);
   return { success: true, id: serie.id };
+}
+
+async function autoLinkSerieByRules(
+  supabase: any,
+  serieId: string,
+  data: {
+    name: string;
+    description?: string;
+    type: string;
+    timed: boolean;
+    duration_minutes?: number | null;
+    score_definitif: boolean;
+    visible: boolean;
+    cours_id?: string | null;
+    matiere_id?: string | null;
+    annee?: string | null;
+  },
+  sections?: string[],
+) {
+  // Get all dossiers to walk the tree
+  const { data: allDossiers } = await supabase
+    .from("dossiers")
+    .select("id, name, parent_id, dossier_type, formation_offer, link_rules");
+  if (!allDossiers) return;
+
+  type DRow = { id: string; name: string; parent_id: string | null; dossier_type: string; formation_offer: string | null; link_rules: any };
+  const byId = new Map((allDossiers as DRow[]).map((d) => [d.id, d]));
+
+  // Find the dossier_id of the course or matiere to walk up from
+  let startDossierId: string | null = null;
+
+  if (data.cours_id) {
+    const { data: cours } = await supabase.from("cours").select("dossier_id, etiquettes").eq("id", data.cours_id).single();
+    if (cours) startDossierId = cours.dossier_id;
+    // Use course etiquette as section if not provided
+    if (!sections?.length && cours?.etiquettes?.[0]) sections = [cours.etiquettes[0]];
+  }
+
+  if (!startDossierId) {
+    // Try to find dossier from matiere (legacy path)
+    return;
+  }
+
+  // Walk up to find subject name, university (with link_rules), current offer code
+  let subjectName: string | null = null;
+  let uniName: string | null = null;
+  let uniLinkRules: { sections: Record<string, string[]> } | null = null;
+  let currentOfferCode: string | null = null;
+  let cur: string | null = startDossierId;
+  while (cur) {
+    const d = byId.get(cur);
+    if (!d) break;
+    if (d.dossier_type === "subject" && !subjectName) subjectName = d.name;
+    if (d.dossier_type === "university" && !uniName) {
+      uniName = d.name;
+      if (d.link_rules) uniLinkRules = d.link_rules;
+    }
+    if (d.dossier_type === "offer") {
+      currentOfferCode = d.formation_offer ?? null;
+      break;
+    }
+    cur = d.parent_id;
+  }
+
+  if (!uniLinkRules || !subjectName || !uniName || !currentOfferCode) return;
+  if (!sections?.length) return;
+
+  // Collect all target offer codes from all selected sections
+  const targetOfferCodes = new Set<string>();
+  for (const section of sections) {
+    const offers = uniLinkRules.sections[section];
+    if (offers) {
+      for (const o of offers) {
+        if (o !== currentOfferCode) targetOfferCodes.add(o);
+      }
+    }
+  }
+  if (targetOfferCodes.size === 0) return;
+
+  // Set linked_serie_id on the source serie
+  const linkId = serieId;
+  await supabase.from("series").update({ linked_serie_id: linkId }).eq("id", serieId);
+
+  // For each target offer, find the matching subject and clone the serie
+  for (const targetOfferCode of targetOfferCodes) {
+    for (const d of allDossiers as DRow[]) {
+      if (d.dossier_type !== "subject" || d.name !== subjectName) continue;
+      // Walk up to check uni name and offer
+      let dUni: string | null = null;
+      let dOfferCode: string | null = null;
+      let c: string | null = d.parent_id;
+      while (c) {
+        const p = byId.get(c);
+        if (!p) break;
+        if (p.dossier_type === "university" && !dUni) dUni = p.name;
+        if (p.dossier_type === "offer") { dOfferCode = p.formation_offer ?? null; break; }
+        c = p.parent_id;
+      }
+      if (dUni === uniName && dOfferCode === targetOfferCode) {
+        // Found the target subject — find a matching cours_id there
+        let targetCoursId: string | null = null;
+        if (data.cours_id) {
+          // Find the linked course in the target subject
+          const { data: sourceCours } = await supabase
+            .from("cours")
+            .select("linked_cours_id")
+            .eq("id", data.cours_id)
+            .single();
+          if (sourceCours?.linked_cours_id) {
+            const { data: targetCours } = await supabase
+              .from("cours")
+              .select("id")
+              .eq("linked_cours_id", sourceCours.linked_cours_id)
+              .eq("dossier_id", d.id)
+              .limit(1)
+              .single();
+            targetCoursId = targetCours?.id ?? null;
+          }
+        }
+        // If no linked cours found, use any first course in target subject
+        if (!targetCoursId) {
+          const { data: anyCours } = await supabase
+            .from("cours")
+            .select("id")
+            .eq("dossier_id", d.id)
+            .limit(1)
+            .single();
+          targetCoursId = anyCours?.id ?? null;
+        }
+
+        if (!targetCoursId) break; // No course in target, can't link
+
+        // Clone the serie
+        await supabase.from("series").insert({
+          name: data.name,
+          description: data.description || null,
+          type: data.type,
+          timed: data.timed,
+          duration_minutes: data.timed ? (data.duration_minutes ?? null) : null,
+          score_definitif: data.score_definitif,
+          visible: data.visible,
+          cours_id: targetCoursId,
+          matiere_id: null,
+          annee: data.annee || null,
+          linked_serie_id: linkId,
+        });
+        break; // One match per offer
+      }
+    }
+  }
 }
 
 export async function updateSerie(

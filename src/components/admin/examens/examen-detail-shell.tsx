@@ -132,7 +132,7 @@ export function ExamenDetailShell({
       if ("error" in res) { showToast(res.error!, "error"); return; }
       const addRes = await addSerieToExamen(initialExamen.id, res.id!, epreuves.length, 1);
       if ("error" in addRes) { showToast(addRes.error!, "error"); return; }
-      const newSerie: Serie = { id: res.id!, name: serieName, type: "concours_blanc", description: null, cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null, score_definitif: false, visible: true, annee: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const newSerie: Serie = { id: res.id!, name: serieName, type: "concours_blanc", description: null, cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null, score_definitif: false, visible: true, annee: null, linked_serie_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       setEpreuves(prev => [...prev, { series_id: res.id!, order_index: prev.length, coefficient: 1, series: newSerie }]);
       showToast(`${subject.name} ajoutée`, "success");
     } finally { setCreating(null); }
@@ -201,7 +201,7 @@ export function ExamenDetailShell({
       const importRes = await fetch("/api/import-serie", { method: "POST", body: formData });
       const importData = await importRes.json();
       if (!importRes.ok || importData.error) { showToast(importData.error || "Erreur d'import", "error"); return; }
-      const newSerie: Serie = { id: res.id!, name: serieName, type: "concours_blanc", description: null, cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null, score_definitif: false, visible: true, annee: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const newSerie: Serie = { id: res.id!, name: serieName, type: "concours_blanc", description: null, cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null, score_definitif: false, visible: true, annee: null, linked_serie_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       setEpreuves(prev => [...prev, { series_id: res.id!, order_index: prev.length, coefficient: 1, series: newSerie }]);
       showToast(`${subject.name} importée`, "success");
     } finally { setCreating(null); }

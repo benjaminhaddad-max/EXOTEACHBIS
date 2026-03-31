@@ -205,6 +205,7 @@ export interface Serie {
   score_definitif: boolean;
   visible: boolean;
   annee: string | null;
+  linked_serie_id: string | null;
   created_at: string;
   updated_at: string;
   // Relations

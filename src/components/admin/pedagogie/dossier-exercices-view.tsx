@@ -1229,6 +1229,7 @@ function NewSerieModal({
       cours_id: effectiveCoursId,
       matiere_id: effectiveCoursId ? null : (matiereId ?? null),
       annee: type === "annales" && annee.trim() ? annee.trim() : null,
+      sections: selectedSections.size > 0 ? [...selectedSections] : undefined,
     });
     if ("error" in res) { setError(res.error ?? "Erreur"); setSaving(false); return; }
     onSaved();
