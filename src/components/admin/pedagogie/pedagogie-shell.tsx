@@ -691,6 +691,7 @@ export function PedagogieShell({
                   dossierId={selectedDossier.id}
                   dossierName={selectedDossier.name}
                   allDossiers={allDossiers}
+                  availableSections={linkRulesSections ?? undefined}
                   onNewSerie={() => {}}
                 />
               </div>

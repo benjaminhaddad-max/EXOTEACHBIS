@@ -29,7 +29,7 @@ export type SerieSummary = {
   nb_questions: number; annee: string | null;
 };
 
-export type CoursBasic = { id: string; name: string; dossier_id: string };
+export type CoursBasic = { id: string; name: string; dossier_id: string; etiquettes?: string[] };
 
 const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
   annales:             { label: "Annales corrigées",   icon: <BookOpen size={14} />,   color: "text-amber-300",  bg: "bg-amber-500/15",  border: "border-amber-500/30" },
@@ -53,13 +53,27 @@ function buildChapters(dossierId: string, allDossiers: Dossier[], cours: CoursBa
   return [...direct, ...childChapters];
 }
 
-function SmartAIModal({ chapters, matiereName, onSaved, onClose }: {
-  chapters: Chapter[]; matiereName: string; onSaved: () => void; onClose: () => void;
+function SmartAIModal({ chapters, coursList, matiereName, availableSections, onSaved, onClose }: {
+  chapters: Chapter[]; coursList?: CoursBasic[]; matiereName: string; availableSections?: string[]; onSaved: () => void; onClose: () => void;
 }) {
   const [topic, setTopic] = useState("");
   const [nb, setNb] = useState(10);
   const [diff, setDiff] = useState(3);
+  const [aiSection, setAiSection] = useState<string>(availableSections?.[0] ?? "");
+
+  // Filter chapters by section
+  const filteredChapters = React.useMemo(() => {
+    if (!availableSections || !aiSection || !coursList) return chapters;
+    const sectionCoursIds = new Set(coursList.filter((c) => c.etiquettes?.[0] === aiSection).map((c) => c.id));
+    return chapters.filter((ch) => sectionCoursIds.has(ch.id));
+  }, [chapters, coursList, availableSections, aiSection]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(chapters.map((c) => c.id)));
+
+  // Update selection when section changes
+  React.useEffect(() => {
+    setSelectedIds(new Set(filteredChapters.map((c) => c.id)));
+  }, [aiSection]); // eslint-disable-line
   const [step, setStep] = useState<"config" | "loading" | "preview" | "saving">("config");
   const [generated, setGenerated] = useState<any[]>([]);
   const [error, setError] = useState("");
@@ -116,22 +130,36 @@ function SmartAIModal({ chapters, matiereName, onSaved, onClose }: {
                   <input type="range" min={1} max={5} value={diff} onChange={(e) => setDiff(Number(e.target.value))} className="w-full accent-[#C9A84C]" />
                 </div>
               </div>
+              {availableSections && availableSections.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-1.5 block">Section *</label>
+                  <select
+                    value={aiSection}
+                    onChange={(e) => setAiSection(e.target.value)}
+                    className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/25"
+                  >
+                    {availableSections.map((s) => (
+                      <option key={s} value={s} className="bg-[#0e1e35] text-white">{s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-white/50 uppercase tracking-wider">Chapitres ({selectedIds.size}/{chapters.length})</label>
+                  <label className="text-xs font-semibold text-white/50 uppercase tracking-wider">Chapitres ({selectedIds.size}/{filteredChapters.length})</label>
                   <div className="flex gap-2">
-                    <button onClick={() => setSelectedIds(new Set(chapters.map((c) => c.id)))} className="text-[10px] text-white/30 hover:text-white/60">Tout</button>
+                    <button onClick={() => setSelectedIds(new Set(filteredChapters.map((c) => c.id)))} className="text-[10px] text-white/30 hover:text-white/60">Tout</button>
                     <button onClick={() => setSelectedIds(new Set())} className="text-[10px] text-white/30 hover:text-white/60">Aucun</button>
                   </div>
                 </div>
                 <div className="space-y-1 max-h-40 overflow-y-auto rounded-xl border border-white/8 p-2">
-                  {chapters.map((c) => (
+                  {filteredChapters.map((c) => (
                     <label key={c.id} className="flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-white/4 cursor-pointer">
                       <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => setSelectedIds((p) => { const n = new Set(p); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })} className="mt-0.5 accent-[#C9A84C]" />
                       <div className="min-w-0"><p className="text-xs font-medium text-white truncate">{c.name}</p><p className="text-[10px] text-white/30 truncate">{c.path}</p></div>
                     </label>
                   ))}
-                  {chapters.length === 0 && <p className="text-xs text-white/30 text-center py-3">Aucun cours disponible</p>}
+                  {filteredChapters.length === 0 && <p className="text-xs text-white/30 text-center py-3">Aucun cours dans cette section</p>}
                 </div>
               </div>
               {error && <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400"><AlertCircle size={12} />{error}</div>}
@@ -718,11 +746,13 @@ export function DossierExercicesView({
   dossierId,
   dossierName,
   allDossiers,
+  availableSections,
   onNewSerie,
 }: {
   dossierId: string;
   dossierName: string;
   allDossiers: Dossier[];
+  availableSections?: string[];
   onNewSerie?: (type: SerieType) => void;
 }) {
   const [activeTab, setActiveTab] = useState<SerieType | "flashcards" | "acc_fabricator">("annales");
@@ -1089,6 +1119,7 @@ export function DossierExercicesView({
           coursList={cours}
           matiereId={matiereId}
           defaultAnnee={selectedAnnee}
+          availableSections={availableSections}
           onSaved={() => { setRefreshKey((k) => k + 1); setShowNewSerie(false); }}
           onClose={() => setShowNewSerie(false)}
         />
@@ -1098,7 +1129,9 @@ export function DossierExercicesView({
       {showAI && (
         <SmartAIModal
           chapters={chapters}
+          coursList={cours}
           matiereName={dossierName}
+          availableSections={availableSections}
           onSaved={() => setRefreshKey((k) => k + 1)}
           onClose={() => setShowAI(false)}
         />
@@ -1153,18 +1186,25 @@ export function DossierExercicesView({
 // ─── New Serie Modal ────────────────────────────────────────────────────────
 
 function NewSerieModal({
-  initialType, coursList, matiereId, defaultAnnee, onSaved, onClose,
+  initialType, coursList, matiereId, defaultAnnee, availableSections, onSaved, onClose,
 }: {
   initialType: SerieType;
   coursList: CoursBasic[];
   matiereId?: string | null;
   defaultAnnee?: string | null;
+  availableSections?: string[];
   onSaved: () => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<SerieType>(initialType);
+  const [selectedSection, setSelectedSection] = useState<string>("");
   const [coursId, setCoursId] = useState<string>("");
+
+  // Filter courses by selected section when sections are available
+  const filteredCoursList = availableSections && selectedSection
+    ? coursList.filter((c) => c.etiquettes?.[0] === selectedSection)
+    : coursList;
   const [annee, setAnnee] = useState(defaultAnnee ?? "");
   const [timed, setTimed] = useState(false);
   const [duration, setDuration] = useState("30");
@@ -1176,10 +1216,11 @@ function NewSerieModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError("Le nom est requis"); return; }
+    if (availableSections && !selectedSection) { setError("Choisissez une section"); return; }
     setSaving(true);
     setError("");
-    // Si "Toute la matière" (coursId vide), utiliser le 1er cours comme rattachement
-    const effectiveCoursId = coursId || coursList[0]?.id || null;
+    // Si "Toute la matière" (coursId vide), utiliser le 1er cours de la section (ou le 1er cours)
+    const effectiveCoursId = coursId || filteredCoursList[0]?.id || coursList[0]?.id || null;
     const res = await createSerie({
       name: name.trim(),
       type,
@@ -1241,16 +1282,33 @@ function NewSerieModal({
             </div>
           )}
 
+          {/* Section (si link_rules) */}
+          {availableSections && availableSections.length > 0 && (
+            <div>
+              <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Section *</label>
+              <select
+                value={selectedSection}
+                onChange={(e) => { setSelectedSection(e.target.value); setCoursId(""); }}
+                className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/25"
+              >
+                <option value="">— Choisir une section —</option>
+                {availableSections.map((s) => (
+                  <option key={s} value={s} className="bg-[#0e1e35] text-white">{s}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Cours associé */}
-          {coursList.length > 0 && (
+          {filteredCoursList.length > 0 && (
             <div>
               <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Cours associé <span className="font-normal text-white/30 normal-case">(optionnel)</span></label>
               <select
                 value={coursId} onChange={(e) => setCoursId(e.target.value)}
                 className="w-full bg-white/8 border border-white/12 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/25"
               >
-                <option value="">— Toute la matière (pas de chapitre spécifique) —</option>
-                {coursList.map((c) => (
+                <option value="">— Toute la {selectedSection || "matière"} —</option>
+                {filteredCoursList.map((c) => (
                   <option key={c.id} value={c.id} className="bg-[#0e1e35] text-white">{c.name}</option>
                 ))}
               </select>

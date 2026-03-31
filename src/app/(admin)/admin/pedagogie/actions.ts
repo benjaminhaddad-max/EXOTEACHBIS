@@ -855,7 +855,7 @@ export async function getSeriesByDossier(dossierId: string) {
   // Cours via dossier_id direct
   const { data: coursDirect } = await supabase
     .from("cours")
-    .select("id, name, dossier_id")
+    .select("id, name, dossier_id, etiquettes")
     .in("dossier_id", subtreeIds);
 
   // Matieres dans le sous-arbre → pour trouver cours via matiere_id
