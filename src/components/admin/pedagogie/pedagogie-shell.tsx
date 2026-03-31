@@ -2753,21 +2753,20 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       )}
 
       {/* Actualisation badge */}
-      {cours.actualisation && cours.actualisation !== "non_actualisee" && (
-        <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
-          cours.actualisation === "aucun_changement" ? "bg-gray-100 text-gray-500" :
-          cours.actualisation === "actualisation" ? "bg-blue-50 text-blue-600" :
-          cours.actualisation === "changements_notables" ? "bg-amber-50 text-amber-600" :
-          cours.actualisation === "nouvelle_fiche" ? "bg-green-50 text-green-600" : ""
-        }`}>
-          {cours.actualisation === "aucun_changement" ? "=" :
-           cours.actualisation === "actualisation" ? "↑" :
-           cours.actualisation === "changements_notables" ? "!!" :
-           cours.actualisation === "nouvelle_fiche" ? "★" : ""}
-        </span>
+      {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
+        <span className="flex-shrink-0 rounded-md bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-600">⏳ Non actualisé</span>
       )}
-      {cours.actualisation === "non_actualisee" && (
-        <span className="flex-shrink-0 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-500" title="Pas encore actualisée">⏳</span>
+      {cours.actualisation === "aucun_changement" && (
+        <span className="flex-shrink-0 rounded-md bg-gray-50 border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-500">= Aucun changement</span>
+      )}
+      {cours.actualisation === "actualisation" && (
+        <span className="flex-shrink-0 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-600">↑ Actualisation</span>
+      )}
+      {cours.actualisation === "changements_notables" && (
+        <span className="flex-shrink-0 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-600">⚠ Changements notables</span>
+      )}
+      {cours.actualisation === "nouvelle_fiche" && (
+        <span className="flex-shrink-0 rounded-md bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] font-semibold text-green-600">★ Nouvelle fiche</span>
       )}
 
       {/* Visibility indicator */}
