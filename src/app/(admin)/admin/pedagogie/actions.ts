@@ -975,13 +975,12 @@ export async function getMissingCoursFromOtherOffers(dossierId: string) {
   }
   if (siblingSubjectIds.length === 0) return { items: [] };
 
-  // Get courses in current dossier to know what we already have
+  // Get courses in current dossier to know what we already have (by linked_cours_id only)
   const { data: localCours } = await supabase
     .from("cours")
-    .select("id, linked_cours_id, name")
+    .select("id, linked_cours_id")
     .eq("dossier_id", dossierId);
   const localLinkedIds = new Set((localCours ?? []).map((c) => c.linked_cours_id).filter(Boolean));
-  const localNames = new Set((localCours ?? []).map((c) => c.name));
 
   // Get courses from sibling subjects
   const allSiblingIds = siblingSubjectIds.map((s) => s.id);
@@ -993,13 +992,10 @@ export async function getMissingCoursFromOtherOffers(dossierId: string) {
 
   const offerNameMap = new Map(siblingSubjectIds.map((s) => [s.id, s.offerName]));
 
-  // Filter to only courses we don't have (by linked_cours_id or by name)
+  // Filter to only courses we don't have (by linked_cours_id only)
   const missing = (siblingCours ?? []).filter((c) => {
     const linkId = c.linked_cours_id ?? c.id;
-    if (localLinkedIds.has(linkId)) return false;
-    // Also skip if we already have a course with the same name (not linked yet)
-    if (localNames.has(c.name)) return false;
-    return true;
+    return !localLinkedIds.has(linkId);
   });
 
   // Group by offer
