@@ -136,6 +136,7 @@ export function PedagogieShell({
   });
   const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(new Set());
   const [emptySections, setEmptySections] = useState<string[]>([]);
+  const [inlineCoursSection, setInlineCoursSection] = useState<string | null>(null);
   const [sectionOrder, setSectionOrder] = useState<string[]>([]);
   const [selectedDossierIds, setSelectedDossierIds] = useState<Set<string>>(new Set());
   const [bulkEtiquettes, setBulkEtiquettes] = useState<string[]>([]);
@@ -1204,31 +1205,48 @@ export function PedagogieShell({
                                           />
                                         </div>
                                       ))}
+                                      {canEdit && selectedDossier && (
+                                        <AddCoursInlineButton
+                                          label={group.label ? `Ajouter dans ${group.label}` : "Ajouter un cours"}
+                                          onClick={() => {
+                                            setModal({ type: "create_cours", dossierId: selectedDossier.id });
+                                            if (group.label) setInlineCoursSection(group.label);
+                                          }}
+                                        />
+                                      )}
                                     </div>
                                   ))
                                 ) : (
-                                  coursList.map((c) => (
-                                    <SortableCoursRow
-                                      key={c.id}
-                                      cours={c}
-                                      dossierId={selectedDossier?.id ?? ""}
-                                      selected={selectedCoursIds.has(c.id)}
-                                      onToggleSelect={canEdit ? () => {
-                                        setSelectedCoursIds((prev) => {
-                                          const next = new Set(prev);
-                                          if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
-                                          return next;
-                                        });
-                                      } : undefined}
-                                      onSelect={() => setSelectedCours(c)}
-                                      onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
-                                      onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
-                                      onLink={canEdit && selectedDossier && !universityLinkRules ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
-                                      availableSections={!universityLinkRules ? availableCourseSections : undefined}
-                                      onMoveToSection={canEdit && !universityLinkRules ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
-                                      onPdfUploaded={refreshAll}
-                                    />
-                                  ))
+                                  <>
+                                    {coursList.map((c) => (
+                                      <SortableCoursRow
+                                        key={c.id}
+                                        cours={c}
+                                        dossierId={selectedDossier?.id ?? ""}
+                                        selected={selectedCoursIds.has(c.id)}
+                                        onToggleSelect={canEdit ? () => {
+                                          setSelectedCoursIds((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                                            return next;
+                                          });
+                                        } : undefined}
+                                        onSelect={() => setSelectedCours(c)}
+                                        onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
+                                        onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
+                                        onLink={canEdit && selectedDossier && !universityLinkRules ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
+                                        availableSections={!universityLinkRules ? availableCourseSections : undefined}
+                                        onMoveToSection={canEdit && !universityLinkRules ? (section) => handleAction(() => bulkSetEtiquettes([c.id], [section])) : undefined}
+                                        onPdfUploaded={refreshAll}
+                                      />
+                                    ))}
+                                    {canEdit && selectedDossier && (
+                                      <AddCoursInlineButton
+                                        label="Ajouter un cours"
+                                        onClick={() => setModal({ type: "create_cours", dossierId: selectedDossier.id })}
+                                      />
+                                    )}
+                                  </>
                                 )}
                                 {canEdit && coursList.length > 0 && (
                                   <AddCategoryButton
@@ -1243,6 +1261,11 @@ export function PedagogieShell({
                         </>
                       )}
                     </div>
+                  ) : canEdit && selectedDossier && canCreateCourseInDossier(selectedDossier.dossier_type) ? (
+                    <AddCoursInlineButton
+                      label="Ajouter un cours"
+                      onClick={() => setModal({ type: "create_cours", dossierId: selectedDossier.id })}
+                    />
                   ) : null}
 
                   {/* Ressources — drag & drop liste */}
@@ -1411,8 +1434,9 @@ export function PedagogieShell({
               title={contentCreationLabel}
               dossierId={modal.dossierId}
               existingSections={availableCourseSections}
-              onSubmit={(data) => handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId }))}
-              onClose={() => setModal(null)}
+              initialData={inlineCoursSection ? { etiquettes: [inlineCoursSection] } : undefined}
+              onSubmit={(data) => { setInlineCoursSection(null); handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId })); }}
+              onClose={() => { setInlineCoursSection(null); setModal(null); }}
               isPending={isPending}
             />
           )}
@@ -3353,6 +3377,18 @@ function CoursForm({ title, dossierId, initialData, existingSections, onSubmit, 
 // =============================================
 // ADD CATEGORY BUTTON
 // =============================================
+
+function AddCoursInlineButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-200 py-2 text-xs font-medium text-gray-400 transition hover:border-gold/30 hover:bg-gold/5 hover:text-gold-dark"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
 
 function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
   const [open, setOpen] = useState(false);
