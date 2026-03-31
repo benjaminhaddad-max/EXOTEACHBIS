@@ -3847,11 +3847,14 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
   );
 }
 
-function SubjectSectionsSummary({ universityName, sectionNames, offersWithThisUni }: {
+const SECTION_ORDER: Record<string, number> = { "Socle": 0, "Approfondissement": 1, "Perfectionnement": 2 };
+
+function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames, offersWithThisUni }: {
   universityName: string;
   sectionNames: string[];
   offersWithThisUni: { offerId: string; offerName: string; uniDossierId: string }[];
 }) {
+  const sectionNames = [...rawSectionNames].sort((a, b) => (SECTION_ORDER[a] ?? 99) - (SECTION_ORDER[b] ?? 99));
   const [data, setData] = useState<{ subjectName: string; offerName: string; offerCode: string; sections: string[] }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -3872,7 +3875,8 @@ function SubjectSectionsSummary({ universityName, sectionNames, offersWithThisUn
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [data]);
 
-  const offerNames = offersWithThisUni.map((o) => o.offerName);
+  const OFFER_ORDER: Record<string, number> = { "PREPA PASS": 0, "PREPA LAS": 1, "PREPA LSPS": 2 };
+  const offerNames = [...offersWithThisUni].sort((a, b) => (OFFER_ORDER[a.offerName] ?? 99) - (OFFER_ORDER[b.offerName] ?? 99)).map((o) => o.offerName);
 
   if (loading) {
     return <div className="mt-6 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-400" /></div>;
