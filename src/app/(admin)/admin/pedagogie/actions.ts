@@ -921,6 +921,100 @@ function sortByDepth(dossiers: any[], rootId: string): any[] {
 }
 
 // =============================================
+// COURS MANQUANTS DEPUIS LES AUTRES OFFRES
+// =============================================
+
+export async function getMissingCoursFromOtherOffers(dossierId: string) {
+  "use server";
+  const supabase = await createClient();
+
+  // Get all dossiers to walk the tree
+  const { data: allDossiers } = await supabase
+    .from("dossiers")
+    .select("id, name, parent_id, dossier_type")
+    .order("order_index");
+  if (!allDossiers) return { items: [] };
+
+  const byId = new Map(allDossiers.map((d) => [d.id, d]));
+
+  // Walk up from dossierId to find subject name, university name, offer id
+  let subjectName: string | null = null;
+  let uniName: string | null = null;
+  let offerId: string | null = null;
+  const src = byId.get(dossierId);
+  if (src?.dossier_type === "subject") subjectName = src.name;
+  let cur: string | null = dossierId;
+  while (cur) {
+    const d = byId.get(cur);
+    if (!d) break;
+    if (d.dossier_type === "subject" && !subjectName) subjectName = d.name;
+    if (d.dossier_type === "university" && !uniName) uniName = d.name;
+    if (d.dossier_type === "offer") { offerId = d.id; break; }
+    cur = d.parent_id;
+  }
+  if (!subjectName || !uniName) return { items: [] };
+
+  // Find matching subject dossiers (same uni name + same subject name) in other offers
+  const siblingSubjectIds: { id: string; offerName: string }[] = [];
+  for (const subj of allDossiers) {
+    if (subj.dossier_type !== "subject" || subj.name !== subjectName || subj.id === dossierId) continue;
+    let sUni: string | null = null;
+    let sOfferId: string | null = null;
+    let sOfferName: string | null = null;
+    let c: string | null = subj.parent_id;
+    while (c) {
+      const p = byId.get(c);
+      if (!p) break;
+      if (p.dossier_type === "university" && !sUni) sUni = p.name;
+      if (p.dossier_type === "offer") { sOfferId = p.id; sOfferName = p.name; break; }
+      c = p.parent_id;
+    }
+    if (sUni === uniName && sOfferId !== offerId && sOfferName) {
+      siblingSubjectIds.push({ id: subj.id, offerName: sOfferName });
+    }
+  }
+  if (siblingSubjectIds.length === 0) return { items: [] };
+
+  // Get courses in current dossier to know what we already have
+  const { data: localCours } = await supabase
+    .from("cours")
+    .select("id, linked_cours_id, name")
+    .eq("dossier_id", dossierId);
+  const localLinkedIds = new Set((localCours ?? []).map((c) => c.linked_cours_id).filter(Boolean));
+  const localNames = new Set((localCours ?? []).map((c) => c.name));
+
+  // Get courses from sibling subjects
+  const allSiblingIds = siblingSubjectIds.map((s) => s.id);
+  const { data: siblingCours } = await supabase
+    .from("cours")
+    .select("id, name, dossier_id, linked_cours_id, pdf_url, etiquettes")
+    .in("dossier_id", allSiblingIds)
+    .order("order_index");
+
+  const offerNameMap = new Map(siblingSubjectIds.map((s) => [s.id, s.offerName]));
+
+  // Filter to only courses we don't have (by linked_cours_id or by name)
+  const missing = (siblingCours ?? []).filter((c) => {
+    const linkId = c.linked_cours_id ?? c.id;
+    if (localLinkedIds.has(linkId)) return false;
+    // Also skip if we already have a course with the same name (not linked yet)
+    if (localNames.has(c.name)) return false;
+    return true;
+  });
+
+  // Group by offer
+  const items = missing.map((c) => ({
+    id: c.id,
+    name: c.name,
+    offerName: offerNameMap.get(c.dossier_id) ?? "",
+    hasPdf: !!c.pdf_url,
+    etiquettes: c.etiquettes ?? [],
+  }));
+
+  return { items };
+}
+
+// =============================================
 // RATTACHER COURS À UN AUTRE DOSSIER (clone lié)
 // =============================================
 

@@ -44,7 +44,7 @@ import {
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
-  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier,
+  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -67,6 +67,7 @@ type ModalState =
   | { type: "clone_proposal"; sourceDossier: Dossier; targetDossierId: string; offerLabel: string }
   | { type: "linked_edit_confirm"; cours: Cours; data: any; linkedCount: number }
   | { type: "rattacher_cours"; coursIds: string[]; sourceDossierId: string }
+  | { type: "missing_cours"; dossierId: string }
   | null;
 
 const COLORS = [
@@ -661,6 +662,15 @@ export function PedagogieShell({
                         <span className="h-px flex-1 bg-navy/10" />
                         <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Cours</span>
                         <span className="h-px flex-1 bg-navy/10" />
+                        {canEdit && selectedDossier && (
+                          <button
+                            onClick={() => setModal({ type: "missing_cours", dossierId: selectedDossier.id })}
+                            className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-semibold text-purple-600 hover:bg-purple-100 transition"
+                            title="Voir les cours disponibles dans les autres offres"
+                          >
+                            <Sparkles className="h-3 w-3" /> Autres offres
+                          </button>
+                        )}
                         <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5">
                           <button
                             onClick={() => { setCoursViewMode("cards"); localStorage.setItem("pedagogie-cours-view", "cards"); }}
@@ -910,7 +920,7 @@ export function PedagogieShell({
 
       {/* ── MODALS ── */}
       {modal && (
-        <ModalOverlay onClose={() => setModal(null)} wide={modal.type === "rattacher_cours"}>
+        <ModalOverlay onClose={() => setModal(null)} wide={modal.type === "rattacher_cours" || modal.type === "missing_cours"}>
 
           {/* Picker "+" — style ExoTeach */}
           {modal.type === "add_picker" && (
@@ -1181,6 +1191,26 @@ export function PedagogieShell({
                     setSelectedCoursIds(new Set());
                   } else if (lastError) {
                     showToast(lastError, "error");
+                  }
+                  setModal(null);
+                  await refreshAll();
+                });
+              }}
+              onClose={() => setModal(null)}
+            />
+          )}
+
+          {modal.type === "missing_cours" && (
+            <MissingCoursModal
+              dossierId={modal.dossierId}
+              isPending={isPending}
+              onImport={(coursIds) => {
+                startTransition(async () => {
+                  const result = await linkCoursToOtherDossier(coursIds, modal.dossierId);
+                  if (result.error) {
+                    showToast(result.error, "error");
+                  } else {
+                    showToast(`${result.count} cours importé${(result.count ?? 0) > 1 ? "s" : ""} depuis les autres offres`, "success");
                   }
                   setModal(null);
                   await refreshAll();
@@ -2977,6 +3007,164 @@ function IconPicker({ value, onChange }: { value: string; onChange: (url: string
 // =============================================
 // UI PRIMITIVES
 // =============================================
+
+// =============================================
+// MISSING COURS MODAL (cours manquants depuis les autres offres)
+// =============================================
+
+function MissingCoursModal({
+  dossierId,
+  isPending,
+  onImport,
+  onClose,
+}: {
+  dossierId: string;
+  isPending: boolean;
+  onImport: (coursIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<{ id: string; name: string; offerName: string; hasPdf: boolean; etiquettes: string[] }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    getMissingCoursFromOtherOffers(dossierId).then((res) => {
+      setItems(res.items);
+      setLoading(false);
+    });
+  }, [dossierId]);
+
+  const toggleCheck = (id: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (checkedIds.size === items.length) setCheckedIds(new Set());
+    else setCheckedIds(new Set(items.map((i) => i.id)));
+  };
+
+  // Group by offer
+  const grouped = useMemo(() => {
+    const map = new Map<string, typeof items>();
+    for (const item of items) {
+      const arr = map.get(item.offerName) ?? [];
+      arr.push(item);
+      map.set(item.offerName, arr);
+    }
+    return [...map.entries()];
+  }, [items]);
+
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
+            <Sparkles className="h-4 w-4 text-purple-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Cours des autres offres</h3>
+            <p className="text-xs text-gray-500">Cours que vous n&apos;avez pas encore ici</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
+          <X className="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 py-4" style={{ maxHeight: "55vh" }}>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="py-8 text-center">
+            <Check className="mx-auto h-8 w-8 text-green-400" />
+            <p className="mt-2 text-sm font-medium text-gray-700">Tout est synchronisé</p>
+            <p className="text-xs text-gray-400">
+              Tous les cours des autres offres sont déjà présents ici.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-gray-500">{items.length} cours manquant{items.length > 1 ? "s" : ""}</p>
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-[10px] font-medium text-purple-600 hover:text-purple-800 underline"
+              >{checkedIds.size === items.length ? "Tout désélectionner" : "Tout sélectionner"}</button>
+            </div>
+            {grouped.map(([offerName, offerItems]) => (
+              <div key={offerName}>
+                <div className="mb-2 flex items-center gap-2">
+                  <Layers className="h-3.5 w-3.5 text-navy/50" />
+                  <span className="text-xs font-bold text-navy/60">{offerName}</span>
+                  <span className="h-px flex-1 bg-gray-100" />
+                </div>
+                <div className="space-y-1.5">
+                  {offerItems.map((item) => (
+                    <label
+                      key={item.id}
+                      className={`flex items-center gap-3 rounded-xl border p-2.5 transition cursor-pointer ${
+                        checkedIds.has(item.id)
+                          ? "border-purple-300 bg-purple-50"
+                          : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checkedIds.has(item.id)}
+                        onChange={() => toggleCheck(item.id)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 accent-purple-600"
+                      />
+                      <span className="flex-1 truncate text-sm text-gray-800">{item.name}</span>
+                      {item.etiquettes?.length > 0 && (
+                        <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">
+                          {item.etiquettes[0]}
+                        </span>
+                      )}
+                      {item.hasPdf && (
+                        <span className="rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600">PDF</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
+          <span className="text-xs text-gray-500">
+            {checkedIds.size > 0
+              ? `${checkedIds.size} cours sélectionné${checkedIds.size > 1 ? "s" : ""}`
+              : "Aucune sélection"}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >Annuler</button>
+            <button
+              onClick={() => checkedIds.size > 0 && onImport([...checkedIds])}
+              disabled={checkedIds.size === 0 || isPending}
+              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-50"
+            >
+              {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Importer ici
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // =============================================
 // RATTACHER COURS MODAL
