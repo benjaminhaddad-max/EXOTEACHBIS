@@ -2132,9 +2132,6 @@ function SortableTreeNode({
                 <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
                   {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
                 </span>
-                {node.etiquettes?.map((tag) => (
-                  <span key={tag} className="rounded-full bg-gold/10 px-1.5 py-0.5 text-[9px] font-medium text-gold-dark">{tag}</span>
-                ))}
               </span>
             </span>
             {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
