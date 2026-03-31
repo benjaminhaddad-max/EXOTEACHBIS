@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useMemo, useRef, useCallback } from
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  Plus, Pencil, Trash2, ChevronRight, ChevronDown,
+  Plus, Pencil, Trash2, ChevronRight, ChevronDown, ChevronUp,
   Folder, FolderOpen, X, Eye, EyeOff, Upload,
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
@@ -133,6 +133,7 @@ export function PedagogieShell({
   });
   const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(new Set());
   const [emptySections, setEmptySections] = useState<string[]>([]);
+  const [sectionOrder, setSectionOrder] = useState<string[]>([]);
   const [selectedDossierIds, setSelectedDossierIds] = useState<Set<string>>(new Set());
   const [bulkEtiquettes, setBulkEtiquettes] = useState<string[]>([]);
   const [showBulkPopover, setShowBulkPopover] = useState(false);
@@ -161,25 +162,28 @@ export function PedagogieShell({
   const coursGroups = useMemo(() => {
     const hasAnyEtiquette = coursList.some((c) => c.etiquettes?.length > 0);
     if (!hasAnyEtiquette && emptySections.length === 0) return null;
-    const groups: { label: string; cours: Cours[] }[] = [];
-    const seen = new Map<string, number>();
-    // Add empty sections first
+    const groupMap = new Map<string, Cours[]>();
+    // Ensure empty sections exist
     for (const s of emptySections) {
-      if (!seen.has(s)) {
-        seen.set(s, groups.length);
-        groups.push({ label: s, cours: [] });
-      }
+      if (!groupMap.has(s)) groupMap.set(s, []);
     }
     for (const c of coursList) {
       const label = c.etiquettes?.[0] ?? "";
-      if (!seen.has(label)) {
-        seen.set(label, groups.length);
-        groups.push({ label, cours: [] });
-      }
-      groups[seen.get(label)!].cours.push(c);
+      if (!groupMap.has(label)) groupMap.set(label, []);
+      groupMap.get(label)!.push(c);
     }
+    // Sort by sectionOrder, then append any new sections not in the order
+    const allLabels = [...groupMap.keys()];
+    const ordered: string[] = [];
+    for (const s of sectionOrder) {
+      if (groupMap.has(s)) ordered.push(s);
+    }
+    for (const s of allLabels) {
+      if (!ordered.includes(s)) ordered.push(s);
+    }
+    const groups = ordered.map((label) => ({ label, cours: groupMap.get(label) ?? [] }));
     return groups.length > 0 ? groups : null;
-  }, [coursList, emptySections]);
+  }, [coursList, emptySections, sectionOrder]);
   const dossierGroups = useMemo(() => {
     const hasAnyEtiquette = childDossiers.some((d) => d.etiquettes?.length > 0);
     if (!hasAnyEtiquette) return null;
@@ -196,6 +200,17 @@ export function PedagogieShell({
     return groups;
   }, [childDossiers]);
   const contentCreationLabel = getContentCreationLabel(selectedDossier?.dossier_type);
+
+  const moveSectionByLabel = useCallback((label: string, direction: "up" | "down") => {
+    const labels = coursGroups?.map((g) => g.label) ?? [];
+    const idx = labels.indexOf(label);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= labels.length) return;
+    const newOrder = [...labels];
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+    setSectionOrder(newOrder);
+  }, [coursGroups]);
 
   // Breadcrumb
   const getBreadcrumb = (id: string | null): Dossier[] => {
@@ -908,13 +923,15 @@ export function PedagogieShell({
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndCours}>
                           <SortableContext items={coursList.map((c) => c.id)} strategy={rectSortingStrategy}>
                             {coursGroups ? (
-                              coursGroups.map((group) => (
+                              coursGroups.map((group, gi) => (
                                 <div key={group.label || "__none__"}>
                                   <EtiquetteSectionHeader
                                     label={group.label}
                                     coursIds={group.cours.map((c) => c.id)}
                                     canEdit={canEdit}
                                     onRenamed={refreshAll}
+                                    onMoveUp={canEdit && gi > 0 && group.label ? () => moveSectionByLabel(group.label, "up") : undefined}
+                                    onMoveDown={canEdit && gi < (coursGroups?.length ?? 0) - 1 && group.label ? () => moveSectionByLabel(group.label, "down") : undefined}
                                     onDeleteSection={canEdit && group.label ? (mode) => {
                                       const coursInGroup = group.cours;
                                       const ids = coursInGroup.map((c) => c.id);
@@ -1015,13 +1032,15 @@ export function PedagogieShell({
                             <SortableContext items={coursList.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                               <div className="space-y-1.5">
                                 {coursGroups ? (
-                                  coursGroups.map((group) => (
+                                  coursGroups.map((group, gi) => (
                                     <div key={group.label || "__none__"}>
                                       <EtiquetteSectionHeader
                                         label={group.label}
                                         coursIds={group.cours.map((c) => c.id)}
                                         canEdit={canEdit}
                                         onRenamed={refreshAll}
+                                        onMoveUp={canEdit && gi > 0 && group.label ? () => moveSectionByLabel(group.label, "up") : undefined}
+                                        onMoveDown={canEdit && gi < (coursGroups?.length ?? 0) - 1 && group.label ? () => moveSectionByLabel(group.label, "down") : undefined}
                                         onDeleteSection={canEdit && group.label ? (mode) => {
                                           const coursInGroup = group.cours;
                                           const ids = coursInGroup.map((c) => c.id);
@@ -3182,12 +3201,14 @@ function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
 // ETIQUETTE SECTION HEADER
 // =============================================
 
-function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteSection }: {
+function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteSection, onMoveUp, onMoveDown }: {
   label: string;
   coursIds: string[];
   canEdit: boolean;
   onRenamed: () => void;
   onDeleteSection?: (mode: "remove_tag" | "delete_cours") => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(label);
@@ -3239,15 +3260,25 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
               {saving ? "..." : label}
               <span className="ml-1.5 text-[9px] font-normal opacity-60">({coursIds.length})</span>
             </button>
-            {canEdit && onDeleteSection && (
-              <div className="relative" ref={menuRef}>
-                <button
+            {canEdit && (onMoveUp || onMoveDown || onDeleteSection) && (
+              <div className="relative flex items-center gap-0.5" ref={menuRef}>
+                {onMoveUp && (
+                  <button onClick={onMoveUp} className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-blue-50 hover:text-blue-500 transition" title="Monter">
+                    <ChevronUp className="h-3 w-3" />
+                  </button>
+                )}
+                {onMoveDown && (
+                  <button onClick={onMoveDown} className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-blue-50 hover:text-blue-500 transition" title="Descendre">
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                )}
+                {onDeleteSection && <button
                   onClick={() => setShowDeleteMenu(!showDeleteMenu)}
                   className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-red-50 hover:text-red-500 transition"
                 >
                   <Trash2 className="h-3 w-3" />
-                </button>
-                {showDeleteMenu && (
+                </button>}
+                {showDeleteMenu && onDeleteSection && (
                   <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
                     <button
                       onClick={() => { setShowDeleteMenu(false); onDeleteSection("remove_tag"); }}
