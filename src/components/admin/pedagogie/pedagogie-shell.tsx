@@ -1684,10 +1684,15 @@ function SortableCoursRow({ cours, dossierId, onSelect, onEdit, onDelete, onPdfU
         <button
           onClick={onSelect}
           onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 text-left flex items-center gap-2"
           title="Double-clic pour renommer"
         >
           <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
+          {cours.etiquette && (
+            <span className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">
+              {cours.etiquette}
+            </span>
+          )}
         </button>
       )}
 
@@ -1800,6 +1805,11 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
               <p className="text-[12px] font-extrabold text-white leading-snug line-clamp-2 tracking-wide">
                 {cours.name}
               </p>
+              {cours.etiquette && (
+                <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide" style={{ background: "rgba(212,171,80,0.12)", color: "rgba(212,171,80,0.80)", border: "1px solid rgba(212,171,80,0.20)" }}>
+                  {cours.etiquette}
+                </span>
+              )}
             </div>
           </div>
         </div>
