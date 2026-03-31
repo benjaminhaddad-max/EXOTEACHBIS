@@ -565,6 +565,69 @@ export async function removeUniversityFromOffer(universityDossierId: string) {
   return { success: true };
 }
 
+/** Get all subjects under a university (across all offers with same name) with their course sections */
+export async function getUniversitySubjectsSummary(universityName: string) {
+  "use server";
+  const supabase = await createClient();
+  const { data: allDossiers } = await supabase
+    .from("dossiers")
+    .select("id, name, parent_id, dossier_type, formation_offer")
+    .order("order_index");
+  if (!allDossiers) return [];
+
+  type DRow = { id: string; name: string; parent_id: string | null; dossier_type: string; formation_offer: string | null };
+  const byId = new Map((allDossiers as DRow[]).map((d) => [d.id, d]));
+
+  // Find all university dossiers with this name
+  const unis = (allDossiers as DRow[]).filter((d) => d.dossier_type === "university" && d.name === universityName);
+
+  // For each uni, find its offer and all descendant subjects
+  const results: { subjectName: string; offerName: string; offerCode: string; subjectId: string; sections: string[] }[] = [];
+
+  for (const uni of unis) {
+    // Find offer ancestor
+    let offerName = "";
+    let offerCode = "";
+    let cur: string | null = uni.parent_id;
+    while (cur) {
+      const p = byId.get(cur);
+      if (!p) break;
+      if (p.dossier_type === "offer") { offerName = p.name; offerCode = p.formation_offer ?? ""; break; }
+      cur = p.parent_id;
+    }
+
+    // Find all subject descendants of this uni
+    const queue = [uni.id];
+    const subjects: DRow[] = [];
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      for (const d of allDossiers as DRow[]) {
+        if (d.parent_id === parentId) {
+          if (d.dossier_type === "subject") subjects.push(d);
+          else queue.push(d.id);
+        }
+      }
+    }
+
+    // Get course etiquettes for each subject
+    if (subjects.length > 0) {
+      const subjectIds = subjects.map((s) => s.id);
+      const { data: cours } = await supabase
+        .from("cours")
+        .select("dossier_id, etiquettes")
+        .in("dossier_id", subjectIds);
+
+      for (const subj of subjects) {
+        const subjCours = (cours ?? []).filter((c: any) => c.dossier_id === subj.id);
+        const sections = [...new Set(subjCours.map((c: any) => c.etiquettes?.[0]).filter(Boolean))] as string[];
+        results.push({ subjectName: subj.name, offerName, offerCode, subjectId: subj.id, sections });
+      }
+    }
+  }
+
+  return results;
+}
+
 export async function createCoursInDossier(data: {
   dossier_id: string;
   name: string;

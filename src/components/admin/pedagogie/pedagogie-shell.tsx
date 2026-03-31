@@ -46,7 +46,7 @@ import {
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
   updateUniversityLinkRules, getUniversityLinkRulesForDossier, getOffersForUniversity,
-  addUniversityToOffer, removeUniversityFromOffer,
+  addUniversityToOffer, removeUniversityFromOffer, getUniversitySubjectsSummary,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -3836,8 +3836,114 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             Sauvegarder
           </button>
+
+          {/* Récap matières et sections */}
+          {sectionNames.length > 0 && (
+            <SubjectSectionsSummary universityName={university.name} sectionNames={sectionNames} offersWithThisUni={offersWithThisUni} />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SubjectSectionsSummary({ universityName, sectionNames, offersWithThisUni }: {
+  universityName: string;
+  sectionNames: string[];
+  offersWithThisUni: { offerId: string; offerName: string; uniDossierId: string }[];
+}) {
+  const [data, setData] = useState<{ subjectName: string; offerName: string; offerCode: string; sections: string[] }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUniversitySubjectsSummary(universityName).then((res) => {
+      setData(res);
+      setLoading(false);
+    });
+  }, [universityName]);
+
+  // Group by subject name
+  const subjects = useMemo(() => {
+    const map = new Map<string, Map<string, string[]>>();
+    for (const row of data) {
+      if (!map.has(row.subjectName)) map.set(row.subjectName, new Map());
+      map.get(row.subjectName)!.set(row.offerName, row.sections);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [data]);
+
+  const offerNames = offersWithThisUni.map((o) => o.offerName);
+
+  if (loading) {
+    return <div className="mt-6 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-400" /></div>;
+  }
+
+  if (subjects.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <h4 className="text-sm font-bold text-gray-800 mb-3">Vue d&apos;ensemble des matières</h4>
+      <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="text-left px-3 py-2.5 font-semibold text-gray-600 sticky left-0 bg-gray-50">Matière</th>
+              {offerNames.map((name) => (
+                <th key={name} className="text-center px-2 py-2.5 font-semibold text-gray-600 whitespace-nowrap">{name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subjects.map(([subjectName, offerMap]) => (
+              <tr key={subjectName} className="border-b border-gray-100 hover:bg-gray-50/50">
+                <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-white whitespace-nowrap">{subjectName}</td>
+                {offerNames.map((offerName) => {
+                  const sections = offerMap.get(offerName) ?? [];
+                  return (
+                    <td key={offerName} className="px-2 py-2 text-center">
+                      {sections.length > 0 ? (
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {sectionNames.map((s) => (
+                            <span
+                              key={s}
+                              className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                                sections.includes(s)
+                                  ? s === "Socle"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : s === "Approfondissement"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : s === "Perfectionnement"
+                                        ? "bg-purple-100 text-purple-700"
+                                        : "bg-gray-100 text-gray-600"
+                                  : "bg-gray-50 text-gray-300"
+                              }`}
+                            >
+                              {s.substring(0, 4).toUpperCase()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[10px] text-gray-400">
+        {sectionNames.map((s, i) => (
+          <span key={s}>
+            <span className={`font-bold ${s === "Socle" ? "text-blue-600" : s === "Approfondissement" ? "text-amber-600" : s === "Perfectionnement" ? "text-purple-600" : "text-gray-500"}`}>
+              {s.substring(0, 4).toUpperCase()}
+            </span>
+            {" = " + s}
+            {i < sectionNames.length - 1 ? " · " : ""}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
