@@ -381,6 +381,7 @@ export function PedagogieShell({
   };
 
   const [linkedDeleteChoice, setLinkedDeleteChoice] = useState<{ cours: Cours; count: number } | null>(null);
+  const [sectionDeleteChoice, setSectionDeleteChoice] = useState<{ label: string; cours: Cours[] } | null>(null);
 
   const handleDeleteCours = (c: Cours) => {
     if (c.linked_cours_id) {
@@ -695,10 +696,18 @@ export function PedagogieShell({
                                     canEdit={canEdit}
                                     onRenamed={refreshAll}
                                     onDeleteSection={canEdit && group.label ? (mode) => {
-                                      const ids = group.cours.map((c) => c.id);
-                                      if (mode === "delete_cours") {
-                                        setConfirmDelete({ label: `les ${ids.length} cours de "${group.label}"`, onConfirm: () => handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; }) });
-                                      } else { handleAction(() => bulkSetEtiquettes(ids, [])); }
+                                      const coursInGroup = group.cours;
+                                      const ids = coursInGroup.map((c) => c.id);
+                                      if (mode === "remove_tag") {
+                                        handleAction(() => bulkSetEtiquettes(ids, []));
+                                      } else {
+                                        const hasLinked = coursInGroup.some((c) => c.linked_cours_id);
+                                        if (hasLinked) {
+                                          setSectionDeleteChoice({ label: group.label, cours: coursInGroup });
+                                        } else {
+                                          setConfirmDelete({ label: `les ${ids.length} cours de "${group.label}"`, onConfirm: () => handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; }) });
+                                        }
+                                      }
                                     } : undefined}
                                   />
                                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -1231,6 +1240,59 @@ export function PedagogieShell({
               </button>
               <button
                 onClick={() => setLinkedDeleteChoice(null)}
+                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sectionDeleteChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setSectionDeleteChoice(null)}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-3 px-6 pt-6 pb-4 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+                <Link2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Cours liés détectés</h3>
+              <p className="text-sm text-gray-500">
+                Certains cours de <span className="font-medium text-gray-700">{sectionDeleteChoice.label}</span> sont liés à d'autres offres.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-gray-100 px-6 py-4">
+              <button
+                onClick={() => {
+                  const ids = sectionDeleteChoice.cours.map((c) => c.id);
+                  setSectionDeleteChoice(null);
+                  handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; });
+                }}
+                className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+              >
+                Supprimer juste ici ({sectionDeleteChoice.cours.length} cours)
+              </button>
+              <button
+                onClick={() => {
+                  const allCours = sectionDeleteChoice.cours;
+                  setSectionDeleteChoice(null);
+                  handleAction(async () => {
+                    for (const c of allCours) {
+                      if (c.linked_cours_id) {
+                        await deleteLinkedCours(c.linked_cours_id);
+                      } else {
+                        await deleteCoursFromDossier(c.id);
+                      }
+                    }
+                    return { success: true };
+                  });
+                }}
+                className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
+              >
+                Supprimer dans toutes les offres
+              </button>
+              <button
+                onClick={() => setSectionDeleteChoice(null)}
                 className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition"
               >
                 Annuler
