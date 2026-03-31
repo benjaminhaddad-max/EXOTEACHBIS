@@ -233,10 +233,11 @@ export function PedagogieShell({
   }, [selectedId, allDossiers]);
 
   // Filter sections to only those available for the current offer
+  // A section is visible in an offer only if that offer is listed in its targets
   const linkRulesSections = useMemo(() => {
     if (!universityLinkRules || !currentOfferCode) return universityLinkRules ? Object.keys(universityLinkRules.sections) : null;
     return Object.entries(universityLinkRules.sections)
-      .filter(([_, offers]) => offers.length === 0 || offers.includes(currentOfferCode))
+      .filter(([_, offers]) => offers.includes(currentOfferCode))
       .map(([name]) => name);
   }, [universityLinkRules, currentOfferCode]);
 
