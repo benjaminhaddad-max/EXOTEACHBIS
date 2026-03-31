@@ -2228,13 +2228,6 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
         <span className="relative rounded-full px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-widest" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
-        {dossier.etiquettes?.length > 0 && (
-          <div className="relative mt-1 flex flex-wrap justify-center gap-1">
-            {dossier.etiquettes.map((tag) => (
-              <span key={tag} className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium text-white/70">{tag}</span>
-            ))}
-          </div>
-        )}
       </button>
 
       {(onEdit || onDelete) && (
@@ -2288,9 +2281,6 @@ function SortableSubDossierRow({ dossier, selected, onToggleSelect, onClick, onE
             : <CardIcon className="h-4 w-4" style={{ color: cs.iconColor }} />}
         </div>
         <p className="truncate text-sm font-semibold text-gray-800">{dossier.name}</p>
-        {dossier.etiquettes?.map((tag) => (
-          <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
-        ))}
         <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
