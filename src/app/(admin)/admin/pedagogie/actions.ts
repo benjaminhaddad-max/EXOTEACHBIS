@@ -551,6 +551,21 @@ export async function deleteLinkedCours(linkedCoursId: string) {
   return { success: true };
 }
 
+export async function deleteLinkedCoursByCoursId(coursId: string) {
+  const supabase = await createClient();
+  const { data: cours } = await supabase.from("cours").select("linked_cours_id").eq("id", coursId).single();
+  if (!cours?.linked_cours_id) {
+    // Not linked, just delete this one
+    const { error } = await supabase.from("cours").delete().eq("id", coursId);
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase.from("cours").delete().eq("linked_cours_id", cours.linked_cours_id);
+    if (error) return { error: error.message };
+  }
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function reorderCours(updates: { id: string; order_index: number }[]) {
   const supabase = await createClient();
   await Promise.all(
@@ -940,11 +955,14 @@ export async function updateLinkedCours(
   return { success: true };
 }
 
-export async function getLinkedCoursCount(linkedCoursId: string) {
+export async function getLinkedCoursCount(coursId: string) {
   const supabase = await createClient();
+  // First get the linked_cours_id for this cours
+  const { data: cours } = await supabase.from("cours").select("linked_cours_id").eq("id", coursId).single();
+  if (!cours?.linked_cours_id) return 0;
   const { count } = await supabase
     .from("cours")
     .select("id", { count: "exact", head: true })
-    .eq("linked_cours_id", linkedCoursId);
+    .eq("linked_cours_id", cours.linked_cours_id);
   return count ?? 0;
 }

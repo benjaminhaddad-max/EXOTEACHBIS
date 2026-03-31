@@ -44,7 +44,7 @@ import {
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
-  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours,
+  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -384,24 +384,18 @@ export function PedagogieShell({
   const [sectionDeleteChoice, setSectionDeleteChoice] = useState<{ label: string; cours: Cours[] } | null>(null);
 
   const handleDeleteCours = (c: Cours) => {
-    if (c.linked_cours_id) {
-      startTransition(async () => {
-        const count = await getLinkedCoursCount(c.linked_cours_id!);
-        if (count > 1) {
-          setLinkedDeleteChoice({ cours: c, count });
-        } else {
-          setConfirmDelete({
-            label: `le cours "${c.name}"`,
-            onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)),
-          });
-        }
-      });
-    } else {
-      setConfirmDelete({
-        label: `le cours "${c.name}"`,
-        onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)),
-      });
-    }
+    // Always check server-side if the cours is linked
+    startTransition(async () => {
+      const count = await getLinkedCoursCount(c.id);
+      if (count > 1) {
+        setLinkedDeleteChoice({ cours: c, count });
+      } else {
+        setConfirmDelete({
+          label: `le cours "${c.name}"`,
+          onConfirm: () => handleAction(() => deleteCoursFromDossier(c.id)),
+        });
+      }
+    });
   };
 
   return (
@@ -1056,19 +1050,14 @@ export function PedagogieShell({
               initialData={modal.cours}
               onSubmit={(data) => {
                 const cours = modal.cours;
-                if (cours.linked_cours_id) {
-                  // Has linked courses → ask before saving
-                  startTransition(async () => {
-                    const count = await getLinkedCoursCount(cours.linked_cours_id!);
-                    if (count > 1) {
-                      setModal({ type: "linked_edit_confirm", cours, data, linkedCount: count });
-                    } else {
-                      await handleAction(() => updateCoursInDossier(cours.id, data));
-                    }
-                  });
-                } else {
-                  handleAction(() => updateCoursInDossier(cours.id, data));
-                }
+                startTransition(async () => {
+                  const count = await getLinkedCoursCount(cours.id);
+                  if (count > 1) {
+                    setModal({ type: "linked_edit_confirm", cours, data, linkedCount: count });
+                  } else {
+                    await handleAction(() => updateCoursInDossier(cours.id, data));
+                  }
+                });
               }}
               onClose={() => setModal(null)}
               isPending={isPending}
@@ -1227,7 +1216,7 @@ export function PedagogieShell({
                 onClick={() => {
                   const c = linkedDeleteChoice.cours;
                   setLinkedDeleteChoice(null);
-                  handleAction(() => deleteLinkedCours(c.linked_cours_id!));
+                  handleAction(() => deleteLinkedCoursByCoursId(c.id));
                 }}
                 className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
               >
@@ -1273,11 +1262,7 @@ export function PedagogieShell({
                   setSectionDeleteChoice(null);
                   handleAction(async () => {
                     for (const c of allCours) {
-                      if (c.linked_cours_id) {
-                        await deleteLinkedCours(c.linked_cours_id);
-                      } else {
-                        await deleteCoursFromDossier(c.id);
-                      }
+                      await deleteLinkedCoursByCoursId(c.id);
                     }
                     return { success: true };
                   });
