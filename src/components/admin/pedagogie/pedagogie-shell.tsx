@@ -132,6 +132,7 @@ export function PedagogieShell({
     return "cards";
   });
   const [selectedCoursIds, setSelectedCoursIds] = useState<Set<string>>(new Set());
+  const [emptySections, setEmptySections] = useState<string[]>([]);
   const [selectedDossierIds, setSelectedDossierIds] = useState<Set<string>>(new Set());
   const [bulkEtiquettes, setBulkEtiquettes] = useState<string[]>([]);
   const [showBulkPopover, setShowBulkPopover] = useState(false);
@@ -159,9 +160,16 @@ export function PedagogieShell({
   const coursList = selectedId ? (coursMap[selectedId] ?? []) : [];
   const coursGroups = useMemo(() => {
     const hasAnyEtiquette = coursList.some((c) => c.etiquettes?.length > 0);
-    if (!hasAnyEtiquette) return null; // pas de groupement si aucun cours n'a d'etiquette
+    if (!hasAnyEtiquette && emptySections.length === 0) return null;
     const groups: { label: string; cours: Cours[] }[] = [];
     const seen = new Map<string, number>();
+    // Add empty sections first
+    for (const s of emptySections) {
+      if (!seen.has(s)) {
+        seen.set(s, groups.length);
+        groups.push({ label: s, cours: [] });
+      }
+    }
     for (const c of coursList) {
       const label = c.etiquettes?.[0] ?? "";
       if (!seen.has(label)) {
@@ -170,8 +178,8 @@ export function PedagogieShell({
       }
       groups[seen.get(label)!].cours.push(c);
     }
-    return groups;
-  }, [coursList]);
+    return groups.length > 0 ? groups : null;
+  }, [coursList, emptySections]);
   const dossierGroups = useMemo(() => {
     const hasAnyEtiquette = childDossiers.some((d) => d.etiquettes?.length > 0);
     if (!hasAnyEtiquette) return null;
@@ -314,6 +322,7 @@ export function PedagogieShell({
     setSelectedDossierIds(new Set());
     setShowBulkPopover(false);
     setShowBulkDossierPopover(false);
+    setEmptySections([]);
     setExpandedIds((prev) => new Set([...prev, dossier.id]));
     // Toujours refetch (pas de cache stale après deploy)
     setLoadingRessources(true);
@@ -1071,9 +1080,7 @@ export function PedagogieShell({
                                 {canEdit && coursList.length > 0 && (
                                   <AddCategoryButton
                                     onAdd={(name) => {
-                                      setSelectedCoursIds(new Set(coursList.map((c) => c.id)));
-                                      setBulkEtiquettes([name]);
-                                      setShowBulkPopover(true);
+                                      setEmptySections((prev) => prev.includes(name) ? prev : [...prev, name]);
                                     }}
                                   />
                                 )}
