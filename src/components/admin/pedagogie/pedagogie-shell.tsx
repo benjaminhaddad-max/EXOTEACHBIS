@@ -44,7 +44,7 @@ import {
   reorderDossiers, reorderRessources,
   getCourssByDossier, createCoursInDossier, updateCoursInDossier, deleteCoursFromDossier, reorderCours,
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette,
-  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId,
+  cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -66,6 +66,7 @@ type ModalState =
   | { type: "edit_cours"; cours: Cours }
   | { type: "clone_proposal"; sourceDossier: Dossier; targetDossierId: string; offerLabel: string }
   | { type: "linked_edit_confirm"; cours: Cours; data: any; linkedCount: number }
+  | { type: "rattacher_cours"; coursIds: string[]; sourceDossierId: string }
   | null;
 
 const COLORS = [
@@ -745,6 +746,13 @@ export function PedagogieShell({
                                 onClick={() => { setSelectedCoursIds(new Set()); }}
                                 className="text-[10px] font-medium text-navy/60 hover:text-navy underline"
                               >Désélectionner</button>
+                              {selectedDossier && (
+                                <button
+                                  type="button"
+                                  onClick={() => setModal({ type: "rattacher_cours", coursIds: [...selectedCoursIds], sourceDossierId: selectedDossier.id })}
+                                  className="rounded-lg bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-200 transition flex items-center gap-1"
+                                ><Link2 className="h-3 w-3" /> Rattacher</button>
+                              )}
                               <div className="ml-auto relative">
                                 <button
                                   type="button"
@@ -815,6 +823,7 @@ export function PedagogieShell({
                                             onSelect={() => setSelectedCours(c)}
                                             onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
                                             onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
+                                            onLink={canEdit && selectedDossier ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
                                             onPdfUploaded={refreshAll}
                                           />
                                         </div>
@@ -838,6 +847,7 @@ export function PedagogieShell({
                                       onSelect={() => setSelectedCours(c)}
                                       onEdit={canEdit ? () => setModal({ type: "edit_cours", cours: c }) : undefined}
                                       onDelete={canEdit ? () => handleDeleteCours(c) : undefined}
+                                      onLink={canEdit && selectedDossier ? () => setModal({ type: "rattacher_cours", coursIds: [c.id], sourceDossierId: selectedDossier.id }) : undefined}
                                       onPdfUploaded={refreshAll}
                                     />
                                   ))
@@ -900,7 +910,7 @@ export function PedagogieShell({
 
       {/* ── MODALS ── */}
       {modal && (
-        <ModalOverlay onClose={() => setModal(null)}>
+        <ModalOverlay onClose={() => setModal(null)} wide={modal.type === "rattacher_cours"}>
 
           {/* Picker "+" — style ExoTeach */}
           {modal.type === "add_picker" && (
@@ -1149,6 +1159,29 @@ export function PedagogieShell({
                 >Appliquer partout</button>
               </div>
             </div>
+          )}
+
+          {modal.type === "rattacher_cours" && (
+            <RattacherCoursModal
+              coursIds={modal.coursIds}
+              sourceDossierId={modal.sourceDossierId}
+              allDossiers={allDossiers as Dossier[]}
+              isPending={isPending}
+              onConfirm={(targetId) => {
+                startTransition(async () => {
+                  const result = await linkCoursToOtherDossier(modal.coursIds, targetId);
+                  if (result.error) {
+                    showToast(result.error, "error");
+                  } else {
+                    showToast(`${result.count} cours rattaché${(result.count ?? 0) > 1 ? "s" : ""} avec succès`, "success");
+                    setSelectedCoursIds(new Set());
+                  }
+                  setModal(null);
+                  await refreshAll();
+                });
+              }}
+              onClose={() => setModal(null)}
+            />
           )}
         </ModalOverlay>
       )}
@@ -2027,7 +2060,7 @@ function DiplomaLogoMini() {
   );
 }
 
-function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect, onEdit, onDelete, onPdfUploaded }: {
+function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect, onEdit, onDelete, onLink, onPdfUploaded }: {
   cours: Cours;
   dossierId: string;
   selected?: boolean;
@@ -2035,6 +2068,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
   onSelect?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onLink?: () => void;
   onPdfUploaded?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cours.id });
@@ -2159,8 +2193,9 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         </button>
       )}
 
-      {(onEdit || onDelete) && (
+      {(onEdit || onDelete || onLink) && (
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-50 hover:text-purple-600"><Link2 className="h-4 w-4" /></button>}
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
           {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
         </div>
@@ -2937,11 +2972,208 @@ function IconPicker({ value, onChange }: { value: string; onChange: (url: string
 // UI PRIMITIVES
 // =============================================
 
-function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+// =============================================
+// RATTACHER COURS MODAL
+// =============================================
+
+function RattacherCoursModal({
+  coursIds,
+  sourceDossierId,
+  allDossiers,
+  isPending,
+  onConfirm,
+  onClose,
+}: {
+  coursIds: string[];
+  sourceDossierId: string;
+  allDossiers: Dossier[];
+  isPending: boolean;
+  onConfirm: (targetDossierId: string) => void;
+  onClose: () => void;
+}) {
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    // Auto-expand offer-level dossiers
+    const set = new Set<string>();
+    for (const d of allDossiers) {
+      if (d.dossier_type === "offer") set.add(d.id);
+    }
+    return set;
+  });
+
+  const tree = useMemo(() => buildTree(allDossiers, null), [allDossiers]);
+
+  const searchLower = search.toLowerCase().trim();
+
+  // Find all dossier IDs that match search or have a descendant that matches
+  const matchingIds = useMemo(() => {
+    if (!searchLower) return null;
+    const matches = new Set<string>();
+    const byId = new Map(allDossiers.map((d) => [d.id, d]));
+    for (const d of allDossiers) {
+      if (d.name.toLowerCase().includes(searchLower)) {
+        // Add this node and all ancestors
+        let cur: string | null = d.id;
+        while (cur) {
+          matches.add(cur);
+          cur = byId.get(cur)?.parent_id ?? null;
+        }
+      }
+    }
+    return matches;
+  }, [allDossiers, searchLower]);
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const pathLabel = selectedTarget
+    ? getDossierPathLabel(selectedTarget, allDossiers)
+    : null;
+
+  const renderNode = (node: DossierNode, depth: number): React.ReactNode => {
+    // If searching and this node isn't in the match set, skip it
+    if (matchingIds && !matchingIds.has(node.id)) return null;
+
+    const isSubject = node.dossier_type === "subject";
+    const isSource = node.id === sourceDossierId;
+    const isSelected = node.id === selectedTarget;
+    const hasChildren = node.children.length > 0;
+    const isExpanded = expandedIds.has(node.id);
+    const meta = DOSSIER_TYPE_META[node.dossier_type as keyof typeof DOSSIER_TYPE_META];
+
+    return (
+      <div key={node.id}>
+        <div
+          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition cursor-pointer ${
+            isSelected
+              ? "bg-purple-100 ring-1 ring-purple-300"
+              : isSource
+                ? "opacity-40 cursor-not-allowed"
+                : isSubject
+                  ? "hover:bg-purple-50"
+                  : "hover:bg-gray-50"
+          }`}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => {
+            if (isSource) return;
+            if (isSubject) {
+              setSelectedTarget(node.id);
+            } else if (hasChildren) {
+              toggleExpand(node.id);
+            }
+          }}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
+              className="flex-shrink-0 rounded p-0.5 hover:bg-gray-200"
+            >
+              {isExpanded
+                ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
+            </button>
+          ) : (
+            <span className="w-[18px] flex-shrink-0" />
+          )}
+          {isSubject
+            ? <BookOpen className="h-4 w-4 flex-shrink-0 text-purple-500" />
+            : node.dossier_type === "offer"
+              ? <Layers className="h-4 w-4 flex-shrink-0 text-navy" />
+              : node.dossier_type === "university"
+                ? <Building2 className="h-4 w-4 flex-shrink-0 text-blue-500" />
+                : node.dossier_type === "semester"
+                  ? <Calendar className="h-4 w-4 flex-shrink-0 text-green-500" />
+                  : <Folder className="h-4 w-4 flex-shrink-0 text-gray-400" />}
+          <span className={`flex-1 truncate ${isSubject ? "font-medium" : ""} ${isSource ? "line-through" : ""}`}>
+            {node.name}
+          </span>
+          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+            {meta?.shortLabel ?? node.dossier_type}
+          </span>
+          {isSource && (
+            <span className="flex-shrink-0 text-[10px] text-gray-400">(actuel)</span>
+          )}
+        </div>
+        {hasChildren && isExpanded && (
+          <div>
+            {node.children.map((child) => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
+            <Link2 className="h-4 w-4 text-purple-600" />
+          </div>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Rattacher {coursIds.length} cours à une autre matière
+          </h3>
+        </div>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
+          <X className="h-4 w-4 text-gray-500" />
+        </button>
+      </div>
+
+      <div className="px-5 pt-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher une matière..."
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 py-3" style={{ maxHeight: "50vh" }}>
+        {tree.map((node) => renderNode(node, 0))}
+      </div>
+
+      {pathLabel && (
+        <div className="border-t border-gray-100 px-5 py-2">
+          <p className="text-xs text-gray-500">
+            Cible : <span className="font-medium text-purple-700">{pathLabel}</span>
+          </p>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+        <button
+          onClick={onClose}
+          className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+        >Annuler</button>
+        <button
+          onClick={() => selectedTarget && onConfirm(selectedTarget)}
+          disabled={!selectedTarget || isPending}
+          className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-700 disabled:opacity-50"
+        >
+          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Rattacher ici
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModalOverlay({ children, onClose, wide }: { children: React.ReactNode; onClose: () => void; wide?: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg">{children}</div>
+      <div className={`relative z-10 w-full ${wide ? "max-w-2xl" : "max-w-lg"}`}>{children}</div>
     </div>
   );
 }

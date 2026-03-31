@@ -921,6 +921,97 @@ function sortByDepth(dossiers: any[], rootId: string): any[] {
 }
 
 // =============================================
+// RATTACHER COURS À UN AUTRE DOSSIER (clone lié)
+// =============================================
+
+export async function linkCoursToOtherDossier(
+  coursIds: string[],
+  targetDossierId: string,
+): Promise<{ success?: boolean; error?: string; count?: number }> {
+  "use server";
+  const supabase = await createClient();
+
+  // Validate target dossier exists and is a subject
+  const { data: target } = await supabase
+    .from("dossiers")
+    .select("id, dossier_type")
+    .eq("id", targetDossierId)
+    .single();
+  if (!target) return { error: "Dossier cible introuvable." };
+  if (target.dossier_type !== "subject")
+    return { error: "Le dossier cible doit être une matière." };
+
+  // Fetch source courses
+  const { data: sources } = await supabase
+    .from("cours")
+    .select("*")
+    .in("id", coursIds);
+  if (!sources?.length) return { error: "Aucun cours trouvé." };
+
+  // Get max order_index in target
+  const { data: maxRow } = await supabase
+    .from("cours")
+    .select("order_index")
+    .eq("dossier_id", targetDossierId)
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single();
+  let nextOrder = (maxRow?.order_index ?? -1) + 1;
+
+  // Get existing linked_cours_ids in target to avoid duplicates
+  const { data: existingInTarget } = await supabase
+    .from("cours")
+    .select("linked_cours_id")
+    .eq("dossier_id", targetDossierId)
+    .not("linked_cours_id", "is", null);
+  const existingLinks = new Set(
+    (existingInTarget ?? []).map((c: any) => c.linked_cours_id),
+  );
+
+  let count = 0;
+  for (const source of sources) {
+    const linkId = source.linked_cours_id ?? source.id;
+
+    // Skip if already linked in target
+    if (existingLinks.has(linkId)) continue;
+
+    // Set linked_cours_id on source if not already set
+    if (!source.linked_cours_id) {
+      await supabase
+        .from("cours")
+        .update({ linked_cours_id: linkId })
+        .eq("id", source.id);
+    }
+
+    const { error } = await supabase.from("cours").insert({
+      dossier_id: targetDossierId,
+      matiere_id: null,
+      name: source.name,
+      description: source.description,
+      pdf_url: source.pdf_url,
+      pdf_path: source.pdf_path,
+      nb_pages: source.nb_pages ?? 0,
+      etiquettes: source.etiquettes ?? [],
+      tags: source.tags ?? [],
+      order_index: nextOrder++,
+      visible: source.visible,
+      version: 1,
+      linked_cours_id: linkId,
+    });
+    if (!error) {
+      existingLinks.add(linkId);
+      count++;
+    }
+  }
+
+  if (count === 0)
+    return { error: "Tous les cours sont déjà rattachés à cette matière." };
+
+  revalidatePath(PATH);
+  return { success: true, count };
+}
+
+// =============================================
 // UPDATE LINKED COURS (propager ou détacher)
 // =============================================
 
