@@ -63,8 +63,42 @@ function convertHtml(html: string | null | undefined): string {
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)));
 
-  // Charges chimiques: M_ → M-, I_ → I-, remplacer _ utilisé comme moins
-  // Pattern: une lettre majuscule suivie de _ en fin de mot = charge négative
+  // Nettoyer les attributs HTML résiduels qui se retrouvent en texte brut
+  s = s.replace(/contenteditable="[^"]*"/g, "");
+  s = s.replace(/draggable="[^"]*"/g, "");
+  s = s.replace(/style="[^"]*"/g, "");
+  s = s.replace(/class="[^"]*"/g, "");
+
+  // Convertir LaTeX courant en texte lisible
+  s = s.replace(/\\mathrm\{([^}]+)\}/g, "$1");
+  s = s.replace(/\\text\{([^}]+)\}/g, "$1");
+  s = s.replace(/\\cdot/g, "·");
+  s = s.replace(/\\times/g, "×");
+  s = s.replace(/\\approx/g, "≈");
+  s = s.replace(/\\neq/g, "≠");
+  s = s.replace(/\\leq/g, "≤");
+  s = s.replace(/\\geq/g, "≥");
+  s = s.replace(/\\rightarrow/g, "→");
+  s = s.replace(/\\leftarrow/g, "←");
+  s = s.replace(/\\leftrightarrow/g, "⇌");
+  s = s.replace(/\\rightleftharpoons/g, "⇌");
+  s = s.replace(/\\Delta/g, "Δ");
+  s = s.replace(/\\alpha/g, "α");
+  s = s.replace(/\\beta/g, "β");
+  s = s.replace(/\\gamma/g, "γ");
+  s = s.replace(/\\sigma/g, "σ");
+  s = s.replace(/\\pi/g, "π");
+  s = s.replace(/\\mu/g, "μ");
+  s = s.replace(/\\lambda/g, "λ");
+  s = s.replace(/\\infty/g, "∞");
+
+  // LaTeX between $...$ : keep as-is for KaTeX rendering on client side
+  // Only convert LaTeX that's NOT inside $...$ delimiters
+  // Convert standalone LaTeX sub/sup outside of $ blocks
+  s = s.replace(/(?<!\$)_\{([^}]+)\}(?!\$)/g, (_, sub) => toUnicode(sub, SUB));
+  s = s.replace(/(?<!\$)\^\{([^}]+)\}(?!\$)/g, (_, sup) => toUnicode(sup, SUP));
+
+  // Charges chimiques: M_ → M-, I_ → I-
   s = s.replace(/([A-Z])_(?=\s|$|[.,;:!?)])/g, "$1-");
 
   // Nettoyer espaces multiples (garder \n)

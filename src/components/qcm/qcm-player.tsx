@@ -38,6 +38,47 @@ function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
   );
 }
 
+/** Split long question text: separate the final interrogative sentence */
+function QuestionText({ text }: { text: string }) {
+  if (!text || text.length < 150) return <MathText text={text} />;
+
+  // Find the last "?" and extract the final question
+  const lastQ = text.lastIndexOf("?");
+  if (lastQ < 0 || lastQ < text.length * 0.3) return <MathText text={text} />;
+
+  // Find the start of the last sentence (after last period/colon before the "?")
+  const beforeQ = text.slice(0, lastQ + 1);
+  // Look for sentence boundary: ". ", ": ", " : " before the last question
+  let splitIdx = -1;
+  for (let i = lastQ - 1; i > text.length * 0.3; i--) {
+    if ((text[i] === "." || text[i] === ":" || text[i] === ")") && text[i + 1] === " ") {
+      // Check it's not inside a formula like "2.5" or "pH = 4.5"
+      const after = text.slice(i + 2, i + 5);
+      if (text[i] === "." && /^\d/.test(after)) continue;
+      splitIdx = i + 2;
+      break;
+    }
+  }
+
+  if (splitIdx < 0) return <MathText text={text} />;
+
+  const context = text.slice(0, splitIdx).trim();
+  const question = text.slice(splitIdx).trim();
+
+  if (question.length < 20) return <MathText text={text} />;
+
+  return (
+    <>
+      <MathText text={context} />
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="font-semibold text-gray-900">
+          <MathText text={question} />
+        </p>
+      </div>
+    </>
+  );
+}
+
 /** Parse image_url — supports single URL string or JSON array of URLs */
 function parseImageUrls(imageUrl: string | null | undefined): string[] {
   if (!imageUrl) return [];
@@ -495,7 +536,7 @@ function PlayingScreen({
                   {/* Question text */}
                   <div className="px-5 py-4">
                     <div className="text-sm font-medium text-gray-800 leading-relaxed">
-                      <MathText text={q.text} />
+                      <QuestionText text={q.text} />
                       {(q as any).image_url && (
                         <QuestionImages imageUrl={(q as any).image_url} />
                       )}
