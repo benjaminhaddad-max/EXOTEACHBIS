@@ -2725,8 +2725,12 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       )}
 
       {/* Visibility indicator */}
-      {!cours.visible && (
-        <span className="flex items-center gap-0.5 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-400" title="Masqué pour les élèves">
+      {cours.visible ? (
+        <span className="flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-green-500" title="Visible pour les élèves">
+          <Eye className="h-3 w-3" />
+        </span>
+      ) : (
+        <span className="flex items-center rounded-md bg-red-50 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
           <EyeOff className="h-3 w-3" />
         </span>
       )}
