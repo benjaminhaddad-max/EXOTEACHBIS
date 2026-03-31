@@ -648,6 +648,13 @@ export function PedagogieShell({
                   setModal(null);
                 }
               }}
+              onBulkCreateCours={() => {
+                if (modal.parentId) {
+                  setModal({ type: "bulk_create_cours", dossierId: modal.parentId });
+                } else {
+                  setModal(null);
+                }
+              }}
               onCreateRessource={(type) => {
                 if (modal.parentId) {
                   setModal({ type: "create_ressource", dossierId: modal.parentId, ressourceType: type });
@@ -719,6 +726,14 @@ export function PedagogieShell({
             />
           )}
 
+          {modal.type === "bulk_create_cours" && (
+            <BulkCreateCoursModal
+              dossierId={modal.dossierId}
+              onCreated={() => { setModal(null); refreshTree(); }}
+              onClose={() => setModal(null)}
+            />
+          )}
+
           {modal.type === "edit_cours" && (
             <CoursForm
               title="Modifier le cours"
@@ -785,12 +800,99 @@ const CONTENT_TYPES = [
   { type: "lien",  label: "Lien",  icon: <LinkIcon className="h-8 w-8" />,      color: "text-green-500",bg: "hover:bg-green-50 hover:border-green-200" },
 ];
 
+function BulkCreateCoursModal({ dossierId, onCreated, onClose }: {
+  dossierId: string;
+  onCreated: () => void;
+  onClose: () => void;
+}) {
+  const [input, setInput] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [result, setResult] = useState<{ ok: number; errors: string[] } | null>(null);
+
+  const courseNames = input
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-•●◦▪▸▹►]\s*/, "").replace(/^\d+[.)]\s*/, "").trim())
+    .filter((name) => name.length > 1);
+
+  const handleCreate = async () => {
+    if (courseNames.length === 0 || creating) return;
+    setCreating(true);
+    let ok = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < courseNames.length; i++) {
+      try {
+        const res = await createCoursInDossier({
+          dossier_id: dossierId,
+          name: courseNames[i],
+          visible: true,
+          order_index: i,
+        });
+        if ("error" in res) errors.push(`${courseNames[i]}: ${res.error}`);
+        else ok++;
+      } catch (e: any) {
+        errors.push(`${courseNames[i]}: ${e.message}`);
+      }
+    }
+
+    setResult({ ok, errors });
+    setCreating(false);
+    if (ok > 0) onCreated();
+  };
+
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-md">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <h3 className="text-sm font-semibold text-gray-900">Créer plusieurs cours</h3>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+      </div>
+      <div className="p-5 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Noms des cours (un par ligne)</label>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            rows={10}
+            placeholder={"Atomistique\nIsomérie\nLiaisons chimiques\nMolécules conjuguées\n..."}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+            autoFocus
+          />
+          {courseNames.length > 0 && (
+            <p className="mt-1 text-xs text-gray-500">{courseNames.length} cours à créer</p>
+          )}
+        </div>
+
+        {result && (
+          <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
+            <p className="font-semibold">✅ {result.ok} cours créé{result.ok > 1 ? "s" : ""}</p>
+            {result.errors.map((e, i) => <p key={i} className="text-red-600 mt-1">❌ {e}</p>)}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+            Fermer
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={courseNames.length === 0 || creating}
+            className="flex-1 py-2 rounded-xl bg-[#0e1e35] text-white text-sm font-semibold hover:bg-[#1a2d4a] disabled:opacity-40 transition-colors"
+          >
+            {creating ? "Création..." : `Créer ${courseNames.length} cours`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddPickerModal({
-  parentDossier, onCreateDossier, onCreateCours, onCreateRessource, canAddContent, onClose,
+  parentDossier, onCreateDossier, onCreateCours, onBulkCreateCours, onCreateRessource, canAddContent, onClose,
 }: {
   parentDossier: Dossier | null;
   onCreateDossier: () => void;
   onCreateCours: () => void;
+  onBulkCreateCours: () => void;
   onCreateRessource: (type: string) => void;
   canAddContent: boolean;
   onClose: () => void;
@@ -845,6 +947,22 @@ function AddPickerModal({
             <div>
               <p className="font-semibold text-gray-900">{courseLabel}</p>
               <p className="text-xs text-gray-400">Chapitre PDF + séries d'exercices</p>
+            </div>
+          </button>
+        )}
+
+        {/* Bulk create cours */}
+        {canAddContent && (
+          <button
+            onClick={onBulkCreateCours}
+            className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-teal-200 hover:bg-teal-50"
+          >
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600 transition group-hover:bg-teal-100">
+              <Layers className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Créer plusieurs cours</p>
+              <p className="text-xs text-gray-400">Coller une liste de noms ou un screenshot</p>
             </div>
           </button>
         )}
