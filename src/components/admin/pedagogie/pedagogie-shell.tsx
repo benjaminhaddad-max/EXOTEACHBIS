@@ -703,15 +703,6 @@ export function PedagogieShell({
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
-                      {dossierTab === "contenu" && (
-                        <button
-                          onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
-                          className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Ajouter
-                        </button>
-                      )}
                     </>
                   )}
                 </div>
@@ -973,6 +964,16 @@ export function PedagogieShell({
                         </DndContext>
                       )}
                     </div>
+                  )}
+
+                  {/* Bouton + sous les dossiers */}
+                  {canEdit && selectedDossier && selectedDossier.dossier_type !== "subject" && (
+                    <button
+                      onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
+                      className="mt-2 mb-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm font-medium text-gray-400 transition hover:border-navy/20 hover:bg-navy/5 hover:text-navy"
+                    >
+                      <Plus className="h-4 w-4" /> Ajouter du contenu
+                    </button>
                   )}
 
                   {/* Cours — drag & drop grille ou liste */}
