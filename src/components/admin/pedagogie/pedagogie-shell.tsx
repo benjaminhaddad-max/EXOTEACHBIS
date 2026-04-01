@@ -1896,7 +1896,6 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
           dossier_type: childType,
           color: COLORS[i % COLORS.length],
           parent_id: parentId,
-          order_index: i,
           visible: true,
         });
         if ("error" in res) errors.push(`${names[i]}: ${res.error}`);
