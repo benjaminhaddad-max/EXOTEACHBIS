@@ -888,6 +888,17 @@ export async function bulkArchiveCours(coursIds: string[]) {
   return { success: true };
 }
 
+export async function bulkSetDossierVisible(dossierIds: string[], visible: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("dossiers")
+    .update({ visible, updated_at: new Date().toISOString() })
+    .in("id", dossierIds);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function bulkSetDossierEtiquettes(dossierIds: string[], etiquettes: string[]) {
   const supabase = await createClient();
   const { error } = await supabase

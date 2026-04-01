@@ -46,7 +46,7 @@ import {
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette, bulkSetCoursVisible, bulkDeleteCours, bulkArchiveCours,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
   updateUniversityLinkRules, getUniversityLinkRulesForDossier, getOffersForUniversity,
-  addUniversityToOffer, removeUniversityFromOffer, getUniversitySubjectsSummary, moveDossiers,
+  addUniversityToOffer, removeUniversityFromOffer, getUniversitySubjectsSummary, moveDossiers, bulkSetDossierVisible,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -790,6 +790,19 @@ export function PedagogieShell({
                             onClick={() => setModal({ type: "move_dossiers", dossierIds: [...selectedDossierIds] })}
                             className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-200 transition flex items-center gap-1"
                           ><FolderOpen className="h-3 w-3" /> Déplacer</button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const ids = [...selectedDossierIds];
+                              const anyHidden = childDossiers.some((d) => ids.includes(d.id) && !d.visible);
+                              await handleAction(() => bulkSetDossierVisible(ids, anyHidden));
+                              setSelectedDossierIds(new Set());
+                            }}
+                            className="rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-200 transition flex items-center gap-1"
+                          >
+                            {childDossiers.some((d) => selectedDossierIds.has(d.id) && !d.visible) ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                            {childDossiers.some((d) => selectedDossierIds.has(d.id) && !d.visible) ? "Visible" : "Masquer"}
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -2597,6 +2610,12 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
             {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
           </span>
         </button>
+      )}
+      {/* Visibility indicator */}
+      {!dossier.visible && (
+        <span className="flex-shrink-0 rounded-md bg-red-50 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
+          <EyeOff className="h-3 w-3" />
+        </span>
       )}
       {!renaming && (onEdit || onDelete) && (
         <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
