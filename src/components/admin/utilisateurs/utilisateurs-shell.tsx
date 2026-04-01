@@ -557,6 +557,7 @@ export function UtilisateursShell({
             filieres={initialFilieres}
             matieres={initialMatieres}
             profMatieresByUser={profMatieresByUser}
+            profMatieres={profMatieres}
             groupeAccessById={groupeAccessById}
             profileAccessById={profileAccessById}
             onEditUser={(u) => setModal({ type: "edit_user", user: u })}
@@ -1606,7 +1607,7 @@ function GroupTreeNode({
 // ─── ComptesView ──────────────────────────────────────────────────────────────
 
 function ComptesView({
-  users, groupes, dossiers, filieres, matieres, profMatieresByUser, groupeAccessById, profileAccessById, onEditUser, onCreateUser,
+  users, groupes, dossiers, filieres, matieres, profMatieresByUser, profMatieres, groupeAccessById, profileAccessById, onEditUser, onCreateUser,
 }: {
   users: Profile[];
   groupes: Groupe[];
@@ -1614,6 +1615,7 @@ function ComptesView({
   filieres: Filiere[];
   matieres: Matiere[];
   profMatieresByUser: Map<string, string[]>;
+  profMatieres: ProfMatiereAssignment[];
   groupeAccessById: Map<string, string[]>;
   profileAccessById: Map<string, string[]>;
   onEditUser: (u: Profile) => void;
@@ -1768,6 +1770,73 @@ function ComptesView({
   const filiereMap = useMemo(() => new Map(filieres.map((filiere) => [filiere.id, filiere])), [filieres]);
   const matiereMap = useMemo(() => new Map(matieres.map((matiere) => [matiere.id, matiere])), [matieres]);
 
+  const profGroupesByUser = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const pm of profMatieres) {
+      if (pm.groupe_id) {
+        if (!m.has(pm.prof_id)) m.set(pm.prof_id, new Set());
+        m.get(pm.prof_id)!.add(pm.groupe_id);
+      }
+    }
+    return m;
+  }, [profMatieres]);
+
+  const getAncestorChain = (dossierId: string | null): Dossier[] => {
+    const chain: Dossier[] = [];
+    let id = dossierId;
+    while (id) {
+      const d = dMap.get(id);
+      if (!d) break;
+      chain.unshift(d);
+      id = d.parent_id;
+    }
+    return chain;
+  };
+
+  const getUserFormationInfo = (u: Profile) => {
+    if (u.role === "eleve") {
+      const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
+      if (!groupe) return { formation: null, university: null, classe: null };
+      const formDossier = groupe.formation_dossier_id ? dMap.get(groupe.formation_dossier_id) : null;
+      const chain = formDossier ? getAncestorChain(formDossier.id) : [];
+      const offer = chain.find(d => d.dossier_type === "offer");
+      const subOffer = chain.find(d => d.dossier_type === "sub_offer");
+      const uni = chain.find(d => d.dossier_type === "university");
+      return { formation: subOffer ?? offer ?? null, university: uni ?? null, classe: groupe };
+    }
+    if (u.role === "prof") {
+      const gIds = profGroupesByUser.get(u.id);
+      if (!gIds || gIds.size === 0) return { formation: null, university: null, classe: null };
+      const formations = new Set<string>();
+      const universities = new Set<string>();
+      const classes: Groupe[] = [];
+      for (const gid of gIds) {
+        const g = groupMap.get(gid);
+        if (!g) continue;
+        classes.push(g);
+        const formD = g.formation_dossier_id ? dMap.get(g.formation_dossier_id) : null;
+        const chain = formD ? getAncestorChain(formD.id) : [];
+        const offer = chain.find(d => d.dossier_type === "offer");
+        const subOffer = chain.find(d => d.dossier_type === "sub_offer");
+        const uni = chain.find(d => d.dossier_type === "university");
+        if (subOffer) formations.add(subOffer.name); else if (offer) formations.add(offer.name);
+        if (uni) universities.add(uni.name);
+      }
+      return { formationNames: [...formations], universityNames: [...universities], classes };
+    }
+    if (u.role === "coach") {
+      const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
+      if (!groupe) return { formation: null, university: null, classe: null };
+      const formDossier = groupe.formation_dossier_id ? dMap.get(groupe.formation_dossier_id) : null;
+      const chain = formDossier ? getAncestorChain(formDossier.id) : [];
+      const offer = chain.find(d => d.dossier_type === "offer");
+      const subOffer = chain.find(d => d.dossier_type === "sub_offer");
+      const uni = chain.find(d => d.dossier_type === "university");
+      return { formation: subOffer ?? offer ?? null, university: uni ?? null, classe: groupe };
+    }
+    return { formation: null, university: null, classe: null };
+  };
+
   return (
     <div className="p-5">
       {/* Search + Create */}
@@ -1875,7 +1944,8 @@ function ComptesView({
             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.03)" }}>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Utilisateur</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Rôle</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Groupe</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Formation</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Détails</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
@@ -1883,12 +1953,7 @@ function ComptesView({
             {paged.map(u => {
               const rc = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.eleve;
               const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
-              const formationDossierId = getGroupeInheritedFormationDossierId(groupe?.id, groupMap);
-              const formationLabel = formationDossierId ? getDossierPathLabel(formationDossierId, dossiers) : null;
-              const filiere = u.filiere_id ? filiereMap.get(u.filiere_id) : null;
-              const accessLabel = getDossierPathLabel(u.access_dossier_id, dossiers);
-              const directAccessIds = profileAccessById.get(u.id) ?? (u.access_dossier_id ? [u.access_dossier_id] : []);
-              const groupAccessIds = u.groupe_id ? (groupeAccessById.get(u.groupe_id) ?? []) : [];
+              const info = getUserFormationInfo(u);
               const assignedMatieres = (profMatieresByUser.get(u.id) ?? [])
                 .map((matiereId) => matiereMap.get(matiereId)?.name)
                 .filter(Boolean) as string[];
@@ -1902,15 +1967,9 @@ function ComptesView({
                         style={{ backgroundColor: groupe?.color ?? "#6366F1" }}>
                         {avatar(u)}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.9)" }}>{fullName(u)}</p>
-                        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
-                        {u.phone && (
-                          <p className="text-[11px] flex items-center gap-1 mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-                            <Phone size={9} />
-                            {u.phone.replace(/(\d{2})(?=\d)/g, "$1 ").trim()}
-                          </p>
-                        )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: "rgba(255,255,255,0.9)" }}>{fullName(u)}</p>
+                        <p className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
                         {u.role === "prof" && assignedMatieres.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {assignedMatieres.map(m => (
@@ -1929,21 +1988,66 @@ function ComptesView({
                       {rc.icon} {rc.label}
                     </span>
                   </td>
+                  {/* Formation */}
                   <td className="px-4 py-3">
-                    {groupe ? (
+                    {u.role === "prof" && "formationNames" in info ? (
+                      <div className="space-y-0.5">
+                        {(info.formationNames as string[]).length > 0 ? (info.formationNames as string[]).map(f => (
+                          <span key={f} className="block text-[11px] font-medium truncate max-w-[160px]" style={{ color: "rgba(255,255,255,0.65)" }}>{f}</span>
+                        )) : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
+                      </div>
+                    ) : info.formation ? (
+                      <span className="text-[11px] font-medium truncate block max-w-[160px]" style={{ color: "rgba(255,255,255,0.65)" }}>{info.formation.name}</span>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                    )}
+                  </td>
+                  {/* Détails : université + classe */}
+                  <td className="px-4 py-3">
+                    {u.role === "prof" && "universityNames" in info ? (
                       <div className="space-y-1">
-                        <span className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.7)" }}>
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: groupe.color }} />
-                          {groupe.name}
-                        </span>
-                        {formationLabel && (
-                          <p className="max-w-[240px] truncate text-[10px]" style={{ color: "rgba(255,255,255,0.38)" }}>
-                            {formationLabel}
-                          </p>
+                        {(info.universityNames as string[]).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {(info.universityNames as string[]).map(un => (
+                              <span key={un} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(139,92,246,0.1)", color: "rgba(196,181,253,0.8)", border: "1px solid rgba(139,92,246,0.15)" }}>
+                                <Building2 size={8} />
+                                {un}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {(info.classes as Groupe[]).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {(info.classes as Groupe[]).map(c => (
+                              <span key={c.id} className="inline-flex items-center gap-1 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                                {c.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {(info.universityNames as string[]).length === 0 && (info.classes as Groupe[]).length === 0 && (
+                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>—</span>
+                      <div className="space-y-0.5">
+                        {info.university && (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(139,92,246,0.1)", color: "rgba(196,181,253,0.8)", border: "1px solid rgba(139,92,246,0.15)" }}>
+                            <Building2 size={8} />
+                            {info.university.name}
+                          </span>
+                        )}
+                        {info.classe && (
+                          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
+                            {info.classe.name}
+                          </span>
+                        )}
+                        {!info.university && !info.classe && (
+                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
