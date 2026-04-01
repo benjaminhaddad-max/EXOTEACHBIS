@@ -21,6 +21,10 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  OfferIcon, SubOfferIcon, UniversityIcon, SemesterIcon, SubjectIcon,
+  ModuleIcon, OptionIcon, PeriodIcon, GenericIcon, CoursIcon,
+} from "./dossier-icons";
 import type { Dossier, Ressource, Cours } from "@/types/database";
 import { uploadPdf } from "@/lib/upload-pdf";
 import { CoursDetailPanel } from "./cours-detail-panel";
@@ -2432,7 +2436,7 @@ function SortableTreeNode({
           >
             {node.icon_url
               ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
-              : <NodeIcon className="h-3.5 w-3.5" style={{ color: nodeCs.iconColor }} />}
+              : <NodeIcon className="h-3.5 w-3.5" />}
           </span>
           <span className="min-w-0 flex-1">
             <span className={`block whitespace-normal break-words text-[11px] leading-snug transition-colors ${selected ? "font-bold text-white" : "font-medium text-white/70 group-hover:text-white/90"}`}>
@@ -2493,15 +2497,17 @@ function SortableTreeNode({
 // =============================================
 
 // Type-based visual styles for sub-dossier cards — Diploma Santé charte graphique
-const CARD_STYLES: Record<string, { icon: typeof Folder; gradient: string; iconBg: string; iconColor: string; badgeBg: string; badgeText: string; border: string }> = {
-  offer:      { icon: GraduationCap, gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1a3555 100%)", iconBg: "rgba(201,168,76,0.18)", iconColor: "#E3C286", badgeBg: "rgba(201,168,76,0.18)", badgeText: "#E3C286", border: "rgba(201,168,76,0.35)" },
-  university: { icon: Building2,     gradient: "linear-gradient(145deg, #0e1e35 0%, #14253d 50%, #182c47 100%)", iconBg: "rgba(255,255,255,0.08)", iconColor: "#ffffff", badgeBg: "rgba(201,168,76,0.15)", badgeText: "#E3C286", border: "rgba(255,255,255,0.12)" },
-  semester:   { icon: Calendar,      gradient: "linear-gradient(145deg, #111f33 0%, #15283e 50%, #1a3048 100%)", iconBg: "rgba(201,168,76,0.12)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.12)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.18)" },
-  subject:    { icon: BookOpen,      gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1e3654 100%)", iconBg: "rgba(201,168,76,0.2)", iconColor: "#E3C286", badgeBg: "rgba(52,211,153,0.12)", badgeText: "#6EE7B7", border: "rgba(201,168,76,0.25)" },
-  module:     { icon: Layers,        gradient: "linear-gradient(145deg, #101b2d 0%, #152438 50%, #1a2d42 100%)", iconBg: "rgba(201,168,76,0.12)", iconColor: "#D4B65C", badgeBg: "rgba(201,168,76,0.1)", badgeText: "#D4B65C", border: "rgba(201,168,76,0.15)" },
-  option:     { icon: Sparkles,      gradient: "linear-gradient(145deg, #141e2c 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(251,191,36,0.12)", iconColor: "#FBBF24", badgeBg: "rgba(251,191,36,0.12)", badgeText: "#FBBF24", border: "rgba(251,191,36,0.18)" },
-  period:     { icon: Clock,         gradient: "linear-gradient(145deg, #0e1a2b 0%, #132236 50%, #172a40 100%)", iconBg: "rgba(201,168,76,0.1)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.1)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.12)" },
-  generic:    { icon: Folder,        gradient: "linear-gradient(145deg, #151f2e 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(255,255,255,0.06)", iconColor: "#94A3B8", badgeBg: "rgba(255,255,255,0.06)", badgeText: "#94A3B8", border: "rgba(255,255,255,0.08)" },
+type CardIconComponent = React.FC<React.SVGProps<SVGSVGElement>>;
+const CARD_STYLES: Record<string, { icon: CardIconComponent; gradient: string; iconBg: string; iconColor: string; badgeBg: string; badgeText: string; border: string }> = {
+  offer:      { icon: OfferIcon,      gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1a3555 100%)", iconBg: "rgba(201,168,76,0.18)", iconColor: "#E3C286", badgeBg: "rgba(201,168,76,0.18)", badgeText: "#E3C286", border: "rgba(201,168,76,0.35)" },
+  sub_offer:  { icon: SubOfferIcon,   gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1a3555 100%)", iconBg: "rgba(201,168,76,0.14)", iconColor: "#E3C286", badgeBg: "rgba(201,168,76,0.14)", badgeText: "#E3C286", border: "rgba(201,168,76,0.28)" },
+  university: { icon: UniversityIcon, gradient: "linear-gradient(145deg, #0e1e35 0%, #14253d 50%, #182c47 100%)", iconBg: "rgba(255,255,255,0.08)", iconColor: "#ffffff", badgeBg: "rgba(201,168,76,0.15)", badgeText: "#E3C286", border: "rgba(255,255,255,0.12)" },
+  semester:   { icon: SemesterIcon,   gradient: "linear-gradient(145deg, #111f33 0%, #15283e 50%, #1a3048 100%)", iconBg: "rgba(201,168,76,0.12)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.12)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.18)" },
+  subject:    { icon: SubjectIcon,    gradient: "linear-gradient(145deg, #0e1e35 0%, #162d4a 50%, #1e3654 100%)", iconBg: "rgba(201,168,76,0.2)", iconColor: "#E3C286", badgeBg: "rgba(52,211,153,0.12)", badgeText: "#6EE7B7", border: "rgba(201,168,76,0.25)" },
+  module:     { icon: ModuleIcon,     gradient: "linear-gradient(145deg, #101b2d 0%, #152438 50%, #1a2d42 100%)", iconBg: "rgba(201,168,76,0.12)", iconColor: "#D4B65C", badgeBg: "rgba(201,168,76,0.1)", badgeText: "#D4B65C", border: "rgba(201,168,76,0.15)" },
+  option:     { icon: OptionIcon,     gradient: "linear-gradient(145deg, #141e2c 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(251,191,36,0.12)", iconColor: "#FBBF24", badgeBg: "rgba(251,191,36,0.12)", badgeText: "#FBBF24", border: "rgba(251,191,36,0.18)" },
+  period:     { icon: PeriodIcon,     gradient: "linear-gradient(145deg, #0e1a2b 0%, #132236 50%, #172a40 100%)", iconBg: "rgba(201,168,76,0.1)", iconColor: "#C9A84C", badgeBg: "rgba(201,168,76,0.1)", badgeText: "#C9A84C", border: "rgba(201,168,76,0.12)" },
+  generic:    { icon: GenericIcon,    gradient: "linear-gradient(145deg, #151f2e 0%, #1a2838 50%, #1e3040 100%)", iconBg: "rgba(255,255,255,0.06)", iconColor: "#94A3B8", badgeBg: "rgba(255,255,255,0.06)", badgeText: "#94A3B8", border: "rgba(255,255,255,0.08)" },
 };
 
 function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossier: Dossier; onClick: () => void; onEdit?: () => void; onDelete?: () => void }) {
@@ -2537,7 +2543,7 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: `radial-gradient(circle, ${cs.iconColor}20 0%, transparent 70%)` }} />
           {dossier.icon_url
             ? <img src={dossier.icon_url} alt="" className="relative h-7 w-7 object-contain drop-shadow-sm" />
-            : <CardIcon className="relative h-7 w-7 drop-shadow-sm" style={{ color: cs.iconColor }} />}
+            : <CardIcon className="relative h-7 w-7 drop-shadow-sm" />}
         </div>
 
         <p className="relative text-[13px] font-bold text-white/90 line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-white transition-colors duration-200">{dossier.name}</p>
@@ -2632,7 +2638,7 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
       >
         {dossier.icon_url
           ? <img src={dossier.icon_url} alt="" className="h-5 w-5 object-contain" />
-          : <CardIcon className="h-5 w-5" style={{ color: cs.iconColor }} />}
+          : <CardIcon className="h-5 w-5" />}
       </div>
       {renaming ? (
         <input
@@ -2903,7 +2909,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
         style={{ background: "linear-gradient(145deg, rgba(79,171,219,0.15) 0%, rgba(79,171,219,0.05) 100%)", border: "1px solid rgba(79,171,219,0.2)", boxShadow: selected ? "0 0 12px rgba(79,171,219,0.2)" : "none" }}
       >
-        <FileText className="h-5 w-5 text-[#4fabdb]" />
+        <CoursIcon className="h-5 w-5" />
       </div>
       {editing ? (
         <input
