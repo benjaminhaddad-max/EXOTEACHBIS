@@ -16,6 +16,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ParametrageShell } from "@/components/admin/examens/parametrage-shell";
+import { DateTimePicker } from "@/components/admin/examens/examen-detail-shell";
 import { useRouter } from "next/navigation";
 
 export type ExamenSerieWithCoeff = {
@@ -943,15 +944,10 @@ function ExamenForm({
   onClose: () => void;
   isPending: boolean;
 }) {
-  const toDatetimeLocal = (iso?: string) => {
-    if (!iso) return "";
-    return new Date(iso).toISOString().slice(0, 16);
-  };
-
   const [name, setName] = useState(examen?.name ?? "");
   const [description, setDescription] = useState(examen?.description ?? "");
-  const [debutAt, setDebutAt] = useState(toDatetimeLocal(examen?.debut_at));
-  const [finAt, setFinAt] = useState(toDatetimeLocal(examen?.fin_at));
+  const [debutAt, setDebutAt] = useState<string | null>(examen?.debut_at ?? null);
+  const [finAt, setFinAt] = useState<string | null>(examen?.fin_at ?? null);
   const [visible, setVisible] = useState(examen?.visible ?? true);
   const [resultsVisible, setResultsVisible] = useState(examen?.results_visible ?? false);
   const [notationSur, setNotationSur] = useState(examen?.notation_sur ?? 20);
@@ -1011,21 +1007,11 @@ function ExamenForm({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="text-xs text-white/50 mb-1.5 block">Date de début *</label>
-          <input
-            type="datetime-local"
-            value={debutAt}
-            onChange={(e) => setDebutAt(e.target.value)}
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-white/30"
-          />
+          <DateTimePicker value={debutAt} onChange={setDebutAt} placeholder="Début…" placement="left" />
         </div>
         <div>
           <label className="text-xs text-white/50 mb-1.5 block">Date de fin *</label>
-          <input
-            type="datetime-local"
-            value={finAt}
-            onChange={(e) => setFinAt(e.target.value)}
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-white/30"
-          />
+          <DateTimePicker value={finAt} onChange={setFinAt} placeholder="Fin…" placement="right" />
         </div>
       </div>
 
@@ -1113,8 +1099,8 @@ function ExamenForm({
           onClick={() => onSubmit({
             name: name.trim(),
             description: description.trim() || undefined,
-            debut_at: new Date(debutAt).toISOString(),
-            fin_at: new Date(finAt).toISOString(),
+            debut_at: debutAt!,
+            fin_at: finAt!,
             visible,
             results_visible: resultsVisible,
             notation_sur: notationSur,

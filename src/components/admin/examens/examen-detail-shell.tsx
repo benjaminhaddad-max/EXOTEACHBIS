@@ -338,20 +338,18 @@ export function ExamenDetailShell({
             </h1>
           )}
           <div className="flex items-center gap-4 mt-2">
-            <div className="flex items-center gap-1.5">
-              <Calendar size={11} className="text-white/30" />
-              <span className="text-[10px] text-white/40 font-medium">Début</span>
-              <input type="datetime-local" value={toDatetimeLocal(debutAt)}
-                onChange={e => { if (!e.target.value) return; const v = new Date(e.target.value).toISOString(); setDebutAt(v); saveHeader({ debut_at: v }); }}
-                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white/70 outline-none focus:border-[#C9A84C]/50 cursor-pointer" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock size={11} className="text-white/30" />
-              <span className="text-[10px] text-white/40 font-medium">Fin</span>
-              <input type="datetime-local" value={toDatetimeLocal(finAt)}
-                onChange={e => { if (!e.target.value) return; const v = new Date(e.target.value).toISOString(); setFinAt(v); saveHeader({ fin_at: v }); }}
-                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white/70 outline-none focus:border-[#C9A84C]/50 cursor-pointer" />
-            </div>
+            <DateTimePicker
+              value={isDateSet(debutAt) ? debutAt : null}
+              onChange={v => { const iso = v ?? `${SENTINEL}T00:00:00.000Z`; setDebutAt(iso); saveHeader({ debut_at: iso }); }}
+              placeholder="Début…"
+              placement="left"
+            />
+            <DateTimePicker
+              value={isDateSet(finAt) ? finAt : null}
+              onChange={v => { const iso = v ?? `${SENTINEL}T00:00:00.000Z`; setFinAt(iso); saveHeader({ fin_at: iso }); }}
+              placeholder="Fin…"
+              placement="left"
+            />
           </div>
         </div>
         <div className="flex items-center gap-2">
