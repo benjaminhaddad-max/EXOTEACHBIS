@@ -2529,6 +2529,17 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   const cs = CARD_STYLES[dossier.dossier_type] ?? CARD_STYLES.generic;
   const CardIcon = cs.icon;
+  const [renaming, setRenaming] = useState(false);
+  const [renameName, setRenameName] = useState(dossier.name);
+  const renameRef = useRef<HTMLInputElement>(null);
+
+  const commitRename = async () => {
+    setRenaming(false);
+    const trimmed = renameName.trim();
+    if (!trimmed || trimmed === dossier.name) { setRenameName(dossier.name); return; }
+    await updateDossier(dossier.id, { name: trimmed, color: dossier.color, visible: dossier.visible });
+    onEdit?.(); // reuse to trigger refresh
+  };
 
   return (
     <div
@@ -2551,20 +2562,41 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
           <GripVertical className="h-4 w-4" />
         </span>
       )}
-      <button onClick={onClick} className="min-w-0 flex-1 text-left flex items-center gap-2">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: cs.iconBg }}>
-          {dossier.icon_url
-            ? <img src={dossier.icon_url} alt="" className="h-5 w-5 object-contain" />
-            : <CardIcon className="h-4 w-4" style={{ color: cs.iconColor }} />}
-        </div>
-        <p className="truncate text-sm font-semibold text-gray-800">{dossier.name}</p>
-        {sectionBadges && sectionBadges.length > 0 && sectionBadges.map((badge) => (
-          <span key={badge} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{badge}</span>
-        ))}
-        <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-          {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
-        </span>
-      </button>
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: cs.iconBg }}>
+        {dossier.icon_url
+          ? <img src={dossier.icon_url} alt="" className="h-5 w-5 object-contain" />
+          : <CardIcon className="h-4 w-4" style={{ color: cs.iconColor }} />}
+      </div>
+      {renaming ? (
+        <input
+          ref={renameRef}
+          value={renameName}
+          onChange={(e) => setRenameName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setRenaming(false); setRenameName(dossier.name); } }}
+          className="min-w-0 flex-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-sm font-semibold text-gray-800 outline-none ring-2 ring-blue-200"
+          autoFocus
+        />
+      ) : (
+        <button onClick={onClick} className="min-w-0 flex-1 text-left flex items-center gap-2">
+          <p className="truncate text-sm font-semibold text-gray-800">{dossier.name}</p>
+          {sectionBadges && sectionBadges.length > 0 && sectionBadges.map((badge) => (
+            <span key={badge} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{badge}</span>
+          ))}
+          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+            {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
+          </span>
+        </button>
+      )}
+      {!renaming && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setRenaming(true); setTimeout(() => renameRef.current?.select(), 0); }}
+          className="flex-shrink-0 rounded p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-blue-500 transition"
+          title="Renommer"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      )}
       {(onEdit || onDelete) && (
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
@@ -2803,12 +2835,18 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
             onClick={onSelect}
             onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
             className="min-w-0 flex-1 text-left flex items-center gap-2"
-            title="Double-clic pour renommer"
           >
             <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
             {cours.etiquettes?.map((tag) => (
               <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
             ))}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
+            className="flex-shrink-0 rounded p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-blue-500 transition"
+            title="Renommer"
+          >
+            <Pencil className="h-3 w-3" />
           </button>
         </div>
       )}
