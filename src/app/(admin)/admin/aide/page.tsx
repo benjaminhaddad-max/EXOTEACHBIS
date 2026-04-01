@@ -97,46 +97,49 @@ export default function AidePage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-          <HelpCircle size={20} className="text-indigo-600" /> Centre d'aide
+        <h1 className="text-xl font-semibold text-white/90 flex items-center gap-2">
+          <HelpCircle size={20} style={{ color: "#C9A84C" }} /> Centre d&apos;aide
         </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Documentation et réponses aux questions fréquentes</p>
+        <p className="text-sm text-white/40 mt-0.5">Documentation et réponses aux questions fréquentes</p>
       </div>
 
-      {/* FAQ Accordion */}
       <div className="space-y-3">
         {FAQ_SECTIONS.map((section) => {
           const Icon = section.icon;
           const isSectionOpen = openSection === section.id;
           return (
-            <div key={section.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div key={section.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
               <button
                 onClick={() => setOpenSection(isSectionOpen ? null : section.id)}
-                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors"
+                onMouseOver={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)"}
+                onMouseOut={e => e.currentTarget.style.backgroundColor = "transparent"}
               >
-                <Icon size={18} className="text-indigo-600 shrink-0" />
-                <span className="flex-1 font-semibold text-gray-900 text-sm">{section.title}</span>
-                <span className="text-xs text-gray-400 mr-2">{section.questions.length} questions</span>
-                {isSectionOpen ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+                <Icon size={18} style={{ color: "#C9A84C" }} className="shrink-0" />
+                <span className="flex-1 font-semibold text-white/85 text-sm">{section.title}</span>
+                <span className="text-xs text-white/30 mr-2">{section.questions.length} questions</span>
+                {isSectionOpen ? <ChevronDown size={16} className="text-white/30" /> : <ChevronRight size={16} className="text-white/30" />}
               </button>
 
               {isSectionOpen && (
-                <div className="border-t border-gray-100 divide-y divide-gray-100">
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
                   {section.questions.map((item, idx) => {
                     const key = `${section.id}-${idx}`;
                     const isOpen = openQuestion === key;
                     return (
-                      <div key={key}>
+                      <div key={key} style={idx > 0 ? { borderTop: "1px solid rgba(255,255,255,0.03)" } : {}}>
                         <button
                           onClick={() => setOpenQuestion(isOpen ? null : key)}
-                          className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-gray-50"
+                          className="w-full flex items-start gap-3 px-5 py-3 text-left transition-colors"
+                          onMouseOver={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.02)"}
+                          onMouseOut={e => e.currentTarget.style.backgroundColor = "transparent"}
                         >
-                          <span className="flex-1 text-sm font-medium text-gray-800">{item.q}</span>
-                          {isOpen ? <ChevronDown size={14} className="text-gray-400 shrink-0 mt-0.5" /> : <ChevronRight size={14} className="text-gray-400 shrink-0 mt-0.5" />}
+                          <span className="flex-1 text-sm font-medium text-white/70">{item.q}</span>
+                          {isOpen ? <ChevronDown size={14} className="text-white/30 shrink-0 mt-0.5" /> : <ChevronRight size={14} className="text-white/30 shrink-0 mt-0.5" />}
                         </button>
                         {isOpen && (
                           <div className="px-5 pb-4">
-                            <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-3">{item.a}</p>
+                            <p className="text-sm leading-relaxed rounded-lg p-3" style={{ color: "rgba(255,255,255,0.55)", backgroundColor: "rgba(255,255,255,0.02)" }}>{item.a}</p>
                           </div>
                         )}
                       </div>
@@ -149,23 +152,21 @@ export default function AidePage() {
         })}
       </div>
 
-      {/* Contact */}
-      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-5">
+      <div className="rounded-xl p-5" style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08), rgba(201,168,76,0.03))", border: "1px solid rgba(201,168,76,0.12)" }}>
         <div className="flex items-start gap-3">
-          <Mail size={20} className="text-indigo-600 shrink-0 mt-0.5" />
+          <Mail size={20} style={{ color: "#C9A84C" }} className="shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-gray-900 mb-1">Vous n'avez pas trouvé votre réponse ?</h3>
-            <p className="text-sm text-gray-600 mb-3">Notre équipe support répond sous 24h en jours ouvrés.</p>
-            <a href="mailto:support@diplomasante.fr" className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+            <h3 className="font-semibold text-white/85 mb-1">Vous n&apos;avez pas trouvé votre réponse ?</h3>
+            <p className="text-sm text-white/50 mb-3">Notre équipe support répond sous 24h en jours ouvrés.</p>
+            <a href="mailto:support@diplomasante.fr" className="inline-flex items-center gap-1.5 text-sm font-medium transition-colors" style={{ color: "#C9A84C" }}>
               <Mail size={14} /> support@diplomasante.fr
             </a>
           </div>
         </div>
       </div>
 
-      {/* Version */}
       <div className="text-center">
-        <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
+        <span className="inline-flex items-center gap-1.5 text-xs text-white/25">
           <Tag size={11} /> ExoTeach Bis v1.0.0 · Powered by Next.js 16 + Supabase
         </span>
       </div>

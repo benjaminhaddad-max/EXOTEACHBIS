@@ -25,18 +25,21 @@ export function Header({ title, breadcrumb }: HeaderProps) {
     : "Élève";
 
   return (
-    <header className="mb-8 border-b border-gray-200 pb-5">
+    <header className="mb-8 pb-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
       {breadcrumb && breadcrumb.length > 0 && (
-        <nav className="mb-2 flex items-center gap-1 text-xs text-gray-400">
+        <nav className="mb-2 flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
           {breadcrumb.map((item, i) => (
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <ChevronRight className="h-3 w-3" />}
               {item.href ? (
-                <Link href={item.href} className="hover:text-navy transition-colors">
+                <Link href={item.href} className="transition-colors" style={{ color: "rgba(201,168,76,0.6)" }}
+                  onMouseOver={e => e.currentTarget.style.color = "#C9A84C"}
+                  onMouseOut={e => e.currentTarget.style.color = "rgba(201,168,76,0.6)"}
+                >
                   {item.label}
                 </Link>
               ) : (
-                <span className="text-gray-600 font-medium">{item.label}</span>
+                <span className="font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>{item.label}</span>
               )}
             </span>
           ))}
@@ -44,17 +47,17 @@ export function Header({ title, breadcrumb }: HeaderProps) {
       )}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-navy">{title}</h1>
-          <div className="mt-1.5 h-0.5 w-10 rounded-full bg-gold" />
+          <h1 className="text-2xl font-bold text-white/90">{title}</h1>
+          <div className="mt-1.5 h-0.5 w-10 rounded-full" style={{ background: "linear-gradient(90deg, #C9A84C, rgba(201,168,76,0.3))" }} />
         </div>
         <div className="hidden lg:flex items-center gap-3">
           <div className="text-right">
-            <p className="text-sm font-medium text-gray-900">
+            <p className="text-sm font-medium text-white/80">
               {profile?.first_name} {profile?.last_name}
             </p>
-            <p className="text-xs text-gray-500">{roleLabel}</p>
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{roleLabel}</p>
           </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-navy text-xs font-semibold text-gold ring-2 ring-gold/30">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold" style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.08))", color: "#E3C286", border: "1px solid rgba(201,168,76,0.2)" }}>
             {profile
               ? `${(profile.first_name || "")[0] || ""}${(profile.last_name || "")[0] || ""}`.toUpperCase()
               : "?"}

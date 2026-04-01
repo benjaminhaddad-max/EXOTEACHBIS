@@ -551,7 +551,7 @@ export function PedagogieShell({
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-white/10 shadow-2xl" style={{ backgroundColor: "#0e1e35" }}>
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-2xl border border-white/[0.06] shadow-2xl" style={{ backgroundColor: "#0e1e35" }}>
 
       {/* ── LEFT: Arborescence ── */}
       <div

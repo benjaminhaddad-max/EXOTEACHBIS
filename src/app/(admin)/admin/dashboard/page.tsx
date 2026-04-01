@@ -107,24 +107,25 @@ function AdminStatCard({
 }: {
   title: string; value: string; icon: any; description: string; color: StatColor;
 }) {
-  const colorMap: Record<StatColor, string> = {
-    blue: "bg-blue-100 text-blue-600",
-    navy: "bg-navy/10 text-navy",
-    purple: "bg-purple-100 text-purple-600",
-    green: "bg-green-100 text-green-600",
-    orange: "bg-orange-100 text-orange-600",
-    pink: "bg-pink-100 text-pink-600",
-    teal: "bg-teal-100 text-teal-600",
-    gray: "bg-gray-100 text-gray-500",
+  const colorMap: Record<StatColor, { bg: string; text: string; glow: string }> = {
+    blue:   { bg: "rgba(59,130,246,0.12)", text: "#60A5FA", glow: "rgba(59,130,246,0.08)" },
+    navy:   { bg: "rgba(79,171,219,0.12)", text: "#4FABDB", glow: "rgba(79,171,219,0.08)" },
+    purple: { bg: "rgba(147,51,234,0.12)", text: "#A78BFA", glow: "rgba(147,51,234,0.08)" },
+    green:  { bg: "rgba(16,185,129,0.12)", text: "#34D399", glow: "rgba(16,185,129,0.08)" },
+    orange: { bg: "rgba(245,158,11,0.12)", text: "#FBBF24", glow: "rgba(245,158,11,0.08)" },
+    pink:   { bg: "rgba(236,72,153,0.12)", text: "#F472B6", glow: "rgba(236,72,153,0.08)" },
+    teal:   { bg: "rgba(20,184,166,0.12)", text: "#2DD4BF", glow: "rgba(20,184,166,0.08)" },
+    gray:   { bg: "rgba(255,255,255,0.06)", text: "rgba(255,255,255,0.6)", glow: "rgba(255,255,255,0.03)" },
   };
+  const c = colorMap[color];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className={cn("mb-4 flex h-10 w-10 items-center justify-center rounded-lg", colorMap[color])}>
+    <div className="rounded-xl border border-white/[0.06] p-5 transition-all hover:border-white/10" style={{ backgroundColor: "rgba(255,255,255,0.03)", boxShadow: `0 0 24px ${c.glow}` }}>
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: c.bg, color: c.text }}>
         <Icon className="h-5 w-5" />
       </div>
-      <p className="text-3xl font-bold text-gray-900">{value}</p>
-      <p className="mt-1 text-sm font-semibold text-gray-800">{title}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{description}</p>
+      <p className="text-3xl font-bold text-white/90">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-white/70">{title}</p>
+      <p className="text-xs text-white/35 mt-0.5">{description}</p>
     </div>
   );
 }
