@@ -2258,6 +2258,7 @@ function MembresTab({
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [addSearch, setAddSearch] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
 
   const availableUsers = useMemo(() =>
     allUsers.filter(u => u.groupe_id !== groupe.id && (
@@ -2265,6 +2266,12 @@ function MembresTab({
     )),
     [allUsers, groupe.id, addSearch]
   );
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return members;
+    const q = memberSearch.toLowerCase();
+    return members.filter(u => `${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q));
+  }, [members, memberSearch]);
 
   return (
     <div>
@@ -2323,44 +2330,51 @@ function MembresTab({
         </div>
       )}
 
-      {members.length === 0 ? (
+      {/* Search bar */}
+      {members.length > 0 && (
+        <div className="mb-3 relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
+          <input
+            value={memberSearch}
+            onChange={e => setMemberSearch(e.target.value)}
+            placeholder="Rechercher un membre..."
+            className="w-full bg-transparent pl-9 pr-3 py-2 text-xs text-white rounded-lg focus:outline-none"
+            style={{ border: "1px solid rgba(255,255,255,0.1)", caretColor: "white" }}
+          />
+        </div>
+      )}
+
+      {filteredMembers.length === 0 ? (
         <div className="text-center py-8 text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-          Aucun membre dans ce groupe
+          {members.length === 0 ? "Aucun membre dans ce groupe" : "Aucun résultat"}
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {members.map(u => {
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
+          {filteredMembers.map(u => {
             const rc = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.eleve;
             return (
-              <div key={u.id} className="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors"
+              <div key={u.id} className="group relative flex flex-col items-center gap-1.5 rounded-xl p-2.5 text-center transition-colors cursor-pointer"
                 style={{ backgroundColor: "rgba(255,255,255,0.03)" }}
-                onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.06)")}
-                onMouseOut={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)")}>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)")}
+                onMouseOut={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)")}
+                onClick={() => onEditUser(u)}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
                   style={{ backgroundColor: groupe.color }}>
                   {avatar(u)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.9)" }}>{fullName(u)}</p>
-                  <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
-                </div>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${rc.bg} ${rc.color}`}>
-                  {rc.icon} {rc.label}
+                <p className="text-[11px] font-medium leading-tight truncate w-full" style={{ color: "rgba(255,255,255,0.9)" }}>
+                  {u.first_name ?? ""} {(u.last_name ?? "").charAt(0)}.
+                </p>
+                <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full ${rc.bg} ${rc.color}`}>
+                  {rc.label}
                 </span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => onEditUser(u)} className="p-1.5 rounded-lg transition-colors"
-                    style={{ color: "rgba(255,255,255,0.4)" }}
-                    onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.8)"; (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(255,255,255,0.05)"; }}
-                    onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.4)"; (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}>
-                    <Pencil size={12} />
-                  </button>
-                  <button onClick={() => onRemoveUser(u)} title="Retirer du groupe" className="p-1.5 rounded-lg transition-colors"
-                    style={{ color: "rgba(255,255,255,0.4)" }}
-                    onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgb(248,113,113)"; (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(239,68,68,0.1)"; }}
-                    onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.4)"; (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}>
-                    <UserMinus size={12} />
-                  </button>
-                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRemoveUser(u); }}
+                  title="Retirer du groupe"
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ backgroundColor: "rgba(239,68,68,0.9)", color: "white" }}>
+                  <UserMinus size={10} />
+                </button>
               </div>
             );
           })}
@@ -2418,6 +2432,7 @@ function AccessScopeTree({
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const inheritedSet = useMemo(() => new Set(inheritedIds), [inheritedIds]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => collectExpandableIds(dossierTree));
+  const [accessSearch, setAccessSearch] = useState("");
 
   useEffect(() => {
     setExpandedIds((prev) => {
@@ -2473,6 +2488,16 @@ function AccessScopeTree({
 
   return (
     <div className="rounded-2xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+      <div className="mb-3 relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.3)" }} />
+        <input
+          value={accessSearch}
+          onChange={e => setAccessSearch(e.target.value)}
+          placeholder="Rechercher un contenu..."
+          className="w-full bg-transparent pl-9 pr-3 py-2 text-xs text-white rounded-lg focus:outline-none"
+          style={{ border: "1px solid rgba(255,255,255,0.1)", caretColor: "white" }}
+        />
+      </div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {!readOnly && (
           <button
@@ -2504,7 +2529,14 @@ function AccessScopeTree({
       </div>
 
       <div className="space-y-1">
-        {dossierTree.map((node) => (
+        {dossierTree.filter(node => {
+          if (!accessSearch.trim()) return true;
+          const q = accessSearch.toLowerCase();
+          // Show node if it or any descendant matches
+          const matches = (n: DossierNode): boolean =>
+            n.name.toLowerCase().includes(q) || n.children.some(matches);
+          return matches(node);
+        }).map((node) => (
           <AccessScopeTreeNode
             key={node.id}
             node={node}
@@ -2512,7 +2544,7 @@ function AccessScopeTree({
             depth={0}
             selectedSet={selectedSet}
             inheritedSet={inheritedSet}
-            expandedIds={expandedIds}
+            expandedIds={accessSearch.trim() ? new Set(dossierList.map(d => d.id)) : expandedIds}
             readOnly={readOnly}
             disabled={disabled}
             accent={accent}
