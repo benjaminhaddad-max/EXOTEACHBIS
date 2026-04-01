@@ -635,28 +635,7 @@ export function FullSerieEditor({
               })
             )}
 
-            {/* Bank questions */}
-            <div className="pt-3 border-t border-white/8 space-y-2">
-              {bankQuestions.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">
-                    Questions disponibles ({bankQuestions.length})
-                  </p>
-                  {bankQuestions.map((q: any) => (
-                    <div key={q.id} className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/3 px-3 py-2">
-                      <div className="flex-1 min-w-0">
-                        <MathText text={q.text} className="text-xs text-white/50 line-clamp-1" />
-                      </div>
-                      <button onClick={() => handleAddQ(q.id)} disabled={adding === q.id}
-                        className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#C9A84C]/20 text-[#C9A84C] text-[10px] font-bold hover:bg-[#C9A84C]/30 transition-colors disabled:opacity-40">
-                        {adding === q.id ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
-                        Ajouter
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            
           </div>
         </div>
       </div>
