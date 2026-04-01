@@ -5,7 +5,7 @@ import {
   Users, Search, Pencil, Trash2, X, Check,
   AlertCircle, Loader2, Plus, ShieldCheck, GraduationCap,
   BookOpen, Crown, ChevronDown, ChevronRight, Folder,
-  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2, FileText, Copy,
+  FolderOpen, UserMinus, Settings, LogIn, Mail, Phone, Building2, FileText, Copy, Layers,
 } from "lucide-react";
 import type {
   Profile,
