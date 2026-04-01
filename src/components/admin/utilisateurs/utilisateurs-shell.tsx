@@ -1762,6 +1762,7 @@ function ComptesView({
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [filterFormationId, setFilterFormationId] = useState("");
+  const [filterSubOfferId, setFilterSubOfferId] = useState("");
   const [filterUniversityId, setFilterUniversityId] = useState("");
   const [filterGroupeId, setFilterGroupeId] = useState("");
 
@@ -1791,38 +1792,84 @@ function ComptesView({
     return m;
   }, [users]);
 
+  // Helper: get all descendant IDs of a dossier
+  const getDescendantIds = useCallback((rootId: string): Set<string> => {
+    const ids = new Set<string>();
+    const queue = [rootId];
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      for (const d of dossiers) {
+        if (d.parent_id === parentId && !ids.has(d.id)) {
+          ids.add(d.id);
+          queue.push(d.id);
+        }
+      }
+    }
+    return ids;
+  }, [dossiers]);
+
+  // Helper: check if group belongs to a dossier subtree
+  const groupBelongsToSubtree = useCallback((g: Groupe, rootId: string): boolean => {
+    if (!g.formation_dossier_id) return false;
+    if (g.formation_dossier_id === rootId) return true;
+    const descendants = getDescendantIds(rootId);
+    return descendants.has(g.formation_dossier_id);
+  }, [getDescendantIds]);
+
   // Formations (offers)
   const formations = useMemo(() => {
     return dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index).map(d => {
-      // Count users in groups linked to this formation
       const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === d.id);
       const count = users.filter(u => u.groupe_id && formGroupes.some(g => g.id === u.groupe_id)).length;
       return { id: d.id, name: d.name, count };
     });
   }, [dossiers, groupes, users]);
 
-  // Universities (filtered by selected formation)
+  // Sub-offers (only when formation is selected and has sub_offer children)
+  const filteredSubOffers = useMemo(() => {
+    if (!filterFormationId) return [];
+    return dossiers.filter(d => d.dossier_type === "sub_offer" && d.parent_id === filterFormationId).sort((a, b) => a.order_index - b.order_index).map(d => {
+      const subGroupes = groupes.filter(g => groupBelongsToSubtree(g, d.id));
+      const count = users.filter(u => u.groupe_id && subGroupes.some(g => g.id === u.groupe_id)).length;
+      return { id: d.id, name: d.name, count };
+    });
+  }, [dossiers, groupes, users, filterFormationId, groupBelongsToSubtree]);
+
+  // Universities (filtered by selected formation or sub-offer)
   const filteredUniversities = useMemo(() => {
     let unis = dossiers.filter(d => d.dossier_type === "university");
-    if (filterFormationId) unis = unis.filter(d => d.parent_id === filterFormationId);
+    if (filterSubOfferId) {
+      // Show universities under this sub-offer (direct or nested)
+      const descendants = getDescendantIds(filterSubOfferId);
+      unis = unis.filter(d => d.parent_id === filterSubOfferId || descendants.has(d.id));
+    } else if (filterFormationId) {
+      // Show universities anywhere under this formation
+      const descendants = getDescendantIds(filterFormationId);
+      unis = unis.filter(d => descendants.has(d.id) || d.parent_id === filterFormationId);
+    }
     return unis.sort((a, b) => a.order_index - b.order_index).map(d => {
-      const uniGroupes = groupes.filter(g => g.formation_dossier_id === d.id);
+      const uniGroupes = groupes.filter(g => groupBelongsToSubtree(g, d.id));
       const count = users.filter(u => u.groupe_id && uniGroupes.some(g => g.id === u.groupe_id)).length;
       return { id: d.id, name: d.name, count };
     });
-  }, [dossiers, groupes, users, filterFormationId]);
+  }, [dossiers, groupes, users, filterFormationId, filterSubOfferId, getDescendantIds, groupBelongsToSubtree]);
 
-  // Classes (filtered by selected university)
+  // Classes (filtered by selected university or higher)
   const filteredClasses = useMemo(() => {
     let cls = groupes.filter(g => g.formation_dossier_id);
-    if (filterUniversityId) cls = cls.filter(g => g.formation_dossier_id === filterUniversityId);
-    else if (filterFormationId) cls = cls.filter(g => getFormationForGroup(g)?.id === filterFormationId);
+    if (filterUniversityId) {
+      cls = cls.filter(g => groupBelongsToSubtree(g, filterUniversityId));
+    } else if (filterSubOfferId) {
+      cls = cls.filter(g => groupBelongsToSubtree(g, filterSubOfferId));
+    } else if (filterFormationId) {
+      cls = cls.filter(g => getFormationForGroup(g)?.id === filterFormationId);
+    }
     return cls.map(g => {
       const count = users.filter(u => u.groupe_id === g.id).length;
       const uni = getUniversityForGroup(g);
       return { id: g.id, name: g.name, uniName: uni?.name ?? "", count, color: g.color };
     });
-  }, [groupes, users, filterUniversityId, filterFormationId]);
+  }, [groupes, users, filterUniversityId, filterSubOfferId, filterFormationId, groupBelongsToSubtree]);
 
   // Filtered users
   const filtered = useMemo(() => users.filter(u => {
@@ -1832,15 +1879,19 @@ function ComptesView({
     if (filterRole && filterRole !== "admin" && u.role !== filterRole) return false;
     if (filterGroupeId && u.groupe_id !== filterGroupeId) return false;
     if (filterUniversityId && !filterGroupeId) {
-      const uniGroupes = groupes.filter(g => g.formation_dossier_id === filterUniversityId);
+      const uniGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterUniversityId));
       if (!uniGroupes.some(g => g.id === u.groupe_id)) return false;
     }
-    if (filterFormationId && !filterUniversityId && !filterGroupeId) {
+    if (filterSubOfferId && !filterUniversityId && !filterGroupeId) {
+      const subGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterSubOfferId));
+      if (!subGroupes.some(g => g.id === u.groupe_id)) return false;
+    }
+    if (filterFormationId && !filterSubOfferId && !filterUniversityId && !filterGroupeId) {
       const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === filterFormationId);
       if (!formGroupes.some(g => g.id === u.groupe_id)) return false;
     }
     return true;
-  }), [users, search, filterRole, filterGroupeId, filterUniversityId, filterFormationId, groupes]);
+  }), [users, search, filterRole, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, groupes, groupBelongsToSubtree]);
 
   const groupMap = useMemo(() => {
     const m = new Map<string, Groupe>();
@@ -1874,13 +1925,13 @@ function ComptesView({
         </button>
       </div>
 
-      {/* Pill filters — cascading: Formation → Université → Classe → Rôle */}
+      {/* Pill filters — cascading: Formation → Sous-offre → Université → Classe → Rôle */}
       <div className="rounded-xl p-3 mb-4 space-y-2" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
         {/* Formation */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
           {[{ id: "", name: "Tout", count: users.length }, ...formations].map(f => (
-            <button key={f.id} onClick={() => { setFilterFormationId(f.id); setFilterUniversityId(""); setFilterGroupeId(""); }}
+            <button key={f.id} onClick={() => { setFilterFormationId(f.id); setFilterSubOfferId(""); setFilterUniversityId(""); setFilterGroupeId(""); }}
               className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
               style={{ backgroundColor: filterFormationId === f.id ? "#0e1e35" : "rgba(255,255,255,0.06)", color: filterFormationId === f.id ? "white" : "rgba(255,255,255,0.5)", fontWeight: filterFormationId === f.id ? 600 : 400, border: filterFormationId === f.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
               {f.name} <span className="text-[9px] opacity-60">{f.count}</span>
@@ -1888,7 +1939,21 @@ function ComptesView({
           ))}
         </div>
 
-        {/* Université — only show when a formation is selected */}
+        {/* Sous-offre — only show when formation has sub-offers */}
+        {filterFormationId && filteredSubOffers.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Sous-offre</span>
+            {[{ id: "", name: "Toutes", count: filtered.length }, ...filteredSubOffers].map(f => (
+              <button key={f.id} onClick={() => { setFilterSubOfferId(f.id); setFilterUniversityId(""); setFilterGroupeId(""); }}
+                className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
+                style={{ backgroundColor: filterSubOfferId === f.id ? "#0e1e35" : "rgba(255,255,255,0.06)", color: filterSubOfferId === f.id ? "white" : "rgba(255,255,255,0.5)", fontWeight: filterSubOfferId === f.id ? 600 : 400, border: filterSubOfferId === f.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                {f.name} <span className="text-[9px] opacity-60">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Université — show when formation or sub-offer is selected */}
         {filterFormationId && filteredUniversities.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
@@ -1902,7 +1967,7 @@ function ComptesView({
           </div>
         )}
 
-        {/* Classe — only show when a university is selected */}
+        {/* Classe — show when university is selected */}
         {filterUniversityId && filteredClasses.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classe</span>
