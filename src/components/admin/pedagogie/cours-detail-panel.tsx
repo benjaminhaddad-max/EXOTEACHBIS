@@ -1511,17 +1511,24 @@ export function CoursDetailPanel({
                   )}
 
                   {/* Barre d'actions bulk */}
-                  {checkedIds.size > 0 && (
+                  {checkedIds.size > 0 && (() => {
+                    const hasVisible = [...checkedIds].some((id) => series.find((s) => s.id === id)?.visible);
+                    const hasArchived = [...checkedIds].some((id) => { const s = series.find((x) => x.id === id); return s && !s.visible; });
+                    return (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/10">
                       <span className="text-[10px] font-bold text-[#C9A84C]">{checkedIds.size} sél.</span>
-                      <button onClick={handleBulkArchive}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
-                        <EyeOff size={10} /> Archiver
-                      </button>
-                      <button onClick={handleBulkRestore}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
-                        <Eye size={10} /> Restaurer
-                      </button>
+                      {hasVisible && (
+                        <button onClick={handleBulkArchive}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
+                          <EyeOff size={10} /> Archiver
+                        </button>
+                      )}
+                      {hasArchived && (
+                        <button onClick={handleBulkRestore}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
+                          <Eye size={10} /> Restaurer
+                        </button>
+                      )}
                       <button onClick={handleBulkDelete}
                         className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors">
                         <Trash2 size={10} /> Suppr.
@@ -1529,7 +1536,7 @@ export function CoursDetailPanel({
                       <button onClick={() => setCheckedIds(new Set())}
                         className="ml-auto text-[10px] text-white/40 hover:text-white/60">✕</button>
                     </div>
-                  )}
+                    ); })()}
 
                   {visibleSeries.length === 0 && archivedSeries.length === 0 ? (
                     <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
