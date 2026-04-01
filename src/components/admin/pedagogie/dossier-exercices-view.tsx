@@ -666,10 +666,11 @@ export function FullSerieEditor({
 
 // ─── Annale Serie Card with year picker ────────────────────────────────────
 
-function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, onOpen, onEdit, onDelete, onAnneeChange }: {
+function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, onOpen, onEdit, onDelete, onArchive, onAnneeChange }: {
   serie: SerieSummary; anneesList: string[]; coursNameStr: string;
   checked?: boolean; onCheck?: () => void;
   onOpen: () => void; onEdit: () => void; onDelete: () => void;
+  onArchive?: () => void;
   onAnneeChange: (annee: string | null) => Promise<void>;
 }) {
   const [showPicker, setShowPicker] = useState(false);
@@ -685,8 +686,11 @@ function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, on
       {onCheck && <input type="checkbox" checked={!!checked} onChange={onCheck}
         className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />}
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-xs font-semibold text-white truncate">{serie.name}</p>
+          <span className="flex items-center gap-0.5 rounded-full bg-green-500/15 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
+            <Eye size={9} /> Visible
+          </span>
         </div>
         <p className="text-[10px] text-white/40 mt-0.5">
           {serie.nb_questions} question{serie.nb_questions !== 1 ? "s" : ""}
@@ -724,6 +728,13 @@ function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, on
               </button>
             )}
           </div>
+        )}
+        {onArchive && (
+          <button onClick={onArchive}
+            className="p-1.5 rounded-lg hover:bg-orange-500/20 text-white/30 hover:text-orange-400 transition-colors"
+            title="Archiver (masquer)">
+            <EyeOff size={12} />
+          </button>
         )}
         <button onClick={onEdit}
           className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
@@ -1014,6 +1025,7 @@ export function DossierExercicesView({
                     onOpen={() => window.open(`/serie/${s.id}`, "_blank")}
                     onEdit={() => setComposeSerie(s)}
                     onDelete={() => handleDelete(s.id)}
+                    onArchive={() => handleToggleVisible(s.id, false)}
                     onAnneeChange={async (a) => {
                       await updateSerieAnnee(s.id, a);
                       setSeries((prev) => prev.map((x) => x.id === s.id ? { ...x, annee: a } : x));
@@ -1046,7 +1058,12 @@ export function DossierExercicesView({
                     <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
                       className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(`/serie/${s.id}`, "_blank")}>
-                      <p className="text-xs font-semibold text-white truncate">{s.name}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-xs font-semibold text-white truncate">{s.name}</p>
+                        <span className="flex items-center gap-0.5 rounded-full bg-green-500/15 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
+                          <Eye size={9} /> Visible
+                        </span>
+                      </div>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
                         {s.timed && ` · ${s.duration_minutes}min`}
@@ -1054,6 +1071,11 @@ export function DossierExercicesView({
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => handleToggleVisible(s.id, false)}
+                        className="p-1.5 rounded-lg hover:bg-orange-500/20 text-white/30 hover:text-orange-400 transition-colors"
+                        title="Archiver (masquer)">
+                        <EyeOff size={12} />
+                      </button>
                       <button onClick={() => setComposeSerie(s)}
                         className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
                         title="Éditer la série">

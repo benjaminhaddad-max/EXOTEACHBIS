@@ -5,6 +5,7 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, GripVertical,
   Check, AlertCircle, Loader2, Layers, BookOpen, ChevronRight, Sparkles, X, Zap, FileText,
   Image as ImageIcon, ChevronDown, Upload, ExternalLink, Download, RefreshCw, Filter,
+  Eye, EyeOff, Archive,
 } from "lucide-react";
 import { ImportExoteachModal } from "./import-exoteach-modal";
 import type { Cours } from "@/types/database";
@@ -1143,16 +1144,21 @@ export function CoursDetailPanel({
   const [sidebarTab, setSidebarTab] = useState<"series" | "flashcards">("series");
   const [serieFilter, setSerieFilter] = useState<SerieType | "all">("all");
 
+  const [showArchived, setShowArchived] = useState(false);
+
+  const visibleSeries = useMemo(() => series.filter((s) => s.visible), [series]);
+  const archivedSeries = useMemo(() => series.filter((s) => !s.visible), [series]);
+
   const filteredSeries = useMemo(() => {
-    if (serieFilter === "all") return series;
-    return series.filter((s) => s.type === serieFilter);
-  }, [series, serieFilter]);
+    if (serieFilter === "all") return visibleSeries;
+    return visibleSeries.filter((s) => s.type === serieFilter);
+  }, [visibleSeries, serieFilter]);
 
   const serieTypeCounts = useMemo(() => {
     const counts: Partial<Record<SerieType, number>> = {};
-    for (const s of series) counts[s.type] = (counts[s.type] ?? 0) + 1;
+    for (const s of visibleSeries) counts[s.type] = (counts[s.type] ?? 0) + 1;
     return counts;
-  }, [series]);
+  }, [visibleSeries]);
 
   const showToast = useCallback((message: string, kind: "success" | "error") => {
     setToast({ message, kind });
@@ -1307,7 +1313,7 @@ export function CoursDetailPanel({
               }`}
             >
               <Layers size={13} />
-              Séries ({series.length})
+              Séries ({visibleSeries.length})
             </button>
             <button
               onClick={() => setSidebarTab("flashcards")}
@@ -1378,7 +1384,7 @@ export function CoursDetailPanel({
                     </div>
                   )}
 
-                  {series.length === 0 ? (
+                  {visibleSeries.length === 0 && archivedSeries.length === 0 ? (
                     <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
                       <Layers size={20} className="mx-auto text-white/20 mb-2" />
                       <p className="text-xs text-white/30">Aucune série — crée-en une</p>
@@ -1387,40 +1393,95 @@ export function CoursDetailPanel({
                       </button>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {filteredSeries.map((s) => (
-                        <a
-                          key={s.id}
-                          href={`/serie/${s.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-xl border border-white/8 bg-white/4 p-3 flex items-center gap-3 cursor-pointer hover:bg-white/8 transition-colors group block"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-white group-hover:text-[#C9A84C] transition-colors">{s.name}</span>
-                              {serieFilter === "all" && <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[s.type]}`}>{TYPE_LABELS[s.type]}</span>}
-                              {!s.visible && <span className="text-[10px] text-white/30">Masquée</span>}
+                    <>
+                      {/* Séries actives */}
+                      <div className="space-y-2">
+                        {filteredSeries.map((s) => (
+                          <a
+                            key={s.id}
+                            href={`/serie/${s.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-xl border border-white/8 bg-white/4 p-3 flex items-center gap-3 cursor-pointer hover:bg-white/8 transition-colors group block"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-white group-hover:text-[#C9A84C] transition-colors">{s.name}</span>
+                                {serieFilter === "all" && <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[s.type]}`}>{TYPE_LABELS[s.type]}</span>}
+                                <span className="flex items-center gap-0.5 rounded-full bg-green-500/15 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
+                                  <Eye size={10} /> Visible
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-white/40 mt-1">
+                                {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
+                                {s.timed && ` · ${s.duration_minutes}min`}
+                              </p>
                             </div>
-                            <p className="text-[11px] text-white/40 mt-1">
-                              {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
-                              {s.timed && ` · ${s.duration_minutes}min`}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
-                            <button onClick={(e) => { e.preventDefault(); setModal({ type: "edit_serie", s }); }}
-                              className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-                              title="Modifier la série">
-                              <Pencil size={13} />
-                            </button>
-                            <button onClick={(e) => { e.preventDefault(); handleDeleteSerie(s.id); }}
-                              className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
+                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
+                              <button onClick={(e) => { e.preventDefault(); handleToggleVisible(s.id, false); }}
+                                className="p-1.5 rounded-lg hover:bg-orange-500/20 text-white/30 hover:text-orange-400 transition-colors"
+                                title="Archiver (masquer pour les élèves)">
+                                <EyeOff size={13} />
+                              </button>
+                              <button onClick={(e) => { e.preventDefault(); setModal({ type: "edit_serie", s }); }}
+                                className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+                                title="Modifier la série">
+                                <Pencil size={13} />
+                              </button>
+                              <button onClick={(e) => { e.preventDefault(); handleDeleteSerie(s.id); }}
+                                className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
+                                title="Supprimer">
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </a>
+                        ))}
+                        {filteredSeries.length === 0 && visibleSeries.length > 0 && (
+                          <p className="text-xs text-white/30 text-center py-3">Aucune série de ce type</p>
+                        )}
+                      </div>
+
+                      {/* Section Archives */}
+                      {archivedSeries.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-white/8">
+                          <button
+                            onClick={() => setShowArchived(!showArchived)}
+                            className="flex items-center gap-2 w-full text-left text-xs font-semibold text-white/40 hover:text-white/60 transition-colors"
+                          >
+                            <Archive size={12} />
+                            Archives ({archivedSeries.length})
+                            <ChevronDown size={12} className={`ml-auto transition-transform ${showArchived ? "rotate-180" : ""}`} />
+                          </button>
+                          {showArchived && (
+                            <div className="mt-2 space-y-1.5">
+                              {archivedSeries.map((s) => (
+                                <div key={s.id} className="rounded-lg border border-white/5 bg-white/2 p-2.5 flex items-center gap-2.5 opacity-60">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-medium text-white/60 truncate">{s.name}</span>
+                                      <span className="flex items-center gap-0.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[9px] font-medium text-red-400">
+                                        <EyeOff size={9} /> Masquée
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-white/30 mt-0.5">{s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""} · {TYPE_LABELS[s.type]}</p>
+                                  </div>
+                                  <button onClick={() => handleToggleVisible(s.id, true)}
+                                    className="shrink-0 p-1.5 rounded-lg hover:bg-green-500/20 text-white/30 hover:text-green-400 transition-colors"
+                                    title="Restaurer (rendre visible)">
+                                    <Eye size={12} />
+                                  </button>
+                                  <button onClick={() => handleDeleteSerie(s.id)}
+                                    className="shrink-0 p-1.5 rounded-lg hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-colors"
+                                    title="Supprimer définitivement">
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </section>
               </>
