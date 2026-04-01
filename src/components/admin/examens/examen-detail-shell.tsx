@@ -16,6 +16,7 @@ import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
 import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
 import { buildFiliereCoefficientMap, resolveSerieCoefficient, type FiliereMatiereCoefficient } from "@/lib/examens/filiere-coefficients";
+import { SemesterIcon, SubjectIcon } from "@/components/admin/pedagogie/dossier-icons";
 
 type ExamenSerieWithCoeff = {
   series_id: string;
@@ -80,19 +81,23 @@ export function ExamenDetailShell({
   const [editingName, setEditingName] = useState(false);
   const [debutAt, setDebutAt] = useState(initialExamen.debut_at);
   const [finAt, setFinAt] = useState(initialExamen.fin_at);
+  const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  const SENTINEL = "9999-01-01";
+  const isDateSet = (iso: string) => !iso.startsWith(SENTINEL);
   const toDatetimeLocal = (iso: string) => {
+    if (!isDateSet(iso)) return "";
     try { return new Date(iso).toISOString().slice(0, 16); } catch { return ""; }
   };
 
-  const saveHeader = (updates: { name?: string; debut_at?: string; fin_at?: string }) => {
+  const saveHeader = (updates: { name?: string; debut_at?: string; fin_at?: string; visible?: boolean }) => {
     startTransition(async () => {
       const res = await updateExamen(initialExamen.id, {
         name: updates.name ?? examenName,
         debut_at: updates.debut_at ?? debutAt,
         fin_at: updates.fin_at ?? finAt,
-        visible: initialExamen.visible,
+        visible: updates.visible ?? examenVisible,
       });
       if ("error" in res) showToast(res.error!, "error");
     });
@@ -332,28 +337,38 @@ export function ExamenDetailShell({
               {examenName}
             </h1>
           )}
-          <div className="flex items-center gap-3 text-xs text-white/40 mt-1">
-            <label className="flex items-center gap-1 cursor-pointer hover:text-white/60 transition-colors">
-              <Calendar size={10} /> Début
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-1.5">
+              <Calendar size={11} className="text-white/30" />
+              <span className="text-[10px] text-white/40 font-medium">Début</span>
               <input type="datetime-local" value={toDatetimeLocal(debutAt)}
-                onChange={e => { const v = new Date(e.target.value).toISOString(); setDebutAt(v); saveHeader({ debut_at: v }); }}
-                className="bg-transparent border-none text-xs text-white/60 outline-none cursor-pointer w-[140px]" />
-            </label>
-            <label className="flex items-center gap-1 cursor-pointer hover:text-white/60 transition-colors">
-              <Clock size={10} /> Fin
+                onChange={e => { if (!e.target.value) return; const v = new Date(e.target.value).toISOString(); setDebutAt(v); saveHeader({ debut_at: v }); }}
+                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white/70 outline-none focus:border-[#C9A84C]/50 cursor-pointer" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock size={11} className="text-white/30" />
+              <span className="text-[10px] text-white/40 font-medium">Fin</span>
               <input type="datetime-local" value={toDatetimeLocal(finAt)}
-                onChange={e => { const v = new Date(e.target.value).toISOString(); setFinAt(v); saveHeader({ fin_at: v }); }}
-                className="bg-transparent border-none text-xs text-white/60 outline-none cursor-pointer w-[140px]" />
-            </label>
+                onChange={e => { if (!e.target.value) return; const v = new Date(e.target.value).toISOString(); setFinAt(v); saveHeader({ fin_at: v }); }}
+                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white/70 outline-none focus:border-[#C9A84C]/50 cursor-pointer" />
+            </div>
           </div>
         </div>
-        <button onClick={handleToggleResults} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${resultsVisible ? "bg-green-500/15 text-green-400" : "bg-white/5 text-white/40"}`}>
-          {resultsVisible ? <Eye size={13} /> : <EyeOff size={13} />}
-          {resultsVisible ? "Résultats visibles" : "Résultats masqués"}
-        </button>
-        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] transition-colors">
-          <Download size={13} /> CSV
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Examen visibility toggle */}
+          <button onClick={() => { const v = !examenVisible; setExamenVisible(v); saveHeader({ visible: v }); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${examenVisible ? "bg-[#C9A84C]/15 text-[#C9A84C]" : "bg-white/5 text-white/40"}`}>
+            {examenVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+            {examenVisible ? "Visible élèves" : "Masqué élèves"}
+          </button>
+          <button onClick={handleToggleResults} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${resultsVisible ? "bg-green-500/15 text-green-400" : "bg-white/5 text-white/40"}`}>
+            {resultsVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+            {resultsVisible ? "Résultats visibles" : "Résultats masqués"}
+          </button>
+          <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#0e1e35] text-xs font-semibold rounded-lg hover:bg-[#A8892E] transition-colors">
+            <Download size={13} /> CSV
+          </button>
+        </div>
       </div>
 
       {/* Two-column layout */}
@@ -480,7 +495,7 @@ export function ExamenDetailShell({
                 <div key={sem.id}>
                   <button onClick={() => toggleSemester(sem.id)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.04] text-left">
                     <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.3)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
-                    <Layers size={10} style={{ color: "#C9A84C" }} />
+                    <SemesterIcon className="w-4 h-4 shrink-0" />
                     <span className="text-[11px] font-semibold" style={{ color: "#C9A84C" }}>{sem.name}</span>
                   </button>
                   {isOpen && subjects.map(sub => {
@@ -495,7 +510,7 @@ export function ExamenDetailShell({
                         disabled={added || isCreatingThis}
                         className={`w-full flex items-center gap-2.5 ml-4 px-3 py-2 rounded-lg transition-all text-left ${added ? "opacity-35 cursor-default" : "hover:bg-[#C9A84C]/8 cursor-pointer"}`}
                       >
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
+                        <SubjectIcon className="w-4 h-4 shrink-0" />
                         <span className="flex-1 text-[11px] text-white/70 truncate font-medium">{sub.name}</span>
                         {added ? (
                           <Check size={12} className="text-green-400/60 shrink-0" />

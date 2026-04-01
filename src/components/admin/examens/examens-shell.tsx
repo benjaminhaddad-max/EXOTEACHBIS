@@ -373,7 +373,7 @@ export function ExamensShell({
                 const dossierName = dossiers.find(d => d.id === selectedDossierId)?.name ?? allDossiers.find(d => d.id === selectedDossierId)?.name ?? "";
                 const existingCount = examens.filter(e => e.groupe_ids?.some(gid => contextGroupeIds.has(gid))).length;
                 const autoName = `Concours Blanc n°${existingCount + 1} — ${dossierName.replace("Université ", "")}`;
-                const placeholder = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+                const placeholder = "9999-01-01T00:00:00.000Z";
                 startTransition(async () => {
                   const res = await createExamen({
                     name: autoName,
