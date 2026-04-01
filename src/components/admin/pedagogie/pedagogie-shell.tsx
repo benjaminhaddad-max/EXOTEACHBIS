@@ -671,67 +671,100 @@ export function PedagogieShell({
         ) : selectedDossier ? (
           <>
             {/* Header */}
-            <div className="border-b border-white/8 px-5 pt-3 pb-0 relative overflow-hidden" style={{ background: "linear-gradient(180deg, #12314d 0%, #0e1e35 100%)" }}>
-              <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 0%, rgba(79,171,219,0.04) 0%, transparent 60%)" }} />
-              <div className="relative flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1 text-xs text-white/40">
-                  <button onClick={() => setSelectedId(null)} className="hover:text-[#C9A84C] transition-colors">
-                    <Home className="h-3 w-3" />
-                  </button>
-                  {breadcrumb.map((d, i) => (
-                    <span key={d.id} className="flex items-center gap-1">
-                      <ChevronRight className="h-3 w-3 text-white/20" />
-                      <button
-                        onClick={() => selectDossier(d)}
-                        className={i === breadcrumb.length - 1 ? "font-semibold text-white" : "hover:text-[#C9A84C] transition-colors"}
-                      >
-                        {d.name}
-                      </button>
+            <div className="relative overflow-hidden" style={{ background: "linear-gradient(180deg, #12314d 0%, #0e1e35 100%)" }}>
+              {/* Decorative gradients */}
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 120% at 80% -20%, rgba(201,168,76,0.06) 0%, transparent 60%)" }} />
+              <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 40% 80% at 20% 100%, rgba(79,171,219,0.04) 0%, transparent 60%)" }} />
+              <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent 0%, rgba(201,168,76,0.2) 30%, rgba(79,171,219,0.2) 70%, transparent 100%)" }} />
+
+              {/* Breadcrumb row */}
+              <div className="relative px-5 pt-4 pb-2">
+                <div className="flex items-center justify-between">
+                  <nav className="flex items-center gap-1.5 text-[11px]">
+                    <button onClick={() => setSelectedId(null)} className="flex items-center justify-center h-6 w-6 rounded-lg bg-white/[0.04] border border-white/8 text-white/30 hover:text-[#C9A84C] hover:border-[#C9A84C]/30 hover:bg-[#C9A84C]/[0.06] transition-all duration-150">
+                      <Home className="h-3 w-3" />
+                    </button>
+                    {breadcrumb.map((d, i) => {
+                      const isLast = i === breadcrumb.length - 1;
+                      const cs = CARD_STYLES[d.dossier_type] ?? CARD_STYLES.generic;
+                      return (
+                        <span key={d.id} className="flex items-center gap-1.5">
+                          <ChevronRight className="h-2.5 w-2.5 text-white/15" />
+                          <button
+                            onClick={() => selectDossier(d)}
+                            className={`flex items-center gap-1.5 rounded-lg px-2 py-1 transition-all duration-150 ${
+                              isLast
+                                ? "bg-white/[0.06] border border-white/10 font-bold text-white"
+                                : "text-white/45 hover:text-white/80 hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            {isLast && <cs.icon className="h-3 w-3 flex-shrink-0" />}
+                            <span className={isLast ? "text-[12px]" : "text-[11px]"}>{d.name}</span>
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </nav>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="rounded-lg px-2.5 py-1 text-[8px] font-extrabold uppercase tracking-[0.15em]"
+                      style={{ backgroundColor: (CARD_STYLES[selectedDossier.dossier_type] ?? CARD_STYLES.generic).badgeBg, color: (CARD_STYLES[selectedDossier.dossier_type] ?? CARD_STYLES.generic).badgeText, border: `1px solid ${(CARD_STYLES[selectedDossier.dossier_type] ?? CARD_STYLES.generic).iconColor}20` }}
+                    >
+                      {DOSSIER_TYPE_META[selectedDossier.dossier_type]?.shortLabel ?? "Dossier"}
                     </span>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide bg-[#C9A84C]/15 text-[#d3ab67]">
-                    {DOSSIER_TYPE_META[selectedDossier.dossier_type]?.shortLabel ?? "Dossier"}
-                  </span>
-                  {selectedDossier.etiquettes?.map((tag) => (
-                    <span key={tag} className="rounded-full bg-white/8 px-2 py-1 text-[10px] font-medium text-white/60">{tag}</span>
-                  ))}
-                  {selectedDossier.formation_offer && (
-                    <span className="rounded-full bg-[#C9A84C]/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#d3ab67]">
-                      {getOfferLabel(selectedDossier.formation_offer)}
-                    </span>
-                  )}
-                  {canEdit && (
-                    <>
+                    {selectedDossier.etiquettes?.map((tag) => (
+                      <span key={tag} className="rounded-lg bg-white/[0.05] border border-white/8 px-2 py-1 text-[9px] font-semibold text-white/50">{tag}</span>
+                    ))}
+                    {selectedDossier.formation_offer && (
+                      <span className="rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/20 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-[#C9A84C]/80">
+                        {getOfferLabel(selectedDossier.formation_offer)}
+                      </span>
+                    )}
+                    {canEdit && (
                       <button
                         onClick={() => setModal({ type: "edit_dossier", dossier: selectedDossier })}
-                        className="rounded-lg p-2 text-white/30 hover:bg-white/10 hover:text-[#C9A84C] transition-colors"
+                        className="flex items-center justify-center h-7 w-7 rounded-lg border border-white/8 bg-white/[0.03] text-white/25 hover:bg-white/[0.06] hover:text-[#C9A84C] hover:border-[#C9A84C]/30 transition-all duration-150"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="relative flex gap-0">
+
+              {/* Tab bar */}
+              <div className="relative px-5 flex gap-1">
                 <button
                   onClick={() => setDossierTab("contenu")}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "contenu" ? "border-[#4fabdb] text-[#4fabdb]" : "border-transparent text-white/40 hover:text-white/70"}`}
+                  className={`relative flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-t-lg transition-all duration-200 ${
+                    dossierTab === "contenu"
+                      ? "text-[#7DD3FC] bg-white/[0.04]"
+                      : "text-white/30 hover:text-white/60 hover:bg-white/[0.02]"
+                  }`}
                 >
-                  <BookOpen className="h-3.5 w-3.5" />
+                  <SubjectIcon className="h-3.5 w-3.5" />
                   Contenu
+                  {dossierTab === "contenu" && (
+                    <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full" style={{ background: "linear-gradient(90deg, #7DD3FC, #38BDF8)" }} />
+                  )}
                 </button>
                 {coursList.length > 0 && (
                   <button
                     onClick={() => setDossierTab("exercices")}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "exercices" ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-white/40 hover:text-white/70"}`}
+                    className={`relative flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-t-lg transition-all duration-200 ${
+                      dossierTab === "exercices"
+                        ? "text-[#C9A84C] bg-white/[0.04]"
+                        : "text-white/30 hover:text-white/60 hover:bg-white/[0.02]"
+                    }`}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     Exercices
-                    <span className="ml-1 rounded-full bg-[#C9A84C]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#C9A84C]">
+                    <span className={`rounded-md px-1.5 py-0.5 text-[8px] font-extrabold ${dossierTab === "exercices" ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "bg-white/[0.06] text-white/30"}`}>
                       {coursList.length}
                     </span>
+                    {dossierTab === "exercices" && (
+                      <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full" style={{ background: "linear-gradient(90deg, #C9A84C, #E3C286)" }} />
+                    )}
                   </button>
                 )}
               </div>
