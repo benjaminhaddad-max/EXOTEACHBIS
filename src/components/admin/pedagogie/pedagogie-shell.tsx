@@ -547,15 +547,15 @@ export function PedagogieShell({
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-white/10 shadow-2xl" style={{ backgroundColor: "#0e1e35" }}>
 
       {/* ── LEFT: Arborescence ── */}
       <div
-        className="flex flex-shrink-0 flex-col border-r border-gray-100 bg-[#F7F8FC]"
+        className="flex flex-shrink-0 flex-col border-r border-white/8" style={{ backgroundColor: "#0a1628" }}
         style={{ width: treeWidth }}
       >
-        <div className="flex items-center justify-between border-b border-gray-200 bg-navy px-4 py-3">
-          <h2 className="text-sm font-semibold text-white/90">Arborescence</h2>
+        <div className="flex items-center justify-between border-b border-white/8 px-4 py-3" style={{ background: "linear-gradient(135deg, #12314d 0%, #0e1e35 100%)" }}>
+          <h2 className="text-sm font-bold text-white/90 tracking-wide">Arborescence</h2>
           {canEdit && (
             <div className="flex items-center gap-2">
               {!hasOfferRoots && (
@@ -568,7 +568,7 @@ export function PedagogieShell({
               )}
               <button
                 onClick={() => { setShowGlobalSettings(!showGlobalSettings); if (!showGlobalSettings) setSelectedId(null); }}
-                className={`rounded-lg border p-1.5 transition ${showGlobalSettings ? "bg-purple-500/20 border-purple-400/30 text-purple-300" : "border-white/10 text-white/50 hover:bg-white/10 hover:text-white/70"}`}
+                className={`rounded-lg border p-1.5 transition ${showGlobalSettings ? "bg-purple-500/100/20 border-purple-400/30 text-purple-300" : "border-white/10 text-white/50 hover:bg-white/10 hover:text-white/70"}`}
                 title="Paramétrage global"
               >
                 <Settings className="h-4 w-4" />
@@ -580,12 +580,12 @@ export function PedagogieShell({
         <div ref={treeScrollRef} className="flex-1 overflow-y-auto p-2">
           {tree.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FolderPlus className="mb-2 h-8 w-8 text-gray-200" />
-              <p className="text-xs text-gray-400">Aucun dossier</p>
+              <FolderPlus className="mb-2 h-8 w-8 text-white/20" />
+              <p className="text-xs text-white/40">Aucun dossier</p>
               {canEdit && (
                 <button
                   onClick={() => setModal({ type: "add_picker", parentId: null })}
-                  className="mt-2 text-xs text-navy underline"
+                  className="mt-2 text-xs text-[#4fabdb] underline"
                 >
                   Créer le premier dossier
                 </button>
@@ -648,9 +648,9 @@ export function PedagogieShell({
             window.localStorage.setItem(TREE_WIDTH_STORAGE_KEY, "360");
           }
         }}
-        className={`group relative w-2 flex-shrink-0 cursor-col-resize bg-transparent transition ${isResizingTree ? "bg-navy/10" : ""}`}
+        className={`group relative w-2 flex-shrink-0 cursor-col-resize bg-transparent transition ${isResizingTree ? "bg-[#C9A84C]/10" : ""}`}
       >
-        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition group-hover:bg-navy/30" />
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/8 transition group-hover:bg-[#C9A84C]/30" />
       </div>
 
       {/* ── RIGHT: Contenu du dossier sélectionné ou cours détail ── */}
@@ -666,18 +666,18 @@ export function PedagogieShell({
         ) : selectedDossier ? (
           <>
             {/* Header */}
-            <div className="border-b border-gray-200 px-5 pt-3 pb-0">
+            <div className="border-b border-white/8 px-5 pt-3 pb-0" style={{ background: "linear-gradient(180deg, #12314d 0%, #0e1e35 100%)" }}>
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1 text-xs text-gray-400">
-                  <button onClick={() => setSelectedId(null)} className="hover:text-gray-600">
+                <div className="flex items-center gap-1 text-xs text-white/40">
+                  <button onClick={() => setSelectedId(null)} className="hover:text-[#C9A84C] transition-colors">
                     <Home className="h-3 w-3" />
                   </button>
                   {breadcrumb.map((d, i) => (
                     <span key={d.id} className="flex items-center gap-1">
-                      <ChevronRight className="h-3 w-3" />
+                      <ChevronRight className="h-3 w-3 text-white/20" />
                       <button
                         onClick={() => selectDossier(d)}
-                        className={i === breadcrumb.length - 1 ? "font-semibold text-gray-700" : "hover:text-gray-600"}
+                        className={i === breadcrumb.length - 1 ? "font-semibold text-white" : "hover:text-[#C9A84C] transition-colors"}
                       >
                         {d.name}
                       </button>
@@ -685,14 +685,14 @@ export function PedagogieShell({
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-navy/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-navy/70">
+                  <span className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide bg-[#C9A84C]/15 text-[#d3ab67]">
                     {DOSSIER_TYPE_META[selectedDossier.dossier_type]?.shortLabel ?? "Dossier"}
                   </span>
                   {selectedDossier.etiquettes?.map((tag) => (
-                    <span key={tag} className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-medium text-gold-dark">{tag}</span>
+                    <span key={tag} className="rounded-full bg-white/8 px-2 py-1 text-[10px] font-medium text-white/60">{tag}</span>
                   ))}
                   {selectedDossier.formation_offer && (
-                    <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gold-dark">
+                    <span className="rounded-full bg-[#C9A84C]/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#d3ab67]">
                       {getOfferLabel(selectedDossier.formation_offer)}
                     </span>
                   )}
@@ -700,7 +700,7 @@ export function PedagogieShell({
                     <>
                       <button
                         onClick={() => setModal({ type: "edit_dossier", dossier: selectedDossier })}
-                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        className="rounded-lg p-2 text-white/30 hover:bg-white/10 hover:text-[#C9A84C] transition-colors"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -708,11 +708,11 @@ export function PedagogieShell({
                   )}
                 </div>
               </div>
-              {/* Tabs — Exercices tab only when there are cours cards */}
+              {/* Tabs */}
               <div className="flex gap-0">
                 <button
                   onClick={() => setDossierTab("contenu")}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "contenu" ? "border-navy text-navy" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "contenu" ? "border-[#4fabdb] text-[#4fabdb]" : "border-transparent text-white/40 hover:text-white/70"}`}
                 >
                   <BookOpen className="h-3.5 w-3.5" />
                   Contenu
@@ -720,11 +720,11 @@ export function PedagogieShell({
                 {coursList.length > 0 && (
                   <button
                     onClick={() => setDossierTab("exercices")}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "exercices" ? "border-gold text-gold-dark" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "exercices" ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-white/40 hover:text-white/70"}`}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     Exercices
-                    <span className="ml-1 rounded-full bg-gold/15 px-1.5 py-0.5 text-[9px] font-bold text-gold">
+                    <span className="ml-1 rounded-full bg-[#C9A84C]/15 px-1.5 py-0.5 text-[9px] font-bold text-[#C9A84C]">
                       {coursList.length}
                     </span>
                   </button>
@@ -751,7 +751,7 @@ export function PedagogieShell({
             ) : (
 
             /* Contenu tab */
-            <div ref={rightScrollRef} className="flex-1 overflow-y-auto p-5">
+            <div ref={rightScrollRef} className="flex-1 overflow-y-auto p-5" style={{ backgroundColor: "#0e1e35" }}>
               {childDossiers.length === 0 && ressources.length === 0 && coursList.length === 0 && !loadingRessources ? (
                 <EmptyDossier
                   onAdd={canEdit ? () => setModal({ type: "add_picker", parentId: selectedId }) : undefined}
@@ -761,19 +761,19 @@ export function PedagogieShell({
                   {/* Sous-dossiers — drag & drop grille ou liste */}
                   {childDossiers.length > 0 && (
                     <div>
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="h-px flex-1 bg-navy/10" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Sous-dossiers</span>
-                        <span className="h-px flex-1 bg-navy/10" />
-                        <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5">
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-px flex-1 bg-white/8" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Sous-dossiers</span>
+                        <span className="h-px flex-1 bg-white/8" />
+                        <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
                           <button
                             onClick={() => { setDossierViewMode("cards"); localStorage.setItem("pedagogie-dossier-view", "cards"); }}
-                            className={`rounded-md p-1 transition ${dossierViewMode === "cards" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            className={`rounded-md p-1 transition ${dossierViewMode === "cards" ? "bg-[#C9A84C]/15 text-[#C9A84C]" : "text-white/30 hover:text-white/60"}`}
                             title="Vue cartes"
                           ><LayoutGrid className="h-3.5 w-3.5" /></button>
                           <button
                             onClick={() => { setDossierViewMode("list"); localStorage.setItem("pedagogie-dossier-view", "list"); }}
-                            className={`rounded-md p-1 transition ${dossierViewMode === "list" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            className={`rounded-md p-1 transition ${dossierViewMode === "list" ? "bg-[#C9A84C]/15 text-[#C9A84C]" : "text-white/30 hover:text-white/60"}`}
                             title="Vue liste"
                           ><LayoutList className="h-3.5 w-3.5" /></button>
                         </div>
@@ -781,14 +781,14 @@ export function PedagogieShell({
 
                       {/* Bulk action bar for dossiers */}
                       {canEdit && selectedDossierIds.size > 0 && (
-                        <div className="mb-2 flex items-center gap-2 rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
-                          <span className="text-xs font-semibold text-gold-dark">{selectedDossierIds.size} dossier{selectedDossierIds.size > 1 ? "s" : ""} sélectionné{selectedDossierIds.size > 1 ? "s" : ""}</span>
-                          <button type="button" onClick={() => setSelectedDossierIds(new Set(childDossiers.map((d) => d.id)))} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Tout sélectionner</button>
-                          <button type="button" onClick={() => setSelectedDossierIds(new Set())} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Désélectionner</button>
+                        <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/10 px-3 py-2">
+                          <span className="text-xs font-semibold text-[#C9A84C]">{selectedDossierIds.size} dossier{selectedDossierIds.size > 1 ? "s" : ""} sélectionné{selectedDossierIds.size > 1 ? "s" : ""}</span>
+                          <button type="button" onClick={() => setSelectedDossierIds(new Set(childDossiers.map((d) => d.id)))} className="text-[10px] font-medium text-white/40 hover:text-white/70 underline">Tout sélectionner</button>
+                          <button type="button" onClick={() => setSelectedDossierIds(new Set())} className="text-[10px] font-medium text-white/40 hover:text-white/70 underline">Désélectionner</button>
                           <button
                             type="button"
                             onClick={() => setModal({ type: "move_dossiers", dossierIds: [...selectedDossierIds] })}
-                            className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-200 transition flex items-center gap-1"
+                            className="rounded-lg bg-[#4fabdb]/15 px-3 py-1.5 text-xs font-semibold text-[#4fabdb] hover:bg-[#4fabdb]/25 transition flex items-center gap-1"
                           ><FolderOpen className="h-3 w-3" /> Déplacer</button>
                           <button
                             type="button"
@@ -798,7 +798,7 @@ export function PedagogieShell({
                               await handleAction(() => bulkSetDossierVisible(ids, anyHidden));
                               setSelectedDossierIds(new Set());
                             }}
-                            className="rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-200 transition flex items-center gap-1"
+                            className="rounded-lg bg-green-500/100/15 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/100/25 transition flex items-center gap-1"
                           >
                             {childDossiers.some((d) => selectedDossierIds.has(d.id) && !d.visible) ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                             {childDossiers.some((d) => selectedDossierIds.has(d.id) && !d.visible) ? "Visible" : "Masquer"}
@@ -817,13 +817,13 @@ export function PedagogieShell({
                                 },
                               });
                             }}
-                            className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition flex items-center gap-1"
+                            className="rounded-lg bg-red-500/100/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/100/150/25 transition flex items-center gap-1"
                           ><Trash2 className="h-3 w-3" /> Supprimer</button>
                           <div className="ml-auto relative">
-                            <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition">Section</button>
+                            <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-[#C9A84C]/15 px-3 py-1.5 text-xs font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/25 transition">Section</button>
                             {showBulkDossierPopover && (
-                              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
-                                <p className="mb-2 text-xs font-semibold text-gray-700">Placer dans la section</p>
+                              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-xl border border-white/15 p-3 shadow-lg" style={{ backgroundColor: "#12314d" }}>
+                                <p className="mb-2 text-xs font-semibold text-white/80">Placer dans la section</p>
                                 {(() => {
                                   const existingSections = [...new Set(childDossiers.flatMap((d) => d.etiquettes ?? []).filter(Boolean))].sort();
                                   return (
@@ -837,7 +837,7 @@ export function PedagogieShell({
                                             setShowBulkDossierPopover(false);
                                             setSelectedDossierIds(new Set());
                                           }}
-                                          className="w-full rounded-lg border border-gray-100 px-3 py-2 text-left text-sm font-medium text-gray-800 hover:bg-gold/5 hover:border-gold/30 transition"
+                                          className="w-full rounded-lg border border-white/10 px-3 py-2 text-left text-sm font-medium text-white/70 hover:bg-[#C9A84C]/10 hover:border-[#C9A84C]/30 transition"
                                         >{s}</button>
                                       ))}
                                       <div className="flex gap-1.5 pt-1">
@@ -845,7 +845,7 @@ export function PedagogieShell({
                                           value={bulkDossierEtiquettes[0] ?? ""}
                                           onChange={(e) => setBulkDossierEtiquettes(e.target.value ? [e.target.value] : [])}
                                           placeholder="Nouvelle section..."
-                                          className="flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20"
+                                          className="flex-1 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none focus:border-[#C9A84C]/40 focus:ring-1 focus:ring-[#C9A84C]/20"
                                           onKeyDown={(e) => {
                                             if (e.key === "Enter" && bulkDossierEtiquettes[0]?.trim()) {
                                               handleAction(() => bulkSetDossierEtiquettes([...selectedDossierIds], [bulkDossierEtiquettes[0].trim()]));
@@ -864,7 +864,7 @@ export function PedagogieShell({
                                             setBulkDossierEtiquettes([]);
                                             setSelectedDossierIds(new Set());
                                           }}
-                                          className="rounded-lg bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy/90"
+                                          className="rounded-lg bg-[#C9A84C] px-3 py-1.5 text-xs font-semibold text-[#0e1e35] hover:bg-[#b8993f]"
                                         >OK</button>
                                       </div>
                                       <button
@@ -874,7 +874,7 @@ export function PedagogieShell({
                                           setShowBulkDossierPopover(false);
                                           setSelectedDossierIds(new Set());
                                         }}
-                                        className="w-full rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                                        className="w-full rounded-lg px-3 py-1.5 text-xs text-white/30 hover:text-red-400 hover:bg-red-500/100/150/10 transition"
                                       >Retirer de toute section</button>
                                     </div>
                                   );
@@ -1006,7 +1006,7 @@ export function PedagogieShell({
                   {canEdit && selectedDossier && selectedDossier.dossier_type !== "subject" && (
                     <button
                       onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
-                      className="mt-2 mb-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-3 text-sm font-medium text-gray-400 transition hover:border-navy/20 hover:bg-navy/5 hover:text-navy"
+                      className="mt-2 mb-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 py-3 text-sm font-medium text-white/40 transition hover:border-white/15 hover:bg-[#12314d]/5 hover:text-[#4fabdb]"
                     >
                       <Plus className="h-4 w-4" /> Ajouter du contenu
                     </button>
@@ -1015,13 +1015,13 @@ export function PedagogieShell({
                   {/* Cours — drag & drop grille ou liste */}
                   {loadingRessources ? (
                     <div className="flex justify-center py-8">
-                      <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                      <Loader2 className="h-5 w-5 animate-spin text-white/40" />
                     </div>
                   ) : coursList.length > 0 ? (
                     <div>
                       {/* Link rules info banner */}
                       {universityLinkRules && currentOfferCode && canEdit && (
-                        <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3">
+                        <div className="mb-3 rounded-xl border border-blue-100 bg-[#4fabdb]/10/50 px-4 py-3">
                           <p className="text-xs font-semibold text-blue-800 mb-1.5">🔗 Synchronisation automatique</p>
                           <div className="space-y-1">
                             {Object.entries(universityLinkRules.sections)
@@ -1030,7 +1030,7 @@ export function PedagogieShell({
                               .map(([section, offers]) => {
                                 const otherOffers = offers.filter((o) => o !== currentOfferCode);
                                 if (otherOffers.length === 0) return (
-                                  <p key={section} className="text-[11px] text-blue-700">
+                                  <p key={section} className="text-[11px] text-[#4fabdb]">
                                     <span className="font-semibold">{section}</span> — cours locaux, pas de synchronisation.
                                   </p>
                                 );
@@ -1038,7 +1038,7 @@ export function PedagogieShell({
                                   o === "prepa_pass" ? "PREPA PASS" : o === "prepa_las" ? "PREPA LAS" : o === "prepa_lsps" ? "PREPA LSPS" : o
                                 );
                                 return (
-                                  <p key={section} className="text-[11px] text-blue-700">
+                                  <p key={section} className="text-[11px] text-[#4fabdb]">
                                     <span className="font-semibold">{section}</span> — synchronisé avec {offerLabels.join(" et ")}. Toute modification se répercute automatiquement.
                                   </p>
                                 );
@@ -1048,20 +1048,20 @@ export function PedagogieShell({
                       )}
 
                       <div className="mb-2 flex items-center gap-2">
-                        <span className="h-px flex-1 bg-navy/10" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-navy/40">Cours</span>
-                        <span className="h-px flex-1 bg-navy/10" />
-                        <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5">
+                        <span className="h-px flex-1 bg-[#12314d]/10" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#4fabdb]/40">Cours</span>
+                        <span className="h-px flex-1 bg-[#12314d]/10" />
+                        <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
                           <button
                             onClick={() => { setCoursViewMode("cards"); localStorage.setItem("pedagogie-cours-view", "cards"); }}
-                            className={`rounded-md p-1 transition ${coursViewMode === "cards" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            className={`rounded-md p-1 transition ${coursViewMode === "cards" ? "bg-[#12314d]/10 text-[#4fabdb]" : "text-white/40 hover:text-white/60"}`}
                             title="Vue cartes"
                           >
                             <LayoutGrid className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => { setCoursViewMode("list"); localStorage.setItem("pedagogie-cours-view", "list"); }}
-                            className={`rounded-md p-1 transition ${coursViewMode === "list" ? "bg-navy/10 text-navy" : "text-gray-400 hover:text-gray-600"}`}
+                            className={`rounded-md p-1 transition ${coursViewMode === "list" ? "bg-[#12314d]/10 text-[#4fabdb]" : "text-white/40 hover:text-white/60"}`}
                             title="Vue liste"
                           >
                             <LayoutList className="h-3.5 w-3.5" />
@@ -1126,17 +1126,17 @@ export function PedagogieShell({
                         <>
                           {/* Bulk action bar */}
                           {canEdit && selectedCoursIds.size > 0 && (
-                            <div className="mb-2 flex items-center gap-2 rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
-                              <span className="text-xs font-semibold text-gold-dark">{selectedCoursIds.size} cours sélectionné{selectedCoursIds.size > 1 ? "s" : ""}</span>
+                            <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/8 px-3 py-2">
+                              <span className="text-xs font-semibold text-[#C9A84C]">{selectedCoursIds.size} cours sélectionné{selectedCoursIds.size > 1 ? "s" : ""}</span>
                               <button
                                 type="button"
                                 onClick={() => { setSelectedCoursIds(new Set(coursList.map((c) => c.id))); }}
-                                className="text-[10px] font-medium text-navy/60 hover:text-navy underline"
+                                className="text-[10px] font-medium text-[#4fabdb]/60 hover:text-[#4fabdb] underline"
                               >Tout sélectionner</button>
                               <button
                                 type="button"
                                 onClick={() => { setSelectedCoursIds(new Set()); }}
-                                className="text-[10px] font-medium text-navy/60 hover:text-navy underline"
+                                className="text-[10px] font-medium text-[#4fabdb]/60 hover:text-[#4fabdb] underline"
                               >Désélectionner</button>
                               <button
                                 type="button"
@@ -1146,7 +1146,7 @@ export function PedagogieShell({
                                   await handleAction(() => bulkSetCoursVisible(ids, anyHidden));
                                   setSelectedCoursIds(new Set());
                                 }}
-                                className="rounded-lg bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-200 transition flex items-center gap-1"
+                                className="rounded-lg bg-green-500/100/15 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/100/25 transition flex items-center gap-1"
                                 title={coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? "Rendre visible" : "Masquer"}
                               >
                                 {coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -1159,7 +1159,7 @@ export function PedagogieShell({
                                   showToast(`${selectedCoursIds.size} cours archivé${selectedCoursIds.size > 1 ? "s" : ""}`, "success");
                                   setSelectedCoursIds(new Set());
                                 }}
-                                className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition flex items-center gap-1"
+                                className="rounded-lg bg-white/8 px-3 py-1.5 text-xs font-semibold text-white/60 hover:bg-white/15 transition flex items-center gap-1"
                               ><FolderOpen className="h-3 w-3" /> Archiver</button>
                               <button
                                 type="button"
@@ -1172,17 +1172,17 @@ export function PedagogieShell({
                                     },
                                   });
                                 }}
-                                className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition flex items-center gap-1"
+                                className="rounded-lg bg-red-500/100/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/100/25 transition flex items-center gap-1"
                               ><Trash2 className="h-3 w-3" /> Supprimer</button>
                               <div className="ml-auto relative">
                                 <button
                                   type="button"
                                   onClick={() => setShowBulkPopover(!showBulkPopover)}
-                                  className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition"
+                                  className="rounded-lg bg-[#C9A84C]/15 px-3 py-1.5 text-xs font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/20 transition"
                                 >Étiquettes</button>
                                 {showBulkPopover && (
-                                  <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
-                                    <p className="mb-2 text-xs font-semibold text-gray-700">Attribuer des étiquettes</p>
+                                  <div className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl border border-white/10 bg-[#12314d] p-3 shadow-lg">
+                                    <p className="mb-2 text-xs font-semibold text-white/80">Attribuer des étiquettes</p>
                                     <TagInput
                                       value={bulkEtiquettes}
                                       onChange={setBulkEtiquettes}
@@ -1190,7 +1190,7 @@ export function PedagogieShell({
                                       placeholder="Taper puis Enter..."
                                     />
                                     <div className="mt-2 flex justify-end gap-2">
-                                      <button type="button" onClick={() => { setShowBulkPopover(false); setBulkEtiquettes([]); }} className="rounded-lg px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100">Annuler</button>
+                                      <button type="button" onClick={() => { setShowBulkPopover(false); setBulkEtiquettes([]); }} className="rounded-lg px-2.5 py-1 text-xs text-white/50 hover:bg-white/8">Annuler</button>
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1199,7 +1199,7 @@ export function PedagogieShell({
                                           setBulkEtiquettes([]);
                                           setSelectedCoursIds(new Set());
                                         }}
-                                        className="rounded-lg bg-navy px-3 py-1 text-xs font-semibold text-white hover:bg-navy/90"
+                                        className="rounded-lg bg-[#12314d] px-3 py-1 text-xs font-semibold text-white hover:bg-[#12314d]/90"
                                       >Appliquer</button>
                                     </div>
                                   </div>
@@ -1319,10 +1319,10 @@ export function PedagogieShell({
                   {/* Ressources — drag & drop liste */}
                   {!loadingRessources && ressources.length > 0 && (
                     <div>
-                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-navy/40">
-                        <span className="h-px flex-1 bg-navy/10" />
+                      <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#4fabdb]/40">
+                        <span className="h-px flex-1 bg-[#12314d]/10" />
                         Ressources
-                        <span className="h-px flex-1 bg-navy/10" />
+                        <span className="h-px flex-1 bg-[#12314d]/10" />
                       </p>
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndRessources}>
                         <SortableContext items={ressources.map((r) => r.id)} strategy={verticalListSortingStrategy}>
@@ -1347,11 +1347,11 @@ export function PedagogieShell({
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-center px-8">
-            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-navy/5 ring-1 ring-navy/10">
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-[#12314d]/5 ring-1 ring-white/10">
               <img src="/logo-ds.svg" alt="" className="h-16 w-16 object-contain opacity-60" />
             </div>
-            <p className="text-sm font-semibold text-navy/60">Sélectionnez un dossier</p>
-            <p className="mt-1.5 text-xs text-gray-400 max-w-[180px] leading-relaxed">Choisissez un dossier dans l'arborescence pour voir et gérer son contenu</p>
+            <p className="text-sm font-semibold text-[#4fabdb]/60">Sélectionnez un dossier</p>
+            <p className="mt-1.5 text-xs text-white/40 max-w-[180px] leading-relaxed">Choisissez un dossier dans l'arborescence pour voir et gérer son contenu</p>
           </div>
         )}
       </div>
@@ -1541,25 +1541,25 @@ export function PedagogieShell({
 
           {modal.type === "clone_proposal" && (
             <div className="space-y-4 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gold/10">
-                <Link2 className="h-7 w-7 text-gold-dark" />
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#C9A84C]/15">
+                <Link2 className="h-7 w-7 text-[#C9A84C]" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-navy">Fac déjà existante</h3>
-                <p className="mt-2 text-sm text-gray-600">
+                <h3 className="text-lg font-bold text-[#4fabdb]">Fac déjà existante</h3>
+                <p className="mt-2 text-sm text-white/60">
                   <strong>{modal.sourceDossier.name}</strong> existe déjà dans <strong>{modal.offerLabel}</strong>.
                 </p>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-white/50">
                   Voulez-vous importer toute son arborescence (semestres, matières, cours) ?
                 </p>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-xs text-white/40">
                   Les cours seront liés — vous pourrez les modifier indépendamment ou propager les changements.
                 </p>
               </div>
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => setModal(null)}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-white/60 hover:bg-white/5"
                 >Non merci</button>
                 <button
                   onClick={() => {
@@ -1574,7 +1574,7 @@ export function PedagogieShell({
                     });
                   }}
                   disabled={isPending}
-                  className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy/90 disabled:opacity-50"
+                  className="rounded-lg bg-[#12314d] px-4 py-2 text-sm font-semibold text-white hover:bg-[#12314d]/90 disabled:opacity-50"
                 >{isPending ? "Import en cours..." : "Importer l'arborescence"}</button>
               </div>
             </div>
@@ -1582,15 +1582,15 @@ export function PedagogieShell({
 
           {modal.type === "linked_edit_confirm" && (
             <div className="space-y-4 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
-                <Link2 className="h-7 w-7 text-blue-600" />
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#4fabdb]/10">
+                <Link2 className="h-7 w-7 text-[#4fabdb]" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-navy">Cours lié</h3>
-                <p className="mt-2 text-sm text-gray-600">
+                <h3 className="text-lg font-bold text-[#4fabdb]">Cours lié</h3>
+                <p className="mt-2 text-sm text-white/60">
                   Ce cours est lié à <strong>{modal.linkedCount - 1} autre{modal.linkedCount > 2 ? "s" : ""} offre{modal.linkedCount > 2 ? "s" : ""}</strong>.
                 </p>
-                <p className="mt-1 text-sm text-gray-500">Appliquer les modifications partout ou seulement ici ?</p>
+                <p className="mt-1 text-sm text-white/50">Appliquer les modifications partout ou seulement ici ?</p>
               </div>
               <div className="flex justify-center gap-3">
                 <button
@@ -1604,7 +1604,7 @@ export function PedagogieShell({
                     });
                   }}
                   disabled={isPending}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-white/60 hover:bg-white/5 disabled:opacity-50"
                 >Juste ici</button>
                 <button
                   onClick={() => {
@@ -1617,7 +1617,7 @@ export function PedagogieShell({
                     });
                   }}
                   disabled={isPending}
-                  className="rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy/90 disabled:opacity-50"
+                  className="rounded-lg bg-[#12314d] px-4 py-2 text-sm font-semibold text-white hover:bg-[#12314d]/90 disabled:opacity-50"
                 >Appliquer partout</button>
               </div>
             </div>
@@ -1705,26 +1705,26 @@ export function PedagogieShell({
       {/* Confirm delete */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDelete(null)}>
-          <div className="w-full max-w-sm mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl bg-[#12314d] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-col items-center gap-3 px-6 pt-6 pb-4 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
                 <Trash2 className="h-5 w-5 text-red-500" />
               </div>
               <h3 className="text-base font-semibold text-gray-900">Confirmer la suppression</h3>
-              <p className="text-sm text-gray-500">
-                Voulez-vous vraiment supprimer <span className="font-medium text-gray-700">{confirmDelete.label}</span> ? Cette action est irréversible.
+              <p className="text-sm text-white/50">
+                Voulez-vous vraiment supprimer <span className="font-medium text-white/80">{confirmDelete.label}</span> ? Cette action est irréversible.
               </p>
             </div>
-            <div className="flex gap-2 border-t border-gray-100 px-6 py-4">
+            <div className="flex gap-2 border-t border-white/8 px-6 py-4">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+                className="flex-1 rounded-xl border border-white/10 py-2 text-sm font-medium text-white/60 hover:bg-white/5 transition"
               >
                 Annuler
               </button>
               <button
                 onClick={() => { confirmDelete.onConfirm(); setConfirmDelete(null); }}
-                className="flex-1 rounded-xl bg-red-500 py-2 text-sm font-semibold text-white hover:bg-red-600 transition"
+                className="flex-1 rounded-xl bg-red-500/100 py-2 text-sm font-semibold text-white hover:bg-red-600 transition"
               >
                 Supprimer
               </button>
@@ -1735,24 +1735,24 @@ export function PedagogieShell({
 
       {linkedDeleteChoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setLinkedDeleteChoice(null)}>
-          <div className="w-full max-w-sm mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl bg-[#12314d] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-col items-center gap-3 px-6 pt-6 pb-4 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
                 <Link2 className="h-5 w-5 text-red-500" />
               </div>
               <h3 className="text-base font-semibold text-gray-900">Cours lié</h3>
-              <p className="text-sm text-gray-500">
-                <span className="font-medium text-gray-700">{linkedDeleteChoice.cours.name}</span> est lié à <span className="font-medium text-gray-700">{linkedDeleteChoice.count - 1} autre{linkedDeleteChoice.count > 2 ? "s" : ""} offre{linkedDeleteChoice.count > 2 ? "s" : ""}</span>.
+              <p className="text-sm text-white/50">
+                <span className="font-medium text-white/80">{linkedDeleteChoice.cours.name}</span> est lié à <span className="font-medium text-white/80">{linkedDeleteChoice.count - 1} autre{linkedDeleteChoice.count > 2 ? "s" : ""} offre{linkedDeleteChoice.count > 2 ? "s" : ""}</span>.
               </p>
             </div>
-            <div className="flex flex-col gap-2 border-t border-gray-100 px-6 py-4">
+            <div className="flex flex-col gap-2 border-t border-white/8 px-6 py-4">
               <button
                 onClick={() => {
                   const c = linkedDeleteChoice.cours;
                   setLinkedDeleteChoice(null);
                   handleAction(() => deleteCoursFromDossier(c.id));
                 }}
-                className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+                className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-medium text-white/60 hover:bg-white/5 transition"
               >
                 Supprimer juste ici
               </button>
@@ -1762,13 +1762,13 @@ export function PedagogieShell({
                   setLinkedDeleteChoice(null);
                   handleAction(() => deleteLinkedCoursByCoursId(c.id));
                 }}
-                className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
+                className="w-full rounded-xl bg-red-500/100 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
               >
                 Supprimer dans toutes les offres ({linkedDeleteChoice.count})
               </button>
               <button
                 onClick={() => setLinkedDeleteChoice(null)}
-                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition"
+                className="w-full py-2 text-xs text-white/40 hover:text-white/60 transition"
               >
                 Annuler
               </button>
@@ -1779,24 +1779,24 @@ export function PedagogieShell({
 
       {sectionDeleteChoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setSectionDeleteChoice(null)}>
-          <div className="w-full max-w-sm mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl bg-[#12314d] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-col items-center gap-3 px-6 pt-6 pb-4 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
                 <Link2 className="h-5 w-5 text-red-500" />
               </div>
               <h3 className="text-base font-semibold text-gray-900">Cours liés détectés</h3>
-              <p className="text-sm text-gray-500">
-                Certains cours de <span className="font-medium text-gray-700">{sectionDeleteChoice.label}</span> sont liés à d'autres offres.
+              <p className="text-sm text-white/50">
+                Certains cours de <span className="font-medium text-white/80">{sectionDeleteChoice.label}</span> sont liés à d'autres offres.
               </p>
             </div>
-            <div className="flex flex-col gap-2 border-t border-gray-100 px-6 py-4">
+            <div className="flex flex-col gap-2 border-t border-white/8 px-6 py-4">
               <button
                 onClick={() => {
                   const ids = sectionDeleteChoice.cours.map((c) => c.id);
                   setSectionDeleteChoice(null);
                   handleAction(async () => { for (const id of ids) await deleteCoursFromDossier(id); return { success: true }; });
                 }}
-                className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
+                className="w-full rounded-xl border border-white/10 py-2.5 text-sm font-medium text-white/60 hover:bg-white/5 transition"
               >
                 Supprimer juste ici ({sectionDeleteChoice.cours.length} cours)
               </button>
@@ -1811,13 +1811,13 @@ export function PedagogieShell({
                     return { success: true };
                   });
                 }}
-                className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
+                className="w-full rounded-xl bg-red-500/100 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition"
               >
                 Supprimer dans toutes les offres
               </button>
               <button
                 onClick={() => setSectionDeleteChoice(null)}
-                className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition"
+                className="w-full py-2 text-xs text-white/40 hover:text-white/60 transition"
               >
                 Annuler
               </button>
@@ -1923,16 +1923,16 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
   };
 
   return (
-    <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-md">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl overflow-hidden w-full max-w-md">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
         <h3 className="text-sm font-semibold text-gray-900">Créer plusieurs dossiers</h3>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8"><X className="h-4 w-4 text-white/50" /></button>
       </div>
       <div className="p-5 space-y-4">
         {/* Type selector */}
         {allowedTypes.length > 1 && (
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700">Type de dossier</label>
+            <label className="mb-1.5 block text-xs font-medium text-white/80">Type de dossier</label>
             <div className="flex flex-wrap gap-1.5">
               {allowedTypes.map((t) => (
                 <button
@@ -1941,8 +1941,8 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
                   onClick={() => setChildType(t)}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                     childType === t
-                      ? "border-navy bg-navy/5 text-navy"
-                      : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                      ? "border-[#4fabdb] bg-[#12314d]/5 text-[#4fabdb]"
+                      : "border-white/10 text-white/40 hover:border-white/15 hover:text-white/60"
                   }`}
                 >{DOSSIER_TYPE_META[t]?.shortLabel ?? t}</button>
               ))}
@@ -1957,8 +1957,8 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
           onClick={() => !analyzing && fileInputRef.current?.click()}
           className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-4 cursor-pointer transition-colors ${
             analyzing
-              ? "border-blue-300 bg-blue-50"
-              : "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/50"
+              ? "border-[#4fabdb]/40 bg-[#4fabdb]/10"
+              : "border-white/10 bg-white/5 hover:border-[#4fabdb]/40 hover:bg-[#4fabdb]/10"
           }`}
         >
           <input
@@ -1974,13 +1974,13 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
           {analyzing ? (
             <>
               <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
-              <p className="text-xs text-blue-600 font-medium">Analyse du screenshot en cours...</p>
+              <p className="text-xs text-[#4fabdb] font-medium">Analyse du screenshot en cours...</p>
             </>
           ) : (
             <>
-              <ImagePlus className="h-6 w-6 text-gray-400" />
-              <p className="text-xs text-gray-500 text-center">
-                <span className="font-medium text-gray-700">Importer un screenshot</span>
+              <ImagePlus className="h-6 w-6 text-white/40" />
+              <p className="text-xs text-white/50 text-center">
+                <span className="font-medium text-white/80">Importer un screenshot</span>
                 <br />
                 Glissez une image ou cliquez pour extraire les noms
               </p>
@@ -1989,29 +1989,29 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">Noms (un par ligne)</label>
+          <label className="block text-xs font-medium text-white/60 mb-1.5">Noms (un par ligne)</label>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             rows={10}
             placeholder={"Chimie générale\nBiologie cellulaire\nAnatomie\nPhysiologie\n..."}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#4fabdb]/20 resize-none"
             autoFocus
           />
           {names.length > 0 && (
-            <p className="mt-1 text-xs text-gray-500">{names.length} {childLabel.toLowerCase()}{names.length > 1 ? "s" : ""} à créer</p>
+            <p className="mt-1 text-xs text-white/50">{names.length} {childLabel.toLowerCase()}{names.length > 1 ? "s" : ""} à créer</p>
           )}
         </div>
 
         {result && (
-          <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
+          <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-500/10 text-amber-700" : "bg-green-500/10 text-green-400"}`}>
             <p className="font-semibold">{result.ok} créé{result.ok > 1 ? "s" : ""}</p>
-            {result.errors.map((e, i) => <p key={i} className="text-red-600 mt-1">{e}</p>)}
+            {result.errors.map((e, i) => <p key={i} className="text-red-400 mt-1">{e}</p>)}
           </div>
         )}
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/5">
             Fermer
           </button>
           <button
@@ -2032,10 +2032,10 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
 // =============================================
 
 const CONTENT_TYPES = [
-  { type: "pdf",   label: "PDF",   icon: <FileText className="h-8 w-8" />,  color: "text-red-500",  bg: "hover:bg-red-50 hover:border-red-200" },
-  { type: "video", label: "Vidéo", icon: <Video className="h-8 w-8" />,     color: "text-blue-500", bg: "hover:bg-blue-50 hover:border-blue-200" },
+  { type: "pdf",   label: "PDF",   icon: <FileText className="h-8 w-8" />,  color: "text-red-500",  bg: "hover:bg-red-500/100/15 hover:border-red-500/20" },
+  { type: "video", label: "Vidéo", icon: <Video className="h-8 w-8" />,     color: "text-blue-500", bg: "hover:bg-[#4fabdb]/15 hover:border-[#4fabdb]/20" },
   { type: "vimeo", label: "Vimeo", icon: <FileVideo className="h-8 w-8" />, color: "text-cyan-500", bg: "hover:bg-cyan-50 hover:border-cyan-200" },
-  { type: "lien",  label: "Lien",  icon: <LinkIcon className="h-8 w-8" />,      color: "text-green-500",bg: "hover:bg-green-50 hover:border-green-200" },
+  { type: "lien",  label: "Lien",  icon: <LinkIcon className="h-8 w-8" />,      color: "text-green-500",bg: "hover:bg-green-500/10 hover:border-green-500/20" },
 ];
 
 function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose }: {
@@ -2131,10 +2131,10 @@ function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose 
   };
 
   return (
-    <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-md">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl overflow-hidden w-full max-w-md">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
         <h3 className="text-sm font-semibold text-gray-900">Créer plusieurs cours</h3>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8"><X className="h-4 w-4 text-white/50" /></button>
       </div>
       <div className="p-5 space-y-4">
         {/* Screenshot upload zone */}
@@ -2144,8 +2144,8 @@ function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose 
           onClick={() => !analyzing && fileInputRef.current?.click()}
           className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-4 cursor-pointer transition-colors ${
             analyzing
-              ? "border-blue-300 bg-blue-50"
-              : "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/50"
+              ? "border-[#4fabdb]/40 bg-[#4fabdb]/10"
+              : "border-white/10 bg-white/5 hover:border-[#4fabdb]/40 hover:bg-[#4fabdb]/10"
           }`}
         >
           <input
@@ -2161,13 +2161,13 @@ function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose 
           {analyzing ? (
             <>
               <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
-              <p className="text-xs text-blue-600 font-medium">Analyse du screenshot en cours...</p>
+              <p className="text-xs text-[#4fabdb] font-medium">Analyse du screenshot en cours...</p>
             </>
           ) : (
             <>
-              <ImagePlus className="h-6 w-6 text-gray-400" />
-              <p className="text-xs text-gray-500 text-center">
-                <span className="font-medium text-gray-700">Importer un screenshot</span>
+              <ImagePlus className="h-6 w-6 text-white/40" />
+              <p className="text-xs text-white/50 text-center">
+                <span className="font-medium text-white/80">Importer un screenshot</span>
                 <br />
                 Glissez une image ou cliquez pour extraire les noms de cours
               </p>
@@ -2176,34 +2176,34 @@ function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose 
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">Noms des cours (un par ligne)</label>
+          <label className="block text-xs font-medium text-white/60 mb-1.5">Noms des cours (un par ligne)</label>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             rows={10}
             placeholder={"Atomistique\nIsomérie\nLiaisons chimiques\nMolécules conjuguées\n..."}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#4fabdb]/20 resize-none"
             autoFocus
           />
           {courseNames.length > 0 && (
-            <p className="mt-1 text-xs text-gray-500">{courseNames.length} cours à créer</p>
+            <p className="mt-1 text-xs text-white/50">{courseNames.length} cours à créer</p>
           )}
         </div>
 
         {result && (
-          <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}>
+          <div className={`rounded-xl px-4 py-3 text-xs ${result.errors.length > 0 ? "bg-amber-500/10 text-amber-700" : "bg-green-500/10 text-green-400"}`}>
             <p className="font-semibold">{result.ok} cours créé{result.ok > 1 ? "s" : ""}</p>
-            {result.errors.map((e, i) => <p key={i} className="text-red-600 mt-1">{e}</p>)}
+            {result.errors.map((e, i) => <p key={i} className="text-red-400 mt-1">{e}</p>)}
           </div>
         )}
 
         {existingSections && (
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-700">Section *</label>
+            <label className="mb-1.5 block text-xs font-medium text-white/80">Section *</label>
             <select
               value={selectedSection}
               onChange={(e) => setSelectedSection(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-[#4fabdb]/40 focus:ring-2 focus:ring-[#4fabdb]/20"
             >
               <option value="">— Choisir une section —</option>
               {existingSections.map((s) => (
@@ -2214,7 +2214,7 @@ function BulkCreateCoursModal({ dossierId, existingSections, onCreated, onClose 
         )}
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/5">
             Fermer
           </button>
           <button
@@ -2253,11 +2253,11 @@ function AddPickerModal({
   const courseLabel = getContentCreationLabel(parentDossier?.dossier_type);
 
   return (
-    <div className="rounded-2xl bg-white shadow-2xl overflow-hidden w-full max-w-sm">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl overflow-hidden w-full max-w-sm">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
         <h3 className="text-sm font-semibold text-gray-900">Que voulez-vous ajouter ?</h3>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
-          <X className="h-4 w-4 text-gray-500" />
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8">
+          <X className="h-4 w-4 text-white/50" />
         </button>
       </div>
 
@@ -2266,16 +2266,16 @@ function AddPickerModal({
         <button
           onClick={onCreateDossier}
           disabled={!canCreateChildren}
-          className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition enabled:hover:border-navy/30 enabled:hover:bg-navy/5 disabled:opacity-50"
+          className="group flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left transition enabled:hover:border-[#4fabdb]/30 enabled:hover:bg-[#12314d]/5 disabled:opacity-50"
         >
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-navy/5 text-navy transition group-hover:bg-navy/10">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[#12314d]/5 text-[#4fabdb] transition group-hover:bg-[#12314d]/10">
             <FolderPlus className="h-6 w-6" />
           </div>
           <div>
             <p className="font-semibold text-gray-900">
               {parentDossier ? `Créer ${/^[AEIOUÉÈÊÀ]/.test(childLabel) ? "une" : "un"} ${childLabel.toLowerCase()}` : "Créer une offre"}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-white/40">
               {parentDossier ? childDescription : "Installer un niveau racine métier"}
             </p>
           </div>
@@ -2285,16 +2285,16 @@ function AddPickerModal({
         {canCreateChildren && (
           <button
             onClick={onBulkCreateDossiers}
-            className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-orange-200 hover:bg-orange-50"
+            className="group flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left transition hover:border-orange-500/20 hover:bg-orange-500/10"
           >
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 transition group-hover:bg-orange-100">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400 transition group-hover:bg-orange-100">
               <ImagePlus className="h-6 w-6" />
             </div>
             <div>
               <p className="font-semibold text-gray-900">
                 Créer depuis un screenshot
               </p>
-              <p className="text-xs text-gray-400">Extraire les noms depuis une capture d'écran</p>
+              <p className="text-xs text-white/40">Extraire les noms depuis une capture d'écran</p>
             </div>
           </button>
         )}
@@ -2303,14 +2303,14 @@ function AddPickerModal({
         {canAddContent && (
           <button
             onClick={onCreateCours}
-            className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
+            className="group flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left transition hover:border-indigo-200 hover:bg-indigo-50"
           >
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition group-hover:bg-indigo-100">
               <BookOpen className="h-6 w-6" />
             </div>
             <div>
               <p className="font-semibold text-gray-900">{courseLabel}</p>
-              <p className="text-xs text-gray-400">Chapitre PDF + séries d'exercices</p>
+              <p className="text-xs text-white/40">Chapitre PDF + séries d'exercices</p>
             </div>
           </button>
         )}
@@ -2319,14 +2319,14 @@ function AddPickerModal({
         {canAddContent && (
           <button
             onClick={onBulkCreateCours}
-            className="group flex w-full items-center gap-4 rounded-xl border border-gray-200 p-4 text-left transition hover:border-teal-200 hover:bg-teal-50"
+            className="group flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left transition hover:border-teal-200 hover:bg-teal-50"
           >
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600 transition group-hover:bg-teal-100">
               <Layers className="h-6 w-6" />
             </div>
             <div>
               <p className="font-semibold text-gray-900">Créer plusieurs cours</p>
-              <p className="text-xs text-gray-400">Coller une liste de noms ou un screenshot</p>
+              <p className="text-xs text-white/40">Coller une liste de noms ou un screenshot</p>
             </div>
           </button>
         )}
@@ -2334,16 +2334,16 @@ function AddPickerModal({
         {/* Contenu */}
         {canAddContent ? (
           <div>
-            <p className="mb-2 text-xs font-medium text-gray-500">Ajouter une ressource</p>
+            <p className="mb-2 text-xs font-medium text-white/50">Ajouter une ressource</p>
             <div className="grid grid-cols-4 gap-2">
               {CONTENT_TYPES.map(({ type, label, icon, color, bg }) => (
                 <button
                   key={type}
                   onClick={() => onCreateRessource(type)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border border-gray-200 p-3 text-center transition ${bg}`}
+                  className={`flex flex-col items-center gap-2 rounded-xl border border-white/10 p-3 text-center transition ${bg}`}
                 >
                   <span className={color}>{icon}</span>
-                  <span className="text-xs font-medium text-gray-700">{label}</span>
+                  <span className="text-xs font-medium text-white/80">{label}</span>
                 </button>
               ))}
             </div>
@@ -2384,12 +2384,12 @@ function SortableTreeNode({
 
   return (
     <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "12px" : 0 }}>
-      <div className={`group mb-0.5 flex items-start gap-1 rounded-lg px-1 py-1.5 transition ${selected ? "bg-navy/10 ring-1 ring-navy/5" : "hover:bg-white/80"}`}>
+      <div className={`group mb-0.5 flex items-start gap-1 rounded-lg px-1.5 py-1.5 transition-all duration-150 ${selected ? "bg-[#C9A84C]/12 ring-1 ring-[#C9A84C]/20" : "hover:bg-white/5"}`}>
         {canEdit && (
           <span
             {...attributes}
             {...listeners}
-            className="mt-0.5 flex-shrink-0 cursor-grab touch-none p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
+            className="mt-0.5 flex-shrink-0 cursor-grab touch-none p-0.5 text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
           >
             <GripVertical className="h-3.5 w-3.5" />
           </span>
@@ -2411,10 +2411,10 @@ function SortableTreeNode({
               }
               onSelect(node);
             }}
-            className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded hover:bg-black/5"
+            className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded hover:bg-white/10"
           >
             {hasChildren
-              ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+              ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronRight className="h-3.5 w-3.5 text-white/30" />
               : <span className="w-3.5" />}
           </button>
           <button
@@ -2422,40 +2422,39 @@ function SortableTreeNode({
             onClick={() => onSelect(node)}
             className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
           >
-            <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded overflow-hidden" style={{ backgroundColor: node.color + "20" }}>
+            <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md overflow-hidden" style={{ backgroundColor: (CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic).iconBg }}>
               {node.icon_url
                 ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
-                : <Folder className="h-3 w-3" style={{ color: node.color }} />}
+                : (() => { const cs = CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic; const Icon = cs.icon; return <Icon className="h-3 w-3" style={{ color: cs.iconColor }} />; })()}
             </span>
             <span className="min-w-0 flex-1">
-              <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-navy" : "text-gray-700"}`}>
+              <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-[#C9A84C]" : "text-white/80"}`}>
                 {node.name}
               </span>
-              <span className="mt-1 inline-flex items-center gap-1.5">
-                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+              <span className="mt-0.5 inline-flex items-center gap-1.5">
+                <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider" style={{ backgroundColor: (CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic).badgeBg, color: (CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic).badgeText }}>
                   {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
                 </span>
               </span>
             </span>
-            {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-300" />}
+            {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-white/20" />}
           </button>
         </div>
 
         {canEdit && (
           <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
-            <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500" title="Modifier">
+            <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]" title="Modifier">
               <Pencil className="h-3 w-3" />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500" title="Supprimer">
+            <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded p-1 text-white/25 hover:bg-red-500/100/150/15 hover:text-red-400" title="Supprimer">
               <Trash2 className="h-3 w-3" />
             </button>
           </div>
         )}
       </div>
 
-      {/* Enfants récursifs avec DnD + bouton Ajouter en dessous */}
       {expanded && (
-        <div className="border-l border-gray-100 ml-3">
+        <div className="border-l border-white/8 ml-3">
           {hasChildren && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
               <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -2532,7 +2531,7 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
       {(onEdit || onDelete) && (
         <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-10">
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70 transition"><Pencil className="h-3 w-3" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/100/150/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
         </div>
       )}
     </div>
@@ -2568,8 +2567,8 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex items-center gap-3 rounded-xl border bg-white p-2.5 shadow-sm transition ${
-        selected ? "border-gold/40 bg-gold/5 ring-1 ring-gold/20" : "border-gray-100 hover:border-gray-200 hover:shadow"
+      className={`group flex items-center gap-3 rounded-xl border p-2.5 transition ${
+        selected ? "border-[#C9A84C]/40 bg-[#C9A84C]/8 ring-1 ring-[#C9A84C]/20" : "border-white/8 hover:border-white/15 hover:bg-white/5"
       }`}
     >
       {onToggleSelect && (
@@ -2577,11 +2576,11 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
           type="checkbox"
           checked={!!selected}
           onChange={onToggleSelect}
-          className="h-3.5 w-3.5 flex-shrink-0 rounded border-gray-300 text-gold accent-gold cursor-pointer"
+          className="h-3.5 w-3.5 flex-shrink-0 rounded border-white/20 cursor-pointer accent-[#C9A84C]"
         />
       )}
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
@@ -2597,23 +2596,22 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
           onChange={(e) => setRenameName(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setRenaming(false); setRenameName(dossier.name); } }}
-          className="min-w-0 flex-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-sm font-semibold text-gray-800 outline-none ring-2 ring-blue-200"
+          className="min-w-0 flex-1 rounded-md border border-[#C9A84C]/40 bg-white/5 px-2 py-1 text-sm font-semibold text-white outline-none ring-2 ring-[#C9A84C]/20"
           autoFocus
         />
       ) : (
         <button onClick={onClick} className="min-w-0 flex-1 text-left flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-gray-800">{dossier.name}</p>
+          <p className="truncate text-sm font-semibold text-white/90">{dossier.name}</p>
           {sectionBadges && sectionBadges.length > 0 && sectionBadges.map((badge) => (
-            <span key={badge} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{badge}</span>
+            <span key={badge} className="flex-shrink-0 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-medium text-[#C9A84C]">{badge}</span>
           ))}
-          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+          <span className="flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
             {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
           </span>
         </button>
       )}
-      {/* Visibility indicator */}
       {!dossier.visible && (
-        <span className="flex-shrink-0 rounded-md bg-red-50 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
+        <span className="flex-shrink-0 rounded-md bg-red-500/100/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
           <EyeOff className="h-3 w-3" />
         </span>
       )}
@@ -2621,12 +2619,12 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
         <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
           <button
             onClick={(e) => { e.stopPropagation(); setRenaming(true); setTimeout(() => renameRef.current?.select(), 0); }}
-            className="rounded-md px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition"
+            className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white/30 hover:bg-white/10 hover:text-[#4fabdb] transition"
           >
             Renommer
           </button>
-          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/100/150/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
         </div>
       )}
     </div>
@@ -2656,7 +2654,7 @@ function DossierEtiquetteSectionHeader({ label, dossierIds, canEdit, onRenamed, 
 
   return (
     <div className="group mb-1.5 mt-3 flex items-center gap-2 first:mt-0">
-      <span className="h-px flex-1 bg-gold/20" />
+      <span className="h-px flex-1 bg-[#C9A84C]/20" />
       {editing ? (
         <input
           ref={inputRef}
@@ -2664,28 +2662,28 @@ function DossierEtiquetteSectionHeader({ label, dossierIds, canEdit, onRenamed, 
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditValue(label); } }}
-          className="rounded border border-gold/30 bg-gold/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-gold-dark outline-none ring-1 ring-gold/20"
+          className="rounded border border-[#C9A84C]/30 bg-[#C9A84C]/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#C9A84C] outline-none ring-1 ring-[#C9A84C]/20"
           autoFocus
         />
       ) : (
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gold-dark">{label}</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">{label}</span>
       )}
-      <span className="text-[10px] text-gold-dark/50">({dossierIds.length})</span>
+      <span className="text-[10px] text-[#C9A84C]/50">({dossierIds.length})</span>
       {canEdit && !editing && (
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition">
           <button
             onClick={() => { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); }}
-            className="rounded p-0.5 text-gold-dark/40 hover:text-gold-dark"
+            className="rounded p-0.5 text-[#C9A84C]/40 hover:text-[#C9A84C]"
           ><Pencil className="h-3 w-3" /></button>
           {onDeleteSection && (
             <button
               onClick={() => onDeleteSection("remove")}
-              className="rounded p-0.5 text-gold-dark/40 hover:text-red-500"
+              className="rounded p-0.5 text-[#C9A84C]/40 hover:text-red-400"
             ><Trash2 className="h-3 w-3" /></button>
           )}
         </div>
       )}
-      <span className="h-px flex-1 bg-gold/20" />
+      <span className="h-px flex-1 bg-[#C9A84C]/20" />
     </div>
   );
 }
@@ -2695,10 +2693,10 @@ function DossierEtiquetteSectionHeader({ label, dossierIds, canEdit, onRenamed, 
 // =============================================
 
 const TYPE_META: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  pdf:   { label: "PDF",   color: "text-red-600 bg-red-50",     icon: <FileText className="h-4 w-4" /> },
-  video: { label: "Vidéo", color: "text-blue-600 bg-blue-50",   icon: <Video className="h-4 w-4" /> },
+  pdf:   { label: "PDF",   color: "text-red-400 bg-red-500/10",     icon: <FileText className="h-4 w-4" /> },
+  video: { label: "Vidéo", color: "text-[#4fabdb] bg-[#4fabdb]/10",   icon: <Video className="h-4 w-4" /> },
   vimeo: { label: "Vimeo", color: "text-cyan-600 bg-cyan-50",   icon: <FileVideo className="h-4 w-4" /> },
-  lien:  { label: "Lien",  color: "text-green-600 bg-green-50", icon: <LinkIcon className="h-4 w-4" /> },
+  lien:  { label: "Lien",  color: "text-green-400 bg-green-500/10", icon: <LinkIcon className="h-4 w-4" /> },
 };
 
 function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ressource; onEdit?: () => void; onDelete?: () => void }) {
@@ -2707,25 +2705,25 @@ function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ress
   const meta = TYPE_META[ressource.type] ?? TYPE_META.lien;
 
   return (
-    <div ref={setNodeRef} style={style} className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition hover:border-gray-200 hover:shadow">
+    <div ref={setNodeRef} style={style} className="group flex items-center gap-3 rounded-xl border border-white/8 bg-[#12314d] p-3 shadow-sm transition hover:border-white/10 hover:shadow">
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/25 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
       <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${meta.color}`}>{meta.icon}</span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-gray-800">{ressource.titre}</p>
+        <p className="truncate text-sm font-semibold text-white/90">{ressource.titre}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${meta.color}`}>{meta.label}</span>
-          {ressource.sous_titre && <span className="text-xs text-gray-400 truncate">{ressource.sous_titre}</span>}
-          {!ressource.visible && <span className="text-xs text-gray-400">Masqué</span>}
+          {ressource.sous_titre && <span className="text-xs text-white/40 truncate">{ressource.sous_titre}</span>}
+          {!ressource.visible && <span className="text-xs text-white/40">Masqué</span>}
         </div>
       </div>
       {(onEdit || onDelete) && (
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/40 hover:bg-[#4fabdb]/15 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/40 hover:bg-red-500/100/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
         </div>
       )}
     </div>
@@ -2827,8 +2825,8 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleFileDrop}
-      className={`group flex items-center gap-3 rounded-xl border bg-white p-2.5 shadow-sm transition ${
-        selected ? "border-gold/40 bg-gold/5 ring-1 ring-gold/20" : dragOver ? "border-blue-400 bg-blue-50 ring-2 ring-blue-200" : "border-gray-100 hover:border-gray-200 hover:shadow"
+      className={`group flex items-center gap-3 rounded-xl border p-2.5 transition ${
+        selected ? "border-[#C9A84C]/40 bg-[#C9A84C]/8 ring-1 ring-[#C9A84C]/20" : dragOver ? "border-[#4fabdb]/40 bg-[#4fabdb]/10 ring-2 ring-[#4fabdb]/20" : "border-white/8 hover:border-white/15 hover:bg-white/5"
       }`}
     >
       {onToggleSelect && (
@@ -2836,11 +2834,11 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           type="checkbox"
           checked={!!selected}
           onChange={onToggleSelect}
-          className="h-3.5 w-3.5 flex-shrink-0 rounded border-gray-300 text-gold accent-gold cursor-pointer"
+          className="h-3.5 w-3.5 flex-shrink-0 rounded border-white/20 cursor-pointer accent-[#C9A84C]"
         />
       )}
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
@@ -2851,7 +2849,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           onChange={(e) => setEditName(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditName(cours.name); } }}
-          className="min-w-0 flex-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-sm font-semibold text-gray-800 outline-none ring-2 ring-blue-200"
+          className="min-w-0 flex-1 rounded-md border border-[#C9A84C]/40 bg-white/5 px-2 py-1 text-sm font-semibold text-white outline-none ring-2 ring-[#C9A84C]/20"
           autoFocus
         />
       ) : (
@@ -2861,44 +2859,42 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
             onClick={onSelect}
             className="min-w-0 flex-1 text-left flex items-center gap-2"
           >
-            <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
+            <p className="truncate text-sm font-semibold text-white/90">{cours.name}</p>
             {cours.etiquettes?.map((tag) => (
-              <span key={tag} className="flex-shrink-0 rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">{tag}</span>
+              <span key={tag} className="flex-shrink-0 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-medium text-[#C9A84C]">{tag}</span>
             ))}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
-            className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-blue-50 hover:text-blue-600 transition"
+            className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium text-white/30 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-[#4fabdb] transition"
           >
             Renommer
           </button>
         </div>
       )}
 
-      {/* Actualisation badge */}
       {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
-        <span className="flex-shrink-0 rounded-md bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-600">⏳ Non actualisé</span>
+        <span className="flex-shrink-0 rounded-md bg-orange-500/100/15 border border-orange-500/20 px-2 py-0.5 text-[10px] font-semibold text-orange-400">⏳ Non actualisé</span>
       )}
       {cours.actualisation === "aucun_changement" && (
-        <span className="flex-shrink-0 rounded-md bg-gray-50 border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-500">= Aucun changement</span>
+        <span className="flex-shrink-0 rounded-md bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/40">= Aucun changement</span>
       )}
       {cours.actualisation === "actualisation" && (
-        <span className="flex-shrink-0 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-600">↑ Actualisation</span>
+        <span className="flex-shrink-0 rounded-md bg-[#4fabdb]/15 border border-[#4fabdb]/20 px-2 py-0.5 text-[10px] font-semibold text-[#4fabdb]">↑ Actualisation</span>
       )}
       {cours.actualisation === "changements_notables" && (
-        <span className="flex-shrink-0 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-600">⚠ Changements notables</span>
+        <span className="flex-shrink-0 rounded-md bg-amber-500/100/15 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-400">⚠ Changements notables</span>
       )}
       {cours.actualisation === "nouvelle_fiche" && (
-        <span className="flex-shrink-0 rounded-md bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] font-semibold text-green-600">★ Nouvelle fiche</span>
+        <span className="flex-shrink-0 rounded-md bg-green-500/100/15 border border-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-400">★ Nouvelle fiche</span>
       )}
 
-      {/* Visibility indicator */}
       {cours.visible ? (
-        <span className="flex items-center rounded-md bg-green-50 px-1.5 py-0.5 text-green-500" title="Visible pour les élèves">
+        <span className="flex items-center rounded-md bg-green-500/100/15 px-1.5 py-0.5 text-green-400" title="Visible pour les élèves">
           <Eye className="h-3 w-3" />
         </span>
       ) : (
-        <span className="flex items-center rounded-md bg-red-50 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
+        <span className="flex items-center rounded-md bg-red-500/100/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
           <EyeOff className="h-3 w-3" />
         </span>
       )}
@@ -2906,11 +2902,11 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       {/* PDF status / upload */}
       <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }} />
       {uploading ? (
-        <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-blue-500" />
+        <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-[#4fabdb]" />
       ) : hasPdf ? (
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600 hover:bg-green-100 transition"
+          className="flex items-center gap-1 rounded-md bg-green-500/100/15 px-2 py-0.5 text-xs font-medium text-green-400 hover:bg-green-500/100/25 transition"
           title="Remplacer le PDF"
         >
           <Check className="h-3 w-3" /> PDF
@@ -2918,7 +2914,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       ) : (
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600 hover:bg-orange-100 transition"
+          className="flex items-center gap-1 rounded-md bg-orange-500/100/15 px-2 py-0.5 text-xs font-medium text-orange-400 hover:bg-orange-500/100/25 transition"
         >
           <Upload className="h-3 w-3" /> PDF
         </button>
@@ -2928,23 +2924,23 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
           {onMoveToSection && availableSections && availableSections.length > 0 && (
             <div className="relative" ref={sectionMenuRef}>
-              <button onClick={() => setShowSectionMenu(!showSectionMenu)} title="Déplacer dans une section" className="rounded-lg p-1.5 text-gray-400 hover:bg-gold/10 hover:text-gold-dark"><Layers className="h-4 w-4" /></button>
+              <button onClick={() => setShowSectionMenu(!showSectionMenu)} title="Déplacer dans une section" className="rounded-lg p-1.5 text-white/25 hover:bg-[#C9A84C]/15 hover:text-[#C9A84C]"><Layers className="h-4 w-4" /></button>
               {showSectionMenu && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-white/15 py-1 shadow-lg" style={{ backgroundColor: "#12314d" }}>
                   {availableSections.map((s) => (
                     <button
                       key={s}
                       onClick={() => { onMoveToSection(s); setShowSectionMenu(false); }}
-                      className={`w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 transition ${cours.etiquettes?.[0] === s ? "font-bold text-gold-dark" : "text-gray-700"}`}
+                      className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/5 transition ${cours.etiquettes?.[0] === s ? "font-bold text-[#C9A84C]" : "text-white/70"}`}
                     >{s}{cours.etiquettes?.[0] === s ? " ✓" : ""}</button>
                   ))}
                 </div>
               )}
             </div>
           )}
-          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-50 hover:text-purple-600"><Link2 className="h-4 w-4" /></button>}
-          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
+          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-white/25 hover:bg-purple-500/100/15 hover:text-purple-400"><Link2 className="h-4 w-4" /></button>}
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/100/150/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
         </div>
       )}
     </div>
@@ -3049,7 +3045,7 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500/100/150 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
               <Trash2 className="h-3 w-3" />
             </button>
           )}
@@ -3069,15 +3065,15 @@ function EmptyDossier({ onAdd, cloneSource, onClone }: {
   onClone?: (source: Dossier) => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
-      <Plus className="mb-3 h-10 w-10 text-gray-200" />
-      <p className="text-sm font-medium text-gray-400">Dossier vide</p>
-      <p className="mt-1 text-xs text-gray-300">{onAdd ? "Ajoutez des sous-dossiers ou du contenu" : "Aucun contenu disponible"}</p>
+    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-white/10 py-16 text-center">
+      <Plus className="mb-3 h-10 w-10 text-white/20" />
+      <p className="text-sm font-medium text-white/40">Dossier vide</p>
+      <p className="mt-1 text-xs text-white/25">{onAdd ? "Ajoutez des sous-dossiers ou du contenu" : "Aucun contenu disponible"}</p>
       <div className="mt-4 flex flex-col items-center gap-2">
         {onAdd && (
           <button
             onClick={onAdd}
-            className="flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy-light transition-colors"
+            className="flex items-center gap-1.5 rounded-lg bg-[#12314d] px-4 py-2 text-xs font-medium text-white hover:bg-[#12314d]-light transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Ajouter
@@ -3086,7 +3082,7 @@ function EmptyDossier({ onAdd, cloneSource, onClone }: {
         {cloneSource && onClone && (
           <button
             onClick={() => onClone(cloneSource.sourceDossier)}
-            className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-4 py-2 text-xs font-semibold text-gold-dark hover:bg-gold/10 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/8 px-4 py-2 text-xs font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/15 transition-colors"
           >
             <Link2 className="h-3.5 w-3.5" />
             Importer depuis {cloneSource.offerLabel}
@@ -3220,7 +3216,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
       })}
       isPending={isPending}
     >
-      <div className="rounded-xl bg-navy/5 px-3 py-2 text-xs text-navy/70">
+      <div className="rounded-xl bg-[#12314d]/5 px-3 py-2 text-xs text-[#4fabdb]/70">
         {selectedParent
           ? `Niveau parent: ${DOSSIER_TYPE_META[selectedParent.dossier_type]?.label ?? "Dossier"}`
           : "Racine métier de la plateforme"}
@@ -3296,8 +3292,8 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
       )}
 
       {nameSuggestions.length > 0 && (
-        <div className="rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gold-dark/80">
+        <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/8 px-3 py-2">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#C9A84C]/80">
             Suggestions de noms
           </p>
           <div className="flex flex-wrap gap-2">
@@ -3306,7 +3302,7 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
                 key={suggestion}
                 type="button"
                 onClick={() => setName(suggestion)}
-                className="rounded-full border border-gold/20 bg-white px-3 py-1 text-xs font-medium text-navy transition hover:border-gold/40 hover:bg-gold/10"
+                className="rounded-full border border-[#C9A84C]/20 bg-[#12314d] px-3 py-1 text-xs font-medium text-[#4fabdb] transition hover:border-[#C9A84C]/40 hover:bg-[#C9A84C]/15"
               >
                 {suggestion}
               </button>
@@ -3378,14 +3374,14 @@ function RessourceForm({ title, dossierId, defaultType = "pdf", initialData, onS
 
       {/* Type selector */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-gray-700">Type</label>
+        <label className="mb-1.5 block text-xs font-medium text-white/80">Type</label>
         <div className="grid grid-cols-4 gap-2">
           {(["pdf", "video", "vimeo", "lien"] as const).map((t) => {
             const m = TYPE_META[t];
             return (
               <button key={t} type="button" onClick={() => setType(t)}
-                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-medium transition ${type === t ? "border-navy bg-navy/5 text-navy" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}>
-                <span className={type === t ? "text-navy" : m.color.split(" ")[0]}>{m.icon}</span>
+                className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-medium transition ${type === t ? "border-[#4fabdb] bg-[#12314d]/5 text-[#4fabdb]" : "border-white/10 text-white/50 hover:border-white/15"}`}>
+                <span className={type === t ? "text-[#4fabdb]" : m.color.split(" ")[0]}>{m.icon}</span>
                 {m.label}
               </button>
             );
@@ -3395,15 +3391,15 @@ function RessourceForm({ title, dossierId, defaultType = "pdf", initialData, onS
 
       {type === "pdf" && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-700">Fichier PDF</label>
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-gray-200 p-3 transition hover:border-navy/30 hover:bg-gray-50">
-            <Upload className="h-4 w-4 text-gray-400" />
-            <span className="flex-1 text-sm text-gray-600">{uploadProgress || (pdfUrl ? "PDF chargé" : "Cliquer pour uploader")}</span>
+          <label className="mb-1.5 block text-xs font-medium text-white/80">Fichier PDF</label>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-white/10 p-3 transition hover:border-[#4fabdb]/30 hover:bg-white/5">
+            <Upload className="h-4 w-4 text-white/40" />
+            <span className="flex-1 text-sm text-white/60">{uploadProgress || (pdfUrl ? "PDF chargé" : "Cliquer pour uploader")}</span>
             <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={uploading} />
           </label>
-          {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-blue-600 underline">Voir le PDF</a>}
+          {pdfUrl && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-[#4fabdb] underline">Voir le PDF</a>}
           <div className="mt-2">
-            <label className="mb-1 block text-xs text-gray-500">Ou URL directe</label>
+            <label className="mb-1 block text-xs text-white/50">Ou URL directe</label>
             <input value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} placeholder="https://..." className={inputCls} />
           </div>
         </div>
@@ -3502,13 +3498,13 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
         )}
       </FormField>
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-gray-700">Fiche PDF <span className="text-gray-400 font-normal">(optionnel)</span></label>
-        <label className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed p-3 transition ${uploading ? "border-indigo-200 bg-indigo-50/40 cursor-wait" : "border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30"}`}>
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin text-indigo-500" /> : <Upload className="h-4 w-4 text-gray-400" />}
-          <span className="flex-1 text-sm text-gray-600">{uploadProgress || (pdfUrl ? "PDF chargé" : "Uploader la fiche de cours")}</span>
+        <label className="mb-1.5 block text-xs font-medium text-white/80">Fiche PDF <span className="text-white/40 font-normal">(optionnel)</span></label>
+        <label className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed p-3 transition ${uploading ? "border-indigo-200 bg-indigo-50/40 cursor-wait" : "border-white/10 hover:border-indigo-300 hover:bg-indigo-50/30"}`}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin text-indigo-500" /> : <Upload className="h-4 w-4 text-white/40" />}
+          <span className="flex-1 text-sm text-white/60">{uploadProgress || (pdfUrl ? "PDF chargé" : "Uploader la fiche de cours")}</span>
           <input type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={uploading} />
         </label>
-        {pdfUrl && !uploading && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-blue-600 underline">Voir le PDF</a>}
+        {pdfUrl && !uploading && <a href={pdfUrl} target="_blank" rel="noreferrer" className="mt-1 text-xs text-[#4fabdb] underline">Voir le PDF</a>}
       </div>
 
       {/* Actualisation (only for PREPA formations) */}
@@ -3516,18 +3512,18 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
         <FormField label="Actualisation">
           <div className="grid grid-cols-2 gap-1.5">
             {([
-              ["non_actualisee", "Pas encore actualisée", "text-orange-600 bg-orange-50 border-orange-200"],
-              ["aucun_changement", "Aucun changement", "text-gray-600 bg-gray-50 border-gray-200"],
-              ["actualisation", "Actualisation", "text-blue-600 bg-blue-50 border-blue-200"],
-              ["changements_notables", "Changements notables", "text-amber-600 bg-amber-50 border-amber-200"],
-              ["nouvelle_fiche", "Nouvelle fiche", "text-green-600 bg-green-50 border-green-200"],
+              ["non_actualisee", "Pas encore actualisée", "text-orange-400 bg-orange-500/10 border-orange-500/20"],
+              ["aucun_changement", "Aucun changement", "text-white/60 bg-white/5 border-white/10"],
+              ["actualisation", "Actualisation", "text-[#4fabdb] bg-[#4fabdb]/10 border-[#4fabdb]/20"],
+              ["changements_notables", "Changements notables", "text-amber-400 bg-amber-500/10 border-amber-500/20"],
+              ["nouvelle_fiche", "Nouvelle fiche", "text-green-400 bg-green-500/10 border-green-500/20"],
             ] as const).map(([val, label, colors]) => (
               <button
                 key={val}
                 type="button"
                 onClick={() => setActualisation(val)}
                 className={`rounded-lg border px-2.5 py-2 text-[11px] font-semibold transition ${
-                  actualisation === val ? colors + " ring-1 ring-current/20" : "border-gray-100 text-gray-400 hover:border-gray-200 hover:text-gray-500"
+                  actualisation === val ? colors + " ring-1 ring-current/20" : "border-white/8 text-white/40 hover:border-white/10 hover:text-white/50"
                 }`}
               >{label}</button>
             ))}
@@ -3540,7 +3536,7 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
         <button
           type="button"
           onClick={onSwitchToBulk}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-200 bg-orange-50/50 py-2.5 text-xs font-medium text-orange-600 transition hover:bg-orange-100"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-500/20 bg-orange-500/10/50 py-2.5 text-xs font-medium text-orange-400 transition hover:bg-orange-100"
         >
           <ImagePlus className="h-4 w-4" /> Importer plusieurs cours par screenshot
         </button>
@@ -3549,17 +3545,17 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
       {/* Visible */}
       <div
         className={`flex items-center justify-between rounded-xl border px-4 py-3 cursor-pointer transition ${
-          visible ? "border-green-200 bg-green-50/50" : "border-red-200 bg-red-50/50"
+          visible ? "border-green-500/20 bg-green-500/10/50" : "border-red-500/20 bg-red-500/10/50"
         }`}
         onClick={() => setVisible(!visible)}
       >
         <div className="flex items-center gap-2.5">
-          {visible ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-red-400" />}
-          <span className={`text-sm font-medium ${visible ? "text-green-700" : "text-red-500"}`}>
+          {visible ? <Eye className="h-4 w-4 text-green-400" /> : <EyeOff className="h-4 w-4 text-red-400" />}
+          <span className={`text-sm font-medium ${visible ? "text-green-400" : "text-red-500"}`}>
             {visible ? "Visible pour les étudiants" : "Masqué pour les étudiants"}
           </span>
         </div>
-        <div className={`h-5 w-9 rounded-full transition-colors ${visible ? "bg-green-500" : "bg-gray-300"}`}>
+        <div className={`h-5 w-9 rounded-full transition-colors ${visible ? "bg-green-500/100" : "bg-white/25"}`}>
           <div className={`h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-4" : "translate-x-0.5"}`} />
         </div>
       </div>
@@ -3606,26 +3602,26 @@ function LinkedCoursIndicator({ cours }: { cours: Cours }) {
     <div className="relative inline-flex" ref={ref}>
       <button
         onClick={handleClick}
-        className="flex-shrink-0 rounded-full bg-blue-50 p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-600 transition"
+        className="flex-shrink-0 rounded-full bg-[#4fabdb]/10 p-0.5 text-blue-400 hover:bg-[#4fabdb]/15 hover:text-[#4fabdb] transition"
         title="Cours lié — cliquer pour voir les détails"
       >
         <Link2 className="h-3 w-3" />
       </button>
       {show && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
-          <p className="text-xs font-semibold text-gray-800 mb-1.5">🔗 Cours lié</p>
+        <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-white/10 bg-[#12314d] p-3 shadow-lg">
+          <p className="text-xs font-semibold text-white/90 mb-1.5">🔗 Cours lié</p>
           {linkedOffers === null ? (
-            <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+            <Loader2 className="h-3 w-3 animate-spin text-white/40" />
           ) : linkedOffers.length > 0 ? (
             <div className="space-y-1">
-              <p className="text-[11px] text-gray-500">Également présent dans :</p>
+              <p className="text-[11px] text-white/50">Également présent dans :</p>
               {linkedOffers.map((offer) => (
-                <p key={offer} className="text-[11px] font-medium text-blue-700">• {offer}</p>
+                <p key={offer} className="text-[11px] font-medium text-[#4fabdb]">• {offer}</p>
               ))}
-              <p className="text-[10px] text-gray-400 mt-2 pt-1.5 border-t border-gray-100">Les modifications se répercutent automatiquement.</p>
+              <p className="text-[10px] text-white/40 mt-2 pt-1.5 border-t border-white/8">Les modifications se répercutent automatiquement.</p>
             </div>
           ) : (
-            <p className="text-[11px] text-gray-400">Aucune autre offre liée</p>
+            <p className="text-[11px] text-white/40">Aucune autre offre liée</p>
           )}
         </div>
       )}
@@ -3663,19 +3659,19 @@ function MoveDossiersModal({ dossierIds, allDossiers, isPending, onMove, onClose
       <div key={node.id}>
         <div
           className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition ${
-            isSelected ? "bg-blue-100 ring-1 ring-blue-300" : "hover:bg-gray-50"
+            isSelected ? "bg-[#4fabdb]/15 ring-1 ring-blue-300" : "hover:bg-white/5"
           }`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => setSelectedTarget(node.id)}
         >
           {hasChildren ? (
-            <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedIds((prev) => { const n = new Set(prev); n.has(node.id) ? n.delete(node.id) : n.add(node.id); return n; }); }} className="flex-shrink-0 rounded p-0.5 hover:bg-gray-200">
-              {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
+            <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedIds((prev) => { const n = new Set(prev); n.has(node.id) ? n.delete(node.id) : n.add(node.id); return n; }); }} className="flex-shrink-0 rounded p-0.5 hover:bg-white/15">
+              {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronRight className="h-3.5 w-3.5 text-white/40" />}
             </button>
           ) : <span className="w-[18px] flex-shrink-0" />}
-          <Folder className="h-4 w-4 flex-shrink-0 text-gray-400" />
+          <Folder className="h-4 w-4 flex-shrink-0 text-white/40" />
           <span className="flex-1 truncate">{node.name}</span>
-          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{meta?.shortLabel ?? node.dossier_type}</span>
+          <span className="flex-shrink-0 rounded-full bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-white/50">{meta?.shortLabel ?? node.dossier_type}</span>
         </div>
         {hasChildren && isExpanded && node.children.map((child) => renderNode(child, depth + 1))}
       </div>
@@ -3685,26 +3681,26 @@ function MoveDossiersModal({ dossierIds, allDossiers, isPending, onMove, onClose
   const pathLabel = selectedTarget ? getDossierPathLabel(selectedTarget, allDossiers) : null;
 
   return (
-    <div className="rounded-2xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-            <FolderOpen className="h-4 w-4 text-blue-600" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#4fabdb]/15">
+            <FolderOpen className="h-4 w-4 text-[#4fabdb]" />
           </div>
           <h3 className="text-sm font-semibold text-gray-900">Déplacer {dossierIds.length} dossier{dossierIds.length > 1 ? "s" : ""}</h3>
         </div>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8"><X className="h-4 w-4 text-white/50" /></button>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-3" style={{ maxHeight: "50vh" }}>
         {tree.map((node) => renderNode(node, 0))}
       </div>
       {pathLabel && (
-        <div className="border-t border-gray-100 px-5 py-2">
-          <p className="text-xs text-gray-500">Destination : <span className="font-medium text-blue-700">{pathLabel}</span></p>
+        <div className="border-t border-white/8 px-5 py-2">
+          <p className="text-xs text-white/50">Destination : <span className="font-medium text-[#4fabdb]">{pathLabel}</span></p>
         </div>
       )}
-      <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
-        <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+      <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
+        <button onClick={onClose} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Annuler</button>
         <button
           onClick={() => selectedTarget && onMove(selectedTarget)}
           disabled={!selectedTarget || isPending}
@@ -3722,7 +3718,7 @@ function AddCoursInlineButton({ label, onClick }: { label: string; onClick: () =
   return (
     <button
       onClick={onClick}
-      className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-200 py-2 text-xs font-medium text-gray-400 transition hover:border-gold/30 hover:bg-gold/5 hover:text-gold-dark"
+      className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/10 py-2 text-xs font-medium text-white/40 transition hover:border-[#C9A84C]/30 hover:bg-[#C9A84C]/10 hover:text-[#C9A84C]"
     >
       <Plus className="h-3.5 w-3.5" />
       {label}
@@ -3748,7 +3744,7 @@ function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
     <div className="mt-3">
       {open ? (
         <div className="flex items-center gap-2">
-          <div className="h-[2px] flex-1 bg-navy/10" />
+          <div className="h-[2px] flex-1 bg-[#12314d]/10" />
           <input
             ref={inputRef}
             value={name}
@@ -3756,24 +3752,24 @@ function AddCategoryButton({ onAdd }: { onAdd: (name: string) => void }) {
             onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") { setOpen(false); setName(""); } }}
             onBlur={() => { setTimeout(() => { if (!name.trim()) setOpen(false); }, 200); }}
             placeholder="Nom de la catégorie..."
-            className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-gold-dark outline-none ring-2 ring-gold/20 w-44 text-center"
+            className="rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/8 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#C9A84C] outline-none ring-2 ring-[#C9A84C]/20 w-44 text-center"
             autoFocus
           />
-          <button onClick={submit} className="rounded-lg bg-navy px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-navy/90 transition">OK</button>
-          <button onClick={() => { setOpen(false); setName(""); }} className="text-[10px] text-gray-400 hover:text-gray-600">Annuler</button>
-          <div className="h-[2px] flex-1 bg-navy/10" />
+          <button onClick={submit} className="rounded-lg bg-[#12314d] px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-[#12314d]/90 transition">OK</button>
+          <button onClick={() => { setOpen(false); setName(""); }} className="text-[10px] text-white/40 hover:text-white/60">Annuler</button>
+          <div className="h-[2px] flex-1 bg-[#12314d]/10" />
         </div>
       ) : (
         <button
           onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
           className="flex w-full items-center gap-2 group"
         >
-          <div className="h-px flex-1 bg-navy/5 group-hover:bg-navy/10 transition" />
-          <span className="flex items-center gap-1.5 rounded-lg border border-dashed border-navy/15 px-3 py-1 text-[10px] font-semibold text-navy/30 transition group-hover:border-gold/30 group-hover:bg-gold/5 group-hover:text-gold-dark">
+          <div className="h-px flex-1 bg-[#12314d]/5 group-hover:bg-[#12314d]/10 transition" />
+          <span className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#4fabdb]/15 px-3 py-1 text-[10px] font-semibold text-[#4fabdb]/30 transition group-hover:border-[#C9A84C]/30 group-hover:bg-[#C9A84C]/10 group-hover:text-[#C9A84C]">
             <Plus className="h-3 w-3" />
             Ajouter une catégorie
           </span>
-          <div className="h-px flex-1 bg-navy/5 group-hover:bg-navy/10 transition" />
+          <div className="h-px flex-1 bg-[#12314d]/5 group-hover:bg-[#12314d]/10 transition" />
         </button>
       )}
     </div>
@@ -3822,7 +3818,7 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
   return (
     <div className="mt-5 mb-2 first:mt-0 group/section">
       <div className="flex items-center gap-3">
-        <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-navy/15 to-navy/15" />
+        <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-white/10" />
         {editing ? (
           <input
             ref={inputRef}
@@ -3830,14 +3826,14 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={commitRename}
             onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditValue(label); } }}
-            className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-gold-dark outline-none ring-2 ring-gold/20 w-40 text-center"
+            className="rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/8 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#C9A84C] outline-none ring-2 ring-[#C9A84C]/20 w-40 text-center"
             autoFocus
           />
         ) : label ? (
           <div className="relative flex items-center gap-1">
             <button
               onClick={canEdit ? () => { setEditing(true); setTimeout(() => inputRef.current?.select(), 0); } : undefined}
-              className={`rounded-lg px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${canEdit ? "cursor-pointer hover:bg-gold/15" : ""}`}
+              className={`rounded-lg px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${canEdit ? "cursor-pointer hover:bg-[#C9A84C]/15" : ""}`}
               style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.15) 100%)", color: "#8B7030", border: "1px solid rgba(201,168,76,0.2)" }}
             >
               {saving ? "..." : label}
@@ -3846,33 +3842,33 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
             {canEdit && (onMoveUp || onMoveDown || onDeleteSection) && (
               <div className="relative flex items-center gap-0.5" ref={menuRef}>
                 {onMoveUp && (
-                  <button onClick={onMoveUp} className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-blue-50 hover:text-blue-500 transition" title="Monter">
+                  <button onClick={onMoveUp} className="rounded-md p-1 text-[#4fabdb]/20 opacity-0 group-hover/section:opacity-100 hover:bg-[#4fabdb]/15 hover:text-blue-500 transition" title="Monter">
                     <ChevronUp className="h-3 w-3" />
                   </button>
                 )}
                 {onMoveDown && (
-                  <button onClick={onMoveDown} className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-blue-50 hover:text-blue-500 transition" title="Descendre">
+                  <button onClick={onMoveDown} className="rounded-md p-1 text-[#4fabdb]/20 opacity-0 group-hover/section:opacity-100 hover:bg-[#4fabdb]/15 hover:text-blue-500 transition" title="Descendre">
                     <ChevronDown className="h-3 w-3" />
                   </button>
                 )}
                 {onDeleteSection && <button
                   onClick={() => setShowDeleteMenu(!showDeleteMenu)}
-                  className="rounded-md p-1 text-navy/20 opacity-0 group-hover/section:opacity-100 hover:bg-red-50 hover:text-red-500 transition"
+                  className="rounded-md p-1 text-[#4fabdb]/20 opacity-0 group-hover/section:opacity-100 hover:bg-red-500/100/15 hover:text-red-400 transition"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>}
                 {showDeleteMenu && onDeleteSection && (
-                  <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                  <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-xl border border-white/10 bg-[#12314d] py-1 shadow-lg">
                     <button
                       onClick={() => { setShowDeleteMenu(false); onDeleteSection("remove_tag"); }}
-                      className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 transition"
+                      className="w-full px-3 py-2 text-left text-xs text-white/80 hover:bg-white/5 transition"
                     >
                       <span className="font-semibold">Retirer l'étiquette</span>
-                      <span className="block text-[10px] text-gray-400">Les cours restent, sans catégorie</span>
+                      <span className="block text-[10px] text-white/40">Les cours restent, sans catégorie</span>
                     </button>
                     <button
                       onClick={() => { setShowDeleteMenu(false); onDeleteSection("delete_cours"); }}
-                      className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 transition"
+                      className="w-full px-3 py-2 text-left text-xs text-red-400 hover:bg-red-500/100/15 transition"
                     >
                       <span className="font-semibold">Supprimer les {coursIds.length} cours</span>
                       <span className="block text-[10px] text-red-400">Suppression définitive</span>
@@ -3883,9 +3879,9 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
             )}
           </div>
         ) : (
-          <span className="px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-navy/30">Autres</span>
+          <span className="px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-[#4fabdb]/30">Autres</span>
         )}
-        <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent via-navy/15 to-navy/15" />
+        <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent via-white/10 to-white/10" />
       </div>
     </div>
   );
@@ -3920,24 +3916,24 @@ function IconPicker({ value, onChange }: { value: string; onChange: (url: string
 
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-gray-700">Icône</label>
+      <label className="mb-1.5 block text-xs font-medium text-white/80">Icône</label>
       {value && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
           <img src={value} alt="" className="h-5 w-5 object-contain" />
-          <span className="flex-1 text-xs text-gray-500">Icône sélectionnée</span>
+          <span className="flex-1 text-xs text-white/50">Icône sélectionnée</span>
           <button type="button" onClick={() => onChange("")} className="text-xs text-red-500 hover:text-red-700">Retirer</button>
         </div>
       )}
       <div className="flex gap-2">
         <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="Ex: biology, law, book..." className={inputCls} />
-        <button type="button" onClick={search} disabled={loading} className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-50 whitespace-nowrap">
+        <button type="button" onClick={search} disabled={loading} className="flex items-center gap-1.5 rounded-lg bg-white/8 px-3 py-2 text-xs font-medium text-white/60 hover:bg-white/15 disabled:opacity-50 whitespace-nowrap">
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
           Chercher
         </button>
       </div>
-      {searched && !loading && icons.length === 0 && <p className="mt-1.5 text-xs text-gray-400">Aucun résultat.</p>}
+      {searched && !loading && icons.length === 0 && <p className="mt-1.5 text-xs text-white/40">Aucun résultat.</p>}
       {icons.length > 0 && (
-        <div className="mt-2 grid grid-cols-8 gap-1 max-h-32 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+        <div className="mt-2 grid grid-cols-8 gap-1 max-h-32 overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-2">
           {icons.map((id) => {
             const url = getUrl(id);
             return (
@@ -4002,25 +3998,25 @@ function GlobalSettingsPanel({ allDossiers, onSaved, onClose }: {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+      <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100">
-            <Settings className="h-5 w-5 text-purple-600" />
+            <Settings className="h-5 w-5 text-purple-400" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-navy">Paramétrage</h2>
-            <p className="text-xs text-gray-500">Règles de liaison par université et formation</p>
+            <h2 className="text-base font-bold text-[#4fabdb]">Paramétrage</h2>
+            <p className="text-xs text-white/50">Règles de liaison par université et formation</p>
           </div>
         </div>
-        <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">
+        <button onClick={onClose} className="rounded-lg p-2 text-white/40 hover:bg-white/8 hover:text-white/60 transition">
           <X className="h-5 w-5" />
         </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: University list */}
-        <div className="w-64 flex-shrink-0 border-r border-gray-100 overflow-y-auto bg-gray-50/50 p-3">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-400 px-2">Universités</p>
+        <div className="w-64 flex-shrink-0 border-r border-white/8 overflow-y-auto bg-white/5/50 p-3">
+          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-white/40 px-2">Universités</p>
           <div className="space-y-1">
             {uniByName.map(([name, unis]) => (
               <button
@@ -4029,16 +4025,16 @@ function GlobalSettingsPanel({ allDossiers, onSaved, onClose }: {
                 className={`w-full rounded-lg px-3 py-2.5 text-left transition ${
                   selectedUniId && unis.some((u) => u.id === selectedUniId)
                     ? "bg-purple-100 text-purple-800 ring-1 ring-purple-200"
-                    : "text-gray-700 hover:bg-gray-100"
+                    : "text-white/80 hover:bg-white/8"
                 }`}
               >
                 <p className="text-sm font-semibold truncate">{name}</p>
-                <p className="text-[10px] text-gray-400 truncate">{unis.map((u) => getOfferName(u)).filter(Boolean).join(", ")}</p>
+                <p className="text-[10px] text-white/40 truncate">{unis.map((u) => getOfferName(u)).filter(Boolean).join(", ")}</p>
               </button>
             ))}
           </div>
           {universities.length === 0 && (
-            <p className="px-2 py-6 text-center text-xs text-gray-400">
+            <p className="px-2 py-6 text-center text-xs text-white/40">
               Aucune université trouvée
             </p>
           )}
@@ -4053,7 +4049,7 @@ function GlobalSettingsPanel({ allDossiers, onSaved, onClose }: {
               onSaved={onSaved}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-sm text-gray-400">
+            <div className="flex items-center justify-center h-full text-sm text-white/40">
               Sélectionnez une université
             </div>
           )}
@@ -4165,7 +4161,7 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        <Loader2 className="h-5 w-5 animate-spin text-white/40" />
       </div>
     );
   }
@@ -4173,15 +4169,15 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
   return (
     <div className="max-w-xl mx-auto">
       <div className="mb-6">
-        <h3 className="text-lg font-bold text-navy">Paramétrage — {university.name}</h3>
-        <p className="mt-1 text-sm text-gray-500">
+        <h3 className="text-lg font-bold text-[#4fabdb]">Paramétrage — {university.name}</h3>
+        <p className="mt-1 text-sm text-white/50">
           Configurez les sections de cours et leurs règles de liaison entre offres.
         </p>
       </div>
 
       {/* Offres rattachées */}
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
-        <h4 className="text-sm font-bold text-gray-800 mb-3">Offres rattachées</h4>
+      <div className="mb-6 rounded-xl border border-white/10 bg-[#12314d] p-4">
+        <h4 className="text-sm font-bold text-white/90 mb-3">Offres rattachées</h4>
         <div className="space-y-1.5">
           {allOffers.map((offer) => {
             const isAttached = offersWithThisUni.some((o) => o.offerId === offer.id);
@@ -4193,12 +4189,12 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
                   checked={isAttached}
                   disabled={isToggling}
                   onChange={() => handleToggleOfferForUni(offer)}
-                  className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 accent-purple-600"
+                  className="h-3.5 w-3.5 rounded border-white/15 text-purple-400 accent-purple-600"
                 />
-                <span className={`text-sm ${isAttached ? "text-gray-800 font-medium" : "text-gray-500"}`}>
+                <span className={`text-sm ${isAttached ? "text-white/90 font-medium" : "text-white/50"}`}>
                   {offer.name}
                 </span>
-                {isToggling && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
+                {isToggling && <Loader2 className="h-3 w-3 animate-spin text-white/40" />}
               </label>
             );
           })}
@@ -4206,27 +4202,27 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
       </div>
 
       {availableOffers.length === 0 ? (
-        <div className="rounded-xl bg-gray-50 p-6 text-center text-sm text-gray-500">
+        <div className="rounded-xl bg-white/5 p-6 text-center text-sm text-white/50">
           Cette université n&apos;apparaît dans aucune offre.
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-xs font-medium text-gray-500">
+          <p className="text-xs font-medium text-white/50">
             Offres contenant &quot;{university.name}&quot; : {availableOffers.map((o) => o.label).join(", ")}
           </p>
 
           {sectionNames.map((section) => (
-            <div key={section} className="rounded-xl border border-gray-200 bg-white p-4">
+            <div key={section} className="rounded-xl border border-white/10 bg-[#12314d] p-4">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-gray-800">{section}</h4>
+                <h4 className="text-sm font-bold text-white/90">{section}</h4>
                 <button
                   onClick={() => removeSection(section)}
-                  className="rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 transition"
+                  className="rounded-lg p-1 text-white/40 hover:bg-red-500/100/15 hover:text-red-400 transition"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <p className="mb-2 text-[11px] text-gray-400">
+              <p className="mb-2 text-[11px] text-white/40">
                 Un cours &quot;{section}&quot; sera automatiquement lié dans :
               </p>
               <div className="space-y-1.5">
@@ -4236,14 +4232,14 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
                       type="checkbox"
                       checked={(linkRules.sections[section] ?? []).includes(offer.code)}
                       onChange={() => toggleOffer(section, offer.code)}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 accent-purple-600"
+                      className="h-3.5 w-3.5 rounded border-white/15 text-purple-400 accent-purple-600"
                     />
-                    <span className="text-sm text-gray-700">{offer.label}</span>
+                    <span className="text-sm text-white/80">{offer.label}</span>
                   </label>
                 ))}
               </div>
               {(linkRules.sections[section] ?? []).length === 0 && (
-                <p className="mt-2 text-[11px] text-gray-400 italic">
+                <p className="mt-2 text-[11px] text-white/40 italic">
                   Aucune offre cochée → cours local uniquement (pas de liaison)
                 </p>
               )}
@@ -4256,7 +4252,7 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
               onChange={(e) => setNewSectionName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addSection(); }}
               placeholder="Nouvelle section..."
-              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
+              className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-sm outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
             />
             <button
               onClick={addSection}
@@ -4270,7 +4266,7 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full rounded-lg bg-navy py-2.5 text-sm font-semibold text-white hover:bg-navy/90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full rounded-lg bg-[#12314d] py-2.5 text-sm font-semibold text-white hover:bg-[#12314d]/90 transition disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             Sauvegarder
@@ -4316,28 +4312,28 @@ function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames,
   const offerNames = [...offersWithThisUni].sort((a, b) => (OFFER_ORDER[a.offerName] ?? 99) - (OFFER_ORDER[b.offerName] ?? 99)).map((o) => o.offerName);
 
   if (loading) {
-    return <div className="mt-6 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-gray-400" /></div>;
+    return <div className="mt-6 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-white/40" /></div>;
   }
 
   if (subjects.length === 0) return null;
 
   return (
     <div className="mt-6">
-      <h4 className="text-sm font-bold text-gray-800 mb-3">Vue d&apos;ensemble des matières</h4>
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <h4 className="text-sm font-bold text-white/90 mb-3">Vue d&apos;ensemble des matières</h4>
+      <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-3 py-2.5 font-semibold text-gray-600 sticky left-0 bg-gray-50">Matière</th>
+            <tr className="bg-white/5 border-b border-white/10">
+              <th className="text-left px-3 py-2.5 font-semibold text-white/60 sticky left-0 bg-white/5">Matière</th>
               {offerNames.map((name) => (
-                <th key={name} className="text-center px-2 py-2.5 font-semibold text-gray-600 whitespace-nowrap">{name}</th>
+                <th key={name} className="text-center px-2 py-2.5 font-semibold text-white/60 whitespace-nowrap">{name}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {subjects.map(([subjectName, offerMap]) => (
-              <tr key={subjectName} className="border-b border-gray-100 hover:bg-gray-50/50">
-                <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 bg-white whitespace-nowrap">{subjectName}</td>
+              <tr key={subjectName} className="border-b border-white/8 hover:bg-white/5/50">
+                <td className="px-3 py-2 font-medium text-white/90 sticky left-0 bg-[#12314d] whitespace-nowrap">{subjectName}</td>
                 {offerNames.map((offerName) => {
                   const sections = offerMap.get(offerName) ?? [];
                   return (
@@ -4350,13 +4346,13 @@ function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames,
                               className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
                                 sections.includes(s)
                                   ? s === "Socle"
-                                    ? "bg-blue-100 text-blue-700"
+                                    ? "bg-[#4fabdb]/15 text-[#4fabdb]"
                                     : s === "Approfondissement"
                                       ? "bg-amber-100 text-amber-700"
                                       : s === "Perfectionnement"
                                         ? "bg-purple-100 text-purple-700"
-                                        : "bg-gray-100 text-gray-600"
-                                  : "bg-gray-50 text-gray-300"
+                                        : "bg-white/8 text-white/60"
+                                  : "bg-white/5 text-white/25"
                               }`}
                             >
                               {s.substring(0, 4).toUpperCase()}
@@ -4364,7 +4360,7 @@ function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames,
                           ))}
                         </div>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-white/25">—</span>
                       )}
                     </td>
                   );
@@ -4374,10 +4370,10 @@ function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames,
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[10px] text-gray-400">
+      <p className="mt-2 text-[10px] text-white/40">
         {sectionNames.map((s, i) => (
           <span key={s}>
-            <span className={`font-bold ${s === "Socle" ? "text-blue-600" : s === "Approfondissement" ? "text-amber-600" : s === "Perfectionnement" ? "text-purple-600" : "text-gray-500"}`}>
+            <span className={`font-bold ${s === "Socle" ? "text-[#4fabdb]" : s === "Approfondissement" ? "text-amber-400" : s === "Perfectionnement" ? "text-purple-400" : "text-white/50"}`}>
               {s.substring(0, 4).toUpperCase()}
             </span>
             {" = " + s}
@@ -4440,51 +4436,51 @@ function MissingCoursModal({
   }, [items]);
 
   return (
-    <div className="rounded-2xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
-            <Sparkles className="h-4 w-4 text-purple-600" />
+            <Sparkles className="h-4 w-4 text-purple-400" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Cours des autres offres</h3>
-            <p className="text-xs text-gray-500">Cours que vous n&apos;avez pas encore ici</p>
+            <p className="text-xs text-white/50">Cours que vous n&apos;avez pas encore ici</p>
           </div>
         </div>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
-          <X className="h-4 w-4 text-gray-500" />
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8">
+          <X className="h-4 w-4 text-white/50" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4" style={{ maxHeight: "55vh" }}>
         {loading ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <Loader2 className="h-5 w-5 animate-spin text-white/40" />
           </div>
         ) : items.length === 0 ? (
           <div className="py-8 text-center">
             <Check className="mx-auto h-8 w-8 text-green-400" />
-            <p className="mt-2 text-sm font-medium text-gray-700">Tout est synchronisé</p>
-            <p className="text-xs text-gray-400">
+            <p className="mt-2 text-sm font-medium text-white/80">Tout est synchronisé</p>
+            <p className="text-xs text-white/40">
               Tous les cours des autres offres sont déjà présents ici.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-gray-500">{items.length} cours manquant{items.length > 1 ? "s" : ""}</p>
+              <p className="text-xs font-medium text-white/50">{items.length} cours manquant{items.length > 1 ? "s" : ""}</p>
               <button
                 type="button"
                 onClick={toggleAll}
-                className="text-[10px] font-medium text-purple-600 hover:text-purple-800 underline"
+                className="text-[10px] font-medium text-purple-400 hover:text-purple-800 underline"
               >{checkedIds.size === items.length ? "Tout désélectionner" : "Tout sélectionner"}</button>
             </div>
             {grouped.map(([offerName, offerItems]) => (
               <div key={offerName}>
                 <div className="mb-2 flex items-center gap-2">
-                  <Layers className="h-3.5 w-3.5 text-navy/50" />
-                  <span className="text-xs font-bold text-navy/60">{offerName}</span>
-                  <span className="h-px flex-1 bg-gray-100" />
+                  <Layers className="h-3.5 w-3.5 text-[#4fabdb]/50" />
+                  <span className="text-xs font-bold text-[#4fabdb]/60">{offerName}</span>
+                  <span className="h-px flex-1 bg-white/8" />
                 </div>
                 <div className="space-y-1.5">
                   {offerItems.map((item) => (
@@ -4492,24 +4488,24 @@ function MissingCoursModal({
                       key={item.id}
                       className={`flex items-center gap-3 rounded-xl border p-2.5 transition cursor-pointer ${
                         checkedIds.has(item.id)
-                          ? "border-purple-300 bg-purple-50"
-                          : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
+                          ? "border-purple-300 bg-purple-500/10"
+                          : "border-white/8 hover:border-white/10 hover:bg-white/5"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={checkedIds.has(item.id)}
                         onChange={() => toggleCheck(item.id)}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-purple-600 accent-purple-600"
+                        className="h-3.5 w-3.5 rounded border-white/15 text-purple-400 accent-purple-600"
                       />
-                      <span className="flex-1 truncate text-sm text-gray-800">{item.name}</span>
+                      <span className="flex-1 truncate text-sm text-white/90">{item.name}</span>
                       {item.etiquettes?.length > 0 && (
-                        <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-medium text-gold-dark">
+                        <span className="rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-medium text-[#C9A84C]">
                           {item.etiquettes[0]}
                         </span>
                       )}
                       {item.hasPdf && (
-                        <span className="rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600">PDF</span>
+                        <span className="rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-400">PDF</span>
                       )}
                     </label>
                   ))}
@@ -4521,8 +4517,8 @@ function MissingCoursModal({
       </div>
 
       {items.length > 0 && (
-        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
-          <span className="text-xs text-gray-500">
+        <div className="flex items-center justify-between border-t border-white/8 px-5 py-4">
+          <span className="text-xs text-white/50">
             {checkedIds.size > 0
               ? `${checkedIds.size} cours sélectionné${checkedIds.size > 1 ? "s" : ""}`
               : "Aucune sélection"}
@@ -4530,7 +4526,7 @@ function MissingCoursModal({
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5"
             >Annuler</button>
             <button
               onClick={() => checkedIds.size > 0 && onImport([...checkedIds])}
@@ -4646,23 +4642,23 @@ function RattacherCoursModal({
   };
 
   return (
-    <div className="rounded-2xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
-            <Link2 className="h-4 w-4 text-purple-600" />
+            <Link2 className="h-4 w-4 text-purple-400" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-900">
               Rattacher {coursIds.length} cours
             </h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-white/50">
               {sourceSubjectName ?? "Matière"} — {sourceUniversityName ?? ""}
             </p>
           </div>
         </div>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
-          <X className="h-4 w-4 text-gray-500" />
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8">
+          <X className="h-4 w-4 text-white/50" />
         </button>
       </div>
 
@@ -4670,13 +4666,13 @@ function RattacherCoursModal({
         {targetSubjects.length > 0 ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-gray-500">
+              <p className="text-xs font-medium text-white/50">
                 Sélectionnez les offres cibles
               </p>
               <button
                 type="button"
                 onClick={toggleAll}
-                className="text-[10px] font-medium text-purple-600 hover:text-purple-800 underline"
+                className="text-[10px] font-medium text-purple-400 hover:text-purple-800 underline"
               >{checkedTargets.size === targetSubjects.length ? "Tout désélectionner" : "Tout sélectionner"}</button>
             </div>
             {targetSubjects.map((target) => (
@@ -4684,39 +4680,39 @@ function RattacherCoursModal({
                 key={target.id}
                 className={`flex items-center gap-3 rounded-xl border p-3 transition cursor-pointer ${
                   checkedTargets.has(target.id)
-                    ? "border-purple-300 bg-purple-50 ring-1 ring-purple-200"
-                    : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
+                    ? "border-purple-300 bg-purple-500/10 ring-1 ring-purple-200"
+                    : "border-white/8 hover:border-white/10 hover:bg-white/5"
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={checkedTargets.has(target.id)}
                   onChange={() => toggleCheck(target.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-purple-600 accent-purple-600"
+                  className="h-4 w-4 rounded border-white/15 text-purple-400 accent-purple-600"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{target.offerName}</p>
-                  <p className="text-xs text-gray-500 truncate">{target.path}</p>
+                  <p className="text-sm font-semibold text-white/90">{target.offerName}</p>
+                  <p className="text-xs text-white/50 truncate">{target.path}</p>
                 </div>
-                <Layers className="h-4 w-4 flex-shrink-0 text-gray-300" />
+                <Layers className="h-4 w-4 flex-shrink-0 text-white/25" />
               </label>
             ))}
           </div>
         ) : (
           <div className="py-8 text-center">
-            <Building2 className="mx-auto h-8 w-8 text-gray-300" />
-            <p className="mt-2 text-sm text-gray-500">
+            <Building2 className="mx-auto h-8 w-8 text-white/25" />
+            <p className="mt-2 text-sm text-white/50">
               Aucune matière &quot;{sourceSubjectName}&quot; trouvée
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-white/40">
               dans {sourceUniversityName} pour les autres offres
             </p>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
-        <span className="text-xs text-gray-500">
+      <div className="flex items-center justify-between border-t border-white/8 px-5 py-4">
+        <span className="text-xs text-white/50">
           {checkedTargets.size > 0
             ? `${checkedTargets.size} offre${checkedTargets.size > 1 ? "s" : ""} sélectionnée${checkedTargets.size > 1 ? "s" : ""}`
             : "Aucune sélection"}
@@ -4724,7 +4720,7 @@ function RattacherCoursModal({
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5"
           >Annuler</button>
           <button
             onClick={() => checkedTargets.size > 0 && onConfirm([...checkedTargets])}
@@ -4753,17 +4749,17 @@ function FormShell({ title, children, onClose, onSubmit, isPending }: {
   title: string; children: React.ReactNode; onClose: () => void; onSubmit: () => void; isPending: boolean;
 }) {
   return (
-    <div className="rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
-      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 sticky top-0 bg-white z-10">
+    <div className="rounded-2xl bg-[#12314d] shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between border-b border-white/8 px-5 py-4 sticky top-0 bg-[#12314d] z-10">
         <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
-          <X className="h-4 w-4 text-gray-500" />
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-white/8">
+          <X className="h-4 w-4 text-white/50" />
         </button>
       </div>
       <div className="space-y-4 p-5">
         {children}
         <div className="flex justify-end gap-2 pt-2">
-          <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+          <button onClick={onClose} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 hover:bg-white/5">Annuler</button>
           <button onClick={onSubmit} disabled={isPending} className="flex items-center gap-2 rounded-lg bg-[#0e1e35] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60">
             {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Sauvegarder
@@ -4777,7 +4773,7 @@ function FormShell({ title, children, onClose, onSubmit, isPending }: {
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-white/80">{label}</label>
       {children}
     </div>
   );
@@ -4786,7 +4782,7 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-gray-700">Couleur</label>
+      <label className="mb-1.5 block text-xs font-medium text-white/80">Couleur</label>
       <div className="flex flex-wrap gap-2">
         {COLORS.map((c) => (
           <button key={c} type="button" onClick={() => onChange(c)}
@@ -4800,16 +4796,16 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
 
 function VisibleToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
+    <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
       <div className="flex items-center gap-2">
-        {value ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-gray-400" />}
-        <span className="text-xs font-medium text-gray-700">Visible aux étudiants</span>
+        {value ? <Eye className="h-4 w-4 text-green-400" /> : <EyeOff className="h-4 w-4 text-white/40" />}
+        <span className="text-xs font-medium text-white/80">Visible aux étudiants</span>
       </div>
-      <button type="button" onClick={() => onChange(!value)} className={`relative h-5 w-9 rounded-full transition-colors ${value ? "bg-green-500" : "bg-gray-300"}`}>
+      <button type="button" onClick={() => onChange(!value)} className={`relative h-5 w-9 rounded-full transition-colors ${value ? "bg-green-500/100" : "bg-white/25"}`}>
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4" : "translate-x-0.5"}`} />
       </button>
     </div>
   );
 }
 
-const inputCls = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#0e1e35] focus:outline-none focus:ring-1 focus:ring-[#0e1e35]/20";
+const inputCls = "w-full rounded-lg border border-white/10 px-3 py-2 text-sm text-white/90 placeholder:text-white/40 focus:border-[#0e1e35] focus:outline-none focus:ring-1 focus:ring-[#0e1e35]/20";
