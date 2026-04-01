@@ -784,6 +784,22 @@ export function PedagogieShell({
                             onClick={() => setModal({ type: "move_dossiers", dossierIds: [...selectedDossierIds] })}
                             className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-200 transition flex items-center gap-1"
                           ><FolderOpen className="h-3 w-3" /> Déplacer</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmDelete({
+                                label: `${selectedDossierIds.size} dossier${selectedDossierIds.size > 1 ? "s" : ""} et tout leur contenu`,
+                                onConfirm: async () => {
+                                  for (const id of selectedDossierIds) {
+                                    await deleteDossier(id);
+                                  }
+                                  setSelectedDossierIds(new Set());
+                                  await refreshAll();
+                                },
+                              });
+                            }}
+                            className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition flex items-center gap-1"
+                          ><Trash2 className="h-3 w-3" /> Supprimer</button>
                           <div className="ml-auto relative">
                             <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition">Section</button>
                             {showBulkDossierPopover && (
