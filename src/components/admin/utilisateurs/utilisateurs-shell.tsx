@@ -4040,11 +4040,44 @@ function EditUserModal({
   }, [user.id, user.role, role]);
   const [coachFormation, setCoachFormation] = useState("");
   const [coachUni, setCoachUni] = useState("");
-  // Cascade filters per section
-  const [coursFormation, setCoursFormation] = useState("");
-  const [coursUni, setCoursUni] = useState("");
-  const [qaFormation, setQaFormation] = useState("");
-  const [qaUni, setQaUni] = useState("");
+  // Cascade filters per section — auto-detect from existing assignments
+  const [coursFormation, setCoursFormation] = useState(() => {
+    const coursRows = profMatiereRows.filter(r => r.role_type === "cours" || !r.role_type);
+    if (coursRows.length === 0) return "";
+    // Find formation from first matiere's dossier ancestry
+    const firstMat = matieres.find(m => m.id === coursRows[0].matiere_id);
+    if (!firstMat?.dossier_id) return "";
+    let d = dossiers.find(dd => dd.id === firstMat.dossier_id);
+    while (d) { if (d.dossier_type === "offer") return d.id; d = d.parent_id ? dossiers.find(dd => dd.id === d!.parent_id) : undefined; }
+    return "";
+  });
+  const [coursUni, setCoursUni] = useState(() => {
+    const coursRows = profMatiereRows.filter(r => r.role_type === "cours" || !r.role_type);
+    if (coursRows.length === 0) return "";
+    const firstMat = matieres.find(m => m.id === coursRows[0].matiere_id);
+    if (!firstMat?.dossier_id) return "";
+    let d = dossiers.find(dd => dd.id === firstMat.dossier_id);
+    while (d) { if (d.dossier_type === "university") return d.id; d = d.parent_id ? dossiers.find(dd => dd.id === d!.parent_id) : undefined; }
+    return "";
+  });
+  const [qaFormation, setQaFormation] = useState(() => {
+    const qaRows = profMatiereRows.filter(r => r.role_type === "qa" || r.role_type === "contenu");
+    if (qaRows.length === 0) return "";
+    const firstMat = matieres.find(m => m.id === qaRows[0].matiere_id);
+    if (!firstMat?.dossier_id) return "";
+    let d = dossiers.find(dd => dd.id === firstMat.dossier_id);
+    while (d) { if (d.dossier_type === "offer") return d.id; d = d.parent_id ? dossiers.find(dd => dd.id === d!.parent_id) : undefined; }
+    return "";
+  });
+  const [qaUni, setQaUni] = useState(() => {
+    const qaRows = profMatiereRows.filter(r => r.role_type === "qa" || r.role_type === "contenu");
+    if (qaRows.length === 0) return "";
+    const firstMat = matieres.find(m => m.id === qaRows[0].matiere_id);
+    if (!firstMat?.dossier_id) return "";
+    let d = dossiers.find(dd => dd.id === firstMat.dossier_id);
+    while (d) { if (d.dossier_type === "university") return d.id; d = d.parent_id ? dossiers.find(dd => dd.id === d!.parent_id) : undefined; }
+    return "";
+  });
   const groupeMap = useMemo(() => new Map(groupes.map((groupe) => [groupe.id, groupe])), [groupes]);
   const currentSelectedMatiereSignature = [...selectedMatiereIds].sort().join("|");
   const currentDirectAccessSignature = [...directAccessIds].sort().join("|");
