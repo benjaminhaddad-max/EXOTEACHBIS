@@ -65,6 +65,25 @@ export async function createDossier(data: {
   return { success: true };
 }
 
+export async function moveDossiers(dossierIds: string[], newParentId: string) {
+  const supabase = await createClient();
+  // Get max order_index in target
+  const { data: maxRow } = await supabase
+    .from("dossiers")
+    .select("order_index")
+    .eq("parent_id", newParentId)
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .single();
+  let nextOrder = (maxRow?.order_index ?? -1) + 1;
+
+  for (const id of dossierIds) {
+    await supabase.from("dossiers").update({ parent_id: newParentId, order_index: nextOrder++ }).eq("id", id);
+  }
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function updateDossier(
   id: string,
   data: {

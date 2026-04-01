@@ -46,7 +46,7 @@ import {
   installCanonicalOffers, bulkSetEtiquettes, renameEtiquette, bulkSetDossierEtiquettes, renameDossierEtiquette, bulkSetCoursVisible, bulkDeleteCours, bulkArchiveCours,
   cloneDossierTree, updateLinkedCours, getLinkedCoursCount, deleteLinkedCours, deleteLinkedCoursByCoursId, linkCoursToOtherDossier, getMissingCoursFromOtherOffers,
   updateUniversityLinkRules, getUniversityLinkRulesForDossier, getOffersForUniversity,
-  addUniversityToOffer, removeUniversityFromOffer, getUniversitySubjectsSummary,
+  addUniversityToOffer, removeUniversityFromOffer, getUniversitySubjectsSummary, moveDossiers,
 } from "@/app/(admin)/admin/pedagogie/actions";
 import { TagInput } from "./tag-input";
 
@@ -70,6 +70,7 @@ type ModalState =
   | { type: "linked_edit_confirm"; cours: Cours; data: any; linkedCount: number }
   | { type: "rattacher_cours"; coursIds: string[]; sourceDossierId: string }
   | { type: "missing_cours"; dossierId: string }
+  | { type: "move_dossiers"; dossierIds: string[] }
   | null;
 
 const COLORS = [
@@ -810,6 +811,11 @@ export function PedagogieShell({
                           <span className="text-xs font-semibold text-gold-dark">{selectedDossierIds.size} dossier{selectedDossierIds.size > 1 ? "s" : ""} sélectionné{selectedDossierIds.size > 1 ? "s" : ""}</span>
                           <button type="button" onClick={() => setSelectedDossierIds(new Set(childDossiers.map((d) => d.id)))} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Tout sélectionner</button>
                           <button type="button" onClick={() => setSelectedDossierIds(new Set())} className="text-[10px] font-medium text-navy/60 hover:text-navy underline">Désélectionner</button>
+                          <button
+                            type="button"
+                            onClick={() => setModal({ type: "move_dossiers", dossierIds: [...selectedDossierIds] })}
+                            className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-200 transition flex items-center gap-1"
+                          ><FolderOpen className="h-3 w-3" /> Déplacer</button>
                           <div className="ml-auto relative">
                             <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-gold/10 px-3 py-1.5 text-xs font-semibold text-gold-dark hover:bg-gold/20 transition">Section</button>
                             {showBulkDossierPopover && (
@@ -1346,7 +1352,7 @@ export function PedagogieShell({
 
       {/* ── MODALS ── */}
       {modal && (
-        <ModalOverlay onClose={() => setModal(null)} wide={modal.type === "rattacher_cours" || modal.type === "missing_cours"}>
+        <ModalOverlay onClose={() => setModal(null)} wide={modal.type === "rattacher_cours" || modal.type === "missing_cours" || modal.type === "move_dossiers"}>
 
           {/* Picker "+" — style ExoTeach */}
           {modal.type === "add_picker" && (
@@ -1650,6 +1656,26 @@ export function PedagogieShell({
                     showToast(result.error, "error");
                   } else {
                     showToast(`${result.count} cours importé${(result.count ?? 0) > 1 ? "s" : ""} depuis les autres offres`, "success");
+                  }
+                  setModal(null);
+                  await refreshAll();
+                });
+              }}
+              onClose={() => setModal(null)}
+            />
+          )}
+
+          {modal.type === "move_dossiers" && (
+            <MoveDossiersModal
+              dossierIds={modal.dossierIds}
+              allDossiers={allDossiers as Dossier[]}
+              isPending={isFormPending}
+              onMove={(targetId) => {
+                startFormTransition(async () => {
+                  await moveDossiers(modal.dossierIds, targetId);
+                  {
+                    showToast(`${modal.dossierIds.length} dossier${modal.dossierIds.length > 1 ? "s" : ""} déplacé${modal.dossierIds.length > 1 ? "s" : ""}`, "success");
+                    setSelectedDossierIds(new Set());
                   }
                   setModal(null);
                   await refreshAll();
@@ -3550,6 +3576,91 @@ function LinkedCoursIndicator({ cours }: { cours: Cours }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function MoveDossiersModal({ dossierIds, allDossiers, isPending, onMove, onClose }: {
+  dossierIds: string[];
+  allDossiers: Dossier[];
+  isPending: boolean;
+  onMove: (targetId: string) => void;
+  onClose: () => void;
+}) {
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
+    const set = new Set<string>();
+    for (const d of allDossiers) {
+      if (d.dossier_type === "offer" || d.dossier_type === "sub_offer") set.add(d.id);
+    }
+    return set;
+  });
+
+  const excludeIds = new Set(dossierIds);
+  const tree = buildTree(allDossiers, null);
+
+  const renderNode = (node: DossierNode, depth: number): React.ReactNode => {
+    if (excludeIds.has(node.id)) return null;
+    const isSelected = node.id === selectedTarget;
+    const hasChildren = node.children.length > 0;
+    const isExpanded = expandedIds.has(node.id);
+    const meta = DOSSIER_TYPE_META[node.dossier_type as keyof typeof DOSSIER_TYPE_META];
+
+    return (
+      <div key={node.id}>
+        <div
+          className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer transition ${
+            isSelected ? "bg-blue-100 ring-1 ring-blue-300" : "hover:bg-gray-50"
+          }`}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => setSelectedTarget(node.id)}
+        >
+          {hasChildren ? (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedIds((prev) => { const n = new Set(prev); n.has(node.id) ? n.delete(node.id) : n.add(node.id); return n; }); }} className="flex-shrink-0 rounded p-0.5 hover:bg-gray-200">
+              {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
+            </button>
+          ) : <span className="w-[18px] flex-shrink-0" />}
+          <Folder className="h-4 w-4 flex-shrink-0 text-gray-400" />
+          <span className="flex-1 truncate">{node.name}</span>
+          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{meta?.shortLabel ?? node.dossier_type}</span>
+        </div>
+        {hasChildren && isExpanded && node.children.map((child) => renderNode(child, depth + 1))}
+      </div>
+    );
+  };
+
+  const pathLabel = selectedTarget ? getDossierPathLabel(selectedTarget, allDossiers) : null;
+
+  return (
+    <div className="rounded-2xl bg-white shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+            <FolderOpen className="h-4 w-4 text-blue-600" />
+          </div>
+          <h3 className="text-sm font-semibold text-gray-900">Déplacer {dossierIds.length} dossier{dossierIds.length > 1 ? "s" : ""}</h3>
+        </div>
+        <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100"><X className="h-4 w-4 text-gray-500" /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-3 py-3" style={{ maxHeight: "50vh" }}>
+        {tree.map((node) => renderNode(node, 0))}
+      </div>
+      {pathLabel && (
+        <div className="border-t border-gray-100 px-5 py-2">
+          <p className="text-xs text-gray-500">Destination : <span className="font-medium text-blue-700">{pathLabel}</span></p>
+        </div>
+      )}
+      <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+        <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Annuler</button>
+        <button
+          onClick={() => selectedTarget && onMove(selectedTarget)}
+          disabled={!selectedTarget || isPending}
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+        >
+          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Déplacer ici
+        </button>
+      </div>
     </div>
   );
 }
