@@ -738,6 +738,7 @@ export function UtilisateursShell({
                             members={members}
                             groupeColor={g.color}
                             onManage={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                            onClickUser={(u) => setModal({ type: "edit_user", user: u })}
                           />
                         </div>
                       </details>
@@ -2390,7 +2391,7 @@ function ContentAccessTree({
 
 // ─── MembresTab ───────────────────────────────────────────────────────────────
 
-function InlineClassMembers({ members, groupeColor, onManage }: { members: Profile[]; groupeColor: string; onManage: () => void }) {
+function InlineClassMembers({ members, groupeColor, onManage, onClickUser }: { members: Profile[]; groupeColor: string; onManage: () => void; onClickUser?: (u: Profile) => void }) {
   const [search, setSearch] = useState("");
   const [elevesExpanded, setElevesExpanded] = useState(false);
 
@@ -2413,7 +2414,7 @@ function InlineClassMembers({ members, groupeColor, onManage }: { members: Profi
 
   const MemberCard = ({ u, color }: { u: Profile; color: string }) => (
     <button
-      onClick={onManage}
+      onClick={() => onClickUser ? onClickUser(u) : onManage()}
       className="flex flex-col items-center gap-1 rounded-lg p-2 hover:bg-gray-50 transition"
       title={`${u.first_name ?? ""} ${u.last_name ?? ""}\n${u.email}`}
     >
