@@ -373,13 +373,12 @@ export function ExamensShell({
                 const dossierName = dossiers.find(d => d.id === selectedDossierId)?.name ?? allDossiers.find(d => d.id === selectedDossierId)?.name ?? "";
                 const existingCount = examens.filter(e => e.groupe_ids?.some(gid => contextGroupeIds.has(gid))).length;
                 const autoName = `Concours Blanc n°${existingCount + 1} — ${dossierName.replace("Université ", "")}`;
-                const now = new Date();
-                const inOneWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                const placeholder = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
                 startTransition(async () => {
                   const res = await createExamen({
                     name: autoName,
-                    debut_at: now.toISOString(),
-                    fin_at: inOneWeek.toISOString(),
+                    debut_at: placeholder,
+                    fin_at: placeholder,
                     visible: false,
                   });
                   if ("error" in res) { showToast(res.error!, "error"); return; }

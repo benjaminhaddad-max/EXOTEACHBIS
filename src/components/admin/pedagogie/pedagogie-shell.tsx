@@ -2890,7 +2890,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       onMouseEnter={(e) => { if (!selected && !dragOver) e.currentTarget.style.borderLeftColor = "#4fabdb60"; }}
       onMouseLeave={(e) => { if (!selected) e.currentTarget.style.borderLeftColor = "transparent"; }}
     >
-      <div className="absolute inset-0 rounded-xl transition-opacity duration-200 opacity-0 group-hover:opacity-100 pointer-events-none" style={{ background: "linear-gradient(90deg, rgba(79,171,219,0.05) 0%, transparent 40%)" }} />
+      <div className="absolute inset-0 rounded-xl transition-opacity duration-200 opacity-0 group-hover:opacity-100 pointer-events-none" style={{ background: "linear-gradient(90deg, rgba(125,211,252,0.06) 0%, transparent 40%)" }} />
 
       {onToggleSelect && (
         <input
@@ -2907,9 +2907,9 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       )}
       <div
         className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
-        style={{ background: "linear-gradient(145deg, rgba(79,171,219,0.15) 0%, rgba(79,171,219,0.05) 100%)", border: "1px solid rgba(79,171,219,0.2)", boxShadow: selected ? "0 0 12px rgba(79,171,219,0.2)" : "none" }}
+        style={{ background: "linear-gradient(145deg, rgba(125,211,252,0.18) 0%, rgba(56,189,248,0.08) 100%)", border: "1px solid rgba(125,211,252,0.25)", boxShadow: selected ? "0 0 14px rgba(125,211,252,0.25)" : "0 2px 8px rgba(0,0,0,0.2)" }}
       >
-        <CoursIcon className="h-5 w-5" />
+        <CoursIcon className="h-[22px] w-[22px]" />
       </div>
       {editing ? (
         <input

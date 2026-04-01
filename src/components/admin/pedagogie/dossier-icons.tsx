@@ -170,21 +170,25 @@ export function GenericIcon(props: Ic) {
 
 export function CoursIcon(props: Ic) {
   const id = useId();
-  const gid = `cours-${id}`;
+  const g1 = `cours-a-${id}`;
+  const g2 = `cours-b-${id}`;
   return (
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <defs>
-        <linearGradient id={gid} x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#4fabdb" />
-          <stop offset="1" stopColor="#2980B9" />
+        <linearGradient id={g1} x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7DD3FC" />
+          <stop offset="1" stopColor="#38BDF8" />
+        </linearGradient>
+        <linearGradient id={g2} x1="6" y1="4" x2="18" y2="20" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FBBF24" />
+          <stop offset="1" stopColor="#F59E0B" />
         </linearGradient>
       </defs>
-      <rect x="4" y="2" width="16" height="20" rx="2.5" fill={`url(#${gid})`} opacity="0.08" stroke={`url(#${gid})`} strokeWidth="1.3" />
-      <path d="M4 7h16" stroke={`url(#${gid})`} strokeWidth="1" opacity="0.3" />
-      <circle cx="7.5" cy="4.5" r="0.7" fill={`url(#${gid})`} opacity="0.6" />
-      <circle cx="10" cy="4.5" r="0.7" fill={`url(#${gid})`} opacity="0.4" />
-      <circle cx="12.5" cy="4.5" r="0.7" fill={`url(#${gid})`} opacity="0.25" />
-      <path d="M8 11h8M8 14h6M8 17h4" stroke={`url(#${gid})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
+      <rect x="5" y="3" width="14" height="18" rx="2" fill={`url(#${g1})`} opacity="0.12" stroke={`url(#${g1})`} strokeWidth="1.4" />
+      <path d="M8 8h8" stroke={`url(#${g2})`} strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M8 11.5h6" stroke={`url(#${g1})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
+      <path d="M8 14.5h7" stroke={`url(#${g1})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
+      <path d="M8 17.5h4" stroke={`url(#${g1})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.3" />
     </svg>
   );
 }

@@ -9,7 +9,7 @@ import {
 import Link from "next/link";
 import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/types/database";
 import {
-  addSerieToExamen, removeSerieFromExamen,
+  addSerieToExamen, removeSerieFromExamen, updateExamen,
   updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility, updateSerieGroupes, ensureSubjectMatiere,
 } from "@/app/(admin)/admin/examens/actions";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
@@ -74,6 +74,29 @@ export function ExamenDetailShell({
   const [creating, setCreating] = useState<string | null>(null);
   const [resultsVisible, setResultsVisible] = useState(initialExamen.results_visible);
   const [editingSerie, setEditingSerie] = useState<SerieSummary | null>(null);
+
+  // Editable header fields
+  const [examenName, setExamenName] = useState(initialExamen.name);
+  const [editingName, setEditingName] = useState(false);
+  const [debutAt, setDebutAt] = useState(initialExamen.debut_at);
+  const [finAt, setFinAt] = useState(initialExamen.fin_at);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const toDatetimeLocal = (iso: string) => {
+    try { return new Date(iso).toISOString().slice(0, 16); } catch { return ""; }
+  };
+
+  const saveHeader = (updates: { name?: string; debut_at?: string; fin_at?: string }) => {
+    startTransition(async () => {
+      const res = await updateExamen(initialExamen.id, {
+        name: updates.name ?? examenName,
+        debut_at: updates.debut_at ?? debutAt,
+        fin_at: updates.fin_at ?? finAt,
+        visible: initialExamen.visible,
+      });
+      if ("error" in res) showToast(res.error!, "error");
+    });
+  };
 
   // Results state
   const [resultTab, setResultTab] = useState<"global" | "serie">("global");
@@ -293,11 +316,35 @@ export function ExamenDetailShell({
       <div className="flex items-center gap-4 px-6 py-4 border-b border-white/10 shrink-0">
         <Link href="/admin/examens" className="text-white/50 hover:text-white transition-colors"><ArrowLeft size={18} /></Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold text-white truncate">{initialExamen.name}</h1>
-          <div className="flex items-center gap-3 text-xs text-white/40 mt-0.5">
-            <span className="flex items-center gap-1"><Calendar size={10} /> {new Date(initialExamen.debut_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}</span>
-            <span className="flex items-center gap-1"><Clock size={10} /> {new Date(initialExamen.fin_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}</span>
-            <span>/{notationSur}</span>
+          {editingName ? (
+            <input
+              ref={nameInputRef}
+              value={examenName}
+              onChange={e => setExamenName(e.target.value)}
+              onBlur={() => { setEditingName(false); if (examenName.trim() && examenName !== initialExamen.name) saveHeader({ name: examenName.trim() }); }}
+              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setExamenName(initialExamen.name); setEditingName(false); } }}
+              className="text-lg font-semibold text-white bg-white/5 border border-white/20 rounded-lg px-2 py-0.5 w-full outline-none focus:border-[#C9A84C]"
+              autoFocus
+            />
+          ) : (
+            <h1 onClick={() => { setEditingName(true); setTimeout(() => nameInputRef.current?.select(), 50); }}
+              className="text-lg font-semibold text-white truncate cursor-pointer hover:text-[#C9A84C] transition-colors" title="Cliquer pour renommer">
+              {examenName}
+            </h1>
+          )}
+          <div className="flex items-center gap-3 text-xs text-white/40 mt-1">
+            <label className="flex items-center gap-1 cursor-pointer hover:text-white/60 transition-colors">
+              <Calendar size={10} /> Début
+              <input type="datetime-local" value={toDatetimeLocal(debutAt)}
+                onChange={e => { const v = new Date(e.target.value).toISOString(); setDebutAt(v); saveHeader({ debut_at: v }); }}
+                className="bg-transparent border-none text-xs text-white/60 outline-none cursor-pointer w-[140px]" />
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer hover:text-white/60 transition-colors">
+              <Clock size={10} /> Fin
+              <input type="datetime-local" value={toDatetimeLocal(finAt)}
+                onChange={e => { const v = new Date(e.target.value).toISOString(); setFinAt(v); saveHeader({ fin_at: v }); }}
+                className="bg-transparent border-none text-xs text-white/60 outline-none cursor-pointer w-[140px]" />
+            </label>
           </div>
         </div>
         <button onClick={handleToggleResults} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${resultsVisible ? "bg-green-500/15 text-green-400" : "bg-white/5 text-white/40"}`}>
@@ -423,8 +470,8 @@ export function ExamenDetailShell({
             {/* Separator */}
             {epreuves.length > 0 && <div className="border-t border-white/5 my-2" />}
 
-            {/* Add épreuves from tree */}
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/20 pt-1">Ajouter</p>
+            {/* Add épreuves — matières list */}
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/20 pt-1">Ajouter une épreuve</p>
             {tree.semesters.map(sem => {
               const subjects = tree.semesterMap.get(sem.id) ?? [];
               if (subjects.length === 0) return null;
@@ -442,19 +489,22 @@ export function ExamenDetailShell({
                       || Array.from(addedSerieNames).some(n => n?.endsWith(`— ${sub.name}`));
                     const isCreatingThis = creating === sub.id;
                     return (
-                      <div key={sub.id} className={`flex items-center gap-2 ml-5 px-3 py-1.5 rounded-lg transition-all ${added ? "opacity-30" : "hover:bg-white/[0.04]"}`}>
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
-                        <span className="flex-1 text-[11px] text-white/60 truncate">{sub.name}</span>
-                        {added ? <Check size={11} className="text-green-400/50" /> : isCreatingThis ? <Loader2 size={11} className="animate-spin text-[#C9A84C]" /> : (
-                          <div className="flex gap-1">
-                            <button onClick={() => handleAddSubject(sub)} className="p-0.5 text-[#C9A84C]/50 hover:text-[#C9A84C]" title="Créer vide"><Plus size={12} /></button>
-                            <label className="p-0.5 text-white/30 hover:text-white/60 cursor-pointer" title="Importer Word">
-                              <Upload size={11} />
-                              <input type="file" accept=".docx,.doc" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportWord(sub, f); }} />
-                            </label>
-                          </div>
+                      <button
+                        key={sub.id}
+                        onClick={() => !added && !isCreatingThis && handleAddSubject(sub)}
+                        disabled={added || isCreatingThis}
+                        className={`w-full flex items-center gap-2.5 ml-4 px-3 py-2 rounded-lg transition-all text-left ${added ? "opacity-35 cursor-default" : "hover:bg-[#C9A84C]/8 cursor-pointer"}`}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sub.color || "#3B82F6" }} />
+                        <span className="flex-1 text-[11px] text-white/70 truncate font-medium">{sub.name}</span>
+                        {added ? (
+                          <Check size={12} className="text-green-400/60 shrink-0" />
+                        ) : isCreatingThis ? (
+                          <Loader2 size={12} className="animate-spin text-[#C9A84C] shrink-0" />
+                        ) : (
+                          <Plus size={13} className="text-[#C9A84C]/50 shrink-0" />
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
