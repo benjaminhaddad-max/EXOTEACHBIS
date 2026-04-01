@@ -838,82 +838,66 @@ export function DossierExercicesView({
         </div>
       )}
 
-      {/* Header avec stats + bouton IA */}
-      <div className="shrink-0 px-5 pt-4 pb-3 space-y-3 relative overflow-hidden" style={{ borderBottom: "1px solid rgba(201,168,76,0.1)" }}>
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 50% 100% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 60%)" }} />
-        {/* Stats */}
-        <div className="relative grid grid-cols-2 gap-3">
-          <div className="rounded-xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(145deg, rgba(201,168,76,0.1) 0%, rgba(201,168,76,0.02) 100%)", border: "1px solid rgba(201,168,76,0.15)" }}>
-            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 50% 0%, rgba(201,168,76,0.08) 0%, transparent 60%)" }} />
-            <p className="relative text-2xl font-extrabold tracking-tight" style={{ color: "#E3C286" }}>{loading ? "…" : totalSeries}</p>
-            <p className="relative text-[9px] font-bold uppercase tracking-[0.15em] text-white/35 mt-0.5">Séries</p>
+      {/* Compact header: stats + actions + tabs — all in ~70px */}
+      <div className="shrink-0 px-4 pt-2.5 pb-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Row 1: stats badges + action buttons */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ background: "rgba(201,168,76,0.1)", color: "#E3C286", border: "1px solid rgba(201,168,76,0.15)" }}>
+              {loading ? "…" : totalSeries} <span className="text-[9px] font-medium opacity-60 uppercase">séries</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ background: "rgba(125,211,252,0.08)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(125,211,252,0.1)" }}>
+              {loading ? "…" : totalQuestions} <span className="text-[9px] font-medium opacity-50 uppercase">questions</span>
+            </span>
           </div>
-          <div className="rounded-xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(145deg, rgba(125,211,252,0.08) 0%, rgba(56,189,248,0.02) 100%)", border: "1px solid rgba(125,211,252,0.12)" }}>
-            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 50% 0%, rgba(125,211,252,0.06) 0%, transparent 60%)" }} />
-            <p className="relative text-2xl font-extrabold tracking-tight text-white">{loading ? "…" : totalQuestions}</p>
-            <p className="relative text-[9px] font-bold uppercase tracking-[0.15em] text-white/35 mt-0.5">Questions</p>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowAI(true)} disabled={cours.length === 0} title="Générer avec l'IA"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-all disabled:opacity-30 hover:shadow-[0_0_12px_rgba(201,168,76,0.1)]"
+              style={{ background: "rgba(201,168,76,0.08)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.18)" }}>
+              <Sparkles size={11} /> IA
+            </button>
+            <button onClick={() => setShowImportExoteach(true)} title="Importer via ExoTeach"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition-all hover:shadow-[0_0_12px_rgba(94,234,212,0.08)]"
+              style={{ background: "rgba(94,234,212,0.06)", color: "#5EEAD4", border: "1px solid rgba(94,234,212,0.12)" }}>
+              <FileDown size={11} /> Import
+            </button>
           </div>
         </div>
-        {/* AI button */}
-        <button onClick={() => setShowAI(true)} disabled={cours.length === 0}
-          className="relative w-full flex items-center gap-2.5 rounded-xl px-4 py-2.5 hover:shadow-[0_0_20px_rgba(201,168,76,0.08)] transition-all duration-200 disabled:opacity-40 group"
-          style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.02) 100%)", border: "1px solid rgba(201,168,76,0.18)" }}>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0" style={{ background: "rgba(201,168,76,0.15)" }}>
-            <Sparkles size={13} className="text-[#C9A84C]" />
-          </div>
-          <div className="text-left">
-            <span className="text-[11px] font-bold text-[#C9A84C] block">Générer avec l&apos;IA</span>
-            <span className="text-[9px] text-white/25">Assigne automatiquement aux chapitres</span>
-          </div>
-        </button>
-        {/* ExoTeach import button */}
-        <button onClick={() => setShowImportExoteach(true)}
-          className="relative w-full flex items-center gap-2.5 rounded-xl px-4 py-2.5 hover:shadow-[0_0_20px_rgba(94,234,212,0.06)] transition-all duration-200 group"
-          style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.06) 0%, rgba(20,184,166,0.02) 100%)", border: "1px solid rgba(94,234,212,0.12)" }}>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0" style={{ background: "rgba(94,234,212,0.12)" }}>
-            <FileDown size={13} className="text-teal-400" />
-          </div>
-          <div className="text-left">
-            <span className="text-[11px] font-bold text-teal-400 block">Importer via ExoTeach</span>
-            <span className="text-[9px] text-white/25">Depuis l&apos;ancienne plateforme</span>
-          </div>
-        </button>
-      </div>
-
-      {/* Type Tabs */}
-      <div className="shrink-0 flex gap-1.5 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        {TYPES.filter((t) => !hiddenTabs?.includes(t)).map((t) => {
-          const cfg = TYPE_CONFIG[t];
-          const count = seriesByType(t).length;
-          const isActive = activeTab === t;
-          return (
-            <button key={t} onClick={() => setActiveTab(t)}
-              className={`relative flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all duration-200 ${isActive ? "" : "hover:bg-white/[0.05]"}`}
-              style={isActive ? { background: cfg.gradient, boxShadow: `0 0 20px ${cfg.glowColor}`, border: `1px solid ${cfg.textColor}30` } : { border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200"
-                style={isActive ? { background: `${cfg.textColor}20` } : { background: "rgba(255,255,255,0.04)" }}>
-                {cfg.svgIcon}
-              </div>
-              <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight transition-colors ${isActive ? cfg.color : "text-white/50"}`}>{cfg.label}</span>
-              {count > 0 && (
-                <span className={`text-[9px] rounded-md px-1.5 py-0.5 font-bold ${isActive ? cfg.bg + " " + cfg.color : "bg-white/[0.06] text-white/35"}`}>{count}</span>
-              )}
-              {isActive && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${cfg.textColor}, transparent)` }} />}
+        {/* Row 2: type tabs — horizontal, compact */}
+        <div className="flex gap-0.5 -mb-px">
+          {TYPES.filter((t) => !hiddenTabs?.includes(t)).map((t) => {
+            const cfg = TYPE_CONFIG[t];
+            const count = seriesByType(t).length;
+            const isActive = activeTab === t;
+            return (
+              <button key={t} onClick={() => setActiveTab(t)}
+                className="relative flex items-center gap-1.5 px-3 py-2 rounded-t-lg text-[10px] font-bold uppercase tracking-wide transition-all"
+                style={isActive
+                  ? { background: cfg.gradient, color: cfg.textColor, borderBottom: `2px solid ${cfg.textColor}` }
+                  : { color: "rgba(255,255,255,0.35)", borderBottom: "2px solid transparent" }
+                }>
+                <span className="flex h-5 w-5 items-center justify-center rounded shrink-0" style={isActive ? { background: `${cfg.textColor}18` } : {}}>
+                  {cfg.svgIcon}
+                </span>
+                <span className="hidden sm:inline whitespace-nowrap">{cfg.label}</span>
+                {count > 0 && <span className={`text-[9px] rounded px-1 py-px font-bold ${isActive ? cfg.bg + " " + cfg.color : "bg-white/[0.06] text-white/30"}`}>{count}</span>}
+              </button>
+            );
+          })}
+          {!hiddenTabs?.includes("flashcards") && (
+            <button onClick={() => setActiveTab("flashcards")}
+              className="relative flex items-center gap-1.5 px-3 py-2 rounded-t-lg text-[10px] font-bold uppercase tracking-wide transition-all"
+              style={activeTab === "flashcards"
+                ? { background: "linear-gradient(135deg, rgba(165,180,252,0.12) 0%, rgba(99,102,241,0.04) 100%)", color: "#A5B4FC", borderBottom: "2px solid #A5B4FC" }
+                : { color: "rgba(255,255,255,0.35)", borderBottom: "2px solid transparent" }
+              }>
+              <span className="flex h-5 w-5 items-center justify-center rounded shrink-0" style={activeTab === "flashcards" ? { background: "rgba(165,180,252,0.18)" } : {}}>
+                <FlashcardIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="hidden sm:inline">Flashcards</span>
             </button>
-          );
-        })}
-        {!hiddenTabs?.includes("flashcards") && (
-          <button onClick={() => setActiveTab("flashcards")}
-            className={`relative flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all duration-200 ${activeTab === "flashcards" ? "" : "hover:bg-white/[0.05]"}`}
-            style={activeTab === "flashcards" ? { background: "linear-gradient(135deg, rgba(165,180,252,0.12) 0%, rgba(99,102,241,0.04) 100%)", boxShadow: "0 0 20px rgba(165,180,252,0.15)", border: "1px solid rgba(165,180,252,0.25)" } : { border: "1px solid rgba(255,255,255,0.06)" }}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200"
-              style={activeTab === "flashcards" ? { background: "rgba(165,180,252,0.2)" } : { background: "rgba(255,255,255,0.04)" }}>
-              <FlashcardIcon className="h-4 w-4" />
-            </div>
-            <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight transition-colors ${activeTab === "flashcards" ? "text-indigo-300" : "text-white/50"}`}>Flashcards</span>
-            {activeTab === "flashcards" && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: "linear-gradient(90deg, transparent, #A5B4FC, transparent)" }} />}
-          </button>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Bulk actions bar */}
