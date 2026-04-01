@@ -170,25 +170,60 @@ export function GenericIcon(props: Ic) {
 
 export function CoursIcon(props: Ic) {
   const id = useId();
-  const g1 = `cours-a-${id}`;
-  const g2 = `cours-b-${id}`;
+  const gold = `crs-g-${id}`;
+  const page = `crs-p-${id}`;
   return (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <defs>
-        <linearGradient id={g1} x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#7DD3FC" />
-          <stop offset="1" stopColor="#38BDF8" />
+        <linearGradient id={gold} x1="0" y1="0" x2="32" y2="40" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#E3C286" />
+          <stop offset="1" stopColor="#C9A84C" />
         </linearGradient>
-        <linearGradient id={g2} x1="6" y1="4" x2="18" y2="20" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#FBBF24" />
-          <stop offset="1" stopColor="#F59E0B" />
+        <linearGradient id={page} x1="0" y1="0" x2="32" y2="40" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FFFFFF" />
+          <stop offset="1" stopColor="#E8E4DC" />
         </linearGradient>
       </defs>
-      <rect x="5" y="3" width="14" height="18" rx="2" fill={`url(#${g1})`} opacity="0.12" stroke={`url(#${g1})`} strokeWidth="1.4" />
-      <path d="M8 8h8" stroke={`url(#${g2})`} strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M8 11.5h6" stroke={`url(#${g1})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
-      <path d="M8 14.5h7" stroke={`url(#${g1})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
-      <path d="M8 17.5h4" stroke={`url(#${g1})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.3" />
+      {/* Page */}
+      <rect x="1" y="1" width="30" height="38" rx="2.5" fill={`url(#${page})`} stroke={`url(#${gold})`} strokeWidth="0.8" />
+      {/* DS header bar */}
+      <rect x="1" y="1" width="30" height="7" rx="2.5" fill="#0B1A2E" />
+      <rect x="1" y="5" width="30" height="3" fill="#0B1A2E" />
+      {/* "DS" text in header */}
+      <text x="4" y="6.5" fill="#C9A84C" fontSize="3.5" fontWeight="800" fontFamily="sans-serif">DS</text>
+      {/* Revision bar label */}
+      <text x="12" y="6" fill="#FFFFFF" fontSize="2" fontWeight="700" fontFamily="sans-serif" opacity="0.6">RÉVISIONS</text>
+      {/* Revision boxes */}
+      {[0,1,2,3,4,5].map(i => (
+        <rect key={i} x={12 + i * 3} y="6.5" width="2.2" height="1.5" rx="0.3" fill="none" stroke="#FFFFFF" strokeWidth="0.3" opacity="0.4" />
+      ))}
+      {/* Fiche # badge */}
+      <circle cx="16" cy="10.5" r="2.5" fill="none" stroke={`url(#${gold})`} strokeWidth="0.5" />
+      <text x="16" y="11.5" fill="#C9A84C" fontSize="2.5" fontWeight="800" fontFamily="sans-serif" textAnchor="middle">#</text>
+      {/* Matière + Titre line */}
+      <rect x="3" y="13.5" width="10" height="1.2" rx="0.4" fill="#0B1A2E" opacity="0.6" />
+      <rect x="19" y="13.5" width="10" height="1.2" rx="0.4" fill="#C9A84C" opacity="0.3" />
+      {/* Two-column content area */}
+      <rect x="3" y="16" width="12.5" height="16" rx="1" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.15" />
+      <rect x="16.5" y="16" width="12.5" height="16" rx="1" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.15" />
+      {/* Column icons */}
+      <rect x="4.5" y="17.5" width="3" height="3" rx="0.5" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.2" />
+      <rect x="24.5" y="17.5" width="3" height="3" rx="0.5" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.2" />
+      {/* Content lines left */}
+      <rect x="4.5" y="22" width="9" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.08" />
+      <rect x="4.5" y="24" width="7" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.06" />
+      <rect x="4.5" y="26" width="8" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.05" />
+      {/* Content lines right */}
+      <rect x="18" y="22" width="9" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.08" />
+      <rect x="18" y="24" width="7" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.06" />
+      <rect x="18" y="26" width="8" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.05" />
+      {/* DS watermark center */}
+      <text x="16" y="29" fill="#C9A84C" fontSize="8" fontWeight="900" fontFamily="sans-serif" textAnchor="middle" opacity="0.04">DS</text>
+      {/* Legend bar */}
+      <rect x="3" y="33.5" width="26" height="3" rx="0.5" fill="#0B1A2E" opacity="0.04" />
+      <rect x="4" y="34.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.12" />
+      <rect x="11" y="34.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.08" />
+      <rect x="18" y="34.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.08" />
     </svg>
   );
 }
