@@ -2833,7 +2833,6 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           {cours.linked_cours_id && <LinkedCoursIndicator cours={cours} />}
           <button
             onClick={onSelect}
-            onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
             className="min-w-0 flex-1 text-left flex items-center gap-2"
           >
             <p className="truncate text-sm font-semibold text-gray-800">{cours.name}</p>
