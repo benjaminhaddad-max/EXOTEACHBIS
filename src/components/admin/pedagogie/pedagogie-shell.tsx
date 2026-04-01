@@ -1456,6 +1456,7 @@ export function PedagogieShell({
               existingSections={availableCourseSections}
               showActualisation={isPrepaOffer}
               initialData={inlineCoursSection ? { etiquettes: [inlineCoursSection] } : undefined}
+              onSwitchToBulk={() => setModal({ type: "bulk_create_cours", dossierId: modal.dossierId })}
               onSubmit={(data) => { setInlineCoursSection(null); handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId })); }}
               onClose={() => { setInlineCoursSection(null); setModal(null); }}
               isPending={isFormPending}
@@ -3374,12 +3375,13 @@ function RessourceForm({ title, dossierId, defaultType = "pdf", initialData, onS
 // COURS FORM
 // =============================================
 
-function CoursForm({ title, dossierId, initialData, existingSections, showActualisation, onSubmit, onClose, isPending }: {
+function CoursForm({ title, dossierId, initialData, existingSections, showActualisation, onSwitchToBulk, onSubmit, onClose, isPending }: {
   title: string;
   dossierId: string;
   initialData?: Partial<Cours>;
   existingSections?: string[];
   showActualisation?: boolean;
+  onSwitchToBulk?: () => void;
   onSubmit: (data: any) => void;
   onClose: () => void;
   isPending: boolean;
@@ -3469,6 +3471,17 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
             ))}
           </div>
         </FormField>
+      )}
+
+      {/* Switch to bulk/screenshot */}
+      {onSwitchToBulk && !initialData?.id && (
+        <button
+          type="button"
+          onClick={onSwitchToBulk}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-200 bg-orange-50/50 py-2.5 text-xs font-medium text-orange-600 transition hover:bg-orange-100"
+        >
+          <ImagePlus className="h-4 w-4" /> Importer plusieurs cours par screenshot
+        </button>
       )}
 
       {/* Visible */}
