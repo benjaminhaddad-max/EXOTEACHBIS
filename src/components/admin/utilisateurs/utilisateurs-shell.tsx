@@ -856,9 +856,9 @@ export function UtilisateursShell({
                             );
                           })()}
 
-                          {/* Members */}
+                          {/* Members — grid view */}
                           <div className="mt-3 pt-2 border-t border-gray-100">
-                            <div className="flex items-center justify-between px-2 mb-1">
+                            <div className="flex items-center justify-between px-2 mb-2">
                               <p className="text-[10px] font-bold uppercase text-gray-400">Membres ({members.length})</p>
                               <button
                                 onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
@@ -868,17 +868,24 @@ export function UtilisateursShell({
                               </button>
                             </div>
                             {members.length > 0 ? (
-                              members.map(u => (
-                                <div key={u.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50">
-                                  <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[9px] font-bold text-gray-500 shrink-0">
-                                    {(u.first_name?.[0] || "").toUpperCase()}{(u.last_name?.[0] || "").toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-xs text-gray-800 block truncate">{u.first_name} {u.last_name}</span>
-                                    <span className="text-[9px] text-gray-400">{u.email}</span>
-                                  </div>
-                                </div>
-                              ))
+                              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1.5 px-1">
+                                {members.map(u => (
+                                  <button
+                                    key={u.id}
+                                    onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                                    className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-gray-50 transition"
+                                    title={`${u.first_name ?? ""} ${u.last_name ?? ""}\n${u.email}`}
+                                  >
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                                      style={{ backgroundColor: g.color }}>
+                                      {(u.first_name?.[0] || "").toUpperCase()}{(u.last_name?.[0] || "").toUpperCase()}
+                                    </div>
+                                    <span className="text-[9px] text-gray-600 truncate w-full text-center leading-tight">
+                                      {u.first_name ?? ""} {(u.last_name ?? "").charAt(0)}.
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
                             ) : (
                               <p className="text-[10px] text-gray-400 px-2 py-1">Aucun membre</p>
                             )}
