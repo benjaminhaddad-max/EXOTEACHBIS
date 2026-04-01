@@ -226,7 +226,7 @@ function SerieModal({
   onSave: (data: any) => Promise<void>; onClose: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [type, setType] = useState<"concours_blanc" | "revision" | "annales" | "qcm_supplementaires">(initial?.type as any ?? "qcm_supplementaires");
+  const type = "qcm_supplementaires" as const;
   const [timed, setTimed] = useState(initial?.timed ?? false);
   const [duration, setDuration] = useState(String(initial?.duration_minutes ?? 30));
   const [scoreDefinitif, setScoreDefinitif] = useState(initial?.score_definitif ?? false);
@@ -257,13 +257,20 @@ function SerieModal({
           <div>
             <label className="text-xs text-white/50 uppercase tracking-wider font-semibold mb-1.5 block">Type de série</label>
             <div className="grid grid-cols-2 gap-2">
-              {(["annales", "qcm_supplementaires", "concours_blanc", "revision"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setType(t)}
-                  className={`py-2.5 px-3 rounded-lg text-[11px] font-bold border transition-colors text-left ${type === t ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/10 text-white/40 hover:border-white/20 hover:text-white/60"}`}>
+              <button type="button"
+                className="py-2.5 px-3 rounded-lg text-[11px] font-bold border bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C] text-left">
+                {TYPE_LABELS["qcm_supplementaires"]}
+              </button>
+              {(["annales", "concours_blanc", "revision"] as const).map((t) => (
+                <button key={t} type="button" disabled
+                  className="py-2.5 px-3 rounded-lg text-[11px] font-bold border border-white/5 text-white/20 text-left cursor-not-allowed opacity-40">
                   {TYPE_LABELS[t]}
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-[10px] text-white/30 leading-snug">
+              Les autres types de séries se créent à l'échelle de la matière (vue Exercices) puis s'attribuent aux chapitres.
+            </p>
           </div>
           <div className="divide-y divide-white/8">
             {[
