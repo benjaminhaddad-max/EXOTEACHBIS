@@ -172,58 +172,79 @@ export function CoursIcon(props: Ic) {
   const id = useId();
   const gold = `crs-g-${id}`;
   const page = `crs-p-${id}`;
+  const mask = `crs-m-${id}`;
   return (
-    <svg viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
       <defs>
-        <linearGradient id={gold} x1="0" y1="0" x2="32" y2="40" gradientUnits="userSpaceOnUse">
+        <linearGradient id={gold} x1="0" y1="0" x2="32" y2="42" gradientUnits="userSpaceOnUse">
           <stop stopColor="#E3C286" />
           <stop offset="1" stopColor="#C9A84C" />
         </linearGradient>
-        <linearGradient id={page} x1="0" y1="0" x2="32" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#FFFFFF" />
-          <stop offset="1" stopColor="#E8E4DC" />
+        <linearGradient id={page} x1="4" y1="2" x2="28" y2="40" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FEFCF8" />
+          <stop offset="1" stopColor="#F0EBE0" />
         </linearGradient>
+        <clipPath id={mask}><rect x="1.5" y="1.5" width="29" height="39" rx="2" /></clipPath>
       </defs>
+
+      {/* Page shadow */}
+      <rect x="2.5" y="2.5" width="29" height="39" rx="2.5" fill="#000" opacity="0.15" />
       {/* Page */}
-      <rect x="1" y="1" width="30" height="38" rx="2.5" fill={`url(#${page})`} stroke={`url(#${gold})`} strokeWidth="0.8" />
-      {/* DS header bar */}
-      <rect x="1" y="1" width="30" height="7" rx="2.5" fill="#0B1A2E" />
-      <rect x="1" y="5" width="30" height="3" fill="#0B1A2E" />
-      {/* "DS" text in header */}
-      <text x="4" y="6.5" fill="#C9A84C" fontSize="3.5" fontWeight="800" fontFamily="sans-serif">DS</text>
-      {/* Revision bar label */}
-      <text x="12" y="6" fill="#FFFFFF" fontSize="2" fontWeight="700" fontFamily="sans-serif" opacity="0.6">RÉVISIONS</text>
-      {/* Revision boxes */}
-      {[0,1,2,3,4,5].map(i => (
-        <rect key={i} x={12 + i * 3} y="6.5" width="2.2" height="1.5" rx="0.3" fill="none" stroke="#FFFFFF" strokeWidth="0.3" opacity="0.4" />
-      ))}
-      {/* Fiche # badge */}
-      <circle cx="16" cy="10.5" r="2.5" fill="none" stroke={`url(#${gold})`} strokeWidth="0.5" />
-      <text x="16" y="11.5" fill="#C9A84C" fontSize="2.5" fontWeight="800" fontFamily="sans-serif" textAnchor="middle">#</text>
-      {/* Matière + Titre line */}
-      <rect x="3" y="13.5" width="10" height="1.2" rx="0.4" fill="#0B1A2E" opacity="0.6" />
-      <rect x="19" y="13.5" width="10" height="1.2" rx="0.4" fill="#C9A84C" opacity="0.3" />
-      {/* Two-column content area */}
-      <rect x="3" y="16" width="12.5" height="16" rx="1" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.15" />
-      <rect x="16.5" y="16" width="12.5" height="16" rx="1" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.15" />
-      {/* Column icons */}
-      <rect x="4.5" y="17.5" width="3" height="3" rx="0.5" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.2" />
-      <rect x="24.5" y="17.5" width="3" height="3" rx="0.5" fill="none" stroke="#0B1A2E" strokeWidth="0.3" opacity="0.2" />
-      {/* Content lines left */}
-      <rect x="4.5" y="22" width="9" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.08" />
-      <rect x="4.5" y="24" width="7" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.06" />
-      <rect x="4.5" y="26" width="8" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.05" />
-      {/* Content lines right */}
-      <rect x="18" y="22" width="9" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.08" />
-      <rect x="18" y="24" width="7" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.06" />
-      <rect x="18" y="26" width="8" height="0.7" rx="0.2" fill="#0B1A2E" opacity="0.05" />
-      {/* DS watermark center */}
-      <text x="16" y="29" fill="#C9A84C" fontSize="8" fontWeight="900" fontFamily="sans-serif" textAnchor="middle" opacity="0.04">DS</text>
-      {/* Legend bar */}
-      <rect x="3" y="33.5" width="26" height="3" rx="0.5" fill="#0B1A2E" opacity="0.04" />
-      <rect x="4" y="34.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.12" />
-      <rect x="11" y="34.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.08" />
-      <rect x="18" y="34.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.08" />
+      <rect x="1.5" y="1.5" width="29" height="39" rx="2.5" fill={`url(#${page})`} />
+      {/* Gold border */}
+      <rect x="1.5" y="1.5" width="29" height="39" rx="2.5" fill="none" stroke={`url(#${gold})`} strokeWidth="0.7" />
+
+      <g clipPath={`url(#${mask})`}>
+        {/* Header bar */}
+        <rect x="1.5" y="1.5" width="29" height="6.5" fill="#0B1A2E" />
+
+        {/* DS logo mark in header — simplified S-curve from the real logo */}
+        <g transform="translate(3.5, 2.2) scale(0.028)" opacity="0.9">
+          <path fill="#C9A84C" d="M158.61,157.69c-1.01-.67-2.21-.9-3.39-.65-1.17.25-2.17.93-2.82,1.94l-1.19,1.85c-.95,1.47-2.4,2.47-4.09,2.82-.55.12-1.12.16-1.71.12-.03,0-.05,0-.08,0-.74-.05-1.47-.25-2.14-.55-.32-.14-.63-.3-.92-.49l-6.63-4.39-.71-.47c-5.11-3.39-11.97-1.95-15.29,3.2-1.6,2.48-2.15,5.45-1.54,8.36.61,2.92,2.31,5.42,4.78,7.06l11.39,7.54,6.6,4.37,4.03,2.67c1.47.97,2.47,2.47,2.82,4.22.34,1.71.01,3.45-.92,4.9-.95,1.47-2.4,2.47-4.09,2.82-1.07.22-2.15.17-3.17-.14-.59-.18-1.15-.44-1.68-.79l-3.67-2.43c-.24-.16-.48-.29-.73-.43-1.07-.6-2.21-1.02-3.4-1.24h-.07c-.05-.01-.1-.02-.15-.03-1.33-.22-2.67-.18-3.98.09-2.88.61-5.36,2.31-6.96,4.8l-2.6,3.63s.03.02.06.04c.05.03.12.02.15-.02l2.6-3.63c.92-1.43,2.37-2.43,4.06-2.78,1.69-.35,3.41-.02,4.85.93l5.17,3.42,2.17,1.44c.49.33,1.02.62,1.57.87.72.32,1.45.55,2.19.72,4.4.97,8.99-.84,11.53-4.78,1.6-2.48,2.15-5.45,1.54-8.36-.61-2.92-2.31-5.42-4.78-7.06l-6.06-4.01-6.79-4.5-9.17-6.07c-1.45-.96-2.45-2.43-2.81-4.15-.36-1.73-.04-3.49.91-4.96.95-1.47,2.4-2.47,4.09-2.82,1.68-.35,3.41-.02,4.85.93l2.93,1.94,7.35,4.87.73.49c.32.21.65.4.98.58,5.06,2.65,11.21,1.03,14.31-3.78l1.19-1.85c.64-1,.86-2.19.62-3.36-.25-1.18-.93-2.19-1.94-2.86Z" />
+        </g>
+
+        {/* Thin gold accent line under header */}
+        <rect x="1.5" y="8" width="29" height="0.5" fill={`url(#${gold})`} opacity="0.5" />
+
+        {/* Revision dots — subtle, tiny */}
+        {[0,1,2,3,4].map(i => (
+          <rect key={i} x={18 + i * 2.4} y="3.5" width="1.6" height="2" rx="0.4" fill="none" stroke="#C9A84C" strokeWidth="0.3" opacity="0.5" />
+        ))}
+
+        {/* Title area placeholder */}
+        <rect x="5" y="11" width="22" height="2.5" rx="0.8" fill="#0B1A2E" opacity="0.08" />
+        <rect x="8" y="14.5" width="16" height="1.5" rx="0.5" fill={`url(#${gold})`} opacity="0.12" />
+
+        {/* Separator */}
+        <line x1="5" y1="17.5" x2="27" y2="17.5" stroke={`url(#${gold})`} strokeWidth="0.3" opacity="0.3" />
+
+        {/* Two-column content */}
+        <rect x="4" y="19" width="11" height="14" rx="0.8" fill="none" stroke="#0B1A2E" strokeWidth="0.25" opacity="0.08" />
+        <rect x="17" y="19" width="11" height="14" rx="0.8" fill="none" stroke="#0B1A2E" strokeWidth="0.25" opacity="0.08" />
+
+        {/* Content lines left */}
+        <rect x="5.5" y="20.5" width="8" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.06" />
+        <rect x="5.5" y="22.5" width="6.5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.05" />
+        <rect x="5.5" y="24.5" width="7.5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.04" />
+        <rect x="5.5" y="26.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.03" />
+
+        {/* Content lines right */}
+        <rect x="18.5" y="20.5" width="8" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.06" />
+        <rect x="18.5" y="22.5" width="6.5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.05" />
+        <rect x="18.5" y="24.5" width="7.5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.04" />
+        <rect x="18.5" y="26.5" width="5" height="0.6" rx="0.2" fill="#0B1A2E" opacity="0.03" />
+
+        {/* DS watermark — the real logo S-curve, very faint */}
+        <g transform="translate(8, 20) scale(0.065)" opacity="0.035">
+          <path fill="#C9A84C" d="M158.61,157.69c-1.01-.67-2.21-.9-3.39-.65-1.17.25-2.17.93-2.82,1.94l-1.19,1.85c-.95,1.47-2.4,2.47-4.09,2.82-.55.12-1.12.16-1.71.12-.03,0-.05,0-.08,0-.74-.05-1.47-.25-2.14-.55-.32-.14-.63-.3-.92-.49l-6.63-4.39-.71-.47c-5.11-3.39-11.97-1.95-15.29,3.2-1.6,2.48-2.15,5.45-1.54,8.36.61,2.92,2.31,5.42,4.78,7.06l11.39,7.54,6.6,4.37,4.03,2.67c1.47.97,2.47,2.47,2.82,4.22.34,1.71.01,3.45-.92,4.9-.95,1.47-2.4,2.47-4.09,2.82-1.07.22-2.15.17-3.17-.14-.59-.18-1.15-.44-1.68-.79l-3.67-2.43c-.24-.16-.48-.29-.73-.43-1.07-.6-2.21-1.02-3.4-1.24h-.07c-.05-.01-.1-.02-.15-.03-1.33-.22-2.67-.18-3.98.09-2.88.61-5.36,2.31-6.96,4.8l-2.6,3.63s.03.02.06.04c.05.03.12.02.15-.02l2.6-3.63c.92-1.43,2.37-2.43,4.06-2.78,1.69-.35,3.41-.02,4.85.93l5.17,3.42,2.17,1.44c.49.33,1.02.62,1.57.87.72.32,1.45.55,2.19.72,4.4.97,8.99-.84,11.53-4.78,1.6-2.48,2.15-5.45,1.54-8.36-.61-2.92-2.31-5.42-4.78-7.06l-6.06-4.01-6.79-4.5-9.17-6.07c-1.45-.96-2.45-2.43-2.81-4.15-.36-1.73-.04-3.49.91-4.96.95-1.47,2.4-2.47,4.09-2.82,1.68-.35,3.41-.02,4.85.93l2.93,1.94,7.35,4.87.73.49c.32.21.65.4.98.58,5.06,2.65,11.21,1.03,14.31-3.78l1.19-1.85c.64-1,.86-2.19.62-3.36-.25-1.18-.93-2.19-1.94-2.86Z" />
+        </g>
+
+        {/* Bottom bar */}
+        <rect x="1.5" y="35" width="29" height="5.5" fill="#0B1A2E" opacity="0.03" />
+        <rect x="5" y="37" width="6" height="0.5" rx="0.2" fill="#0B1A2E" opacity="0.06" />
+        <rect x="13" y="37" width="6" height="0.5" rx="0.2" fill="#0B1A2E" opacity="0.04" />
+        <rect x="21" y="37" width="6" height="0.5" rx="0.2" fill="#0B1A2E" opacity="0.04" />
+      </g>
     </svg>
   );
 }
