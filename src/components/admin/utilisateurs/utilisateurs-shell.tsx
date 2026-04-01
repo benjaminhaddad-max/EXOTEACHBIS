@@ -1781,6 +1781,30 @@ function ComptesView({
     return m;
   }, [profMatieres]);
 
+  // Build prof formation summaries by role_type
+  const profFormationSummary = useMemo(() => {
+    const map = new Map<string, { cours: string[]; contenu: string[] }>();
+    for (const pm of profMatieres) {
+      if (!map.has(pm.prof_id)) map.set(pm.prof_id, { cours: [], contenu: [] });
+      const entry = map.get(pm.prof_id)!;
+      const matiere = matiereMap.get(pm.matiere_id);
+      if (!matiere) continue;
+      // Find formation context from matiere's dossier
+      const matDossier = matiere.dossier_id ? dMap.get(matiere.dossier_id) : null;
+      const chain = matDossier ? getAncestorChain(matDossier.id) : [];
+      const offer = chain.find(d => d.dossier_type === "offer");
+      const uni = chain.find(d => d.dossier_type === "university");
+      const label = uni ? `${offer?.name ?? ""} - ${uni.name.replace("Université ", "")}` : offer?.name ?? "";
+      if (pm.role_type === "cours" || !pm.role_type) {
+        if (label && !entry.cours.includes(label)) entry.cours.push(label);
+      }
+      if (pm.role_type === "contenu" || pm.role_type === "qa") {
+        if (label && !entry.contenu.includes(label)) entry.contenu.push(label);
+      }
+    }
+    return map;
+  }, [profMatieres, matiereMap, dMap]);
+
   const getAncestorChain = (dossierId: string | null): Dossier[] => {
     const chain: Dossier[] = [];
     let id = dossierId;
@@ -1944,8 +1968,9 @@ function ComptesView({
             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.03)" }}>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Utilisateur</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Rôle</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Formation</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Détails</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Donne cours</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Contenu</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Groupe</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
@@ -1970,16 +1995,6 @@ function ComptesView({
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate" style={{ color: "rgba(255,255,255,0.9)" }}>{fullName(u)}</p>
                         <p className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
-                        {u.role === "prof" && assignedMatieres.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {assignedMatieres.map(m => (
-                              <span key={m} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(59,130,246,0.12)", color: "#BFDBFE" }}>
-                                <BookOpen size={9} />
-                                {m}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </td>
@@ -1988,66 +2003,45 @@ function ComptesView({
                       {rc.icon} {rc.label}
                     </span>
                   </td>
-                  {/* Formation */}
+                  {/* Donne cours */}
                   <td className="px-4 py-3">
-                    {u.role === "prof" && "formationNames" in info ? (
-                      <div className="space-y-0.5">
-                        {(info.formationNames as string[]).length > 0 ? (info.formationNames as string[]).map(f => (
-                          <span key={f} className="block text-[11px] font-medium truncate max-w-[160px]" style={{ color: "rgba(255,255,255,0.65)" }}>{f}</span>
-                        )) : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
-                      </div>
-                    ) : info.formation ? (
-                      <span className="text-[11px] font-medium truncate block max-w-[160px]" style={{ color: "rgba(255,255,255,0.65)" }}>{info.formation.name}</span>
+                    {u.role === "prof" ? (() => {
+                      const summary = profFormationSummary.get(u.id);
+                      const cours = summary?.cours ?? [];
+                      return cours.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {cours.map(f => (
+                            <span key={f} className="block text-[10px] font-medium truncate max-w-[200px]" style={{ color: "rgba(52,211,153,0.8)" }}>{f}</span>
+                          ))}
+                        </div>
+                      ) : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>;
+                    })() : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
+                  </td>
+                  {/* Contenu */}
+                  <td className="px-4 py-3">
+                    {u.role === "prof" ? (() => {
+                      const summary = profFormationSummary.get(u.id);
+                      const contenu = summary?.contenu ?? [];
+                      return contenu.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {contenu.map(f => (
+                            <span key={f} className="block text-[10px] font-medium truncate max-w-[200px]" style={{ color: "rgba(96,165,250,0.8)" }}>{f}</span>
+                          ))}
+                        </div>
+                      ) : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>;
+                    })() : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
+                  </td>
+                  {/* Groupe */}
+                  <td className="px-4 py-3">
+                    {info.classe ? (
+                      <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
+                        {info.classe.name}
+                      </span>
+                    ) : u.role === "coach" ? (
+                      <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Multi-classes</span>
                     ) : (
                       <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                    )}
-                  </td>
-                  {/* Détails : université + classe */}
-                  <td className="px-4 py-3">
-                    {u.role === "prof" && "universityNames" in info ? (
-                      <div className="space-y-1">
-                        {(info.universityNames as string[]).length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {(info.universityNames as string[]).map(un => (
-                              <span key={un} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(139,92,246,0.1)", color: "rgba(196,181,253,0.8)", border: "1px solid rgba(139,92,246,0.15)" }}>
-                                <Building2 size={8} />
-                                {un}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {(info.classes as Groupe[]).length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {(info.classes as Groupe[]).map(c => (
-                              <span key={c.id} className="inline-flex items-center gap-1 text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
-                                {c.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {(info.universityNames as string[]).length === 0 && (info.classes as Groupe[]).length === 0 && (
-                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-0.5">
-                        {info.university && (
-                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "rgba(139,92,246,0.1)", color: "rgba(196,181,253,0.8)", border: "1px solid rgba(139,92,246,0.15)" }}>
-                            <Building2 size={8} />
-                            {info.university.name}
-                          </span>
-                        )}
-                        {info.classe && (
-                          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
-                            {info.classe.name}
-                          </span>
-                        )}
-                        {!info.university && !info.classe && (
-                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                        )}
-                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
