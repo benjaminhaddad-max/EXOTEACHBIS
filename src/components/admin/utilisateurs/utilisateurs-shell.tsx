@@ -4737,12 +4737,17 @@ function EditUserModal({
 
             const coursUnis = coursFormation ? getUnisForOffer(coursFormation) : [];
             const coursGroupes = coursUni ? getGroupesForUni(coursUni) : [];
-            const coursMats = coursUni ? getMatieresForUni(coursUni) : [];
-            // All groupes for the selected university (for class checkboxes under each matière)
-            const allUniGroupes = coursUni ? groupes.filter((g) => g.formation_dossier_id === coursUni) : [];
+            // If no universities, load matières directly from the formation
+            const coursMats = coursUni ? getMatieresForUni(coursUni)
+              : (coursFormation && coursUnis.length === 0) ? getMatieresForUni(coursFormation) : [];
+            // All groupes for the selected context
+            const allUniGroupes = coursUni
+              ? groupes.filter((g) => g.formation_dossier_id === coursUni)
+              : (coursFormation && coursUnis.length === 0) ? groupes.filter((g) => g.formation_dossier_id === coursFormation) : [];
 
             const qaUnis = qaFormation ? getUnisForOffer(qaFormation) : [];
-            const qaMats = qaUni ? getMatieresForUni(qaUni) : [];
+            const qaMats = qaUni ? getMatieresForUni(qaUni)
+              : (qaFormation && qaUnis.length === 0) ? getMatieresForUni(qaFormation) : [];
 
             return (
             <div className="space-y-5">
@@ -4767,7 +4772,7 @@ function EditUserModal({
                     </div>
                   )}
                   {/* Matières → Classes */}
-                  {coursUni && coursMats.length > 0 && (
+                  {coursMats.length > 0 && (
                     <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {groupByDossierLabel(coursMats).map(([label, mats]) => (
                         <div key={label} className="mb-2">
@@ -4838,7 +4843,7 @@ function EditUserModal({
                     </div>
                   )}
                   {/* Matières */}
-                  {qaUni && qaMats.length > 0 && (
+                  {qaMats.length > 0 && (
                     <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {groupByDossierLabel(qaMats).map(([label, mats]) => (
                         <div key={label} className="mb-2">
