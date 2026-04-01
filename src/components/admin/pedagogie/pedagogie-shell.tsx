@@ -2819,7 +2819,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, borderLeft: selected ? "3px solid #C9A84C" : "3px solid transparent" }}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleFileDrop}
@@ -2830,7 +2830,6 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
             ? "border-[#4fabdb]/40 bg-[#4fabdb]/10 ring-2 ring-[#4fabdb]/20"
             : "border-white/[0.06] hover:border-white/12 hover:bg-gradient-to-r hover:from-white/[0.03] hover:to-transparent hover:shadow-[0_2px_12px_rgba(0,0,0,0.15)]"
       }`}
-      style={{ borderLeft: selected ? "3px solid #C9A84C" : "3px solid transparent" }}
     >
       {onToggleSelect && (
         <input
