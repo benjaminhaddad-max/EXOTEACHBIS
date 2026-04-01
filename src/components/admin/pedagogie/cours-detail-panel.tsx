@@ -1239,6 +1239,36 @@ export function CoursDetailPanel({
   const [, startTransition] = useTransition();
   const [sidebarTab, setSidebarTab] = useState<"series" | "flashcards">("series");
   const [serieFilter, setSerieFilter] = useState<SerieType | "all">("all");
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+
+  const toggleChecked = (id: string) => setCheckedIds((prev) => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+
+  const handleBulkArchive = async () => {
+    if (checkedIds.size === 0) return;
+    for (const id of checkedIds) await toggleSerieVisible(id, false);
+    setSeries((prev) => prev.map((s) => checkedIds.has(s.id) ? { ...s, visible: false } : s));
+    showToast(`${checkedIds.size} série(s) archivée(s)`, "success");
+    setCheckedIds(new Set());
+  };
+
+  const handleBulkRestore = async () => {
+    if (checkedIds.size === 0) return;
+    for (const id of checkedIds) await toggleSerieVisible(id, true);
+    setSeries((prev) => prev.map((s) => checkedIds.has(s.id) ? { ...s, visible: true } : s));
+    showToast(`${checkedIds.size} série(s) restaurée(s)`, "success");
+    setCheckedIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (checkedIds.size === 0) return;
+    if (!confirm(`Supprimer définitivement ${checkedIds.size} série(s) ?`)) return;
+    for (const id of checkedIds) await deleteSerie(id);
+    setSeries((prev) => prev.filter((s) => !checkedIds.has(s.id)));
+    showToast(`${checkedIds.size} série(s) supprimée(s)`, "success");
+    setCheckedIds(new Set());
+  };
 
   const [showArchived, setShowArchived] = useState(false);
 
@@ -1480,6 +1510,27 @@ export function CoursDetailPanel({
                     </div>
                   )}
 
+                  {/* Barre d'actions bulk */}
+                  {checkedIds.size > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/10">
+                      <span className="text-[10px] font-bold text-[#C9A84C]">{checkedIds.size} sél.</span>
+                      <button onClick={handleBulkArchive}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
+                        <EyeOff size={10} /> Archiver
+                      </button>
+                      <button onClick={handleBulkRestore}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-white/10 text-white/70 hover:bg-white/15 transition-colors">
+                        <Eye size={10} /> Restaurer
+                      </button>
+                      <button onClick={handleBulkDelete}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors">
+                        <Trash2 size={10} /> Suppr.
+                      </button>
+                      <button onClick={() => setCheckedIds(new Set())}
+                        className="ml-auto text-[10px] text-white/40 hover:text-white/60">✕</button>
+                    </div>
+                  )}
+
                   {visibleSeries.length === 0 && archivedSeries.length === 0 ? (
                     <div className="rounded-xl border-2 border-dashed border-white/8 p-5 text-center">
                       <Layers size={20} className="mx-auto text-white/20 mb-2" />
@@ -1493,14 +1544,10 @@ export function CoursDetailPanel({
                       {/* Séries actives */}
                       <div className="space-y-2">
                         {filteredSeries.map((s) => (
-                          <a
-                            key={s.id}
-                            href={`/serie/${s.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-xl border border-white/8 bg-white/4 p-3 flex items-center gap-3 cursor-pointer hover:bg-white/8 transition-colors group block"
-                          >
-                            <div className="flex-1 min-w-0">
+                          <div key={s.id} className="rounded-xl border border-white/8 bg-white/4 p-3 flex items-start gap-2.5 hover:bg-white/8 transition-colors group">
+                            <input type="checkbox" checked={checkedIds.has(s.id)} onChange={() => toggleChecked(s.id)}
+                              className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30 cursor-pointer" />
+                            <a href={`/serie/${s.id}`} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 cursor-pointer">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-semibold text-white group-hover:text-[#C9A84C] transition-colors">{s.name}</span>
                                 {serieFilter === "all" && <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[s.type]}`}>{TYPE_LABELS[s.type]}</span>}
@@ -1512,25 +1559,25 @@ export function CoursDetailPanel({
                                 {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
                                 {s.timed && ` · ${s.duration_minutes}min`}
                               </p>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.preventDefault()}>
-                              <button onClick={(e) => { e.preventDefault(); handleToggleVisible(s.id, false); }}
+                            </a>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => handleToggleVisible(s.id, false)}
                                 className="p-1.5 rounded-lg hover:bg-orange-500/20 text-white/30 hover:text-orange-400 transition-colors"
-                                title="Archiver (masquer pour les élèves)">
+                                title="Archiver (masquer)">
                                 <EyeOff size={13} />
                               </button>
-                              <button onClick={(e) => { e.preventDefault(); setModal({ type: "edit_serie", s }); }}
+                              <button onClick={() => setModal({ type: "edit_serie", s })}
                                 className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-                                title="Modifier la série">
+                                title="Modifier">
                                 <Pencil size={13} />
                               </button>
-                              <button onClick={(e) => { e.preventDefault(); handleDeleteSerie(s.id); }}
+                              <button onClick={() => handleDeleteSerie(s.id)}
                                 className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
                                 title="Supprimer">
                                 <Trash2 size={13} />
                               </button>
                             </div>
-                          </a>
+                          </div>
                         ))}
                         {filteredSeries.length === 0 && visibleSeries.length > 0 && (
                           <p className="text-xs text-white/30 text-center py-3">Aucune série de ce type</p>
@@ -1538,20 +1585,24 @@ export function CoursDetailPanel({
                       </div>
 
                       {/* Section Archives */}
-                      {archivedSeries.length > 0 && (
-                        <div className="mt-4 pt-3 border-t border-white/8">
-                          <button
-                            onClick={() => setShowArchived(!showArchived)}
-                            className="flex items-center gap-2 w-full text-left text-xs font-semibold text-white/40 hover:text-white/60 transition-colors"
-                          >
-                            <Archive size={12} />
-                            Archives ({archivedSeries.length})
-                            <ChevronDown size={12} className={`ml-auto transition-transform ${showArchived ? "rotate-180" : ""}`} />
-                          </button>
-                          {showArchived && (
+                      <div className="mt-4 pt-3 border-t border-white/8">
+                        <button
+                          onClick={() => setShowArchived(!showArchived)}
+                          className="flex items-center gap-2 w-full text-left text-xs font-semibold text-white/40 hover:text-white/60 transition-colors"
+                        >
+                          <Archive size={12} />
+                          Archives ({archivedSeries.length})
+                          <ChevronDown size={12} className={`ml-auto transition-transform ${showArchived ? "rotate-180" : ""}`} />
+                        </button>
+                        {showArchived && (
+                          archivedSeries.length === 0 ? (
+                            <p className="text-[10px] text-white/20 mt-2 text-center">Aucune série archivée</p>
+                          ) : (
                             <div className="mt-2 space-y-1.5">
                               {archivedSeries.map((s) => (
-                                <div key={s.id} className="rounded-lg border border-white/5 bg-white/2 p-2.5 flex items-center gap-2.5 opacity-60">
+                                <div key={s.id} className="rounded-lg border border-white/5 bg-white/2 p-2.5 flex items-start gap-2 opacity-60">
+                                  <input type="checkbox" checked={checkedIds.has(s.id)} onChange={() => toggleChecked(s.id)}
+                                    className="shrink-0 mt-0.5 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30 cursor-pointer" />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="text-xs font-medium text-white/60 truncate">{s.name}</span>
@@ -1574,9 +1625,9 @@ export function CoursDetailPanel({
                                 </div>
                               ))}
                             </div>
-                          )}
-                        </div>
-                      )}
+                          )
+                        )}
+                      </div>
                     </>
                   )}
                 </section>
