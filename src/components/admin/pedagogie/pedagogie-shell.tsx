@@ -148,6 +148,8 @@ export function PedagogieShell({
   const [treeWidth, setTreeWidth] = useState(360);
   const [isResizingTree, setIsResizingTree] = useState(false);
   const treeWidthRef = useRef(treeWidth);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+  const rightScrollRef = useRef<HTMLDivElement>(null);
   const resizeStartRef = useRef<{ mouseX: number; width: number } | null>(null);
 
   const sensors = useSensors(
@@ -428,6 +430,10 @@ export function PedagogieShell({
   };
 
   const refreshAll = async () => {
+    // Save scroll positions
+    const treeScroll = treeScrollRef.current?.scrollTop ?? 0;
+    const rightScroll = rightScrollRef.current?.scrollTop ?? 0;
+
     const result = await getAllDossiers();
     setAllDossiers(result.data as Dossier[]);
     if (selectedId) {
@@ -435,6 +441,12 @@ export function PedagogieShell({
       setRessourcesMap((prev) => ({ ...prev, [selectedId]: ressources as Ressource[] }));
       setCoursMap((prev) => ({ ...prev, [selectedId]: cours }));
     }
+
+    // Restore scroll positions after re-render
+    requestAnimationFrame(() => {
+      if (treeScrollRef.current) treeScrollRef.current.scrollTop = treeScroll;
+      if (rightScrollRef.current) rightScrollRef.current.scrollTop = rightScroll;
+    });
   };
 
   // Drag end — sous-dossiers dans le panneau droit
@@ -570,7 +582,7 @@ export function PedagogieShell({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
+        <div ref={treeScrollRef} className="flex-1 overflow-y-auto p-2">
           {tree.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FolderPlus className="mb-2 h-8 w-8 text-gray-200" />
@@ -739,7 +751,7 @@ export function PedagogieShell({
             ) : (
 
             /* Contenu tab */
-            <div className="flex-1 overflow-y-auto p-5">
+            <div ref={rightScrollRef} className="flex-1 overflow-y-auto p-5">
               {childDossiers.length === 0 && ressources.length === 0 && coursList.length === 0 && !loadingRessources ? (
                 <EmptyDossier
                   onAdd={canEdit ? () => setModal({ type: "add_picker", parentId: selectedId }) : undefined}
