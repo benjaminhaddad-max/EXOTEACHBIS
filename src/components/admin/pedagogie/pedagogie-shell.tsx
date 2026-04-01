@@ -739,6 +739,12 @@ export function PedagogieShell({
                   dossierName={selectedDossier.name}
                   allDossiers={allDossiers}
                   availableSections={exerciseSections}
+                  hiddenTabs={[
+                    // Always hide Fabricateur
+                    "acc_fabricator",
+                    // Hide Annales for non-PREPA offers
+                    ...(!currentOfferCode || ["terminale_sante", "paes_fr_eu", "premiere_elite"].includes(currentOfferCode) ? ["annales"] : []),
+                  ]}
                   onNewSerie={() => {}}
                 />
               </div>

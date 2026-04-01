@@ -747,15 +747,18 @@ export function DossierExercicesView({
   dossierName,
   allDossiers,
   availableSections,
+  hiddenTabs,
   onNewSerie,
 }: {
   dossierId: string;
   dossierName: string;
   allDossiers: Dossier[];
   availableSections?: string[];
+  hiddenTabs?: string[];
   onNewSerie?: (type: SerieType) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<SerieType | "flashcards" | "acc_fabricator">("annales");
+  const visibleTypes = TYPES.filter((t) => !hiddenTabs?.includes(t));
+  const [activeTab, setActiveTab] = useState<SerieType | "flashcards" | "acc_fabricator">(visibleTypes[0] ?? "qcm_supplementaires");
   const [showAccCheck, setShowAccCheck] = useState(false);
   const [series, setSeries] = useState<SerieSummary[]>([]);
   const [cours, setCours] = useState<CoursBasic[]>([]);
@@ -892,9 +895,9 @@ export function DossierExercicesView({
         </button>
       </div>
 
-      {/* 5 Type Tabs (4 series + flashcards) */}
+      {/* Type Tabs */}
       <div className="shrink-0 flex border-b border-white/8">
-        {TYPES.map((t) => {
+        {TYPES.filter((t) => !hiddenTabs?.includes(t)).map((t) => {
           const cfg = TYPE_CONFIG[t];
           const count = seriesByType(t).length;
           return (
@@ -907,17 +910,13 @@ export function DossierExercicesView({
           );
         })}
         {/* Flashcards tab */}
-        <button onClick={() => setActiveTab("flashcards")}
-          className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === "flashcards" ? "border-current text-indigo-300" : "border-transparent text-white/30 hover:text-white/50"}`}>
-          <Layers size={14} />
-          <span className="text-[9px] font-bold mt-1 leading-tight">Flashcards</span>
-        </button>
-        {/* ACC Fabricator tab */}
-        <button onClick={() => setActiveTab("acc_fabricator")}
-          className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === "acc_fabricator" ? "border-current text-orange-300" : "border-transparent text-white/30 hover:text-white/50"}`}>
-          <FileUp size={14} />
-          <span className="text-[9px] font-bold mt-1 leading-tight">Fabricateur</span>
-        </button>
+        {!hiddenTabs?.includes("flashcards") && (
+          <button onClick={() => setActiveTab("flashcards")}
+            className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === "flashcards" ? "border-current text-indigo-300" : "border-transparent text-white/30 hover:text-white/50"}`}>
+            <Layers size={14} />
+            <span className="text-[9px] font-bold mt-1 leading-tight">Flashcards</span>
+          </button>
+        )}
       </div>
 
       {/* Bulk actions bar */}
