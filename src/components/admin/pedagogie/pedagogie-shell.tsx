@@ -620,6 +620,14 @@ export function PedagogieShell({
               </SortableContext>
             </DndContext>
           )}
+          {canEdit && (
+            <button
+              onClick={() => setModal({ type: "create_dossier", parentId: null })}
+              className="mt-2 mx-2 mb-2 flex w-[calc(100%-16px)] items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/10 py-2 text-[11px] font-medium text-white/30 transition hover:border-white/20 hover:bg-white/5 hover:text-white/50"
+            >
+              <Plus className="h-3 w-3" /> Ajouter une offre
+            </button>
+          )}
         </div>
       </div>
 
