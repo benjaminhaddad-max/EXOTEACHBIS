@@ -210,6 +210,109 @@ export function SubOfferIcon(props: Ic) {
   );
 }
 
+// ─── Serie type icons ─────────────────────────────────────────────────────
+
+export function AnnalesIcon(props: Ic) {
+  const id = useId();
+  const g = `ann-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id={g} x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FCD34D" />
+          <stop offset="1" stopColor="#D97706" />
+        </linearGradient>
+      </defs>
+      <rect x="4" y="2" width="16" height="20" rx="2.5" fill={`url(#${g})`} opacity="0.1" stroke={`url(#${g})`} strokeWidth="1.3" />
+      <path d="M4 7h16" stroke={`url(#${g})`} strokeWidth="1" opacity="0.35" />
+      <path d="M8 4h2" stroke={`url(#${g})`} strokeWidth="1.4" strokeLinecap="round" opacity="0.6" />
+      <path d="M8 10.5h8" stroke={`url(#${g})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
+      <path d="M8 13.5h6" stroke={`url(#${g})`} strokeWidth="1.1" strokeLinecap="round" opacity="0.35" />
+      <circle cx="17" cy="18" r="3.5" fill={`url(#${g})`} opacity="0.15" stroke={`url(#${g})`} strokeWidth="1.1" />
+      <path d="M15.8 18l1 1 2-2.2" stroke={`url(#${g})`} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+    </svg>
+  );
+}
+
+export function QcmIcon(props: Ic) {
+  const id = useId();
+  const g = `qcm-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id={g} x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#5EEAD4" />
+          <stop offset="1" stopColor="#14B8A6" />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="3" width="18" height="18" rx="3" fill={`url(#${g})`} opacity="0.08" stroke={`url(#${g})`} strokeWidth="1.3" />
+      <rect x="6" y="6.5" width="3" height="3" rx="0.8" fill="none" stroke={`url(#${g})`} strokeWidth="1.1" opacity="0.6" />
+      <path d="M6.8 8l0.8 0.8 1.6-1.6" stroke={`url(#${g})`} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+      <path d="M11.5 7.5h6" stroke={`url(#${g})`} strokeWidth="1.1" strokeLinecap="round" opacity="0.5" />
+      <rect x="6" y="11" width="3" height="3" rx="0.8" fill="none" stroke={`url(#${g})`} strokeWidth="1.1" opacity="0.4" />
+      <path d="M11.5 12h5" stroke={`url(#${g})`} strokeWidth="1.1" strokeLinecap="round" opacity="0.35" />
+      <rect x="6" y="15.5" width="3" height="3" rx="0.8" fill="none" stroke={`url(#${g})`} strokeWidth="1.1" opacity="0.3" />
+      <path d="M11.5 16.5h4" stroke={`url(#${g})`} strokeWidth="1.1" strokeLinecap="round" opacity="0.25" />
+    </svg>
+  );
+}
+
+export function ConcoursIcon(props: Ic) {
+  const id = useId();
+  const g = `con-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id={g} x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#FCA5A5" />
+          <stop offset="1" stopColor="#EF4444" />
+        </linearGradient>
+      </defs>
+      <path d="M6 4h12a2 2 0 012 2v3a6 6 0 01-6 6 6 6 0 01-6-6V6a2 2 0 012-2z" fill={`url(#${g})`} opacity="0.1" stroke={`url(#${g})`} strokeWidth="1.3" />
+      <path d="M12 15v3" stroke={`url(#${g})`} strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M8 20h8" stroke={`url(#${g})`} strokeWidth="1.4" strokeLinecap="round" opacity="0.6" />
+      <path d="M4 6h2M18 6h2" stroke={`url(#${g})`} strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
+      <circle cx="12" cy="9" r="1.5" fill={`url(#${g})`} opacity="0.5" />
+    </svg>
+  );
+}
+
+export function RevisionIcon(props: Ic) {
+  const id = useId();
+  const g = `rev-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id={g} x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#C4B5FD" />
+          <stop offset="1" stopColor="#8B5CF6" />
+        </linearGradient>
+      </defs>
+      <circle cx="12" cy="12" r="9" fill={`url(#${g})`} opacity="0.08" stroke={`url(#${g})`} strokeWidth="1.3" />
+      <path d="M8 12l2.5 2.5L16 9" stroke={`url(#${g})`} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 3.5V5M12 19v1.5M3.5 12H5M19 12h1.5" stroke={`url(#${g})`} strokeWidth="1" strokeLinecap="round" opacity="0.3" />
+    </svg>
+  );
+}
+
+export function FlashcardIcon(props: Ic) {
+  const id = useId();
+  const g = `flash-${id}`;
+  return (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id={g} x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#A5B4FC" />
+          <stop offset="1" stopColor="#6366F1" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="5" width="16" height="12" rx="2" fill={`url(#${g})`} opacity="0.08" stroke={`url(#${g})`} strokeWidth="1.2" transform="rotate(-3 10 11)" />
+      <rect x="5" y="6" width="16" height="12" rx="2" fill={`url(#${g})`} opacity="0.12" stroke={`url(#${g})`} strokeWidth="1.3" />
+      <path d="M9 10h8M9 13h5" stroke={`url(#${g})`} strokeWidth="1.1" strokeLinecap="round" opacity="0.45" />
+    </svg>
+  );
+}
+
 const DOSSIER_ICON_MAP: Record<string, React.FC<Ic>> = {
   offer: OfferIcon,
   sub_offer: SubOfferIcon,

@@ -8,6 +8,7 @@ import {
   Pencil, Trash2, GripVertical, ListPlus, ListMinus, Search,
   FileDown, FileUp, ChevronDown,
 } from "lucide-react";
+import { AnnalesIcon, QcmIcon, ConcoursIcon, RevisionIcon, FlashcardIcon } from "./dossier-icons";
 import type { Dossier, Cours } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
 import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie, updateQuestionCoursId } from "@/app/(admin)/admin/pedagogie/actions";
@@ -31,11 +32,11 @@ export type SerieSummary = {
 
 export type CoursBasic = { id: string; name: string; dossier_id: string; etiquettes?: string[] };
 
-const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
-  annales:             { label: "Annales corrigées",   icon: <BookOpen size={14} />,   color: "text-amber-300",  bg: "bg-amber-500/15",  border: "border-amber-500/30" },
-  qcm_supplementaires: { label: "QCM supplémentaires", icon: <PlusCircle size={14} />, color: "text-teal-300",   bg: "bg-teal-500/15",   border: "border-teal-500/30" },
-  concours_blanc:      { label: "Concours blanc",      icon: <Trophy size={14} />,     color: "text-red-300",    bg: "bg-red-500/15",    border: "border-red-500/30" },
-  revision:            { label: "Révision",            icon: <BookMarked size={14} />, color: "text-purple-300", bg: "bg-purple-500/15", border: "border-purple-500/30" },
+const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; svgIcon: React.ReactNode; color: string; textColor: string; bg: string; border: string; gradient: string; glowColor: string }> = {
+  annales:             { label: "Annales corrigées",   icon: <BookOpen size={14} />,   svgIcon: <AnnalesIcon className="h-4 w-4" />,   color: "text-amber-300",  textColor: "#FCD34D", bg: "bg-amber-500/15",  border: "border-amber-500/30", gradient: "linear-gradient(135deg, rgba(252,211,77,0.12) 0%, rgba(217,119,6,0.04) 100%)", glowColor: "rgba(252,211,77,0.15)" },
+  qcm_supplementaires: { label: "QCM supplémentaires", icon: <PlusCircle size={14} />, svgIcon: <QcmIcon className="h-4 w-4" />,       color: "text-teal-300",   textColor: "#5EEAD4", bg: "bg-teal-500/15",   border: "border-teal-500/30", gradient: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(20,184,166,0.04) 100%)", glowColor: "rgba(94,234,212,0.15)" },
+  concours_blanc:      { label: "Concours blanc",      icon: <Trophy size={14} />,     svgIcon: <ConcoursIcon className="h-4 w-4" />,  color: "text-red-300",    textColor: "#FCA5A5", bg: "bg-red-500/15",    border: "border-red-500/30", gradient: "linear-gradient(135deg, rgba(252,165,165,0.12) 0%, rgba(239,68,68,0.04) 100%)", glowColor: "rgba(252,165,165,0.15)" },
+  revision:            { label: "Révision",            icon: <BookMarked size={14} />, svgIcon: <RevisionIcon className="h-4 w-4" />,  color: "text-purple-300", textColor: "#C4B5FD", bg: "bg-purple-500/15", border: "border-purple-500/30", gradient: "linear-gradient(135deg, rgba(196,181,253,0.12) 0%, rgba(139,92,246,0.04) 100%)", glowColor: "rgba(196,181,253,0.15)" },
 };
 
 const TYPES: SerieType[] = ["annales", "qcm_supplementaires", "concours_blanc", "revision"];
@@ -634,33 +635,44 @@ function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, on
     await onAnneeChange(a);
   };
 
+  const cfg = TYPE_CONFIG.annales;
   return (
-    <div className="rounded-xl border border-white/8 bg-white/3 p-3 flex items-start gap-3 hover:bg-white/5 transition-colors">
+    <div className="group relative rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-[0_2px_16px_rgba(0,0,0,0.2)]"
+      style={{ borderLeft: `3px solid ${cfg.textColor}40`, background: "transparent" }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = cfg.textColor; e.currentTarget.style.background = cfg.gradient; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = `${cfg.textColor}40`; e.currentTarget.style.background = "transparent"; }}>
+
       {onCheck && <input type="checkbox" checked={!!checked} onChange={onCheck}
-        className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />}
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-xs font-semibold text-white truncate">{serie.name}</p>
-          <span className="flex items-center gap-0.5 rounded-full bg-green-500/15 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
-            <Eye size={9} /> Visible
-          </span>
-        </div>
-        <p className="text-[10px] text-white/40 mt-0.5">
-          {serie.nb_questions} question{serie.nb_questions !== 1 ? "s" : ""}
-          {serie.timed && ` · ${serie.duration_minutes}min`}
-          {serie.cours_id && <span className="text-white/25"> · {coursNameStr}</span>}
-        </p>
+        className="shrink-0 mt-1.5 h-3.5 w-3.5 rounded border-white/20 cursor-pointer accent-amber-400" />}
+
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
+        style={{ background: "rgba(252,211,77,0.1)", border: "1px solid rgba(252,211,77,0.2)" }}>
+        <AnnalesIcon className="h-[18px] w-[18px]" />
       </div>
-      <div className="flex items-center gap-1.5 shrink-0 relative">
-        {/* Year badge — clickable */}
+
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
+        <p className="text-[12px] font-bold text-white/90 group-hover:text-white transition-colors truncate">{serie.name}</p>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="flex items-center gap-0.5 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[8px] font-bold text-green-400/70">
+            <Eye size={8} /> Visible
+          </span>
+          <span className="text-[9px] text-white/30">
+            {serie.nb_questions} question{serie.nb_questions !== 1 ? "s" : ""}
+            {serie.timed && ` · ${serie.duration_minutes}min`}
+          </span>
+          {serie.cours_id && <span className="text-[9px] text-white/20 truncate">{coursNameStr}</span>}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0 relative">
         <button onClick={(e) => { e.stopPropagation(); setShowPicker(!showPicker); }}
-          className={`px-2 py-0.5 rounded-full text-[9px] font-bold border transition-colors ${serie.annee ? "bg-amber-500/15 text-amber-300 border-amber-500/25 hover:bg-amber-500/25" : "bg-white/5 text-white/30 border-white/10 hover:border-amber-400/30 hover:text-amber-300/60"}`}>
+          className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold border transition-all duration-150 ${serie.annee ? "text-amber-300 hover:shadow-[0_0_8px_rgba(252,211,77,0.15)]" : "text-white/25 hover:text-amber-300/60"}`}
+          style={serie.annee ? { background: "rgba(252,211,77,0.1)", borderColor: "rgba(252,211,77,0.25)" } : { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" }}>
           {serie.annee ?? "+ année"}
         </button>
-        {/* Picker dropdown */}
         {showPicker && (
-          <div className="absolute right-0 top-7 z-50 min-w-[140px] rounded-xl border border-white/15 bg-[#0e1e35] shadow-2xl p-1.5 space-y-0.5"
-            onClick={(e) => e.stopPropagation()}>
+          <div className="absolute right-0 top-8 z-50 min-w-[140px] rounded-xl border border-white/10 shadow-2xl p-1.5 space-y-0.5 backdrop-blur-xl"
+            style={{ backgroundColor: "rgba(14,30,53,0.95)" }} onClick={(e) => e.stopPropagation()}>
             {anneesList.map((a) => (
               <button key={a} onClick={() => handlePick(a)}
                 className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${serie.annee === a ? "bg-amber-500/20 text-amber-300" : "text-white/60 hover:bg-white/8 hover:text-white"}`}>
@@ -682,23 +694,19 @@ function AnnaleSerieCard({ serie, anneesList, coursNameStr, checked, onCheck, on
             )}
           </div>
         )}
-        {onArchive && (
-          <button onClick={onArchive}
-            className="p-1.5 rounded-lg hover:bg-orange-500/20 text-white/30 hover:text-orange-400 transition-colors"
-            title="Archiver (masquer)">
-            <EyeOff size={12} />
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          {onArchive && (
+            <button onClick={onArchive} className="p-1.5 rounded-lg hover:bg-orange-500/10 text-white/20 hover:text-orange-400 transition-colors" title="Archiver">
+              <EyeOff size={12} />
+            </button>
+          )}
+          <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-white/8 text-white/20 hover:text-[#7DD3FC] transition-colors" title="Éditer">
+            <Pencil size={12} />
           </button>
-        )}
-        <button onClick={onEdit}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-          title="Éditer la série">
-          <Pencil size={12} />
-        </button>
-        <button onClick={onDelete}
-          className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-          title="Supprimer">
-          <Trash2 size={12} />
-        </button>
+          <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors" title="Supprimer">
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -831,54 +839,79 @@ export function DossierExercicesView({
       )}
 
       {/* Header avec stats + bouton IA */}
-      <div className="shrink-0 px-5 pt-4 pb-3 border-b border-white/8 space-y-3">
+      <div className="shrink-0 px-5 pt-4 pb-3 space-y-3 relative overflow-hidden" style={{ borderBottom: "1px solid rgba(201,168,76,0.1)" }}>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 50% 100% at 50% 0%, rgba(201,168,76,0.04) 0%, transparent 60%)" }} />
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl border border-white/8 bg-white/3 p-3 text-center">
-            <p className="text-xl font-bold text-[#C9A84C]">{loading ? "…" : totalSeries}</p>
-            <p className="text-[10px] text-white/40">Séries</p>
+        <div className="relative grid grid-cols-2 gap-3">
+          <div className="rounded-xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(145deg, rgba(201,168,76,0.1) 0%, rgba(201,168,76,0.02) 100%)", border: "1px solid rgba(201,168,76,0.15)" }}>
+            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 50% 0%, rgba(201,168,76,0.08) 0%, transparent 60%)" }} />
+            <p className="relative text-2xl font-extrabold tracking-tight" style={{ color: "#E3C286" }}>{loading ? "…" : totalSeries}</p>
+            <p className="relative text-[9px] font-bold uppercase tracking-[0.15em] text-white/35 mt-0.5">Séries</p>
           </div>
-          <div className="rounded-xl border border-white/8 bg-white/3 p-3 text-center">
-            <p className="text-xl font-bold text-white">{loading ? "…" : totalQuestions}</p>
-            <p className="text-[10px] text-white/40">Questions</p>
+          <div className="rounded-xl p-4 text-center relative overflow-hidden" style={{ background: "linear-gradient(145deg, rgba(125,211,252,0.08) 0%, rgba(56,189,248,0.02) 100%)", border: "1px solid rgba(125,211,252,0.12)" }}>
+            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(circle at 50% 0%, rgba(125,211,252,0.06) 0%, transparent 60%)" }} />
+            <p className="relative text-2xl font-extrabold tracking-tight text-white">{loading ? "…" : totalQuestions}</p>
+            <p className="relative text-[9px] font-bold uppercase tracking-[0.15em] text-white/35 mt-0.5">Questions</p>
           </div>
         </div>
         {/* AI button */}
         <button onClick={() => setShowAI(true)} disabled={cours.length === 0}
-          className="w-full flex items-center gap-2 rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/6 px-3 py-2 hover:bg-[#C9A84C]/12 transition-colors disabled:opacity-40">
-          <Sparkles size={14} className="text-[#C9A84C] shrink-0" />
-          <span className="text-xs font-bold text-[#C9A84C]">Générer avec l&apos;IA</span>
-          <span className="text-[10px] text-white/30 ml-1 truncate">— assigne automatiquement aux chapitres</span>
+          className="relative w-full flex items-center gap-2.5 rounded-xl px-4 py-2.5 hover:shadow-[0_0_20px_rgba(201,168,76,0.08)] transition-all duration-200 disabled:opacity-40 group"
+          style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.02) 100%)", border: "1px solid rgba(201,168,76,0.18)" }}>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0" style={{ background: "rgba(201,168,76,0.15)" }}>
+            <Sparkles size={13} className="text-[#C9A84C]" />
+          </div>
+          <div className="text-left">
+            <span className="text-[11px] font-bold text-[#C9A84C] block">Générer avec l&apos;IA</span>
+            <span className="text-[9px] text-white/25">Assigne automatiquement aux chapitres</span>
+          </div>
         </button>
         {/* ExoTeach import button */}
         <button onClick={() => setShowImportExoteach(true)}
-          className="w-full flex items-center gap-2 rounded-xl border border-teal-500/20 bg-teal-500/6 px-3 py-2 hover:bg-teal-500/12 transition-colors">
-          <FileDown size={14} className="text-teal-400 shrink-0" />
-          <span className="text-xs font-bold text-teal-400">Importer via ExoTeach</span>
-          <span className="text-[10px] text-white/30 ml-1 truncate">— depuis l&apos;ancienne plateforme</span>
+          className="relative w-full flex items-center gap-2.5 rounded-xl px-4 py-2.5 hover:shadow-[0_0_20px_rgba(94,234,212,0.06)] transition-all duration-200 group"
+          style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.06) 0%, rgba(20,184,166,0.02) 100%)", border: "1px solid rgba(94,234,212,0.12)" }}>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg shrink-0" style={{ background: "rgba(94,234,212,0.12)" }}>
+            <FileDown size={13} className="text-teal-400" />
+          </div>
+          <div className="text-left">
+            <span className="text-[11px] font-bold text-teal-400 block">Importer via ExoTeach</span>
+            <span className="text-[9px] text-white/25">Depuis l&apos;ancienne plateforme</span>
+          </div>
         </button>
       </div>
 
       {/* Type Tabs */}
-      <div className="shrink-0 flex border-b border-white/8">
+      <div className="shrink-0 flex gap-1 px-4 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         {TYPES.filter((t) => !hiddenTabs?.includes(t)).map((t) => {
           const cfg = TYPE_CONFIG[t];
           const count = seriesByType(t).length;
+          const isActive = activeTab === t;
           return (
             <button key={t} onClick={() => setActiveTab(t)}
-              className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === t ? `border-current ${cfg.color}` : "border-transparent text-white/30 hover:text-white/50"}`}>
-              {cfg.icon}
-              <span className="text-[9px] font-bold mt-1 leading-tight">{cfg.label}</span>
-              {count > 0 && <span className={`text-[9px] rounded-full px-1.5 mt-0.5 font-bold ${activeTab === t ? cfg.bg + " " + cfg.color : "bg-white/10 text-white/30"}`}>{count}</span>}
+              className={`relative flex-1 flex flex-col items-center gap-1.5 py-2.5 px-2 rounded-xl transition-all duration-200 ${isActive ? "" : "hover:bg-white/[0.03]"}`}
+              style={isActive ? { background: cfg.gradient, boxShadow: `0 0 16px ${cfg.glowColor}`, border: `1px solid ${cfg.textColor}20` } : { border: "1px solid transparent" }}>
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-200 ${isActive ? "" : "opacity-40"}`}
+                style={isActive ? { background: `${cfg.textColor}18` } : {}}>
+                {cfg.svgIcon}
+              </div>
+              <span className={`text-[8px] font-extrabold uppercase tracking-[0.1em] leading-tight transition-colors ${isActive ? cfg.color : "text-white/30"}`}>{cfg.label}</span>
+              {count > 0 && (
+                <span className={`text-[8px] rounded-md px-1.5 py-0.5 font-extrabold ${isActive ? cfg.bg + " " + cfg.color : "bg-white/[0.04] text-white/20"}`}>{count}</span>
+              )}
+              {isActive && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${cfg.textColor}, transparent)` }} />}
             </button>
           );
         })}
-        {/* Flashcards tab */}
         {!hiddenTabs?.includes("flashcards") && (
           <button onClick={() => setActiveTab("flashcards")}
-            className={`flex-1 flex flex-col items-center py-2.5 px-1 text-center border-b-2 transition-colors ${activeTab === "flashcards" ? "border-current text-indigo-300" : "border-transparent text-white/30 hover:text-white/50"}`}>
-            <Layers size={14} />
-            <span className="text-[9px] font-bold mt-1 leading-tight">Flashcards</span>
+            className={`relative flex-1 flex flex-col items-center gap-1.5 py-2.5 px-2 rounded-xl transition-all duration-200 ${activeTab === "flashcards" ? "" : "hover:bg-white/[0.03]"}`}
+            style={activeTab === "flashcards" ? { background: "linear-gradient(135deg, rgba(165,180,252,0.12) 0%, rgba(99,102,241,0.04) 100%)", boxShadow: "0 0 16px rgba(165,180,252,0.15)", border: "1px solid rgba(165,180,252,0.2)" } : { border: "1px solid transparent" }}>
+            <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-200 ${activeTab === "flashcards" ? "" : "opacity-40"}`}
+              style={activeTab === "flashcards" ? { background: "rgba(165,180,252,0.18)" } : {}}>
+              <FlashcardIcon className="h-4 w-4" />
+            </div>
+            <span className={`text-[8px] font-extrabold uppercase tracking-[0.1em] leading-tight transition-colors ${activeTab === "flashcards" ? "text-indigo-300" : "text-white/30"}`}>Flashcards</span>
+            {activeTab === "flashcards" && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: "linear-gradient(90deg, transparent, #A5B4FC, transparent)" }} />}
           </button>
         )}
       </div>
@@ -1005,43 +1038,51 @@ export function DossierExercicesView({
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {seriesByType(activeTab).map((s) => (
-                  <div key={s.id} className="rounded-xl border border-white/8 bg-white/3 p-3 flex items-start gap-3 hover:bg-white/5 transition-colors">
-                    <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
-                      className="shrink-0 mt-1 rounded border-white/20 bg-white/5 text-[#C9A84C] focus:ring-[#C9A84C]/30" />
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(`/serie/${s.id}`, "_blank")}>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-xs font-semibold text-white truncate">{s.name}</p>
-                        <span className="flex items-center gap-0.5 rounded-full bg-green-500/15 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
-                          <Eye size={9} /> Visible
-                        </span>
+              <div className="space-y-1.5">
+                {seriesByType(activeTab).map((s) => {
+                  const cfg = TYPE_CONFIG[activeTab];
+                  return (
+                    <div key={s.id} className="group relative rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-[0_2px_16px_rgba(0,0,0,0.2)]"
+                      style={{ borderLeft: `3px solid ${cfg.textColor}40`, background: "transparent" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = cfg.textColor; e.currentTarget.style.background = cfg.gradient; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = `${cfg.textColor}40`; e.currentTarget.style.background = "transparent"; }}>
+
+                      <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
+                        className="shrink-0 mt-1.5 h-3.5 w-3.5 rounded border-white/20 cursor-pointer" style={{ accentColor: cfg.textColor }} />
+
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
+                        style={{ background: `${cfg.textColor}12`, border: `1px solid ${cfg.textColor}25` }}>
+                        {cfg.svgIcon}
                       </div>
-                      <p className="text-[10px] text-white/40 mt-0.5">
-                        {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
-                        {s.timed && ` · ${s.duration_minutes}min`}
-                        {s.cours_id && <span className="text-white/25"> · {coursName(s.cours_id)}</span>}
-                      </p>
+
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(`/serie/${s.id}`, "_blank")}>
+                        <p className="text-[12px] font-bold text-white/90 group-hover:text-white transition-colors truncate">{s.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="flex items-center gap-0.5 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[8px] font-bold text-green-400/70">
+                            <Eye size={8} /> Visible
+                          </span>
+                          <span className="text-[9px] text-white/30">
+                            {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
+                            {s.timed && ` · ${s.duration_minutes}min`}
+                          </span>
+                          {s.cours_id && <span className="text-[9px] text-white/20 truncate">{coursName(s.cours_id)}</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                        <button onClick={() => handleToggleVisible(s.id, false)} className="p-1.5 rounded-lg hover:bg-orange-500/10 text-white/20 hover:text-orange-400 transition-colors" title="Archiver">
+                          <EyeOff size={12} />
+                        </button>
+                        <button onClick={() => setComposeSerie(s)} className="p-1.5 rounded-lg hover:bg-white/8 text-white/20 hover:text-[#7DD3FC] transition-colors" title="Éditer">
+                          <Pencil size={12} />
+                        </button>
+                        <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors" title="Supprimer">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => handleToggleVisible(s.id, false)}
-                        className="p-1.5 rounded-lg hover:bg-orange-500/20 text-white/30 hover:text-orange-400 transition-colors"
-                        title="Archiver (masquer)">
-                        <EyeOff size={12} />
-                      </button>
-                      <button onClick={() => setComposeSerie(s)}
-                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
-                        title="Éditer la série">
-                        <Pencil size={12} />
-                      </button>
-                      <button onClick={() => handleDelete(s.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors"
-                        title="Supprimer">
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <button onClick={() => { setNewSerieType(activeTab); setShowNewSerie(true); }}
                   className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed text-xs font-semibold transition-colors ${TYPE_CONFIG[activeTab].color} border-current/30 hover:bg-white/4`}>
                   <Plus size={12} /> Nouvelle série
