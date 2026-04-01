@@ -1781,6 +1781,18 @@ function ComptesView({
     return m;
   }, [profMatieres]);
 
+  const getAncestorChain = (dossierId: string | null): Dossier[] => {
+    const chain: Dossier[] = [];
+    let id = dossierId;
+    while (id) {
+      const d = dMap.get(id);
+      if (!d) break;
+      chain.unshift(d);
+      id = d.parent_id;
+    }
+    return chain;
+  };
+
   // Build prof formation summaries by role_type
   const profFormationSummary = useMemo(() => {
     const map = new Map<string, { cours: string[]; contenu: string[] }>();
@@ -1789,7 +1801,6 @@ function ComptesView({
       const entry = map.get(pm.prof_id)!;
       const matiere = matiereMap.get(pm.matiere_id);
       if (!matiere) continue;
-      // Find formation context from matiere's dossier
       const matDossier = matiere.dossier_id ? dMap.get(matiere.dossier_id) : null;
       const chain = matDossier ? getAncestorChain(matDossier.id) : [];
       const offer = chain.find(d => d.dossier_type === "offer");
@@ -1804,18 +1815,6 @@ function ComptesView({
     }
     return map;
   }, [profMatieres, matiereMap, dMap]);
-
-  const getAncestorChain = (dossierId: string | null): Dossier[] => {
-    const chain: Dossier[] = [];
-    let id = dossierId;
-    while (id) {
-      const d = dMap.get(id);
-      if (!d) break;
-      chain.unshift(d);
-      id = d.parent_id;
-    }
-    return chain;
-  };
 
   const getUserFormationInfo = (u: Profile) => {
     if (u.role === "eleve") {
