@@ -573,13 +573,6 @@ export function PedagogieShell({
               >
                 <Settings className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setModal({ type: "add_picker", parentId: null })}
-                className="flex items-center gap-1 rounded-lg bg-gold/20 border border-gold/30 px-2.5 py-1.5 text-xs font-medium text-gold transition hover:bg-gold/30"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Ajouter
-              </button>
             </div>
           )}
         </div>
