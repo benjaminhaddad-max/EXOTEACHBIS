@@ -757,30 +757,6 @@ export function PedagogieShell({
               {childDossiers.length === 0 && ressources.length === 0 && coursList.length === 0 && !loadingRessources ? (
                 <EmptyDossier
                   onAdd={canEdit ? () => setModal({ type: "add_picker", parentId: selectedId }) : undefined}
-                  cloneSource={(() => {
-                    if (!canEdit || !selectedDossier || selectedDossier.dossier_type !== "university") return undefined;
-                    const thisOffer = inferOfferFromAncestors(selectedDossier, allDossiers);
-                    const dup = allDossiers.find(
-                      (d) =>
-                        d.id !== selectedDossier.id &&
-                        d.name.toLowerCase() === selectedDossier.name.toLowerCase() &&
-                        d.dossier_type === "university" &&
-                        inferOfferFromAncestors(d, allDossiers) !== thisOffer &&
-                        allDossiers.some((child) => child.parent_id === d.id)
-                    );
-                    if (!dup) return undefined;
-                    const dupOffer = inferOfferFromAncestors(dup, allDossiers);
-                    return { sourceDossier: dup, offerLabel: getOfferLabel(dupOffer ?? "") };
-                  })()}
-                  onClone={canEdit ? (source) => {
-                    const srcOffer = inferOfferFromAncestors(source, allDossiers);
-                    setModal({
-                      type: "clone_proposal",
-                      sourceDossier: source,
-                      targetDossierId: selectedDossier!.id,
-                      offerLabel: getOfferLabel(srcOffer ?? ""),
-                    });
-                  } : undefined}
                 />
               ) : (
                 <div className="space-y-5">
