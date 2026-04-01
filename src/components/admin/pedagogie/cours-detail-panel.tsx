@@ -226,7 +226,7 @@ function SerieModal({
   onSave: (data: any) => Promise<void>; onClose: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [type, setType] = useState<"concours_blanc" | "revision" | "annales" | "qcm_supplementaires">(initial?.type as any ?? "annales");
+  const [type, setType] = useState<"concours_blanc" | "revision" | "annales" | "qcm_supplementaires">(initial?.type as any ?? "qcm_supplementaires");
   const [timed, setTimed] = useState(initial?.timed ?? false);
   const [duration, setDuration] = useState(String(initial?.duration_minutes ?? 30));
   const [scoreDefinitif, setScoreDefinitif] = useState(initial?.score_definitif ?? false);

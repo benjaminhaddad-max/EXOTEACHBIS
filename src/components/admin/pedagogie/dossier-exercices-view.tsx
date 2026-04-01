@@ -766,7 +766,7 @@ export function DossierExercicesView({
   const [loading, setLoading] = useState(true);
   const [showAI, setShowAI] = useState(false);
   const [showNewSerie, setShowNewSerie] = useState(false);
-  const [newSerieType, setNewSerieType] = useState<SerieType>("annales");
+  const [newSerieType, setNewSerieType] = useState<SerieType>("qcm_supplementaires");
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [editSerie, setEditSerie] = useState<SerieSummary | null>(null);
