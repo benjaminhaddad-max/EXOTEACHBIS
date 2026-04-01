@@ -4791,9 +4791,10 @@ function EditUserModal({
                         const someChecked = allNodeMatIds.some(id => coursAssignments.has(id));
                         return (
                           <details key={node.dossier.id} open={someChecked || allChecked}>
-                            <summary className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/[0.03] list-none [&::-webkit-details-marker]:hidden">
-                              <ChevronRight size={10} className="text-white/20 transition-transform [details[open]>&]:rotate-90" />
-                              <span className="text-[10px] font-semibold" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
+                            <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                              <ChevronRight size={11} className="text-[#C9A84C]/40 transition-transform [details[open]>&]:rotate-90" />
+                              <Layers size={11} className="text-[#C9A84C]/60 shrink-0" />
+                              <span className="text-[11px] font-bold tracking-wide" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
                               <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#60A5FA" : "rgba(255,255,255,0.2)" }}>
                                 {allNodeMatIds.filter(id => coursAssignments.has(id)).length}/{allNodeMatIds.length}
                               </span>
@@ -4868,9 +4869,10 @@ function EditUserModal({
                         const someChecked = allNodeMatIds.some(id => qaContenuMatIds.includes(id));
                         return (
                           <details key={node.dossier.id} open={someChecked}>
-                            <summary className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/[0.03] list-none [&::-webkit-details-marker]:hidden">
-                              <ChevronRight size={10} className="text-white/20 transition-transform [details[open]>&]:rotate-90" />
-                              <span className="text-[10px] font-semibold" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
+                            <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                              <ChevronRight size={11} className="text-[#C9A84C]/40 transition-transform [details[open]>&]:rotate-90" />
+                              <Layers size={11} className="text-[#C9A84C]/60 shrink-0" />
+                              <span className="text-[11px] font-bold tracking-wide" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
                               <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#FBBF24" : "rgba(255,255,255,0.2)" }}>
                                 {allNodeMatIds.filter(id => qaContenuMatIds.includes(id)).length}/{allNodeMatIds.length}
                               </span>
