@@ -15,6 +15,7 @@ type CoursBasic = { id: string; name: string; dossier_id: string | null; matiere
 
 const DTYPE_ICON: Record<string, typeof Folder> = {
   offer: GraduationCap,
+  sub_offer: Layers,
   university: Building2,
   semester: Calendar,
   subject: BookOpen,
@@ -26,6 +27,7 @@ const DTYPE_ICON: Record<string, typeof Folder> = {
 
 const DTYPE_COLOR: Record<string, string> = {
   offer: "#C9A84C",
+  sub_offer: "#F59E0B",
   university: "#A78BFA",
   semester: "#38BDF8",
   subject: "#34D399",
@@ -58,7 +60,7 @@ interface DossierGroupTreeProps {
 
 // Only show offer + university levels in the admin tree
 // Semesters/subjects/chapters are managed via checkboxes in the right panel
-const ADMIN_TREE_TYPES = new Set(["offer", "university"]);
+const ADMIN_TREE_TYPES = new Set(["offer", "sub_offer", "university"]);
 
 function buildDossierTree(dossiers: Dossier[]): DossierNode[] {
   // Filter to only show offer and university dossiers
@@ -67,11 +69,26 @@ function buildDossierTree(dossiers: Dossier[]): DossierNode[] {
   const map = new Map<string, DossierNode>();
   for (const d of filtered) map.set(d.id, { ...d, children: [] });
 
+  // Build a full parent lookup from ALL dossiers (not just filtered)
+  const allMap = new Map(dossiers.map(d => [d.id, d]));
+
   const roots: DossierNode[] = [];
   for (const node of map.values()) {
-    if (node.parent_id && map.has(node.parent_id)) {
-      map.get(node.parent_id)!.children.push(node);
-    } else if (!node.parent_id) {
+    // Walk up the chain to find the nearest ancestor in the tree
+    let attached = false;
+    let cur = node.parent_id;
+    while (cur) {
+      if (map.has(cur)) {
+        map.get(cur)!.children.push(node);
+        attached = true;
+        break;
+      }
+      cur = allMap.get(cur)?.parent_id ?? null;
+    }
+    if (!attached && !node.parent_id) {
+      roots.push(node);
+    } else if (!attached) {
+      // Orphan node — add to roots so it's not lost
       roots.push(node);
     }
   }
