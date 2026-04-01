@@ -4703,13 +4703,27 @@ function EditUserModal({
               const descendantIds = new Set<string>();
               const walk = (pid: string) => { descendantIds.add(pid); dossiers.filter((d) => d.parent_id === pid).forEach((d) => walk(d.id)); };
               walk(uniId);
-              // Only keep dossiers of type "subject" (actual matière containers), skip filière/semester/generic dossiers that contain non-teaching items like LAS/PASS
               return dossiers
                 .filter((d) => descendantIds.has(d.id) && d.dossier_type === "subject" && (matieresByDossier.get(d.id)?.length ?? 0) > 0)
                 .flatMap((d) => (matieresByDossier.get(d.id) ?? []).map((m) => ({ ...m, dossierLabel: getDossierPathLabel(d.id, dossiers) })));
             };
 
-            // Group matières by their dossier label for display
+            // Build tree: group matières by their parent folder (semester/module)
+            const buildMatiereTree = (rootId: string) => {
+              type TreeNode = { dossier: Dossier; matieres: { id: string; name: string; color: string }[]; children: TreeNode[] };
+              const buildNode = (parentId: string): TreeNode[] => {
+                return dossiers.filter(d => d.parent_id === parentId).sort((a, b) => a.order_index - b.order_index).map(d => {
+                  const mats = (matieresByDossier.get(d.id) ?? []).map(m => ({ id: m.id, name: m.name, color: m.color }));
+                  const children = buildNode(d.id);
+                  // Only include if it has matières or has children with matières
+                  if (mats.length === 0 && children.length === 0) return null;
+                  return { dossier: d, matieres: mats, children };
+                }).filter(Boolean) as TreeNode[];
+              };
+              return buildNode(rootId);
+            };
+
+            // Group matières by their dossier label for display (kept for flat list fallback)
             const groupByDossierLabel = (mats: { dossierLabel: string; id: string; name: string; color: string }[]) => {
               const map = new Map<string, typeof mats>();
               for (const m of mats) { const arr = map.get(m.dossierLabel) ?? []; arr.push(m); map.set(m.dossierLabel, arr); }
@@ -4736,18 +4750,15 @@ function EditUserModal({
             );
 
             const coursUnis = coursFormation ? getUnisForOffer(coursFormation) : [];
-            const coursGroupes = coursUni ? getGroupesForUni(coursUni) : [];
-            // If no universities, load matières directly from the formation
-            const coursMats = coursUni ? getMatieresForUni(coursUni)
-              : (coursFormation && coursUnis.length === 0) ? getMatieresForUni(coursFormation) : [];
-            // All groupes for the selected context
+            const coursRootId = coursUni || (coursFormation && coursUnis.length === 0 ? coursFormation : "");
+            const coursTree = coursRootId ? buildMatiereTree(coursRootId) : [];
             const allUniGroupes = coursUni
               ? groupes.filter((g) => g.formation_dossier_id === coursUni)
               : (coursFormation && coursUnis.length === 0) ? groupes.filter((g) => g.formation_dossier_id === coursFormation) : [];
 
             const qaUnis = qaFormation ? getUnisForOffer(qaFormation) : [];
-            const qaMats = qaUni ? getMatieresForUni(qaUni)
-              : (qaFormation && qaUnis.length === 0) ? getMatieresForUni(qaFormation) : [];
+            const qaRootId = qaUni || (qaFormation && qaUnis.length === 0 ? qaFormation : "");
+            const qaTree = qaRootId ? buildMatiereTree(qaRootId) : [];
 
             return (
             <div className="space-y-5">
@@ -4771,51 +4782,58 @@ function EditUserModal({
                       <PillFilter items={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" />
                     </div>
                   )}
-                  {/* Matières → Classes */}
-                  {coursMats.length > 0 && (
-                    <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                      {groupByDossierLabel(coursMats).map(([label, mats]) => (
-                        <div key={label} className="mb-2">
-                          <p className="mb-1 text-[9px] font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</p>
-                          <div className="space-y-1.5">
-                            {mats.map((m) => {
-                              const checked = coursAssignments.has(m.id);
-                              const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
-                              return (
-                                <div key={m.id}>
-                                  <button type="button" onClick={() => toggleCoursMatiere(m.id)}
-                                    className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors w-full text-left"
-                                    style={{ borderColor: checked ? "#60A5FA99" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#60A5FA22" : "rgba(255,255,255,0.02)", color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>
-                                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#60A5FA" : m.color }} />{m.name}
-                                    {checked && assignedGroupes.size > 0 && (
-                                      <span className="ml-auto text-[9px] opacity-60">{assignedGroupes.size} classe{assignedGroupes.size > 1 ? "s" : ""}</span>
+                  {/* Matières tree */}
+                  {coursTree.length > 0 && (
+                    <div className="mt-1 pt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      {coursTree.map(node => {
+                        const allNodeMatIds = [...node.matieres.map(m => m.id), ...node.children.flatMap(c => c.matieres.map(m => m.id))];
+                        const allChecked = allNodeMatIds.length > 0 && allNodeMatIds.every(id => coursAssignments.has(id));
+                        const someChecked = allNodeMatIds.some(id => coursAssignments.has(id));
+                        return (
+                          <details key={node.dossier.id} open={someChecked || allChecked}>
+                            <summary className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/[0.03] list-none [&::-webkit-details-marker]:hidden">
+                              <ChevronRight size={10} className="text-white/20 transition-transform [details[open]>&]:rotate-90" />
+                              <span className="text-[10px] font-semibold" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
+                              <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#60A5FA" : "rgba(255,255,255,0.2)" }}>
+                                {allNodeMatIds.filter(id => coursAssignments.has(id)).length}/{allNodeMatIds.length}
+                              </span>
+                            </summary>
+                            <div className="ml-5 space-y-0.5 pb-1">
+                              {[...node.matieres, ...node.children.flatMap(c => c.matieres)].map(m => {
+                                const checked = coursAssignments.has(m.id);
+                                const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
+                                return (
+                                  <div key={m.id}>
+                                    <label className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
+                                      <input type="checkbox" checked={checked} onChange={() => toggleCoursMatiere(m.id)}
+                                        className="w-3.5 h-3.5 rounded border-gray-500 text-blue-500 focus:ring-blue-400/30" />
+                                      <span className="text-[11px]" style={{ color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
+                                      {checked && assignedGroupes.size > 0 && (
+                                        <span className="ml-auto text-[9px] text-blue-400/50">{assignedGroupes.size} cl.</span>
+                                      )}
+                                    </label>
+                                    {checked && allUniGroupes.length > 0 && (
+                                      <div className="ml-8 mt-0.5 mb-1 flex flex-wrap gap-1">
+                                        {allUniGroupes.map(g => {
+                                          const gChecked = assignedGroupes.has(g.id);
+                                          return (
+                                            <button key={g.id} type="button" onClick={() => toggleCoursGroupe(m.id, g.id)}
+                                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] transition-colors"
+                                              style={{ backgroundColor: gChecked ? "#60A5FA22" : "rgba(255,255,255,0.03)", color: gChecked ? "#60A5FA" : "rgba(255,255,255,0.35)" }}>
+                                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: gChecked ? "#60A5FA" : g.color }} />
+                                              {g.name}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
                                     )}
-                                  </button>
-                                  {checked && allUniGroupes.length > 0 && (
-                                    <div className="ml-4 mt-1 flex flex-wrap gap-1">
-                                      {allUniGroupes.map((g) => {
-                                        const gChecked = assignedGroupes.has(g.id);
-                                        return (
-                                          <button key={g.id} type="button" onClick={() => toggleCoursGroupe(m.id, g.id)}
-                                            className="flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors"
-                                            style={{
-                                              borderColor: gChecked ? "#60A5FA80" : "rgba(255,255,255,0.06)",
-                                              backgroundColor: gChecked ? "#60A5FA33" : "rgba(255,255,255,0.02)",
-                                              color: gChecked ? "#60A5FA" : "rgba(255,255,255,0.4)",
-                                            }}>
-                                            <span className="h-1.5 w-1.5 rounded-sm shrink-0" style={{ backgroundColor: gChecked ? "#60A5FA" : "rgba(255,255,255,0.2)" }} />
-                                            {g.name}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        );
+                      })}
                     </div>
                   )}
                   {!coursFormation && <p className="text-[11px] py-1 text-center" style={{ color: "rgba(255,255,255,0.25)" }}>Sélectionnez une formation</p>}
@@ -4842,26 +4860,36 @@ function EditUserModal({
                       <PillFilter items={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" />
                     </div>
                   )}
-                  {/* Matières */}
-                  {qaMats.length > 0 && (
-                    <div className="mt-1 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                      {groupByDossierLabel(qaMats).map(([label, mats]) => (
-                        <div key={label} className="mb-2">
-                          <p className="mb-1 text-[9px] font-semibold" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {mats.map((m) => {
-                              const checked = qaContenuMatIds.includes(m.id);
-                              return (
-                                <button key={m.id} type="button" onClick={() => toggleQaMatiere(m.id)}
-                                  className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors"
-                                  style={{ borderColor: checked ? "#FBBF2499" : "rgba(255,255,255,0.08)", backgroundColor: checked ? "#FBBF2422" : "rgba(255,255,255,0.02)", color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>
-                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: checked ? "#FBBF24" : m.color }} />{m.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                  {/* Matières tree */}
+                  {qaTree.length > 0 && (
+                    <div className="mt-1 pt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      {qaTree.map(node => {
+                        const allNodeMatIds = [...node.matieres.map(m => m.id), ...node.children.flatMap(c => c.matieres.map(m => m.id))];
+                        const someChecked = allNodeMatIds.some(id => qaContenuMatIds.includes(id));
+                        return (
+                          <details key={node.dossier.id} open={someChecked}>
+                            <summary className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white/[0.03] list-none [&::-webkit-details-marker]:hidden">
+                              <ChevronRight size={10} className="text-white/20 transition-transform [details[open]>&]:rotate-90" />
+                              <span className="text-[10px] font-semibold" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
+                              <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#FBBF24" : "rgba(255,255,255,0.2)" }}>
+                                {allNodeMatIds.filter(id => qaContenuMatIds.includes(id)).length}/{allNodeMatIds.length}
+                              </span>
+                            </summary>
+                            <div className="ml-5 space-y-0.5 pb-1">
+                              {[...node.matieres, ...node.children.flatMap(c => c.matieres)].map(m => {
+                                const checked = qaContenuMatIds.includes(m.id);
+                                return (
+                                  <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
+                                    <input type="checkbox" checked={checked} onChange={() => toggleQaMatiere(m.id)}
+                                      className="w-3.5 h-3.5 rounded border-gray-500 text-amber-500 focus:ring-amber-400/30" />
+                                    <span className="text-[11px]" style={{ color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        );
+                      })}
                     </div>
                   )}
                   {!qaFormation && <p className="text-[11px] py-1 text-center" style={{ color: "rgba(255,255,255,0.25)" }}>Sélectionnez une formation</p>}
