@@ -2441,9 +2441,6 @@ function SortableTreeNode({
 
         {canEdit && (
           <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
-            <button onClick={(e) => { e.stopPropagation(); onAdd(node.id); }} className="rounded p-1 text-gray-400 hover:bg-navy/10 hover:text-navy" title="Ajouter">
-              <Plus className="h-3 w-3" />
-            </button>
             <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-500" title="Modifier">
               <Pencil className="h-3 w-3" />
             </button>
@@ -2454,13 +2451,14 @@ function SortableTreeNode({
         )}
       </div>
 
-      {/* Enfants récursifs avec DnD */}
-      {expanded && hasChildren && (
+      {/* Enfants récursifs avec DnD + bouton Ajouter en dessous */}
+      {expanded && (
         <div className="border-l border-gray-100 ml-3">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
-            <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-              {node.children.map((child) => (
-                <SortableTreeNode
+          {hasChildren && (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
+              <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                {node.children.map((child) => (
+                  <SortableTreeNode
                   key={child.id}
                   node={child}
                   selectedId={selectedId}
@@ -2478,6 +2476,15 @@ function SortableTreeNode({
               ))}
             </SortableContext>
           </DndContext>
+          )}
+          {canEdit && node.dossier_type !== "subject" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onAdd(node.id); }}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 ml-1 mt-0.5 mb-1 text-[10px] font-medium text-gray-400 transition hover:bg-navy/5 hover:text-navy"
+            >
+              <Plus className="h-3 w-3" /> Ajouter
+            </button>
+          )}
         </div>
       )}
     </div>
