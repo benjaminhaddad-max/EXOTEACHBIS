@@ -720,141 +720,18 @@ export function UtilisateursShell({
                           <p className="text-[10px] text-gray-400 mb-2">
                             Cochez les contenus auxquels cette classe aura accès :
                           </p>
-                          {/* Simple checkbox tree — children of the selected dossier */}
-                          {(() => {
-                            const children = initialDossiers.filter(d => d.parent_id === dossier.id).sort((a, b) => a.order_index - b.order_index);
-                            const accessSet = new Set(groupAccessIds);
-
-                            const toggleAccess = (dossierId: string) => {
-                              const has = accessSet.has(dossierId);
-                              const next = has
-                                ? groupAccessIds.filter(id => id !== dossierId)
-                                : [...groupAccessIds, dossierId];
-                              // Optimistic update (instant)
-                              setGroupeDossierAcces(prev => [
-                                ...prev.filter(a => a.groupe_id !== g.id),
-                                ...next.map(did => ({ groupe_id: g.id, dossier_id: did, created_at: "" }))
-                              ]);
-                              // Server update (async, no blocking)
-                              saveGroupeDossierAcces(g.id, next).catch(() => {});
-                            };
-
-                            return (
-                              <div className="space-y-0.5">
-                                {children.map(child => {
-                                  const subChildren = initialDossiers.filter(d => d.parent_id === child.id).sort((a, b) => a.order_index - b.order_index);
-                                  const childMeta = DOSSIER_TYPE_META[child.dossier_type] as { shortLabel?: string } | undefined;
-                                  const childCours = (initialCours ?? []).filter(c => c.dossier_id === child.id);
-                                  const hasContent = subChildren.length > 0 || childCours.length > 0;
-                                  return (
-                                    <details key={child.id} className="group/sem" open={accessSet.has(child.id)}>
-                                      <summary className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                                        {hasContent && <ChevronRight size={12} className="text-gray-400 transition-transform group-open/sem:rotate-90 shrink-0" />}
-                                        {!hasContent && <span className="w-3" />}
-                                        <input
-                                          type="checkbox"
-                                          checked={accessSet.has(child.id)}
-                                          onChange={(e) => { e.stopPropagation(); toggleAccess(child.id); }}
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                        />
-                                        <span className="text-sm font-medium text-gray-800 flex-1">{child.name}</span>
-                                        <span className="text-[9px] text-gray-400 uppercase">{childMeta?.shortLabel ?? ""}</span>
-                                      </summary>
-                                      {/* Sub-level: matières under semester */}
-                                      {subChildren.length > 0 && (
-                                        <div className="ml-9 space-y-0.5 pb-1">
-                                          {subChildren.map(sub => {
-                                            const subMeta = DOSSIER_TYPE_META[sub.dossier_type] as { shortLabel?: string } | undefined;
-                                            const subCours2 = (initialCours ?? []).filter(c => c.dossier_id === sub.id);
-                                            const hasCours = subCours2.length > 0;
-                                            return (
-                                              <details key={sub.id} className="group/mat">
-                                                <summary className="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-50 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                                                  {hasCours && <ChevronRight size={10} className="text-gray-400 transition-transform group-open/mat:rotate-90 shrink-0" />}
-                                                  {!hasCours && <span className="w-2.5" />}
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={accessSet.has(sub.id)}
-                                                    onChange={(e) => { e.stopPropagation(); toggleAccess(sub.id); }}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                                  />
-                                                  <span className="text-xs text-gray-700 flex-1">{sub.name}</span>
-                                                  <span className="text-[8px] text-gray-400 uppercase">{subMeta?.shortLabel ?? ""}</span>
-                                                </summary>
-                                                {/* Cours/chapters under matière */}
-                                                {subCours2.length > 0 && (
-                                                  <div className="ml-7 space-y-0">
-                                                    {subCours2.map(c => (
-                                                      <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
-                                                        <input
-                                                          type="checkbox"
-                                                          checked={groupCoursAccessIds.has(c.id)}
-                                                          onChange={() => {
-                                                            const has = groupCoursAccessIds.has(c.id);
-                                                            // Optimistic update
-                                                            setGroupeCoursAcces(prev => has
-                                                              ? prev.filter(a => !(a.groupe_id === g.id && a.cours_id === c.id))
-                                                              : [...prev, { groupe_id: g.id, cours_id: c.id }]
-                                                            );
-                                                            // Server update
-                                                            const sb = createBrowserClient();
-                                                            if (has) {
-                                                              sb.from("groupe_cours_acces").delete().eq("groupe_id", g.id).eq("cours_id", c.id).then(() => {});
-                                                            } else {
-                                                              sb.from("groupe_cours_acces").insert({ groupe_id: g.id, cours_id: c.id }).then(() => {});
-                                                            }
-                                                          }}
-                                                          className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                                        />
-                                                        <span className="text-[11px] text-gray-600">{c.name}</span>
-                                                      </label>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </details>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-                                      {/* Cours directly under this child (e.g. chapters under a matière) */}
-                                      {childCours.length > 0 && subChildren.length === 0 && (
-                                        <div className="ml-9 space-y-0 pb-1">
-                                          {childCours.map(c => (
-                                            <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
-                                              <input
-                                                type="checkbox"
-                                                checked={groupCoursAccessIds.has(c.id)}
-                                                onChange={() => {
-                                                  const has = groupCoursAccessIds.has(c.id);
-                                                  setGroupeCoursAcces(prev => has
-                                                    ? prev.filter(a => !(a.groupe_id === g.id && a.cours_id === c.id))
-                                                    : [...prev, { groupe_id: g.id, cours_id: c.id }]
-                                                  );
-                                                  const sb = createBrowserClient();
-                                                  if (has) {
-                                                    sb.from("groupe_cours_acces").delete().eq("groupe_id", g.id).eq("cours_id", c.id).then(() => {});
-                                                  } else {
-                                                    sb.from("groupe_cours_acces").insert({ groupe_id: g.id, cours_id: c.id }).then(() => {});
-                                                  }
-                                                }}
-                                                className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                              />
-                                              <span className="text-[11px] text-gray-600">{c.name}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </details>
-                                  );
-                                })}
-                                {children.length === 0 && (
-                                  <p className="text-xs text-gray-400 py-2">Aucun contenu sous ce dossier</p>
-                                )}
-                              </div>
-                            );
-                          })()}
+                          {/* Enhanced checkbox tree with search + bulk actions */}
+                          <ContentAccessTree
+                            groupeId={g.id}
+                            dossierId={dossier.id}
+                            initialDossiers={initialDossiers}
+                            initialCours={initialCours ?? []}
+                            groupAccessIds={groupAccessIds}
+                            groupCoursAccessIds={groupCoursAccessIds}
+                            setGroupeDossierAcces={setGroupeDossierAcces}
+                            setGroupeCoursAcces={setGroupeCoursAcces}
+                            saveGroupeDossierAcces={saveGroupeDossierAcces}
+                          />
 
                           {/* Members — separated by role */}
                           <InlineClassMembers
@@ -2223,10 +2100,299 @@ function GroupeDetail({
   );
 }
 
+// ─── ContentAccessTree ───────────────────────────────────────────────────────
+type CoursItem = { id: string; name: string; dossier_id: string | null; matiere_id: string | null; order_index: number; visible: boolean };
+
+function ContentAccessTree({
+  groupeId, dossierId, initialDossiers, initialCours,
+  groupAccessIds, groupCoursAccessIds,
+  setGroupeDossierAcces, setGroupeCoursAcces, saveGroupeDossierAcces,
+}: {
+  groupeId: string;
+  dossierId: string;
+  initialDossiers: Dossier[];
+  initialCours: CoursItem[];
+  groupAccessIds: string[];
+  groupCoursAccessIds: Set<string>;
+  setGroupeDossierAcces: React.Dispatch<React.SetStateAction<{ groupe_id: string; dossier_id: string; created_at: string }[]>>;
+  setGroupeCoursAcces: React.Dispatch<React.SetStateAction<{ groupe_id: string; cours_id: string }[]>>;
+  saveGroupeDossierAcces: (groupeId: string, dossierIds: string[]) => Promise<any>;
+}) {
+  const [contentSearch, setContentSearch] = useState("");
+  const cq = contentSearch.toLowerCase();
+
+  const children = initialDossiers.filter(d => d.parent_id === dossierId).sort((a, b) => a.order_index - b.order_index);
+  const accessSet = new Set(groupAccessIds);
+
+  // Gather all dossier IDs and cours IDs under this tree for bulk operations
+  const allDossierIds = useMemo(() => {
+    const ids: string[] = [];
+    children.forEach(child => {
+      ids.push(child.id);
+      initialDossiers.filter(d => d.parent_id === child.id).forEach(sub => ids.push(sub.id));
+    });
+    return ids;
+  }, [children, initialDossiers]);
+
+  const allCoursIds = useMemo(() => {
+    const ids: string[] = [];
+    children.forEach(child => {
+      initialCours.filter(c => c.dossier_id === child.id).forEach(c => ids.push(c.id));
+      initialDossiers.filter(d => d.parent_id === child.id).forEach(sub => {
+        initialCours.filter(c => c.dossier_id === sub.id).forEach(c => ids.push(c.id));
+      });
+    });
+    return ids;
+  }, [children, initialDossiers, initialCours]);
+
+  const allDossierChecked = allDossierIds.length > 0 && allDossierIds.every(id => accessSet.has(id));
+  const allCoursChecked = allCoursIds.length > 0 && allCoursIds.every(id => groupCoursAccessIds.has(id));
+  const allChecked = allDossierChecked && allCoursChecked;
+  const noneChecked = allDossierIds.every(id => !accessSet.has(id)) && allCoursIds.every(id => !groupCoursAccessIds.has(id));
+
+  const toggleAccess = (dosId: string) => {
+    const has = accessSet.has(dosId);
+    const next = has ? groupAccessIds.filter(id => id !== dosId) : [...groupAccessIds, dosId];
+    setGroupeDossierAcces(prev => [
+      ...prev.filter(a => a.groupe_id !== groupeId),
+      ...next.map(did => ({ groupe_id: groupeId, dossier_id: did, created_at: "" }))
+    ]);
+    saveGroupeDossierAcces(groupeId, next).catch(() => {});
+  };
+
+  const bulkToggleDossiers = (ids: string[], check: boolean) => {
+    const current = new Set(groupAccessIds);
+    if (check) ids.forEach(id => current.add(id));
+    else ids.forEach(id => current.delete(id));
+    const next = Array.from(current);
+    setGroupeDossierAcces(prev => [
+      ...prev.filter(a => a.groupe_id !== groupeId),
+      ...next.map(did => ({ groupe_id: groupeId, dossier_id: did, created_at: "" }))
+    ]);
+    saveGroupeDossierAcces(groupeId, next).catch(() => {});
+  };
+
+  const bulkToggleCours = (ids: string[], check: boolean) => {
+    const sb = createBrowserClient();
+    if (check) {
+      const toAdd = ids.filter(id => !groupCoursAccessIds.has(id));
+      if (toAdd.length === 0) return;
+      setGroupeCoursAcces(prev => [...prev, ...toAdd.map(id => ({ groupe_id: groupeId, cours_id: id }))]);
+      sb.from("groupe_cours_acces").insert(toAdd.map(id => ({ groupe_id: groupeId, cours_id: id }))).then(() => {});
+    } else {
+      const toRemove = ids.filter(id => groupCoursAccessIds.has(id));
+      if (toRemove.length === 0) return;
+      setGroupeCoursAcces(prev => prev.filter(a => !(a.groupe_id === groupeId && toRemove.includes(a.cours_id))));
+      const removeSet = new Set(toRemove);
+      removeSet.forEach(cid => {
+        sb.from("groupe_cours_acces").delete().eq("groupe_id", groupeId).eq("cours_id", cid).then(() => {});
+      });
+    }
+  };
+
+  const toggleAll = (check: boolean) => {
+    bulkToggleDossiers(allDossierIds, check);
+    bulkToggleCours(allCoursIds, check);
+  };
+
+  // Helpers for per-semester bulk
+  const getSemesterDossierIds = (childId: string) => {
+    const ids = [childId];
+    initialDossiers.filter(d => d.parent_id === childId).forEach(sub => ids.push(sub.id));
+    return ids;
+  };
+  const getSemesterCoursIds = (childId: string) => {
+    const ids: string[] = [];
+    initialCours.filter(c => c.dossier_id === childId).forEach(c => ids.push(c.id));
+    initialDossiers.filter(d => d.parent_id === childId).forEach(sub => {
+      initialCours.filter(c => c.dossier_id === sub.id).forEach(c => ids.push(c.id));
+    });
+    return ids;
+  };
+
+  const toggleCoursAccess = (coursId: string) => {
+    const has = groupCoursAccessIds.has(coursId);
+    setGroupeCoursAcces(prev => has
+      ? prev.filter(a => !(a.groupe_id === groupeId && a.cours_id === coursId))
+      : [...prev, { groupe_id: groupeId, cours_id: coursId }]
+    );
+    const sb = createBrowserClient();
+    if (has) {
+      sb.from("groupe_cours_acces").delete().eq("groupe_id", groupeId).eq("cours_id", coursId).then(() => {});
+    } else {
+      sb.from("groupe_cours_acces").insert({ groupe_id: groupeId, cours_id: coursId }).then(() => {});
+    }
+  };
+
+  const matchesSearch = (name: string) => !cq || name.toLowerCase().includes(cq);
+
+  return (
+    <div className="space-y-2">
+      {/* Toolbar: search + bulk actions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[140px]">
+          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={contentSearch}
+            onChange={e => setContentSearch(e.target.value)}
+            placeholder="Filtrer les contenus..."
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-2 py-1.5 text-[11px] outline-none focus:border-emerald-300 focus:ring-1 focus:ring-emerald-100"
+          />
+        </div>
+        <button
+          onClick={() => toggleAll(true)}
+          disabled={allChecked}
+          className="text-[10px] px-2.5 py-1.5 rounded-lg font-medium transition-colors border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-default"
+        >
+          Tout cocher
+        </button>
+        <button
+          onClick={() => toggleAll(false)}
+          disabled={noneChecked}
+          className="text-[10px] px-2.5 py-1.5 rounded-lg font-medium transition-colors border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-default"
+        >
+          Tout décocher
+        </button>
+      </div>
+
+      {/* Tree */}
+      <div className="space-y-0.5">
+        {children.map(child => {
+          const subChildren = initialDossiers.filter(d => d.parent_id === child.id).sort((a, b) => a.order_index - b.order_index);
+          const childMeta = DOSSIER_TYPE_META[child.dossier_type] as { shortLabel?: string } | undefined;
+          const childCours = initialCours.filter(c => c.dossier_id === child.id);
+          const hasContent = subChildren.length > 0 || childCours.length > 0;
+
+          // Search filtering
+          const filteredSubChildren = subChildren.filter(sub => {
+            if (matchesSearch(sub.name)) return true;
+            return initialCours.filter(c => c.dossier_id === sub.id).some(c => matchesSearch(c.name));
+          });
+          const filteredChildCours = childCours.filter(c => matchesSearch(c.name));
+          const childVisible = matchesSearch(child.name) || filteredSubChildren.length > 0 || filteredChildCours.length > 0;
+          if (cq && !childVisible) return null;
+
+          // Per-semester bulk state
+          const semDosIds = getSemesterDossierIds(child.id);
+          const semCoursIds = getSemesterCoursIds(child.id);
+          const semAllDosChecked = semDosIds.every(id => accessSet.has(id));
+          const semAllCoursChecked = semCoursIds.length === 0 || semCoursIds.every(id => groupCoursAccessIds.has(id));
+          const semAllChecked = semAllDosChecked && semAllCoursChecked;
+
+          return (
+            <details key={child.id} className="group/sem" open={accessSet.has(child.id) || !!cq}>
+              <summary className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                {hasContent && <ChevronRight size={12} className="text-gray-400 transition-transform group-open/sem:rotate-90 shrink-0" />}
+                {!hasContent && <span className="w-3" />}
+                <input
+                  type="checkbox"
+                  checked={accessSet.has(child.id)}
+                  onChange={(e) => { e.stopPropagation(); toggleAccess(child.id); }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm font-medium text-gray-800 flex-1">{child.name}</span>
+                {/* Per-semester toggle */}
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); bulkToggleDossiers(semDosIds, !semAllChecked); bulkToggleCours(semCoursIds, !semAllChecked); }}
+                  className="text-[9px] px-1.5 py-0.5 rounded border border-gray-200 text-gray-500 hover:text-emerald-600 hover:border-emerald-300 transition-colors"
+                  title={semAllChecked ? "Tout décocher" : "Tout cocher"}
+                >
+                  {semAllChecked ? "Aucun" : "Tous"}
+                </button>
+                <span className="text-[9px] text-gray-400 uppercase">{childMeta?.shortLabel ?? ""}</span>
+              </summary>
+
+              {/* Sub-level: matières under semester */}
+              {subChildren.length > 0 && (
+                <div className="ml-9 space-y-0.5 pb-1">
+                  {(cq ? filteredSubChildren : subChildren).map(sub => {
+                    const subMeta = DOSSIER_TYPE_META[sub.dossier_type] as { shortLabel?: string } | undefined;
+                    const subCours2 = initialCours.filter(c => c.dossier_id === sub.id);
+                    const filteredCours2 = cq ? subCours2.filter(c => matchesSearch(c.name) || matchesSearch(sub.name)) : subCours2;
+                    const hasCours = subCours2.length > 0;
+
+                    // Per-matiere bulk
+                    const matCoursIds = subCours2.map(c => c.id);
+                    const matAllCoursChecked = matCoursIds.length > 0 && matCoursIds.every(id => groupCoursAccessIds.has(id));
+
+                    return (
+                      <details key={sub.id} className="group/mat" open={!!cq}>
+                        <summary className="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-50 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                          {hasCours && <ChevronRight size={10} className="text-gray-400 transition-transform group-open/mat:rotate-90 shrink-0" />}
+                          {!hasCours && <span className="w-2.5" />}
+                          <input
+                            type="checkbox"
+                            checked={accessSet.has(sub.id)}
+                            onChange={(e) => { e.stopPropagation(); toggleAccess(sub.id); }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-xs text-gray-700 flex-1">{sub.name}</span>
+                          {hasCours && (
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); bulkToggleCours(matCoursIds, !matAllCoursChecked); }}
+                              className="text-[8px] px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:text-emerald-600 hover:border-emerald-300 transition-colors"
+                              title={matAllCoursChecked ? "Décocher les cours" : "Cocher les cours"}
+                            >
+                              {matAllCoursChecked ? "Aucun" : "Tous"}
+                            </button>
+                          )}
+                          <span className="text-[8px] text-gray-400 uppercase">{subMeta?.shortLabel ?? ""}</span>
+                        </summary>
+                        {filteredCours2.length > 0 && (
+                          <div className="ml-7 space-y-0">
+                            {filteredCours2.map(c => (
+                              <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={groupCoursAccessIds.has(c.id)}
+                                  onChange={() => toggleCoursAccess(c.id)}
+                                  className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span className="text-[11px] text-gray-600">{c.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </details>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Cours directly under this child */}
+              {childCours.length > 0 && subChildren.length === 0 && (
+                <div className="ml-9 space-y-0 pb-1">
+                  {(cq ? filteredChildCours : childCours).map(c => (
+                    <label key={c.id} className="flex items-center gap-2 py-0.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={groupCoursAccessIds.has(c.id)}
+                        onChange={() => toggleCoursAccess(c.id)}
+                        className="w-3 h-3 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-[11px] text-gray-600">{c.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </details>
+          );
+        })}
+        {children.length === 0 && (
+          <p className="text-xs text-gray-400 py-2">Aucun contenu sous ce dossier</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── MembresTab ───────────────────────────────────────────────────────────────
 
 function InlineClassMembers({ members, groupeColor, onManage }: { members: Profile[]; groupeColor: string; onManage: () => void }) {
   const [search, setSearch] = useState("");
+  const [elevesExpanded, setElevesExpanded] = useState(false);
 
   const profs = members.filter(u => ["prof", "coach"].includes(u.role));
   const eleves = members.filter(u => u.role === "eleve");
@@ -2238,6 +2404,12 @@ function InlineClassMembers({ members, groupeColor, onManage }: { members: Profi
   const filteredProfs = profs.filter(filterUser);
   const filteredEleves = eleves.filter(filterUser);
   const filteredAdmins = admins.filter(filterUser);
+
+  // Show expanded if searching
+  const showAllEleves = elevesExpanded || !!q;
+  const ELEVES_PREVIEW = 8;
+  const displayedEleves = showAllEleves ? filteredEleves : filteredEleves.slice(0, ELEVES_PREVIEW);
+  const hasMoreEleves = !showAllEleves && filteredEleves.length > ELEVES_PREVIEW;
 
   const MemberCard = ({ u, color }: { u: Profile; color: string }) => (
     <button
@@ -2262,13 +2434,14 @@ function InlineClassMembers({ members, groupeColor, onManage }: { members: Profi
         <button onClick={onManage} className="text-[9px] font-medium text-blue-600 hover:text-blue-800">+ Gérer</button>
       </div>
 
-      {members.length > 3 && (
+      {/* Always show search when there are members */}
+      {members.length > 0 && (
         <div className="relative mb-2 px-1">
           <Search size={11} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher..."
+            placeholder="Rechercher un membre..."
             className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-2 py-1.5 text-[11px] outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100"
           />
         </div>
@@ -2288,13 +2461,31 @@ function InlineClassMembers({ members, groupeColor, onManage }: { members: Profi
             </div>
           )}
 
-          {/* Élèves */}
+          {/* Élèves — collapsible when many */}
           {filteredEleves.length > 0 && (
             <div>
-              <p className="text-[9px] font-bold uppercase text-blue-400 mb-1 px-1">Élèves ({filteredEleves.length})</p>
-              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
-                {filteredEleves.map(u => <MemberCard key={u.id} u={u} color={groupeColor} />)}
+              <div className="flex items-center justify-between mb-1 px-1">
+                <p className="text-[9px] font-bold uppercase text-blue-400">Élèves ({filteredEleves.length})</p>
+                {eleves.length > ELEVES_PREVIEW && !q && (
+                  <button
+                    onClick={() => setElevesExpanded(p => !p)}
+                    className="text-[9px] font-medium text-blue-500 hover:text-blue-700 transition-colors"
+                  >
+                    {elevesExpanded ? "Réduire" : `Voir tous (${filteredEleves.length})`}
+                  </button>
+                )}
               </div>
+              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                {displayedEleves.map(u => <MemberCard key={u.id} u={u} color={groupeColor} />)}
+              </div>
+              {hasMoreEleves && (
+                <button
+                  onClick={() => setElevesExpanded(true)}
+                  className="w-full mt-1 py-1.5 text-[10px] text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors font-medium"
+                >
+                  + {filteredEleves.length - ELEVES_PREVIEW} autres élèves
+                </button>
+              )}
             </div>
           )}
 

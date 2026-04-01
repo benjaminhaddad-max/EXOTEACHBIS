@@ -295,26 +295,13 @@ function EditSerieModal({
             </div>
           )}
           <div className="divide-y divide-white/8">
-            {([
-              ["Chronométré", timed, (v: boolean) => setTimed(v)],
-              ["Score définitif", scoreDefinitif, (v: boolean) => setScoreDefinitif(v)],
-              ["Visible pour les élèves", visible, (v: boolean) => setVisible(v)],
-            ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
-              <label key={label} className="flex items-center justify-between py-2.5 cursor-pointer">
-                <span className="text-sm text-white/70">{label}</span>
-                <button type="button" onClick={() => set(!val)}
-                  className={`w-10 h-5 rounded-full flex items-center px-0.5 transition-colors ${val ? "bg-[#C9A84C]" : "bg-white/15"}`}>
-                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${val ? "translate-x-5" : ""}`} />
-                </button>
-              </label>
-            ))}
-            {timed && (
-              <div className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-white/70">Durée (min)</span>
-                <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} min={1}
-                  className="w-20 bg-white/8 border border-white/12 rounded-lg px-2 py-1 text-sm text-white text-center focus:outline-none" />
-              </div>
-            )}
+            <label className="flex items-center justify-between py-2.5 cursor-pointer">
+              <span className="text-sm text-white/70">Visible pour les élèves</span>
+              <button type="button" onClick={() => setVisible(!visible)}
+                className={`w-10 h-5 rounded-full flex items-center px-0.5 transition-colors ${visible ? "bg-[#C9A84C]" : "bg-white/15"}`}>
+                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-5" : ""}`} />
+              </button>
+            </label>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-white/15 text-white/60 text-sm hover:bg-white/5 transition-colors">Annuler</button>
@@ -521,26 +508,13 @@ export function FullSerieEditor({
               </div>
             </div>
             <div className="divide-y divide-white/8">
-              {([
-                ["Chronométré", timed, (v: boolean) => setTimed(v)],
-                ["Score définitif", scoreDefinitif, (v: boolean) => setScoreDefinitif(v)],
-                ["Visible élèves", visible, (v: boolean) => setVisible(v)],
-              ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
-                <label key={label} className="flex items-center justify-between py-2.5 cursor-pointer">
-                  <span className="text-xs text-white/60">{label}</span>
-                  <button type="button" onClick={() => set(!val)}
-                    className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${val ? "bg-[#C9A84C]" : "bg-white/15"}`}>
-                    <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${val ? "translate-x-4" : ""}`} />
-                  </button>
-                </label>
-              ))}
-              {timed && (
-                <div className="py-2.5">
-                  <span className="text-xs text-white/60 block mb-1.5">Durée (min)</span>
-                  <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} min={1}
-                    className="w-full bg-white/8 border border-white/12 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:outline-none" />
-                </div>
-              )}
+              <label className="flex items-center justify-between py-2.5 cursor-pointer">
+                <span className="text-xs text-white/60">Visible élèves</span>
+                <button type="button" onClick={() => setVisible(!visible)}
+                  className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${visible ? "bg-[#C9A84C]" : "bg-white/15"}`}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-4" : ""}`} />
+                </button>
+              </label>
             </div>
           </div>
 
@@ -1303,26 +1277,13 @@ function NewSerieModal({
 
           {/* Toggles */}
           <div className="divide-y divide-white/8">
-            {([
-              ["Chronométré", timed, (v: boolean) => setTimed(v)],
-              ["Score définitif", scoreDefinitif, (v: boolean) => setScoreDefinitif(v)],
-              ["Visible pour les élèves", visible, (v: boolean) => setVisible(v)],
-            ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
-              <label key={label} className="flex items-center justify-between py-2.5 cursor-pointer">
-                <span className="text-sm text-white/70">{label}</span>
-                <button type="button" onClick={() => set(!val)}
-                  className={`w-10 h-5 rounded-full flex items-center px-0.5 transition-colors ${val ? "bg-[#C9A84C]" : "bg-white/15"}`}>
-                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${val ? "translate-x-5" : ""}`} />
-                </button>
-              </label>
-            ))}
-            {timed && (
-              <div className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-white/70">Durée (min)</span>
-                <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} min={1}
-                  className="w-20 bg-white/8 border border-white/12 rounded-lg px-2 py-1 text-sm text-white text-center focus:outline-none" />
-              </div>
-            )}
+            <label className="flex items-center justify-between py-2.5 cursor-pointer">
+              <span className="text-sm text-white/70">Visible pour les élèves</span>
+              <button type="button" onClick={() => setVisible(!visible)}
+                className={`w-10 h-5 rounded-full flex items-center px-0.5 transition-colors ${visible ? "bg-[#C9A84C]" : "bg-white/15"}`}>
+                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${visible ? "translate-x-5" : ""}`} />
+              </button>
+            </label>
           </div>
 
           <div className="flex gap-3 pt-2">
