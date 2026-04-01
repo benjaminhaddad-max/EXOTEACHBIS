@@ -2336,11 +2336,7 @@ function AddPickerModal({
               ))}
             </div>
           </div>
-        ) : (
-          <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700">
-            Sélectionnez un dossier dans l'arborescence pour y ajouter du contenu.
-          </p>
-        )}
+        ) : null}
       </div>
     </div>
   );
