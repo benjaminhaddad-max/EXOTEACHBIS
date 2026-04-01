@@ -117,8 +117,25 @@ export function ExamensShell({
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isPending, startTransition] = useTransition();
-  const [selectedGroupeIds, setSelectedGroupeIds] = useState<Set<string>>(new Set());
+  // Sidebar: single dossier selection (university or terminal formation)
+  const [selectedDossierId, setSelectedDossierId] = useState<string | null>(null);
   const [tab, setTab] = useState<"examens" | "parametrage">("examens");
+
+  // Derive contextGroupeIds + selectedGroupeIds from selectedDossierId
+  const contextGroupeIds = useMemo(() => {
+    if (!selectedDossierId) return new Set<string>();
+    // Get all groupes whose formation_dossier_id matches the selected dossier or any descendant
+    const allDescendantIds = new Set<string>();
+    const collectDescendants = (parentId: string) => {
+      allDescendantIds.add(parentId);
+      for (const d of dossiers) {
+        if (d.parent_id === parentId) collectDescendants(d.id);
+      }
+    };
+    collectDescendants(selectedDossierId);
+    return new Set(groupes.filter(g => g.formation_dossier_id && allDescendantIds.has(g.formation_dossier_id)).map(g => g.id));
+  }, [selectedDossierId, dossiers, groupes]);
+  const selectedGroupeIds = contextGroupeIds;
   const [visibilityPendingKey, setVisibilityPendingKey] = useState<string | null>(null);
   const [profSubTab, setProfSubTab] = useState<"passed" | "upcoming">("upcoming");
   const [uploadingSerieId, setUploadingSerieId] = useState<string | null>(null);
@@ -133,8 +150,9 @@ export function ExamensShell({
     setTimeout(() => setToast(null), 3500);
   };
 
-  const toggleGroupe = (id: string) => setSelectedGroupeIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const selectAll = () => setSelectedGroupeIds(new Set());
+  // Kept for compatibility — no longer needed for sidebar but used by filtering
+  const toggleGroupe = (_id: string) => {};
+  const selectAll = () => setSelectedDossierId(null);
 
   // Filter examens by selected groupes
   const filteredExamens = useMemo(() => {
@@ -383,9 +401,8 @@ export function ExamensShell({
         <ExamensSidebar
           dossiers={dossiers}
           groupes={groupes}
-          selectedGroupeIds={selectedGroupeIds}
-          onToggle={toggleGroupe}
-          onSelectAll={selectAll}
+          selectedDossierId={selectedDossierId}
+          onSelectDossier={setSelectedDossierId}
         />
       )}
 
@@ -658,9 +675,11 @@ export function ExamensShell({
             {(modal.type === "create" || modal.type === "edit") && (
               <ExamenForm
                 examen={modal.type === "edit" ? modal.examen : undefined}
-                selectedGroupeIds={selectedGroupeIds}
+                contextGroupeIds={contextGroupeIds}
                 groupes={groupes}
                 groupeMap={groupeMap}
+                dossiers={allDossiers}
+                selectedDossierId={selectedDossierId}
                 onSubmit={(data, groupeIds) => {
                   startTransition(async () => {
                     if (modal.type === "edit") {
@@ -790,146 +809,179 @@ function VisibilityControlCard({
 
 // ─── Examens Sidebar with Checkboxes ────────────────────────────────────
 
-function ExamensSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSelectAll }: {
+function ExamensSidebar({ dossiers, groupes, selectedDossierId, onSelectDossier }: {
   dossiers: Dossier[]; groupes: Groupe[];
-  selectedGroupeIds: Set<string>; onToggle: (id: string) => void; onSelectAll: () => void;
+  selectedDossierId: string | null; onSelectDossier: (id: string | null) => void;
 }) {
-  // Build dossier children index and group index
-  const childrenByParent = useMemo(() => {
-    const m = new Map<string | null, Dossier[]>();
-    for (const d of dossiers) {
-      const key = d.parent_id ?? null;
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(d);
+  // Build hierarchy
+  const offers = useMemo(() => dossiers.filter(d => !d.parent_id && (d.dossier_type === "offer" || d.dossier_type === "generic")).sort((a, b) => a.order_index - b.order_index), [dossiers]);
+
+  const childrenOf = useCallback((parentId: string) =>
+    dossiers.filter(d => d.parent_id === parentId).sort((a, b) => a.order_index - b.order_index),
+  [dossiers]);
+
+  // Check if a dossier has groups (directly or in descendants)
+  const hasGroupsUnder = useCallback((dossierId: string): boolean => {
+    if (groupes.some(g => g.formation_dossier_id === dossierId)) return true;
+    return childrenOf(dossierId).some(c => hasGroupsUnder(c.id));
+  }, [groupes, childrenOf]);
+
+  // For each offer, find if it has sub_offers or universities
+  const getSubOffers = (offerId: string) => childrenOf(offerId).filter(d => d.dossier_type === "sub_offer");
+  const getUniversities = (parentId: string) => childrenOf(parentId).filter(d => d.dossier_type === "university");
+
+  // Determine which offer/sub_offer contains the selected dossier
+  const selectedAncestry = useMemo(() => {
+    if (!selectedDossierId) return { offerId: null as string | null, subOfferId: null as string | null, uniId: null as string | null };
+    const sel = dossiers.find(d => d.id === selectedDossierId);
+    if (!sel) return { offerId: null, subOfferId: null, uniId: null };
+    if (sel.dossier_type === "offer" || sel.dossier_type === "generic") return { offerId: sel.id, subOfferId: null, uniId: null };
+    if (sel.dossier_type === "sub_offer") return { offerId: sel.parent_id, subOfferId: sel.id, uniId: null };
+    if (sel.dossier_type === "university") {
+      const parent = dossiers.find(d => d.id === sel.parent_id);
+      if (parent?.dossier_type === "sub_offer") return { offerId: parent.parent_id, subOfferId: parent.id, uniId: sel.id };
+      return { offerId: sel.parent_id, subOfferId: null, uniId: sel.id };
     }
-    // Sort each bucket by order_index
-    for (const arr of m.values()) arr.sort((a, b) => a.order_index - b.order_index);
-    return m;
-  }, [dossiers]);
+    return { offerId: null, subOfferId: null, uniId: null };
+  }, [selectedDossierId, dossiers]);
 
-  const groupsByDossier = useMemo(() => {
-    const m = new Map<string, Groupe[]>();
-    for (const g of groupes) if (g.formation_dossier_id) {
-      if (!m.has(g.formation_dossier_id)) m.set(g.formation_dossier_id, []);
-      m.get(g.formation_dossier_id)!.push(g);
+  const { offerId: selOffer, subOfferId: selSubOffer, uniId: selUni } = selectedAncestry;
+
+  const handleSelectOffer = (id: string) => {
+    const subOffers = getSubOffers(id);
+    const unis = getUniversities(id);
+    // If this offer has no sub-offers and no universities, select it directly
+    if (subOffers.length === 0 && unis.length === 0) {
+      onSelectDossier(selectedDossierId === id ? null : id);
+    } else {
+      // Just expand, don't select yet
+      onSelectDossier(null);
+      // We rely on selectedAncestry to show the children
     }
-    return m;
-  }, [groupes]);
+  };
 
-  // Recursively get all group IDs under a dossier
-  const getAllGroupIds = useCallback((dossierId: string): string[] => {
-    const ids: string[] = [];
-    // Direct groups on this dossier
-    for (const g of (groupsByDossier.get(dossierId) ?? [])) ids.push(g.id);
-    // Groups on children
-    for (const child of (childrenByParent.get(dossierId) ?? [])) ids.push(...getAllGroupIds(child.id));
-    return ids;
-  }, [childrenByParent, groupsByDossier]);
+  const handleSelectSubOffer = (id: string) => {
+    const unis = getUniversities(id);
+    if (unis.length === 0) {
+      onSelectDossier(selectedDossierId === id ? null : id);
+    }
+  };
 
-  // Root = offers (dossiers with no parent, or type=offer)
-  const roots = useMemo(() => {
-    return dossiers
-      .filter(d => !d.parent_id && (d.dossier_type === "offer" || d.dossier_type === "generic"))
-      .sort((a, b) => a.order_index - b.order_index);
-  }, [dossiers]);
+  const handleSelectUni = (id: string) => {
+    onSelectDossier(selectedDossierId === id ? null : id);
+  };
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(roots.map(o => o.id)));
-  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  // Count classes under a dossier
+  const countGroups = useCallback((dossierId: string): number => {
+    let count = groupes.filter(g => g.formation_dossier_id === dossierId).length;
+    for (const c of childrenOf(dossierId)) count += countGroups(c.id);
+    return count;
+  }, [groupes, childrenOf]);
 
-  const Chk = ({ checked, partial }: { checked: boolean; partial?: boolean }) => (
-    <div className="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0" style={{
-      borderColor: checked || partial ? "#C9A84C" : "rgba(255,255,255,0.2)",
-      backgroundColor: checked ? "#C9A84C" : "transparent",
-    }}>
-      {checked && <Check size={9} style={{ color: "#0e1e35" }} strokeWidth={3} />}
-      {!checked && partial && <div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: "#C9A84C" }} />}
-    </div>
+  const Pill = ({ label, selected, count, color, onClick }: { label: string; selected: boolean; count?: number; color: string; onClick: () => void }) => (
+    <button onClick={onClick}
+      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all"
+      style={{
+        backgroundColor: selected ? color + "18" : "transparent",
+        border: selected ? `1px solid ${color}40` : "1px solid transparent",
+      }}
+      onMouseOver={e => { if (!selected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+      onMouseOut={e => { if (!selected) e.currentTarget.style.backgroundColor = "transparent"; }}>
+      <span className="flex-1 text-[11px] font-semibold truncate" style={{ color: selected ? color : "rgba(255,255,255,0.6)" }}>{label}</span>
+      {count !== undefined && count > 0 && (
+        <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: selected ? color + "20" : "rgba(255,255,255,0.06)", color: selected ? color : "rgba(255,255,255,0.3)" }}>
+          {count} cl.
+        </span>
+      )}
+    </button>
   );
 
-  const TYPE_STYLE: Record<string, { icon: typeof GraduationCap; color: string; size: number }> = {
-    offer: { icon: GraduationCap, color: "#C9A84C", size: 11 },
-    sub_offer: { icon: GraduationCap, color: "#E3C286", size: 10 },
-    university: { icon: Building2, color: "#A78BFA", size: 9 },
-    semester: { icon: Layers, color: "#60A5FA", size: 9 },
-    generic: { icon: GraduationCap, color: "#C9A84C", size: 11 },
-  };
-  const defaultStyle = { icon: Layers, color: "rgba(255,255,255,0.5)", size: 9 };
-
-  const renderDossier = (d: Dossier, depth: number) => {
-    const children = childrenByParent.get(d.id) ?? [];
-    const directGroups = groupsByDossier.get(d.id) ?? [];
-    const allIds = getAllGroupIds(d.id);
-    const hasContent = children.length > 0 || directGroups.length > 0;
-    if (!hasContent && depth > 0) return null; // Skip empty leaf dossiers (semesters etc)
-
-    const allChecked = allIds.length > 0 && allIds.every(id => selectedGroupeIds.has(id));
-    const someChecked = allIds.some(id => selectedGroupeIds.has(id));
-    const isOpen = expanded.has(d.id);
-    const style = TYPE_STYLE[d.dossier_type] ?? defaultStyle;
-    const Icon = style.icon;
-
-    const bulkToggle = () => {
-      for (const id of allIds) {
-        const shouldHave = !allChecked;
-        if (shouldHave !== selectedGroupeIds.has(id)) onToggle(id);
-      }
-    };
-
-    return (
-      <div key={d.id} style={{ marginLeft: depth > 0 ? 12 : 0 }}>
-        <div className="flex items-center gap-1">
-          {allIds.length > 0 && (
-            <button onClick={bulkToggle} className="p-1 shrink-0">
-              <Chk checked={allChecked} partial={!allChecked && someChecked} />
-            </button>
-          )}
-          {allIds.length === 0 && <span className="w-5" />}
-          <button onClick={() => hasContent && toggleExpand(d.id)}
-            className="flex-1 flex items-center gap-1.5 px-1 py-1.5 rounded-lg transition-all text-left"
-            onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-            <Icon size={style.size} style={{ color: style.color }} />
-            <span className="flex-1 text-[11px] font-bold truncate" style={{ color: style.color, fontSize: depth > 0 ? 10 : 11 }}>{d.name}</span>
-            {hasContent && <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />}
-          </button>
-        </div>
-
-        {isOpen && (
-          <>
-            {children.map(child => renderDossier(child, depth + 1))}
-            {directGroups.map(g => {
-              const isChecked = selectedGroupeIds.has(g.id);
-              return (
-                <button key={g.id} onClick={() => onToggle(g.id)}
-                  className="w-full flex items-center gap-2 py-1 rounded-lg transition-all text-left"
-                  style={{ paddingLeft: 24, backgroundColor: isChecked ? "rgba(201,168,76,0.08)" : "transparent" }}
-                  onMouseOver={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.04)")}
-                  onMouseOut={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.08)" : "transparent")}>
-                  <Chk checked={isChecked} />
-                  <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>{g.name[0]?.toUpperCase()}</span>
-                  <span className="text-[10px] font-medium truncate" style={{ color: isChecked ? "#E3C286" : "rgba(255,255,255,0.6)" }}>{g.name}</span>
-                </button>
-              );
-            })}
-          </>
-        )}
-      </div>
-    );
-  };
+  // Determine visible universities (from offer or sub_offer)
+  const visibleUnis = selSubOffer ? getUniversities(selSubOffer) : (selOffer ? getUniversities(selOffer) : []);
+  const visibleSubOffers = selOffer ? getSubOffers(selOffer) : [];
 
   return (
     <div className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full" style={{ width: 260, backgroundColor: "rgba(0,0,0,0.15)" }}>
       <div className="px-4 pt-4 pb-2 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-          Formations &amp; Classes
+          Formation
         </p>
       </div>
 
-      <div className="px-3 pb-2 space-y-0.5 flex-1">
-        {roots.map(r => renderDossier(r, 0))}
+      {/* Level 1: Formations */}
+      <div className="px-2 pb-2 space-y-0.5">
+        <button onClick={() => onSelectDossier(null)}
+          className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-all"
+          style={{ backgroundColor: !selectedDossierId ? "rgba(255,255,255,0.06)" : "transparent" }}
+          onMouseOver={e => { if (selectedDossierId) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+          onMouseOut={e => { if (selectedDossierId) e.currentTarget.style.backgroundColor = "transparent"; }}>
+          <span className="text-[10px] font-medium" style={{ color: !selectedDossierId ? "#E3C286" : "rgba(255,255,255,0.4)" }}>Toutes les formations</span>
+        </button>
+
+        {offers.map(offer => {
+          const isSelected = selOffer === offer.id;
+          const gc = countGroups(offer.id);
+          return (
+            <div key={offer.id}>
+              <Pill
+                label={offer.name}
+                selected={isSelected}
+                count={gc}
+                color="#C9A84C"
+                onClick={() => {
+                  if (selOffer === offer.id && !selSubOffer && !selUni) {
+                    onSelectDossier(null); // deselect
+                  } else {
+                    handleSelectOffer(offer.id);
+                    // If offer has sub_offers or unis, we want to "open" it
+                    // Set to offer id temporarily so children show
+                    if (getSubOffers(offer.id).length > 0 || getUniversities(offer.id).length > 0) {
+                      // Just set offer context — the actual selectedDossierId stays null until a terminal is clicked
+                      // We fake it by setting to the offer so the ancestry shows children
+                      onSelectDossier(offer.id);
+                    }
+                  }
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
 
-      <div className="h-4" />
+      {/* Level 2: Sub-offers (if any) */}
+      {selOffer && visibleSubOffers.length > 0 && (
+        <div className="px-2 pb-2 border-t border-white/5 pt-2">
+          <p className="text-[9px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>
+            Sous-offres
+          </p>
+          {visibleSubOffers.map(sub => (
+            <Pill key={sub.id} label={sub.name} selected={selSubOffer === sub.id} count={countGroups(sub.id)} color="#E3C286"
+              onClick={() => {
+                if (selSubOffer === sub.id) {
+                  onSelectDossier(selOffer); // go back to offer
+                } else {
+                  const unis = getUniversities(sub.id);
+                  onSelectDossier(unis.length > 0 ? sub.id : sub.id);
+                }
+              }} />
+          ))}
+        </div>
+      )}
+
+      {/* Level 3: Universities */}
+      {selOffer && visibleUnis.length > 0 && (
+        <div className="px-2 pb-2 border-t border-white/5 pt-2">
+          <p className="text-[9px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>
+            Université
+          </p>
+          {visibleUnis.map(uni => (
+            <Pill key={uni.id} label={uni.name.replace("Université ", "")} selected={selUni === uni.id} count={countGroups(uni.id)} color="#A78BFA"
+              onClick={() => handleSelectUni(uni.id)} />
+          ))}
+        </div>
+      )}
+
+      <div className="flex-1" />
     </div>
   );
 }
@@ -940,17 +992,21 @@ function ExamensSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSele
 
 function ExamenForm({
   examen,
-  selectedGroupeIds: sidebarGroupeIds,
+  contextGroupeIds,
   groupes,
   groupeMap,
+  dossiers,
+  selectedDossierId,
   onSubmit,
   onClose,
   isPending,
 }: {
   examen?: ExamenWithSeries;
-  selectedGroupeIds: Set<string>;
+  contextGroupeIds: Set<string>;
   groupes: Groupe[];
   groupeMap: Map<string, Groupe>;
+  dossiers: Dossier[];
+  selectedDossierId: string | null;
   onSubmit: (data: any, groupeIds: string[]) => void;
   onClose: () => void;
   isPending: boolean;
@@ -968,10 +1024,22 @@ function ExamenForm({
   const [resultsVisible, setResultsVisible] = useState(examen?.results_visible ?? false);
   const [notationSur, setNotationSur] = useState(examen?.notation_sur ?? 20);
 
-  // For edit: use existing groupe_ids; for create: use sidebar selection
+  // For edit: use existing groupe_ids; for create: use context from sidebar
   const [formGroupeIds, setFormGroupeIds] = useState<Set<string>>(
-    new Set(examen ? (examen.groupe_ids ?? []) : [...sidebarGroupeIds])
+    new Set(examen ? (examen.groupe_ids ?? []) : [...contextGroupeIds])
   );
+
+  // Matières (subjects) under the selected dossier context
+  const contextMatieres = useMemo(() => {
+    if (!selectedDossierId) return [];
+    const allDescendantIds = new Set<string>();
+    const collect = (parentId: string) => {
+      allDescendantIds.add(parentId);
+      for (const d of dossiers) { if (d.parent_id === parentId) collect(d.id); }
+    };
+    collect(selectedDossierId);
+    return dossiers.filter(d => d.dossier_type === "subject" && d.parent_id && allDescendantIds.has(d.parent_id)).sort((a, b) => a.order_index - b.order_index);
+  }, [selectedDossierId, dossiers]);
 
   const toggleFormGroupe = (id: string) => setFormGroupeIds(prev => {
     const n = new Set(prev);
@@ -1046,24 +1114,42 @@ function ExamenForm({
         <label className="text-xs text-white/50 mb-2 block flex items-center gap-1.5">
           <Users size={11} /> Classes cibles ({formGroupeIds.size})
         </label>
-        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-          {groupes.filter(g => sidebarGroupeIds.has(g.id) || (examen?.groupe_ids ?? []).includes(g.id)).map(g => {
-            const isSelected = formGroupeIds.has(g.id);
-            return (
-              <button key={g.id} onClick={() => toggleFormGroupe(g.id)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all"
-                style={{
-                  backgroundColor: isSelected ? g.color + "25" : "rgba(255,255,255,0.05)",
-                  color: isSelected ? g.color : "rgba(255,255,255,0.4)",
-                  border: isSelected ? `1px solid ${g.color}40` : "1px solid rgba(255,255,255,0.1)",
-                }}>
-                <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: g.color }} />
-                {g.name}
-              </button>
-            );
-          })}
-        </div>
+        {contextGroupeIds.size === 0 && !examen ? (
+          <p className="text-[11px] text-white/30">Sélectionnez une formation dans la sidebar pour voir les classes disponibles.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+            {groupes.filter(g => contextGroupeIds.has(g.id) || (examen?.groupe_ids ?? []).includes(g.id)).map(g => {
+              const isSelected = formGroupeIds.has(g.id);
+              return (
+                <button key={g.id} onClick={() => toggleFormGroupe(g.id)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all"
+                  style={{
+                    backgroundColor: isSelected ? g.color + "25" : "rgba(255,255,255,0.05)",
+                    color: isSelected ? g.color : "rgba(255,255,255,0.4)",
+                    border: isSelected ? `1px solid ${g.color}40` : "1px solid rgba(255,255,255,0.1)",
+                  }}>
+                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: g.color }} />
+                  {g.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Matières context (info only — for reference when composing the examen) */}
+      {contextMatieres.length > 0 && (
+        <div>
+          <label className="text-xs text-white/50 mb-2 block">Matières disponibles</label>
+          <div className="flex flex-wrap gap-1.5">
+            {contextMatieres.map(m => (
+              <span key={m.id} className="px-2 py-1 rounded-lg text-[10px] font-medium" style={{ backgroundColor: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                {m.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-6">
         <label className="flex items-center gap-3 cursor-pointer select-none">
