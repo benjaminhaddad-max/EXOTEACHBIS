@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { BookOpen, MessageCircleQuestion, Pencil, GraduationCap, Plus, X, ChevronDown } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { BookOpen, MessageCircleQuestion, Pencil, GraduationCap, Plus, X, ChevronDown, Users } from "lucide-react";
 import type { Profile, Dossier } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 
@@ -228,6 +228,134 @@ export function PedagogicalTeamSection({
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Coaching section */}
+      <CoachingAssignments
+        universityId={universityId}
+        users={users}
+        groupes={groupes}
+      />
+    </div>
+  );
+}
+
+// ─── Coaching Assignments ────────────────────────────────────────────────────
+
+function CoachingAssignments({ universityId, users, groupes }: { universityId: string; users: Profile[]; groupes: Groupe[] }) {
+  const supabase = createClient();
+  const uniClasses = useMemo(() => groupes.filter(g => g.formation_dossier_id === universityId), [groupes, universityId]);
+  const coaches = useMemo(() => users.filter(u => u.role === "coach" || u.role === "admin" || u.role === "superadmin"), [users]);
+
+  const [assignments, setAssignments] = useState<{ coach_id: string; groupe_id: string }[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [addingFor, setAddingFor] = useState<string | null>(null);
+  const [addCoachId, setAddCoachId] = useState("");
+
+  useEffect(() => {
+    if (uniClasses.length === 0) return;
+    supabase
+      .from("coach_groupe_assignments")
+      .select("coach_id, groupe_id")
+      .in("groupe_id", uniClasses.map(c => c.id))
+      .then(({ data }) => {
+        setAssignments(data ?? []);
+        setLoaded(true);
+      });
+  }, [uniClasses]);
+
+  const handleAssign = async (coachId: string, groupeId: string) => {
+    await supabase.from("coach_groupe_assignments").upsert({ coach_id: coachId, groupe_id: groupeId }, { onConflict: "coach_id,groupe_id" });
+    setAssignments(prev => [...prev, { coach_id: coachId, groupe_id: groupeId }]);
+    setAddingFor(null);
+    setAddCoachId("");
+  };
+
+  const handleRemove = async (coachId: string, groupeId: string) => {
+    await supabase.from("coach_groupe_assignments").delete().eq("coach_id", coachId).eq("groupe_id", groupeId);
+    setAssignments(prev => prev.filter(a => !(a.coach_id === coachId && a.groupe_id === groupeId)));
+  };
+
+  if (uniClasses.length === 0) return null;
+
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-1">Coaching</p>
+      <div className="space-y-2">
+        {uniClasses.map(classe => {
+          const classCoaches = assignments.filter(a => a.groupe_id === classe.id);
+          const isAdding = addingFor === classe.id;
+
+          return (
+            <div key={classe.id} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: classe.color }} />
+                <span className="text-sm font-medium text-gray-800 flex-1">{classe.name}</span>
+                <span className="text-[10px] text-gray-400">{classCoaches.length} coach{classCoaches.length !== 1 ? "s" : ""}</span>
+              </div>
+
+              <div className="ml-5 space-y-1">
+                {classCoaches.length === 0 && !isAdding && (
+                  <span className="text-[11px] text-gray-400">— Aucun coach assigné</span>
+                )}
+                {classCoaches.map(a => {
+                  const coach = users.find(u => u.id === a.coach_id);
+                  return (
+                    <div key={a.coach_id} className="flex items-center gap-2 group/coach">
+                      <div className="w-5 h-5 rounded-full bg-amber-50 flex items-center justify-center text-[8px] font-bold text-amber-600">
+                        {(coach?.first_name?.[0] || "").toUpperCase()}{(coach?.last_name?.[0] || "").toUpperCase()}
+                      </div>
+                      <span className="text-xs text-gray-700">{coach?.first_name} {coach?.last_name}</span>
+                      <button
+                        onClick={() => handleRemove(a.coach_id, a.groupe_id)}
+                        className="ml-auto opacity-0 group-hover/coach:opacity-100 p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {isAdding ? (
+                  <div className="space-y-1.5 bg-gray-50 rounded-lg p-2">
+                    <select
+                      autoFocus
+                      value={addCoachId}
+                      onChange={(e) => setAddCoachId(e.target.value)}
+                      className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gold/50 bg-white"
+                    >
+                      <option value="">Choisir un coach...</option>
+                      {coaches
+                        .filter(c => !classCoaches.some(a => a.coach_id === c.id))
+                        .map(c => (
+                          <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+                        ))}
+                    </select>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => { setAddingFor(null); setAddCoachId(""); }}
+                        className="text-[10px] px-2 py-1 rounded text-gray-500 hover:bg-gray-200">
+                        Annuler
+                      </button>
+                      <button
+                        onClick={() => { if (addCoachId) handleAssign(addCoachId, classe.id); }}
+                        disabled={!addCoachId}
+                        className="text-[10px] px-3 py-1 rounded bg-navy text-white font-medium disabled:opacity-40">
+                        Valider
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setAddingFor(classe.id); setAddCoachId(""); }}
+                    className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 mt-0.5"
+                  >
+                    <Plus size={10} /> Assigner un coach
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

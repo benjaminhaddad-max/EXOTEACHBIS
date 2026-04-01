@@ -3745,6 +3745,19 @@ function EditUserModal({
     return map;
   });
   const [qaContenuMatIds, setQaContenuMatIds] = useState<string[]>(profMatiereRows.filter((r) => r.role_type === "qa" || r.role_type === "contenu").map((r) => r.matiere_id));
+  // Coach class assignments
+  const [coachGroupeIds, setCoachGroupeIds] = useState<Set<string>>(new Set());
+  const [coachGroupeIdsLoaded, setCoachGroupeIdsLoaded] = useState(false);
+  useEffect(() => {
+    if (user.role !== "coach" && role !== "coach") return;
+    const sb = createBrowserClient();
+    sb.from("coach_groupe_assignments").select("groupe_id").eq("coach_id", user.id).then(({ data }) => {
+      setCoachGroupeIds(new Set((data ?? []).map(r => r.groupe_id)));
+      setCoachGroupeIdsLoaded(true);
+    });
+  }, [user.id, user.role, role]);
+  const [coachFormation, setCoachFormation] = useState("");
+  const [coachUni, setCoachUni] = useState("");
   // Cascade filters per section
   const [coursFormation, setCoursFormation] = useState("");
   const [coursUni, setCoursUni] = useState("");
@@ -3994,7 +4007,7 @@ function EditUserModal({
             </div>
           </div>
 
-          {role !== "prof" && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {role !== "prof" && role !== "coach" && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Classe</label>
               {(() => {
@@ -4067,7 +4080,7 @@ function EditUserModal({
           </div>}
 
           {/* Accès individuels — checkbox tree like classes */}
-          {groupeId && (() => {
+          {groupeId && role !== "coach" && (() => {
             // Find the university dossier for this group
             const grp = groupes.find(g => g.id === groupeId);
             const uniDossier = grp?.formation_dossier_id ? dossiers.find(d => d.id === grp.formation_dossier_id) : null;
@@ -4201,6 +4214,96 @@ function EditUserModal({
                       </details>
                     );
                   })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Coaching — coach multi-class assignment */}
+          {role === "coach" && (() => {
+            const offers = dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
+            const unis = coachFormation ? dossiers.filter(d => d.dossier_type === "university" && d.parent_id === coachFormation) : [];
+            const classes = coachUni ? groupes.filter(g => g.formation_dossier_id === coachUni) : [];
+
+            const toggleCoachGroupe = (gid: string) => {
+              const next = new Set(coachGroupeIds);
+              const sb = createBrowserClient();
+              if (next.has(gid)) {
+                next.delete(gid);
+                sb.from("coach_groupe_assignments").delete().eq("coach_id", user.id).eq("groupe_id", gid).then(() => {});
+              } else {
+                next.add(gid);
+                sb.from("coach_groupe_assignments").upsert({ coach_id: user.id, groupe_id: gid }, { onConflict: "coach_id,groupe_id" }).then(() => {});
+              }
+              setCoachGroupeIds(next);
+            };
+
+            // Show all assigned classes across all formations
+            const assignedClasses = groupes.filter(g => coachGroupeIds.has(g.id));
+
+            return (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Coaching — Classes assignées</label>
+
+                {/* Assigned classes summary */}
+                {assignedClasses.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {assignedClasses.map(c => {
+                      const uni = dossiers.find(d => d.id === c.formation_dossier_id);
+                      return (
+                        <span key={c.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+                          style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "#6EE7B7", border: "1px solid rgba(52,211,153,0.25)" }}>
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+                          {c.name}{uni ? ` · ${uni.name.replace("Université ", "")}` : ""}
+                          <button onClick={() => toggleCoachGroupe(c.id)} className="ml-0.5 hover:text-red-400 transition-colors">
+                            <X size={10} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Selector: Formation → Université → Classes (checkboxes) */}
+                <div className="space-y-2 rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
+                    {offers.map(o => (
+                      <button key={o.id} onClick={() => { setCoachFormation(o.id); setCoachUni(""); }}
+                        className="px-2.5 py-1 rounded-full text-[11px]"
+                        style={{ backgroundColor: coachFormation === o.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: coachFormation === o.id ? "#E3C286" : "rgba(255,255,255,0.5)", border: coachFormation === o.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                        {o.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {coachFormation && unis.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
+                      {unis.map(u => (
+                        <button key={u.id} onClick={() => setCoachUni(u.id)}
+                          className="px-2.5 py-1 rounded-full text-[11px]"
+                          style={{ backgroundColor: coachUni === u.id ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", color: coachUni === u.id ? "#E3C286" : "rgba(255,255,255,0.5)", border: coachUni === u.id ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}>
+                          {u.name.replace("Université ", "")}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {coachUni && classes.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Classes</span>
+                      {classes.map(c => (
+                        <button key={c.id} onClick={() => toggleCoachGroupe(c.id)}
+                          className="px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1.5"
+                          style={{ backgroundColor: coachGroupeIds.has(c.id) ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.06)", color: coachGroupeIds.has(c.id) ? "#6EE7B7" : "rgba(255,255,255,0.5)", border: coachGroupeIds.has(c.id) ? "1px solid rgba(52,211,153,0.3)" : "1px solid transparent" }}>
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+                          {c.name}
+                          {coachGroupeIds.has(c.id) && <Check size={10} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
