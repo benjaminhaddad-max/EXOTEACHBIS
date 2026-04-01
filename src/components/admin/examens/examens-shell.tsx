@@ -368,16 +368,35 @@ export function ExamensShell({
               <span className="text-[11px] italic font-medium" style={{ color: "#C9A84C" }}>← Sélectionne une formation</span>
             )}
             <button
-              onClick={() => { if (selectedGroupeIds.size > 0) setModal({ type: "create" }); }}
+              onClick={() => {
+                if (!selectedDossierId || contextGroupeIds.size === 0) return;
+                const dossierName = dossiers.find(d => d.id === selectedDossierId)?.name ?? allDossiers.find(d => d.id === selectedDossierId)?.name ?? "";
+                const existingCount = examens.filter(e => e.groupe_ids?.some(gid => contextGroupeIds.has(gid))).length;
+                const autoName = `Concours Blanc n°${existingCount + 1} — ${dossierName.replace("Université ", "")}`;
+                const now = new Date();
+                const inOneWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                startTransition(async () => {
+                  const res = await createExamen({
+                    name: autoName,
+                    debut_at: now.toISOString(),
+                    fin_at: inOneWeek.toISOString(),
+                    visible: false,
+                  });
+                  if ("error" in res) { showToast(res.error!, "error"); return; }
+                  await setExamenGroupes(res.id!, [...contextGroupeIds]);
+                  router.push(`/admin/examens/${res.id}`);
+                });
+              }}
+              disabled={isPending}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
               style={{
-                backgroundColor: selectedGroupeIds.size > 0 ? "#C9A84C" : "rgba(201,168,76,0.3)",
-                color: selectedGroupeIds.size > 0 ? "#0e1e35" : "rgba(201,168,76,0.7)",
-                border: selectedGroupeIds.size > 0 ? "none" : "1px dashed rgba(201,168,76,0.5)",
-                cursor: selectedGroupeIds.size > 0 ? "pointer" : "not-allowed",
+                backgroundColor: selectedDossierId ? "#C9A84C" : "rgba(201,168,76,0.3)",
+                color: selectedDossierId ? "#0e1e35" : "rgba(201,168,76,0.7)",
+                border: selectedDossierId ? "none" : "1px dashed rgba(201,168,76,0.5)",
+                cursor: selectedDossierId ? "pointer" : "not-allowed",
               }}
             >
-              <Plus size={13} /> Nouvel examen
+              {isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Nouvel examen
             </button>
           </div>
         )}
@@ -672,9 +691,9 @@ export function ExamensShell({
             className="bg-[#0e1e35] border border-white/15 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {(modal.type === "create" || modal.type === "edit") && (
+            {modal.type === "edit" && (
               <ExamenForm
-                examen={modal.type === "edit" ? modal.examen : undefined}
+                examen={modal.examen}
                 contextGroupeIds={contextGroupeIds}
                 groupes={groupes}
                 groupeMap={groupeMap}
@@ -682,56 +701,22 @@ export function ExamensShell({
                 selectedDossierId={selectedDossierId}
                 onSubmit={(data, groupeIds) => {
                   startTransition(async () => {
-                    if (modal.type === "edit") {
-                      const res = await updateExamen(modal.examen.id, data);
-                      if ("error" in res) { showToast(res.error!, "error"); return; }
-                      const groupesRes = await setExamenGroupes(modal.examen.id, groupeIds);
-                      if ("error" in groupesRes) { showToast(groupesRes.error!, "error"); return; }
-
-                      if (res.examen) {
-                        setExamens((prev) =>
-                          orderExamens(
-                            prev.map((e) =>
-                              e.id === modal.examen.id
-                                ? {
-                                    ...e,
-                                    ...res.examen,
-                                    groupe_ids: groupeIds,
-                                  }
-                                : e
-                            )
-                          )
-                        );
-                      } else {
-                        await refreshExamens();
-                      }
+                    const res = await updateExamen(modal.examen.id, data);
+                    if ("error" in res) { showToast(res.error!, "error"); return; }
+                    const groupesRes = await setExamenGroupes(modal.examen.id, groupeIds);
+                    if ("error" in groupesRes) { showToast(groupesRes.error!, "error"); return; }
+                    if (res.examen) {
+                      setExamens((prev) =>
+                        orderExamens(prev.map((e) =>
+                          e.id === modal.examen.id ? { ...e, ...res.examen, groupe_ids: groupeIds } : e
+                        ))
+                      );
                     } else {
-                      const res = await createExamen(data);
-                      if ("error" in res) { showToast(res.error!, "error"); return; }
-                      if (res.id) {
-                        const groupesRes = await setExamenGroupes(res.id, groupeIds);
-                        if ("error" in groupesRes) { showToast(groupesRes.error!, "error"); return; }
-                      }
-
-                      if (res.examen) {
-                        setExamens((prev) =>
-                          orderExamens([
-                            {
-                              ...res.examen,
-                              series: [],
-                              examen_series: [],
-                              groupe_ids: groupeIds,
-                            },
-                            ...prev,
-                          ])
-                        );
-                      } else {
-                        await refreshExamens();
-                      }
+                      await refreshExamens();
                     }
                     setModal(null);
                     router.refresh();
-                    showToast(modal.type === "create" ? "Examen créé" : "Examen modifié", "success");
+                    showToast("Examen modifié", "success");
                   });
                 }}
                 onClose={() => setModal(null)}
