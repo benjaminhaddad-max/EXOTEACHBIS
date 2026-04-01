@@ -695,14 +695,10 @@ function SerieEditorModal({
           <div className="w-52 shrink-0 border-r border-white/8 p-4 space-y-4 overflow-y-auto">
             <div>
               <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">Type</p>
-              <div className="space-y-1.5">
-                {(["annales", "qcm_supplementaires", "concours_blanc", "revision"] as const).map((t) => (
-                  <button key={t} type="button" onClick={() => setType(t)}
-                    className={`w-full py-2 px-3 rounded-lg text-[11px] font-semibold border text-left transition-colors ${type === t ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/10 text-white/40 hover:border-white/20 hover:text-white/60"}`}>
-                    {TYPE_LABELS[t]}
-                  </button>
-                ))}
+              <div className={`w-full py-2 px-3 rounded-lg text-[11px] font-semibold border bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]`}>
+                {TYPE_LABELS[type]}
               </div>
+              <p className="text-[9px] text-white/25 mt-1.5 leading-relaxed">Le type est défini à la création et ne peut pas être modifié.</p>
             </div>
             <div className="divide-y divide-white/8">
               {([
