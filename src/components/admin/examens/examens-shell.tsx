@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2,
   Calendar, Clock, Eye, EyeOff, Layers,
@@ -794,24 +794,47 @@ function ExamensSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSele
   dossiers: Dossier[]; groupes: Groupe[];
   selectedGroupeIds: Set<string>; onToggle: (id: string) => void; onSelectAll: () => void;
 }) {
-  const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
-  const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
-  const unisByOffer = useMemo(() => {
-    const m = new Map<string, Dossier[]>();
-    for (const u of universities) if (u.parent_id) { if (!m.has(u.parent_id)) m.set(u.parent_id, []); m.get(u.parent_id)!.push(u); }
+  // Build dossier children index and group index
+  const childrenByParent = useMemo(() => {
+    const m = new Map<string | null, Dossier[]>();
+    for (const d of dossiers) {
+      const key = d.parent_id ?? null;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(d);
+    }
+    // Sort each bucket by order_index
+    for (const arr of m.values()) arr.sort((a, b) => a.order_index - b.order_index);
     return m;
-  }, [universities]);
-  const groupsByUni = useMemo(() => {
+  }, [dossiers]);
+
+  const groupsByDossier = useMemo(() => {
     const m = new Map<string, Groupe[]>();
-    for (const g of groupes) if (g.formation_dossier_id) { if (!m.has(g.formation_dossier_id)) m.set(g.formation_dossier_id, []); m.get(g.formation_dossier_id)!.push(g); }
+    for (const g of groupes) if (g.formation_dossier_id) {
+      if (!m.has(g.formation_dossier_id)) m.set(g.formation_dossier_id, []);
+      m.get(g.formation_dossier_id)!.push(g);
+    }
     return m;
   }, [groupes]);
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(offers.map(o => o.id)));
-  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  // Recursively get all group IDs under a dossier
+  const getAllGroupIds = useCallback((dossierId: string): string[] => {
+    const ids: string[] = [];
+    // Direct groups on this dossier
+    for (const g of (groupsByDossier.get(dossierId) ?? [])) ids.push(g.id);
+    // Groups on children
+    for (const child of (childrenByParent.get(dossierId) ?? [])) ids.push(...getAllGroupIds(child.id));
+    return ids;
+  }, [childrenByParent, groupsByDossier]);
 
-  const getUniGroupIds = (uniId: string) => (groupsByUni.get(uniId) ?? []).map(g => g.id);
-  const getOfferGroupIds = (offerId: string) => { const ids: string[] = []; for (const u of (unisByOffer.get(offerId) ?? [])) ids.push(...getUniGroupIds(u.id)); return ids; };
+  // Root = offers (dossiers with no parent, or type=offer)
+  const roots = useMemo(() => {
+    return dossiers
+      .filter(d => !d.parent_id && (d.dossier_type === "offer" || d.dossier_type === "generic"))
+      .sort((a, b) => a.order_index - b.order_index);
+  }, [dossiers]);
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(roots.map(o => o.id)));
+  const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const Chk = ({ checked, partial }: { checked: boolean; partial?: boolean }) => (
     <div className="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0" style={{
@@ -823,6 +846,77 @@ function ExamensSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSele
     </div>
   );
 
+  const TYPE_STYLE: Record<string, { icon: typeof GraduationCap; color: string; size: number }> = {
+    offer: { icon: GraduationCap, color: "#C9A84C", size: 11 },
+    sub_offer: { icon: GraduationCap, color: "#E3C286", size: 10 },
+    university: { icon: Building2, color: "#A78BFA", size: 9 },
+    semester: { icon: Layers, color: "#60A5FA", size: 9 },
+    generic: { icon: GraduationCap, color: "#C9A84C", size: 11 },
+  };
+  const defaultStyle = { icon: Layers, color: "rgba(255,255,255,0.5)", size: 9 };
+
+  const renderDossier = (d: Dossier, depth: number) => {
+    const children = childrenByParent.get(d.id) ?? [];
+    const directGroups = groupsByDossier.get(d.id) ?? [];
+    const allIds = getAllGroupIds(d.id);
+    const hasContent = children.length > 0 || directGroups.length > 0;
+    if (!hasContent && depth > 0) return null; // Skip empty leaf dossiers (semesters etc)
+
+    const allChecked = allIds.length > 0 && allIds.every(id => selectedGroupeIds.has(id));
+    const someChecked = allIds.some(id => selectedGroupeIds.has(id));
+    const isOpen = expanded.has(d.id);
+    const style = TYPE_STYLE[d.dossier_type] ?? defaultStyle;
+    const Icon = style.icon;
+
+    const bulkToggle = () => {
+      for (const id of allIds) {
+        const shouldHave = !allChecked;
+        if (shouldHave !== selectedGroupeIds.has(id)) onToggle(id);
+      }
+    };
+
+    return (
+      <div key={d.id} style={{ marginLeft: depth > 0 ? 12 : 0 }}>
+        <div className="flex items-center gap-1">
+          {allIds.length > 0 && (
+            <button onClick={bulkToggle} className="p-1 shrink-0">
+              <Chk checked={allChecked} partial={!allChecked && someChecked} />
+            </button>
+          )}
+          {allIds.length === 0 && <span className="w-5" />}
+          <button onClick={() => hasContent && toggleExpand(d.id)}
+            className="flex-1 flex items-center gap-1.5 px-1 py-1.5 rounded-lg transition-all text-left"
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
+            <Icon size={style.size} style={{ color: style.color }} />
+            <span className="flex-1 text-[11px] font-bold truncate" style={{ color: style.color, fontSize: depth > 0 ? 10 : 11 }}>{d.name}</span>
+            {hasContent && <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />}
+          </button>
+        </div>
+
+        {isOpen && (
+          <>
+            {children.map(child => renderDossier(child, depth + 1))}
+            {directGroups.map(g => {
+              const isChecked = selectedGroupeIds.has(g.id);
+              return (
+                <button key={g.id} onClick={() => onToggle(g.id)}
+                  className="w-full flex items-center gap-2 py-1 rounded-lg transition-all text-left"
+                  style={{ paddingLeft: 24, backgroundColor: isChecked ? "rgba(201,168,76,0.08)" : "transparent" }}
+                  onMouseOver={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.04)")}
+                  onMouseOut={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.08)" : "transparent")}>
+                  <Chk checked={isChecked} />
+                  <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>{g.name[0]?.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium truncate" style={{ color: isChecked ? "#E3C286" : "rgba(255,255,255,0.6)" }}>{g.name}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full" style={{ width: 260, backgroundColor: "rgba(0,0,0,0.15)" }}>
       <div className="px-4 pt-4 pb-2 shrink-0">
@@ -831,70 +925,8 @@ function ExamensSidebar({ dossiers, groupes, selectedGroupeIds, onToggle, onSele
         </p>
       </div>
 
-      {/* Tree with checkboxes */}
       <div className="px-3 pb-2 space-y-0.5 flex-1">
-        {offers.map(offer => {
-          const offerUnis = unisByOffer.get(offer.id) ?? [];
-          const offerIds = getOfferGroupIds(offer.id);
-          const allChecked = offerIds.length > 0 && offerIds.every(id => selectedGroupeIds.has(id));
-          const someChecked = offerIds.some(id => selectedGroupeIds.has(id));
-          const isOpen = expanded.has(offer.id);
-
-          return (
-            <div key={offer.id}>
-              <div className="flex items-center gap-1">
-                <button onClick={() => { const next = new Set(selectedGroupeIds); if (allChecked) for (const id of offerIds) next.delete(id); else for (const id of offerIds) next.add(id); onSelectAll(); setTimeout(() => { for (const id of (allChecked ? [] : [...next])) onToggle(id); }, 0); }}
-                  className="p-1 shrink-0"><Chk checked={allChecked} partial={!allChecked && someChecked} /></button>
-                <button onClick={() => { toggleExpand(offer.id); const next = new Set(selectedGroupeIds); if (allChecked) { for (const id of offerIds) next.delete(id); } else { for (const id of offerIds) next.add(id); } for (const id of offerIds) { if (next.has(id) !== selectedGroupeIds.has(id)) onToggle(id); } }}
-                  className="flex-1 flex items-center gap-1.5 px-1 py-1.5 rounded-lg transition-all text-left"
-                  onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                  <GraduationCap size={11} style={{ color: "#C9A84C" }} />
-                  <span className="flex-1 text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>{offer.name}</span>
-                  <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
-                </button>
-              </div>
-
-              {isOpen && offerUnis.map(uni => {
-                const uniGroups = groupsByUni.get(uni.id) ?? [];
-                const uniIds = getUniGroupIds(uni.id);
-                const uAll = uniIds.length > 0 && uniIds.every(id => selectedGroupeIds.has(id));
-                const uSome = uniIds.some(id => selectedGroupeIds.has(id));
-                const isUniOpen = expanded.has(uni.id);
-
-                return (
-                  <div key={uni.id} className="ml-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => { const next = new Set(selectedGroupeIds); if (uAll) for (const id of uniIds) next.delete(id); else for (const id of uniIds) next.add(id); onSelectAll(); setTimeout(() => { for (const id of [...next]) onToggle(id); }, 0); }}
-                        className="p-1 shrink-0"><Chk checked={uAll} partial={!uAll && uSome} /></button>
-                      <button onClick={() => { toggleExpand(uni.id); for (const id of uniIds) { const shouldAdd = !uAll; if (shouldAdd !== selectedGroupeIds.has(id)) onToggle(id); } }}
-                        className="flex-1 flex items-center gap-1 pl-1 pr-2 py-1 rounded-lg text-left transition-all"
-                        onMouseOver={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")} onMouseOut={e => (e.currentTarget.style.backgroundColor = "transparent")}>
-                        <Building2 size={9} style={{ color: "#A78BFA" }} />
-                        <span className="flex-1 text-[10px] font-semibold truncate" style={{ color: "#A78BFA" }}>{uni.name}</span>
-                        {uniGroups.length > 0 && <ChevronDown size={9} style={{ color: "rgba(255,255,255,0.15)", transform: isUniOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />}
-                      </button>
-                    </div>
-
-                    {isUniOpen && uniGroups.map(g => {
-                      const isChecked = selectedGroupeIds.has(g.id);
-                      return (
-                        <button key={g.id} onClick={() => onToggle(g.id)}
-                          className="w-full flex items-center gap-2 pl-6 pr-2 py-1 rounded-lg transition-all text-left"
-                          style={{ backgroundColor: isChecked ? "rgba(201,168,76,0.08)" : "transparent" }}
-                          onMouseOver={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.04)")}
-                          onMouseOut={e => (e.currentTarget.style.backgroundColor = isChecked ? "rgba(201,168,76,0.08)" : "transparent")}>
-                          <Chk checked={isChecked} />
-                          <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold text-white shrink-0" style={{ backgroundColor: g.color }}>{g.name[0]?.toUpperCase()}</span>
-                          <span className="text-[10px] font-medium truncate" style={{ color: isChecked ? "#E3C286" : "rgba(255,255,255,0.6)" }}>{g.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+        {roots.map(r => renderDossier(r, 0))}
       </div>
 
       <div className="h-4" />

@@ -36,7 +36,7 @@ export default async function ExamensAdminPage() {
       .order("debut_at", { ascending: false }),
     supabase.from("series").select("*").eq("visible", true).order("name"),
     supabase.from("filieres").select("*").order("order_index"),
-    supabase.from("dossiers").select("*").eq("visible", true).in("dossier_type", ["offer", "university"]).order("order_index"),
+    supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),
     supabase.from("groupes").select("*").order("name"),
     supabase.from("examens_groupes").select("*"),
