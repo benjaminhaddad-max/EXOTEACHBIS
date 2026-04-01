@@ -762,19 +762,22 @@ export function PedagogieShell({
                   {/* Sous-dossiers — drag & drop grille ou liste */}
                   {childDossiers.length > 0 && (
                     <div>
-                      <div className="mb-3 flex items-center gap-2">
-                        <span className="h-px flex-1 bg-white/8" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Sous-dossiers</span>
-                        <span className="h-px flex-1 bg-white/8" />
-                        <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-1 rounded-full bg-gradient-to-b from-[#C9A84C] to-[#C9A84C]/30" />
+                          <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-white/40">Sous-dossiers</span>
+                          <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-bold text-white/25">{childDossiers.length}</span>
+                        </div>
+                        <span className="h-px flex-1 bg-gradient-to-r from-white/8 to-transparent" />
+                        <div className="flex gap-0.5 rounded-lg border border-white/8 bg-white/[0.02] p-0.5">
                           <button
                             onClick={() => { setDossierViewMode("cards"); localStorage.setItem("pedagogie-dossier-view", "cards"); }}
-                            className={`rounded-md p-1 transition ${dossierViewMode === "cards" ? "bg-[#C9A84C]/15 text-[#C9A84C]" : "text-white/30 hover:text-white/60"}`}
+                            className={`rounded-md p-1.5 transition-all duration-150 ${dossierViewMode === "cards" ? "bg-[#C9A84C]/15 text-[#C9A84C] shadow-sm" : "text-white/25 hover:text-white/50 hover:bg-white/[0.04]"}`}
                             title="Vue cartes"
                           ><LayoutGrid className="h-3.5 w-3.5" /></button>
                           <button
                             onClick={() => { setDossierViewMode("list"); localStorage.setItem("pedagogie-dossier-view", "list"); }}
-                            className={`rounded-md p-1 transition ${dossierViewMode === "list" ? "bg-[#C9A84C]/15 text-[#C9A84C]" : "text-white/30 hover:text-white/60"}`}
+                            className={`rounded-md p-1.5 transition-all duration-150 ${dossierViewMode === "list" ? "bg-[#C9A84C]/15 text-[#C9A84C] shadow-sm" : "text-white/25 hover:text-white/50 hover:bg-white/[0.04]"}`}
                             title="Vue liste"
                           ><LayoutList className="h-3.5 w-3.5" /></button>
                         </div>
@@ -1007,7 +1010,7 @@ export function PedagogieShell({
                   {canEdit && selectedDossier && selectedDossier.dossier_type !== "subject" && (
                     <button
                       onClick={() => setModal({ type: "add_picker", parentId: selectedId })}
-                      className="mt-2 mb-4 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 py-3 text-sm font-medium text-white/40 transition hover:border-white/15 hover:bg-[#12314d]/5 hover:text-[#4fabdb]"
+                      className="mt-3 mb-5 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/8 py-3.5 text-[12px] font-semibold text-white/30 transition-all duration-200 hover:border-[#C9A84C]/30 hover:bg-[#C9A84C]/[0.04] hover:text-[#C9A84C]/70 hover:shadow-[0_0_20px_rgba(201,168,76,0.04)]"
                     >
                       <Plus className="h-4 w-4" /> Ajouter du contenu
                     </button>
@@ -1048,21 +1051,24 @@ export function PedagogieShell({
                         </div>
                       )}
 
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="h-px flex-1 bg-[#12314d]/10" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#4fabdb]/40">Cours</span>
-                        <span className="h-px flex-1 bg-[#12314d]/10" />
-                        <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-1 rounded-full bg-gradient-to-b from-[#4fabdb] to-[#4fabdb]/30" />
+                          <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-white/40">Cours</span>
+                          <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-bold text-white/25">{coursList.length}</span>
+                        </div>
+                        <span className="h-px flex-1 bg-gradient-to-r from-white/8 to-transparent" />
+                        <div className="flex gap-0.5 rounded-lg border border-white/8 bg-white/[0.02] p-0.5">
                           <button
                             onClick={() => { setCoursViewMode("cards"); localStorage.setItem("pedagogie-cours-view", "cards"); }}
-                            className={`rounded-md p-1 transition ${coursViewMode === "cards" ? "bg-[#12314d]/10 text-[#4fabdb]" : "text-white/40 hover:text-white/60"}`}
+                            className={`rounded-md p-1.5 transition-all duration-150 ${coursViewMode === "cards" ? "bg-[#4fabdb]/15 text-[#4fabdb] shadow-sm" : "text-white/25 hover:text-white/50 hover:bg-white/[0.04]"}`}
                             title="Vue cartes"
                           >
                             <LayoutGrid className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => { setCoursViewMode("list"); localStorage.setItem("pedagogie-cours-view", "list"); }}
-                            className={`rounded-md p-1 transition ${coursViewMode === "list" ? "bg-[#12314d]/10 text-[#4fabdb]" : "text-white/40 hover:text-white/60"}`}
+                            className={`rounded-md p-1.5 transition-all duration-150 ${coursViewMode === "list" ? "bg-[#4fabdb]/15 text-[#4fabdb] shadow-sm" : "text-white/25 hover:text-white/50 hover:bg-white/[0.04]"}`}
                             title="Vue liste"
                           >
                             <LayoutList className="h-3.5 w-3.5" />
@@ -2505,31 +2511,63 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
   const CardIcon = cs.icon;
 
   return (
-    <div ref={setNodeRef} style={style} className="group relative cursor-pointer rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:shadow-[0_8px_30px_rgba(201,168,76,0.12)]">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="group relative cursor-pointer rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.3)]"
+    >
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="absolute left-2 top-2 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-10">
+        <span {...attributes} {...listeners} className="absolute left-2.5 top-2.5 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing z-20">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
 
-      <button onClick={onClick} className="relative flex flex-col items-center gap-2.5 w-full p-6 pb-5 text-center rounded-2xl overflow-hidden" style={{ background: cs.gradient, border: `1px solid ${cs.border}` }}>
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: "radial-gradient(circle at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 70%)" }} />
+      <button
+        onClick={onClick}
+        className="relative flex flex-col items-center gap-3 w-full p-7 pb-5 text-center rounded-2xl overflow-hidden"
+        style={{ background: cs.gradient, border: `1px solid ${cs.border}` }}
+      >
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ background: `radial-gradient(ellipse at 50% -20%, ${cs.iconColor}15 0%, transparent 65%)` }} />
+        <div className="absolute bottom-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: `linear-gradient(90deg, transparent, ${cs.iconColor}40, transparent)` }} />
 
-        <div className="relative flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden backdrop-blur-sm" style={{ backgroundColor: cs.iconBg }}>
+        <div
+          className="relative flex h-14 w-14 items-center justify-center rounded-2xl overflow-hidden transition-all duration-300 group-hover:scale-110 group-hover:rotate-1"
+          style={{ background: `linear-gradient(135deg, ${cs.iconColor}25 0%, ${cs.iconColor}08 100%)`, border: `1px solid ${cs.iconColor}30`, boxShadow: `0 4px 16px ${cs.iconColor}15` }}
+        >
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: `radial-gradient(circle, ${cs.iconColor}20 0%, transparent 70%)` }} />
           {dossier.icon_url
-            ? <img src={dossier.icon_url} alt="" className="h-7 w-7 object-contain" />
-            : <CardIcon className="h-6 w-6" style={{ color: cs.iconColor }} />}
+            ? <img src={dossier.icon_url} alt="" className="relative h-7 w-7 object-contain drop-shadow-sm" />
+            : <CardIcon className="relative h-7 w-7 drop-shadow-sm" style={{ color: cs.iconColor }} />}
         </div>
-        <p className="relative text-[13px] font-bold text-white/90 line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-white transition-colors">{dossier.name}</p>
-        <span className="relative rounded-full px-2.5 py-0.5 text-[8px] font-bold uppercase tracking-widest" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
+
+        <p className="relative text-[13px] font-bold text-white/90 line-clamp-2 leading-snug min-h-[2.5rem] group-hover:text-white transition-colors duration-200">{dossier.name}</p>
+
+        <span
+          className="relative rounded-lg px-2.5 py-1 text-[7px] font-extrabold uppercase tracking-[0.15em]"
+          style={{ backgroundColor: cs.badgeBg, color: cs.badgeText, border: `1px solid ${cs.iconColor}20` }}
+        >
           {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
         </span>
+
+        {!dossier.visible && (
+          <div className="absolute top-2.5 right-2.5 rounded-lg bg-red-500/10 p-1 text-red-400/50 z-10">
+            <EyeOff className="h-3 w-3" />
+          </div>
+        )}
       </button>
 
       {(onEdit || onDelete) && (
-        <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-10">
-          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70 transition"><Pencil className="h-3 w-3" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
+        <div className="absolute right-2.5 bottom-2.5 flex gap-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 z-20">
+          {onEdit && (
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb] transition-colors backdrop-blur-sm">
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/15 hover:text-red-400 transition-colors backdrop-blur-sm">
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -2564,28 +2602,37 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`group flex items-center gap-3 rounded-xl border p-2.5 transition ${
-        selected ? "border-[#C9A84C]/40 bg-[#C9A84C]/8 ring-1 ring-[#C9A84C]/20" : "border-white/8 hover:border-white/15 hover:bg-white/5"
+      style={{ ...style, borderLeft: `3px solid ${selected ? cs.iconColor : "transparent"}` }}
+      className={`group flex items-center gap-3.5 rounded-xl p-3 transition-all duration-200 ${
+        selected
+          ? "shadow-[0_0_20px_rgba(201,168,76,0.06)]"
+          : "hover:shadow-[0_2px_16px_rgba(0,0,0,0.2)]"
       }`}
+      onMouseEnter={(e) => { if (!selected) e.currentTarget.style.borderLeftColor = cs.iconColor + "60"; }}
+      onMouseLeave={(e) => { if (!selected) e.currentTarget.style.borderLeftColor = "transparent"; }}
     >
+      <div className="absolute inset-0 rounded-xl transition-opacity duration-200 opacity-0 group-hover:opacity-100 pointer-events-none" style={{ background: `linear-gradient(90deg, ${cs.iconColor}08 0%, transparent 40%)` }} />
+
       {onToggleSelect && (
         <input
           type="checkbox"
           checked={!!selected}
           onChange={onToggleSelect}
-          className="h-3.5 w-3.5 flex-shrink-0 rounded border-white/20 cursor-pointer accent-[#C9A84C]"
+          className="relative z-10 h-3.5 w-3.5 flex-shrink-0 rounded border-white/20 cursor-pointer accent-[#C9A84C]"
         />
       )}
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <span {...attributes} {...listeners} className="relative z-10 flex-shrink-0 cursor-grab touch-none text-white/10 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
-      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: cs.iconBg }}>
+      <div
+        className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
+        style={{ background: cs.gradient, border: `1px solid ${cs.border}`, boxShadow: selected ? `0 0 12px ${cs.iconColor}25` : "none" }}
+      >
         {dossier.icon_url
           ? <img src={dossier.icon_url} alt="" className="h-5 w-5 object-contain" />
-          : <CardIcon className="h-4 w-4" style={{ color: cs.iconColor }} />}
+          : <CardIcon className="h-5 w-5" style={{ color: cs.iconColor }} />}
       </div>
       {renaming ? (
         <input
@@ -2594,35 +2641,39 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
           onChange={(e) => setRenameName(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setRenaming(false); setRenameName(dossier.name); } }}
-          className="min-w-0 flex-1 rounded-md border border-[#C9A84C]/40 bg-white/5 px-2 py-1 text-sm font-semibold text-white outline-none ring-2 ring-[#C9A84C]/20"
+          className="relative z-10 min-w-0 flex-1 rounded-lg border border-[#C9A84C]/40 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white outline-none ring-2 ring-[#C9A84C]/20"
           autoFocus
         />
       ) : (
-        <button onClick={onClick} className="min-w-0 flex-1 text-left flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-white/90">{dossier.name}</p>
-          {sectionBadges && sectionBadges.length > 0 && sectionBadges.map((badge) => (
-            <span key={badge} className="flex-shrink-0 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-medium text-[#C9A84C]">{badge}</span>
-          ))}
-          <span className="flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
-            {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
-          </span>
+        <button onClick={onClick} className="relative z-10 min-w-0 flex-1 text-left flex items-center gap-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-bold text-white/90 group-hover:text-white transition-colors">{dossier.name}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest" style={{ backgroundColor: cs.badgeBg, color: cs.badgeText }}>
+                {DOSSIER_TYPE_META[dossier.dossier_type]?.shortLabel ?? "Dossier"}
+              </span>
+              {sectionBadges && sectionBadges.length > 0 && sectionBadges.map((badge) => (
+                <span key={badge} className="rounded-md bg-[#C9A84C]/10 px-1.5 py-0.5 text-[8px] font-semibold text-[#C9A84C]/80">{badge}</span>
+              ))}
+            </div>
+          </div>
         </button>
       )}
       {!dossier.visible && (
-        <span className="flex-shrink-0 rounded-md bg-red-500/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
-          <EyeOff className="h-3 w-3" />
+        <span className="relative z-10 flex-shrink-0 rounded-lg bg-red-500/10 p-1.5 text-red-400/60" title="Masqué pour les élèves">
+          <EyeOff className="h-3.5 w-3.5" />
         </span>
       )}
       {!renaming && (onEdit || onDelete) && (
-        <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+        <div className="relative z-10 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
           <button
             onClick={(e) => { e.stopPropagation(); setRenaming(true); setTimeout(() => renameRef.current?.select(), 0); }}
-            className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white/30 hover:bg-white/10 hover:text-[#4fabdb] transition"
+            className="rounded-lg px-2.5 py-1 text-[10px] font-medium text-white/25 hover:bg-white/8 hover:text-[#4fabdb] transition-colors"
           >
             Renommer
           </button>
-          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/20 hover:bg-white/8 hover:text-[#4fabdb] transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/20 hover:bg-red-500/15 hover:text-red-400 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       )}
     </div>
@@ -2819,33 +2870,40 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
   return (
     <div
       ref={setNodeRef}
-      style={{ ...style, borderLeft: selected ? "3px solid #C9A84C" : "3px solid transparent" }}
+      style={{ ...style, borderLeft: `3px solid ${selected ? "#4fabdb" : "transparent"}` }}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleFileDrop}
-      className={`group flex items-center gap-3 rounded-xl border p-3 transition-all duration-200 ${
+      className={`group relative flex items-center gap-3.5 rounded-xl p-3 transition-all duration-200 ${
         selected
-          ? "border-[#C9A84C]/30 bg-gradient-to-r from-[#C9A84C]/10 to-transparent shadow-[0_0_15px_rgba(201,168,76,0.06)]"
+          ? "shadow-[0_0_20px_rgba(79,171,219,0.08)]"
           : dragOver
-            ? "border-[#4fabdb]/40 bg-[#4fabdb]/10 ring-2 ring-[#4fabdb]/20"
-            : "border-white/[0.06] hover:border-white/12 hover:bg-gradient-to-r hover:from-white/[0.03] hover:to-transparent hover:shadow-[0_2px_12px_rgba(0,0,0,0.15)]"
+            ? "ring-2 ring-[#4fabdb]/30"
+            : "hover:shadow-[0_2px_16px_rgba(0,0,0,0.2)]"
       }`}
+      onMouseEnter={(e) => { if (!selected && !dragOver) e.currentTarget.style.borderLeftColor = "#4fabdb60"; }}
+      onMouseLeave={(e) => { if (!selected) e.currentTarget.style.borderLeftColor = "transparent"; }}
     >
+      <div className="absolute inset-0 rounded-xl transition-opacity duration-200 opacity-0 group-hover:opacity-100 pointer-events-none" style={{ background: "linear-gradient(90deg, rgba(79,171,219,0.05) 0%, transparent 40%)" }} />
+
       {onToggleSelect && (
         <input
           type="checkbox"
           checked={!!selected}
           onChange={onToggleSelect}
-          className="h-3.5 w-3.5 flex-shrink-0 rounded border-white/20 cursor-pointer accent-[#C9A84C]"
+          className="relative z-10 h-3.5 w-3.5 flex-shrink-0 rounded border-white/20 cursor-pointer accent-[#4fabdb]"
         />
       )}
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/10 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <span {...attributes} {...listeners} className="relative z-10 flex-shrink-0 cursor-grab touch-none text-white/10 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
-      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#4fabdb]/10 transition-transform group-hover:scale-105">
-        <FileText className="h-4 w-4 text-[#4fabdb]/70" />
+      <div
+        className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
+        style={{ background: "linear-gradient(145deg, rgba(79,171,219,0.15) 0%, rgba(79,171,219,0.05) 100%)", border: "1px solid rgba(79,171,219,0.2)", boxShadow: selected ? "0 0 12px rgba(79,171,219,0.2)" : "none" }}
+      >
+        <FileText className="h-5 w-5 text-[#4fabdb]" />
       </div>
       {editing ? (
         <input
@@ -2854,98 +2912,100 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           onChange={(e) => setEditName(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") { setEditing(false); setEditName(cours.name); } }}
-          className="min-w-0 flex-1 rounded-md border border-[#C9A84C]/40 bg-white/5 px-2 py-1 text-sm font-semibold text-white outline-none ring-2 ring-[#C9A84C]/20"
+          className="relative z-10 min-w-0 flex-1 rounded-lg border border-[#4fabdb]/40 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white outline-none ring-2 ring-[#4fabdb]/20"
           autoFocus
         />
       ) : (
-        <div className="min-w-0 flex-1 flex items-center gap-2">
+        <div className="relative z-10 min-w-0 flex-1 flex items-center gap-2">
           {cours.linked_cours_id && <LinkedCoursIndicator cours={cours} />}
-          <button
-            onClick={onSelect}
-            className="min-w-0 flex-1 text-left flex items-center gap-2"
-          >
-            <p className="truncate text-sm font-semibold text-white/90 group-hover:text-white transition-colors">{cours.name}</p>
-            {cours.etiquettes?.map((tag) => (
-              <span key={tag} className="flex-shrink-0 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-medium text-[#C9A84C]">{tag}</span>
-            ))}
+          <button onClick={onSelect} className="min-w-0 flex-1 text-left">
+            <p className="truncate text-[13px] font-bold text-white/90 group-hover:text-white transition-colors">{cours.name}</p>
+            {cours.etiquettes && cours.etiquettes.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {cours.etiquettes.map((tag) => (
+                  <span key={tag} className="rounded-md bg-[#C9A84C]/10 px-1.5 py-0.5 text-[8px] font-semibold text-[#C9A84C]/70">{tag}</span>
+                ))}
+              </div>
+            )}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
-            className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium text-white/30 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-[#4fabdb] transition"
+            className="flex-shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-medium text-white/25 opacity-0 group-hover:opacity-100 hover:bg-white/8 hover:text-[#4fabdb] transition-colors"
           >
             Renommer
           </button>
         </div>
       )}
 
-      {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
-        <span className="flex-shrink-0 rounded-md bg-orange-500/15 border border-orange-500/20 px-2 py-0.5 text-[10px] font-semibold text-orange-400">⏳ Non actualisé</span>
-      )}
-      {cours.actualisation === "aucun_changement" && (
-        <span className="flex-shrink-0 rounded-md bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/40">= Aucun changement</span>
-      )}
-      {cours.actualisation === "actualisation" && (
-        <span className="flex-shrink-0 rounded-md bg-[#4fabdb]/15 border border-[#4fabdb]/20 px-2 py-0.5 text-[10px] font-semibold text-[#4fabdb]">↑ Actualisation</span>
-      )}
-      {cours.actualisation === "changements_notables" && (
-        <span className="flex-shrink-0 rounded-md bg-amber-500/15 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-400">⚠ Changements notables</span>
-      )}
-      {cours.actualisation === "nouvelle_fiche" && (
-        <span className="flex-shrink-0 rounded-md bg-green-500/15 border border-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-400">★ Nouvelle fiche</span>
-      )}
+      <div className="relative z-10 flex items-center gap-1.5">
+        {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
+          <span className="flex-shrink-0 rounded-lg bg-orange-500/10 border border-orange-500/15 px-2 py-0.5 text-[9px] font-bold text-orange-400/80">⏳ Non actualisé</span>
+        )}
+        {cours.actualisation === "aucun_changement" && (
+          <span className="flex-shrink-0 rounded-lg bg-white/[0.03] border border-white/8 px-2 py-0.5 text-[9px] font-bold text-white/30">= Aucun changement</span>
+        )}
+        {cours.actualisation === "actualisation" && (
+          <span className="flex-shrink-0 rounded-lg bg-[#4fabdb]/10 border border-[#4fabdb]/15 px-2 py-0.5 text-[9px] font-bold text-[#4fabdb]/80">↑ Actualisation</span>
+        )}
+        {cours.actualisation === "changements_notables" && (
+          <span className="flex-shrink-0 rounded-lg bg-amber-500/10 border border-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-400/80">⚠ Changements</span>
+        )}
+        {cours.actualisation === "nouvelle_fiche" && (
+          <span className="flex-shrink-0 rounded-lg bg-green-500/10 border border-green-500/15 px-2 py-0.5 text-[9px] font-bold text-green-400/80">★ Nouvelle fiche</span>
+        )}
 
-      {cours.visible ? (
-        <span className="flex items-center rounded-md bg-green-500/15 px-1.5 py-0.5 text-green-400" title="Visible pour les élèves">
-          <Eye className="h-3 w-3" />
-        </span>
-      ) : (
-        <span className="flex items-center rounded-md bg-red-500/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
-          <EyeOff className="h-3 w-3" />
-        </span>
-      )}
+        {cours.visible ? (
+          <span className="flex items-center rounded-lg bg-green-500/10 p-1.5 text-green-400/60" title="Visible pour les élèves">
+            <Eye className="h-3 w-3" />
+          </span>
+        ) : (
+          <span className="flex items-center rounded-lg bg-red-500/10 p-1.5 text-red-400/60" title="Masqué pour les élèves">
+            <EyeOff className="h-3 w-3" />
+          </span>
+        )}
 
-      {/* PDF status / upload */}
-      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }} />
-      {uploading ? (
-        <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-[#4fabdb]" />
-      ) : hasPdf ? (
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-400 hover:bg-green-500/25 transition"
-          title="Remplacer le PDF"
-        >
-          <Check className="h-3 w-3" /> PDF
-        </button>
-      ) : (
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-400 hover:bg-orange-500/25 transition"
-        >
-          <Upload className="h-3 w-3" /> PDF
-        </button>
-      )}
+        <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f); }} />
+        {uploading ? (
+          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-[#4fabdb]" />
+        ) : hasPdf ? (
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1 rounded-lg bg-green-500/10 border border-green-500/15 px-2 py-1 text-[9px] font-bold text-green-400/70 hover:bg-green-500/20 transition-colors"
+            title="Remplacer le PDF"
+          >
+            <Check className="h-3 w-3" /> PDF
+          </button>
+        ) : (
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1 rounded-lg bg-orange-500/10 border border-orange-500/15 px-2 py-1 text-[9px] font-bold text-orange-400/70 hover:bg-orange-500/20 transition-colors"
+          >
+            <Upload className="h-3 w-3" /> PDF
+          </button>
+        )}
+      </div>
 
       {(onEdit || onDelete || onLink || onMoveToSection) && (
-        <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+        <div className="relative z-10 flex gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
           {onMoveToSection && availableSections && availableSections.length > 0 && (
             <div className="relative" ref={sectionMenuRef}>
-              <button onClick={() => setShowSectionMenu(!showSectionMenu)} title="Déplacer dans une section" className="rounded-lg p-1.5 text-white/25 hover:bg-[#C9A84C]/15 hover:text-[#C9A84C]"><Layers className="h-4 w-4" /></button>
+              <button onClick={() => setShowSectionMenu(!showSectionMenu)} title="Déplacer dans une section" className="rounded-lg p-1.5 text-white/20 hover:bg-[#C9A84C]/10 hover:text-[#C9A84C] transition-colors"><Layers className="h-3.5 w-3.5" /></button>
               {showSectionMenu && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-white/15 py-1 shadow-lg" style={{ backgroundColor: "#12314d" }}>
+                <div className="absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-white/10 py-1 shadow-2xl backdrop-blur-xl" style={{ backgroundColor: "rgba(18,49,77,0.95)" }}>
                   {availableSections.map((s) => (
                     <button
                       key={s}
                       onClick={() => { onMoveToSection(s); setShowSectionMenu(false); }}
-                      className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/5 transition ${cours.etiquettes?.[0] === s ? "font-bold text-[#C9A84C]" : "text-white/70"}`}
+                      className={`w-full px-3 py-1.5 text-left text-[11px] hover:bg-white/5 transition-colors ${cours.etiquettes?.[0] === s ? "font-bold text-[#C9A84C]" : "text-white/60"}`}
                     >{s}{cours.etiquettes?.[0] === s ? " ✓" : ""}</button>
                   ))}
                 </div>
               )}
             </div>
           )}
-          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-white/25 hover:bg-purple-500/15 hover:text-purple-400"><Link2 className="h-4 w-4" /></button>}
-          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
+          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-white/20 hover:bg-purple-500/10 hover:text-purple-400 transition-colors"><Link2 className="h-3.5 w-3.5" /></button>}
+          {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/20 hover:bg-white/8 hover:text-[#4fabdb] transition-colors"><Pencil className="h-3.5 w-3.5" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/20 hover:bg-red-500/10 hover:text-red-400 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}
         </div>
       )}
     </div>
@@ -3050,7 +3110,7 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500/150 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500/15 hover:text-red-400 transition" style={{ background: "rgba(212,171,80,0.15)" }}>
               <Trash2 className="h-3 w-3" />
             </button>
           )}
