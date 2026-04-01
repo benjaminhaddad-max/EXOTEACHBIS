@@ -856,40 +856,12 @@ export function UtilisateursShell({
                             );
                           })()}
 
-                          {/* Members — grid view */}
-                          <div className="mt-3 pt-2 border-t border-gray-100">
-                            <div className="flex items-center justify-between px-2 mb-2">
-                              <p className="text-[10px] font-bold uppercase text-gray-400">Membres ({members.length})</p>
-                              <button
-                                onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
-                                className="text-[9px] font-medium text-blue-600 hover:text-blue-800"
-                              >
-                                + Ajouter
-                              </button>
-                            </div>
-                            {members.length > 0 ? (
-                              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1.5 px-1">
-                                {members.map(u => (
-                                  <button
-                                    key={u.id}
-                                    onClick={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
-                                    className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-gray-50 transition"
-                                    title={`${u.first_name ?? ""} ${u.last_name ?? ""}\n${u.email}`}
-                                  >
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                                      style={{ backgroundColor: g.color }}>
-                                      {(u.first_name?.[0] || "").toUpperCase()}{(u.last_name?.[0] || "").toUpperCase()}
-                                    </div>
-                                    <span className="text-[9px] text-gray-600 truncate w-full text-center leading-tight">
-                                      {u.first_name ?? ""} {(u.last_name ?? "").charAt(0)}.
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-[10px] text-gray-400 px-2 py-1">Aucun membre</p>
-                            )}
-                          </div>
+                          {/* Members — separated by role */}
+                          <InlineClassMembers
+                            members={members}
+                            groupeColor={g.color}
+                            onManage={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
+                          />
                         </div>
                       </details>
                     );
@@ -2252,6 +2224,98 @@ function GroupeDetail({
 }
 
 // ─── MembresTab ───────────────────────────────────────────────────────────────
+
+function InlineClassMembers({ members, groupeColor, onManage }: { members: Profile[]; groupeColor: string; onManage: () => void }) {
+  const [search, setSearch] = useState("");
+
+  const profs = members.filter(u => ["prof", "coach"].includes(u.role));
+  const eleves = members.filter(u => u.role === "eleve");
+  const admins = members.filter(u => ["admin", "superadmin"].includes(u.role));
+
+  const q = search.toLowerCase();
+  const filterUser = (u: Profile) => !q || `${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q);
+
+  const filteredProfs = profs.filter(filterUser);
+  const filteredEleves = eleves.filter(filterUser);
+  const filteredAdmins = admins.filter(filterUser);
+
+  const MemberCard = ({ u, color }: { u: Profile; color: string }) => (
+    <button
+      onClick={onManage}
+      className="flex flex-col items-center gap-1 rounded-lg p-2 hover:bg-gray-50 transition"
+      title={`${u.first_name ?? ""} ${u.last_name ?? ""}\n${u.email}`}
+    >
+      <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+        style={{ backgroundColor: color }}>
+        {(u.first_name?.[0] || "").toUpperCase()}{(u.last_name?.[0] || "").toUpperCase()}
+      </div>
+      <span className="text-[9px] text-gray-700 truncate w-full text-center leading-tight font-medium">
+        {u.first_name ?? ""} {(u.last_name ?? "").charAt(0)}.
+      </span>
+    </button>
+  );
+
+  return (
+    <div className="mt-3 pt-2 border-t border-gray-100">
+      <div className="flex items-center justify-between px-2 mb-2">
+        <p className="text-[10px] font-bold uppercase text-gray-400">Membres ({members.length})</p>
+        <button onClick={onManage} className="text-[9px] font-medium text-blue-600 hover:text-blue-800">+ Gérer</button>
+      </div>
+
+      {members.length > 3 && (
+        <div className="relative mb-2 px-1">
+          <Search size={11} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher..."
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-2 py-1.5 text-[11px] outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-100"
+          />
+        </div>
+      )}
+
+      {members.length === 0 ? (
+        <p className="text-[10px] text-gray-400 px-2 py-2">Aucun membre</p>
+      ) : (
+        <div className="space-y-3 px-1">
+          {/* Profs & Coachs */}
+          {filteredProfs.length > 0 && (
+            <div>
+              <p className="text-[9px] font-bold uppercase text-amber-500 mb-1 px-1">Professeurs & Coachs ({filteredProfs.length})</p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                {filteredProfs.map(u => <MemberCard key={u.id} u={u} color="#D97706" />)}
+              </div>
+            </div>
+          )}
+
+          {/* Élèves */}
+          {filteredEleves.length > 0 && (
+            <div>
+              <p className="text-[9px] font-bold uppercase text-blue-400 mb-1 px-1">Élèves ({filteredEleves.length})</p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                {filteredEleves.map(u => <MemberCard key={u.id} u={u} color={groupeColor} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Admins (if any) */}
+          {filteredAdmins.length > 0 && (
+            <div>
+              <p className="text-[9px] font-bold uppercase text-red-400 mb-1 px-1">Admins ({filteredAdmins.length})</p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                {filteredAdmins.map(u => <MemberCard key={u.id} u={u} color="#EF4444" />)}
+              </div>
+            </div>
+          )}
+
+          {filteredProfs.length === 0 && filteredEleves.length === 0 && filteredAdmins.length === 0 && (
+            <p className="text-[10px] text-gray-400 text-center py-2">Aucun résultat</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MembresTab({
   groupe, members, allUsers, onEditUser, onRemoveUser, onAddUser,
