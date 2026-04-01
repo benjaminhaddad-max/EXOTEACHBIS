@@ -151,7 +151,7 @@ export function getAllowedChildTypes(
         return ["sub_offer", "university", "subject", "module"];
       }
       if (parent.formation_offer === "premiere_elite") {
-        return ["subject"];
+        return ["sub_offer", "semester", "period", "module", "subject"];
       }
       return ["sub_offer", "period", "module", "subject"];
     case "sub_offer":
