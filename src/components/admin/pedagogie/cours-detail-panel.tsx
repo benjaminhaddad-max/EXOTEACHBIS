@@ -100,6 +100,43 @@ function ImageUploadBtn({
   );
 }
 
+// ─── Click-to-edit field: renders MathText, clicks switches to textarea ───
+
+function ClickToEditField({
+  value, onChange, placeholder, rows, className, mathClassName,
+}: {
+  value: string; onChange: (v: string) => void; placeholder?: string; rows?: number;
+  className?: string; mathClassName?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  if (!editing) {
+    return (
+      <div
+        onClick={() => setEditing(true)}
+        className={`cursor-text rounded-lg border border-transparent hover:border-white/15 px-3 py-2 min-h-[2rem] transition-colors ${!value ? "text-white/20 italic" : ""} ${mathClassName ?? ""}`}
+      >
+        {value ? <MathText text={value} className="text-xs text-white/80 leading-relaxed" /> : <span className="text-xs">{placeholder ?? "Cliquez pour éditer..."}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={() => setEditing(false)}
+      rows={rows ?? 2}
+      placeholder={placeholder}
+      className={`w-full bg-white/5 border border-[#C9A84C]/30 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-[#C9A84C]/50 resize-y ${className ?? ""}`}
+    />
+  );
+}
+
 // ─── Inline Question Editor (in-place editing inside serie) ───────────────
 
 function InlineQuestionEditor({
@@ -149,49 +186,61 @@ function InlineQuestionEditor({
   };
 
   return (
-    <div className="px-3 pb-3 pt-2 border-t border-white/8 space-y-3 bg-[#0a1628] rounded-b-xl">
+    <div className="px-4 pb-4 pt-3 border-t border-white/8 space-y-4 bg-[#0a1628] rounded-b-xl">
       {/* Énoncé */}
       <div>
-        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1 block">Énoncé</label>
-        <textarea
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1.5 block">Énoncé</label>
+        <ClickToEditField
           value={text}
-          onChange={(e) => { setText(e.target.value); setDirty(true); }}
-          rows={2}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-white/25 resize-none"
+          onChange={(v) => { setText(v); setDirty(true); }}
+          placeholder="Texte de la question... (supporte $LaTeX$)"
+          rows={3}
         />
-        {imageUrl && (
-          <div className="mt-1.5 flex justify-center p-2 bg-white/5 rounded-lg">
-            <img src={imageUrl} alt="" className="max-h-32 object-contain" />
-          </div>
-        )}
+        <div className="mt-1.5">
+          <ImageUploadBtn current={imageUrl} onUploaded={(url) => { setImageUrl(url); setDirty(true); }} folder={`questions/${coursId}`} label="Image de l'énoncé" />
+        </div>
       </div>
 
       {/* Propositions */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider block">Propositions</label>
         {options.map((opt, i) => (
-          <div key={opt.label} className={`rounded-lg border overflow-hidden ${opt.is_correct ? "border-green-500/30 bg-green-500/8" : "border-red-500/20 bg-red-500/5"}`}>
-            <div className="flex items-center gap-2 px-2.5 py-2">
-              <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${opt.is_correct ? "bg-green-500 text-white" : "bg-red-500/20 text-red-400"}`}>{opt.label}</span>
-              <input
-                value={opt.text}
-                onChange={(e) => setOpt(i, "text", e.target.value)}
-                className="flex-1 bg-transparent text-xs text-white placeholder-white/20 focus:outline-none min-w-0"
-                placeholder={`Proposition ${opt.label}...`}
-              />
-              <div className="flex gap-1 shrink-0">
+          <div key={opt.label} className={`rounded-xl border overflow-hidden transition-colors ${opt.is_correct ? "border-green-500/30 bg-green-500/6" : "border-red-500/20 bg-red-500/4"}`}>
+            {/* Proposition text + V/F */}
+            <div className="flex items-start gap-2 px-3 pt-3 pb-1">
+              <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mt-0.5 ${opt.is_correct ? "bg-green-500 text-white" : "bg-red-500/20 text-red-400"}`}>{opt.label}</span>
+              <div className="flex-1 min-w-0">
+                <ClickToEditField
+                  value={opt.text}
+                  onChange={(v) => setOpt(i, "text", v)}
+                  placeholder={`Proposition ${opt.label}... (supporte $LaTeX$)`}
+                  rows={1}
+                />
+              </div>
+              <div className="flex gap-1 shrink-0 mt-1">
                 <button type="button" onClick={() => setOpt(i, "is_correct", true)}
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${opt.is_correct ? "bg-green-500 text-white" : "bg-white/10 text-white/30 hover:text-white/50"}`}>V</button>
+                  className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors ${opt.is_correct ? "bg-green-500 text-white shadow-sm" : "bg-white/10 text-white/30 hover:text-white/50"}`}>VRAI</button>
                 <button type="button" onClick={() => setOpt(i, "is_correct", false)}
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${!opt.is_correct ? "bg-red-500 text-white" : "bg-white/10 text-white/30 hover:text-white/50"}`}>F</button>
+                  className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors ${!opt.is_correct ? "bg-red-500 text-white shadow-sm" : "bg-white/10 text-white/30 hover:text-white/50"}`}>FAUX</button>
               </div>
             </div>
-            <div className="px-2.5 pb-2">
-              <input
-                value={opt.justification}
-                onChange={(e) => setOpt(i, "justification", e.target.value)}
-                className="w-full bg-white/5 border border-white/8 rounded px-2 py-1 text-[10px] text-white/50 placeholder-white/15 focus:outline-none focus:text-white/70"
-                placeholder={`Justification ${opt.label}...`}
+            {/* Justification + media */}
+            <div className="px-3 pb-3 pt-1 space-y-2">
+              <div>
+                <label className="text-[8px] font-semibold text-white/20 uppercase tracking-wider mb-0.5 block">Correction / Justification</label>
+                <ClickToEditField
+                  value={opt.justification}
+                  onChange={(v) => setOpt(i, "justification", v)}
+                  placeholder={`Justification ${opt.label}...`}
+                  rows={2}
+                  mathClassName="text-[11px]"
+                />
+              </div>
+              <ImageUploadBtn
+                current={opt.image_url}
+                onUploaded={(url) => setOpt(i, "image_url", url)}
+                folder={`questions/${coursId}/options`}
+                label="Image / schéma"
               />
             </div>
           </div>
@@ -200,24 +249,23 @@ function InlineQuestionEditor({
 
       {/* Difficulté */}
       <div>
-        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1 block">Difficulté</label>
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1.5 block">Difficulté</label>
         <div className="flex gap-1.5">
           {[1, 2, 3, 4, 5].map((d) => (
             <button key={d} type="button" onClick={() => { setDifficulty(d); setDirty(true); }}
-              className={`flex-1 py-1 rounded text-[10px] font-bold border transition-colors ${difficulty === d ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/8 text-white/25 hover:text-white/40"}`}>{d}</button>
+              className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${difficulty === d ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/8 text-white/25 hover:text-white/40"}`}>{d}</button>
           ))}
         </div>
       </div>
 
       {/* Explication générale */}
       <div>
-        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1 block">Explication générale</label>
-        <textarea
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1.5 block">Explication générale</label>
+        <ClickToEditField
           value={explanation}
-          onChange={(e) => { setExplanation(e.target.value); setDirty(true); }}
-          rows={2}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white/60 placeholder-white/15 focus:outline-none focus:text-white/80 resize-none"
+          onChange={(v) => { setExplanation(v); setDirty(true); }}
           placeholder="Explication optionnelle..."
+          rows={3}
         />
       </div>
 
@@ -225,7 +273,7 @@ function InlineQuestionEditor({
       <button
         onClick={handleSave}
         disabled={saving || !dirty}
-        className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-colors ${
+        className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-colors ${
           saved
             ? "bg-green-600 text-white"
             : dirty
@@ -233,7 +281,7 @@ function InlineQuestionEditor({
               : "bg-white/8 text-white/20 cursor-not-allowed"
         } disabled:opacity-50`}
       >
-        {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : <Check size={12} />}
+        {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <Check size={13} /> : <Check size={13} />}
         {saved ? "Enregistré !" : "Enregistrer les modifications"}
       </button>
     </div>
@@ -586,7 +634,7 @@ function SerieEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
-      <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border border-white/10 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+      <div className="w-full max-w-6xl max-h-[95vh] flex flex-col rounded-2xl border border-white/10 shadow-2xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
 
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/8 shrink-0">
