@@ -554,8 +554,9 @@ export function PedagogieShell({
         className="flex flex-shrink-0 flex-col border-r border-white/8"
         style={{ width: treeWidth, backgroundColor: "#0a1628" }}
       >
-        <div className="flex items-center justify-between border-b border-white/8 px-4 py-3" style={{ background: "linear-gradient(135deg, #12314d 0%, #0e1e35 100%)" }}>
-          <h2 className="text-sm font-bold text-white/90 tracking-wide">Arborescence</h2>
+        <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 relative overflow-hidden" style={{ background: "linear-gradient(135deg, #12314d 0%, #0e1e35 100%)" }}>
+          <div className="absolute inset-0 opacity-30" style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.08) 0%, transparent 70%)" }} />
+          <h2 className="relative text-sm font-bold text-white/90 tracking-wide">Arborescence</h2>
           {canEdit && (
             <div className="flex items-center gap-2">
               {!hasOfferRoots && (
@@ -568,7 +569,7 @@ export function PedagogieShell({
               )}
               <button
                 onClick={() => { setShowGlobalSettings(!showGlobalSettings); if (!showGlobalSettings) setSelectedId(null); }}
-                className={`rounded-lg border p-1.5 transition ${showGlobalSettings ? "bg-purple-500/100/20 border-purple-400/30 text-purple-300" : "border-white/10 text-white/50 hover:bg-white/10 hover:text-white/70"}`}
+                className={`rounded-lg border p-1.5 transition ${showGlobalSettings ? "bg-purple-500/20 border-purple-400/30 text-purple-300" : "border-white/10 text-white/50 hover:bg-white/10 hover:text-white/70"}`}
                 title="Paramétrage global"
               >
                 <Settings className="h-4 w-4" />
@@ -666,8 +667,9 @@ export function PedagogieShell({
         ) : selectedDossier ? (
           <>
             {/* Header */}
-            <div className="border-b border-white/8 px-5 pt-3 pb-0" style={{ background: "linear-gradient(180deg, #12314d 0%, #0e1e35 100%)" }}>
-              <div className="flex items-center justify-between mb-2">
+            <div className="border-b border-white/8 px-5 pt-3 pb-0 relative overflow-hidden" style={{ background: "linear-gradient(180deg, #12314d 0%, #0e1e35 100%)" }}>
+              <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 80% 0%, rgba(79,171,219,0.04) 0%, transparent 60%)" }} />
+              <div className="relative flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1 text-xs text-white/40">
                   <button onClick={() => setSelectedId(null)} className="hover:text-[#C9A84C] transition-colors">
                     <Home className="h-3 w-3" />
@@ -708,8 +710,7 @@ export function PedagogieShell({
                   )}
                 </div>
               </div>
-              {/* Tabs */}
-              <div className="flex gap-0">
+              <div className="relative flex gap-0">
                 <button
                   onClick={() => setDossierTab("contenu")}
                   className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${dossierTab === "contenu" ? "border-[#4fabdb] text-[#4fabdb]" : "border-transparent text-white/40 hover:text-white/70"}`}
@@ -798,7 +799,7 @@ export function PedagogieShell({
                               await handleAction(() => bulkSetDossierVisible(ids, anyHidden));
                               setSelectedDossierIds(new Set());
                             }}
-                            className="rounded-lg bg-green-500/100/15 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/100/25 transition flex items-center gap-1"
+                            className="rounded-lg bg-green-500/15 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/25 transition flex items-center gap-1"
                           >
                             {childDossiers.some((d) => selectedDossierIds.has(d.id) && !d.visible) ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                             {childDossiers.some((d) => selectedDossierIds.has(d.id) && !d.visible) ? "Visible" : "Masquer"}
@@ -817,7 +818,7 @@ export function PedagogieShell({
                                 },
                               });
                             }}
-                            className="rounded-lg bg-red-500/100/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/100/150/25 transition flex items-center gap-1"
+                            className="rounded-lg bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/25 transition flex items-center gap-1"
                           ><Trash2 className="h-3 w-3" /> Supprimer</button>
                           <div className="ml-auto relative">
                             <button type="button" onClick={() => setShowBulkDossierPopover(!showBulkDossierPopover)} className="rounded-lg bg-[#C9A84C]/15 px-3 py-1.5 text-xs font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/25 transition">Section</button>
@@ -874,7 +875,7 @@ export function PedagogieShell({
                                           setShowBulkDossierPopover(false);
                                           setSelectedDossierIds(new Set());
                                         }}
-                                        className="w-full rounded-lg px-3 py-1.5 text-xs text-white/30 hover:text-red-400 hover:bg-red-500/100/150/10 transition"
+                                        className="w-full rounded-lg px-3 py-1.5 text-xs text-white/30 hover:text-red-400 hover:bg-red-500/10 transition"
                                       >Retirer de toute section</button>
                                     </div>
                                   );
@@ -1021,7 +1022,7 @@ export function PedagogieShell({
                     <div>
                       {/* Link rules info banner */}
                       {universityLinkRules && currentOfferCode && canEdit && (
-                        <div className="mb-3 rounded-xl border border-blue-100 bg-[#4fabdb]/10/50 px-4 py-3">
+                        <div className="mb-3 rounded-xl border border-blue-100 bg-[#4fabdb]/10 px-4 py-3">
                           <p className="text-xs font-semibold text-blue-800 mb-1.5">🔗 Synchronisation automatique</p>
                           <div className="space-y-1">
                             {Object.entries(universityLinkRules.sections)
@@ -1146,7 +1147,7 @@ export function PedagogieShell({
                                   await handleAction(() => bulkSetCoursVisible(ids, anyHidden));
                                   setSelectedCoursIds(new Set());
                                 }}
-                                className="rounded-lg bg-green-500/100/15 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/100/25 transition flex items-center gap-1"
+                                className="rounded-lg bg-green-500/15 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-500/25 transition flex items-center gap-1"
                                 title={coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? "Rendre visible" : "Masquer"}
                               >
                                 {coursList.some((c) => selectedCoursIds.has(c.id) && !c.visible) ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -1172,7 +1173,7 @@ export function PedagogieShell({
                                     },
                                   });
                                 }}
-                                className="rounded-lg bg-red-500/100/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/100/25 transition flex items-center gap-1"
+                                className="rounded-lg bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/25 transition flex items-center gap-1"
                               ><Trash2 className="h-3 w-3" /> Supprimer</button>
                               <div className="ml-auto relative">
                                 <button
@@ -2032,7 +2033,7 @@ function BulkCreateDossiersModal({ parentId, parentDossier, onCreated, onClose }
 // =============================================
 
 const CONTENT_TYPES = [
-  { type: "pdf",   label: "PDF",   icon: <FileText className="h-8 w-8" />,  color: "text-red-500",  bg: "hover:bg-red-500/100/15 hover:border-red-500/20" },
+  { type: "pdf",   label: "PDF",   icon: <FileText className="h-8 w-8" />,  color: "text-red-500",  bg: "hover:bg-red-500/15 hover:border-red-500/20" },
   { type: "video", label: "Vidéo", icon: <Video className="h-8 w-8" />,     color: "text-blue-500", bg: "hover:bg-[#4fabdb]/15 hover:border-[#4fabdb]/20" },
   { type: "vimeo", label: "Vimeo", icon: <FileVideo className="h-8 w-8" />, color: "text-cyan-500", bg: "hover:bg-cyan-50 hover:border-cyan-200" },
   { type: "lien",  label: "Lien",  icon: <LinkIcon className="h-8 w-8" />,      color: "text-green-500",bg: "hover:bg-green-500/10 hover:border-green-500/20" },
@@ -2287,7 +2288,7 @@ function AddPickerModal({
             onClick={onBulkCreateDossiers}
             className="group flex w-full items-center gap-4 rounded-xl border border-white/10 p-4 text-left transition hover:border-orange-500/20 hover:bg-orange-500/10"
           >
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400 transition group-hover:bg-orange-100">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400 transition group-hover:bg-orange-500/20">
               <ImagePlus className="h-6 w-6" />
             </div>
             <div>
@@ -2382,79 +2383,76 @@ function SortableTreeNode({
   const selected = selectedId === node.id;
   const hasChildren = node.children.length > 0;
 
+  const nodeCs = CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic;
+  const NodeIcon = nodeCs.icon;
+
   return (
-    <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "12px" : 0 }}>
-      <div className={`group mb-0.5 flex items-start gap-1 rounded-lg px-1.5 py-1.5 transition-all duration-150 ${selected ? "bg-[#C9A84C]/12 ring-1 ring-[#C9A84C]/20" : "hover:bg-white/5"}`}>
+    <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "14px" : 0 }}>
+      <div
+        className={`group relative mb-0.5 flex items-center gap-1.5 rounded-xl px-2 py-[7px] transition-all duration-200 ${
+          selected
+            ? "shadow-[inset_0_0_20px_rgba(201,168,76,0.06)]"
+            : "hover:bg-white/[0.04]"
+        }`}
+        style={{
+          borderLeft: selected ? `2px solid ${nodeCs.iconColor}` : "2px solid transparent",
+          background: selected ? `linear-gradient(90deg, ${nodeCs.iconColor}12 0%, transparent 70%)` : undefined,
+        }}
+      >
         {canEdit && (
-          <span
-            {...attributes}
-            {...listeners}
-            className="mt-0.5 flex-shrink-0 cursor-grab touch-none p-0.5 text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing"
-          >
-            <GripVertical className="h-3.5 w-3.5" />
+          <span {...attributes} {...listeners}
+            className="flex-shrink-0 cursor-grab touch-none p-0.5 text-white/10 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+            <GripVertical className="h-3 w-3" />
           </span>
         )}
 
-        <div className="flex flex-1 items-start gap-1.5 min-w-0">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasChildren) {
-                if (expanded) {
-                  onToggle(node.id);
-                  return;
-                }
-                onToggle(node.id);
-                onSelect(node);
-                return;
-              }
-              onSelect(node);
-            }}
-            className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded hover:bg-white/10"
+        <button type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren) { if (expanded) { onToggle(node.id); return; } onToggle(node.id); onSelect(node); return; }
+            onSelect(node);
+          }}
+          className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
+        >
+          {hasChildren
+            ? expanded ? <ChevronDown className="h-3 w-3 text-white/50" /> : <ChevronRight className="h-3 w-3 text-white/25" />
+            : <span className="h-1 w-1 rounded-full bg-white/15" />}
+        </button>
+
+        <button type="button" onClick={() => onSelect(node)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <span
+            className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110"
+            style={{ backgroundColor: nodeCs.iconBg, boxShadow: selected ? `0 0 10px ${nodeCs.iconColor}30` : "none" }}
           >
-            {hasChildren
-              ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronRight className="h-3.5 w-3.5 text-white/30" />
-              : <span className="w-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelect(node)}
-            className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
-          >
-            <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md overflow-hidden" style={{ backgroundColor: (CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic).iconBg }}>
-              {node.icon_url
-                ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
-                : (() => { const cs = CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic; const Icon = cs.icon; return <Icon className="h-3 w-3" style={{ color: cs.iconColor }} />; })()}
+            {node.icon_url
+              ? <img src={node.icon_url} alt="" className="h-3.5 w-3.5 object-contain" />
+              : <NodeIcon className="h-3.5 w-3.5" style={{ color: nodeCs.iconColor }} />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={`block whitespace-normal break-words text-[11px] leading-snug transition-colors ${selected ? "font-bold text-white" : "font-medium text-white/70 group-hover:text-white/90"}`}>
+              {node.name}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className={`block whitespace-normal break-words text-xs leading-snug ${selected ? "font-semibold text-[#C9A84C]" : "text-white/80"}`}>
-                {node.name}
-              </span>
-              <span className="mt-0.5 inline-flex items-center gap-1.5">
-                <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider" style={{ backgroundColor: (CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic).badgeBg, color: (CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic).badgeText }}>
-                  {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
-                </span>
-              </span>
-            </span>
-            {!node.visible && <EyeOff className="mt-0.5 h-3 w-3 flex-shrink-0 text-white/20" />}
-          </button>
-        </div>
+          </span>
+          <span className="flex-shrink-0 rounded-md px-1.5 py-0.5 text-[7px] font-bold uppercase tracking-widest opacity-60" style={{ backgroundColor: nodeCs.badgeBg, color: nodeCs.badgeText }}>
+            {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+          </span>
+          {!node.visible && <EyeOff className="h-3 w-3 flex-shrink-0 text-white/15" />}
+        </button>
 
         {canEdit && (
-          <div className="mt-0.5 flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100">
-            <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded p-1 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]" title="Modifier">
-              <Pencil className="h-3 w-3" />
+          <div className="flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded-md p-1 text-white/20 hover:bg-white/10 hover:text-[#4fabdb] transition-colors" title="Modifier">
+              <Pencil className="h-2.5 w-2.5" />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded p-1 text-white/25 hover:bg-red-500/100/150/15 hover:text-red-400" title="Supprimer">
-              <Trash2 className="h-3 w-3" />
+            <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded-md p-1 text-white/20 hover:bg-red-500/15 hover:text-red-400 transition-colors" title="Supprimer">
+              <Trash2 className="h-2.5 w-2.5" />
             </button>
           </div>
         )}
       </div>
 
       {expanded && (
-        <div className="border-l border-white/8 ml-3">
+        <div className="ml-[18px]" style={{ borderLeft: `1px solid ${nodeCs.iconColor}20` }}>
           {hasChildren && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
               <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -2531,7 +2529,7 @@ function SortableSubDossierCard({ dossier, onClick, onEdit, onDelete }: { dossie
       {(onEdit || onDelete) && (
         <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 z-10">
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70 transition"><Pencil className="h-3 w-3" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/100/150/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"><Trash2 className="h-3 w-3" /></button>}
         </div>
       )}
     </div>
@@ -2611,7 +2609,7 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
         </button>
       )}
       {!dossier.visible && (
-        <span className="flex-shrink-0 rounded-md bg-red-500/100/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
+        <span className="flex-shrink-0 rounded-md bg-red-500/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
           <EyeOff className="h-3 w-3" />
         </span>
       )}
@@ -2624,7 +2622,7 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
             Renommer
           </button>
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/100/150/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
         </div>
       )}
     </div>
@@ -2723,7 +2721,7 @@ function SortableRessourceRow({ ressource, onEdit, onDelete }: { ressource: Ress
       {(onEdit || onDelete) && (
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/40 hover:bg-[#4fabdb]/15 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/40 hover:bg-red-500/100/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/40 hover:bg-red-500/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
         </div>
       )}
     </div>
@@ -2825,9 +2823,14 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleFileDrop}
-      className={`group flex items-center gap-3 rounded-xl border p-2.5 transition ${
-        selected ? "border-[#C9A84C]/40 bg-[#C9A84C]/8 ring-1 ring-[#C9A84C]/20" : dragOver ? "border-[#4fabdb]/40 bg-[#4fabdb]/10 ring-2 ring-[#4fabdb]/20" : "border-white/8 hover:border-white/15 hover:bg-white/5"
+      className={`group flex items-center gap-3 rounded-xl border p-3 transition-all duration-200 ${
+        selected
+          ? "border-[#C9A84C]/30 bg-gradient-to-r from-[#C9A84C]/10 to-transparent shadow-[0_0_15px_rgba(201,168,76,0.06)]"
+          : dragOver
+            ? "border-[#4fabdb]/40 bg-[#4fabdb]/10 ring-2 ring-[#4fabdb]/20"
+            : "border-white/[0.06] hover:border-white/12 hover:bg-gradient-to-r hover:from-white/[0.03] hover:to-transparent hover:shadow-[0_2px_12px_rgba(0,0,0,0.15)]"
       }`}
+      style={{ borderLeft: selected ? "3px solid #C9A84C" : "3px solid transparent" }}
     >
       {onToggleSelect && (
         <input
@@ -2838,10 +2841,13 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         />
       )}
       {(onEdit || onDelete) && (
-        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/15 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+        <span {...attributes} {...listeners} className="flex-shrink-0 cursor-grab touch-none text-white/10 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-4 w-4" />
         </span>
       )}
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#4fabdb]/10 transition-transform group-hover:scale-105">
+        <FileText className="h-4 w-4 text-[#4fabdb]/70" />
+      </div>
       {editing ? (
         <input
           ref={nameInputRef}
@@ -2859,7 +2865,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
             onClick={onSelect}
             className="min-w-0 flex-1 text-left flex items-center gap-2"
           >
-            <p className="truncate text-sm font-semibold text-white/90">{cours.name}</p>
+            <p className="truncate text-sm font-semibold text-white/90 group-hover:text-white transition-colors">{cours.name}</p>
             {cours.etiquettes?.map((tag) => (
               <span key={tag} className="flex-shrink-0 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-medium text-[#C9A84C]">{tag}</span>
             ))}
@@ -2874,7 +2880,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       )}
 
       {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
-        <span className="flex-shrink-0 rounded-md bg-orange-500/100/15 border border-orange-500/20 px-2 py-0.5 text-[10px] font-semibold text-orange-400">⏳ Non actualisé</span>
+        <span className="flex-shrink-0 rounded-md bg-orange-500/15 border border-orange-500/20 px-2 py-0.5 text-[10px] font-semibold text-orange-400">⏳ Non actualisé</span>
       )}
       {cours.actualisation === "aucun_changement" && (
         <span className="flex-shrink-0 rounded-md bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/40">= Aucun changement</span>
@@ -2883,18 +2889,18 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
         <span className="flex-shrink-0 rounded-md bg-[#4fabdb]/15 border border-[#4fabdb]/20 px-2 py-0.5 text-[10px] font-semibold text-[#4fabdb]">↑ Actualisation</span>
       )}
       {cours.actualisation === "changements_notables" && (
-        <span className="flex-shrink-0 rounded-md bg-amber-500/100/15 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-400">⚠ Changements notables</span>
+        <span className="flex-shrink-0 rounded-md bg-amber-500/15 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-400">⚠ Changements notables</span>
       )}
       {cours.actualisation === "nouvelle_fiche" && (
-        <span className="flex-shrink-0 rounded-md bg-green-500/100/15 border border-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-400">★ Nouvelle fiche</span>
+        <span className="flex-shrink-0 rounded-md bg-green-500/15 border border-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-400">★ Nouvelle fiche</span>
       )}
 
       {cours.visible ? (
-        <span className="flex items-center rounded-md bg-green-500/100/15 px-1.5 py-0.5 text-green-400" title="Visible pour les élèves">
+        <span className="flex items-center rounded-md bg-green-500/15 px-1.5 py-0.5 text-green-400" title="Visible pour les élèves">
           <Eye className="h-3 w-3" />
         </span>
       ) : (
-        <span className="flex items-center rounded-md bg-red-500/100/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
+        <span className="flex items-center rounded-md bg-red-500/15 px-1.5 py-0.5 text-red-400" title="Masqué pour les élèves">
           <EyeOff className="h-3 w-3" />
         </span>
       )}
@@ -2906,7 +2912,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       ) : hasPdf ? (
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md bg-green-500/100/15 px-2 py-0.5 text-xs font-medium text-green-400 hover:bg-green-500/100/25 transition"
+          className="flex items-center gap-1 rounded-md bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-400 hover:bg-green-500/25 transition"
           title="Remplacer le PDF"
         >
           <Check className="h-3 w-3" /> PDF
@@ -2914,7 +2920,7 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
       ) : (
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1 rounded-md bg-orange-500/100/15 px-2 py-0.5 text-xs font-medium text-orange-400 hover:bg-orange-500/100/25 transition"
+          className="flex items-center gap-1 rounded-md bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-400 hover:bg-orange-500/25 transition"
         >
           <Upload className="h-3 w-3" /> PDF
         </button>
@@ -2938,9 +2944,9 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
               )}
             </div>
           )}
-          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-white/25 hover:bg-purple-500/100/15 hover:text-purple-400"><Link2 className="h-4 w-4" /></button>}
+          {onLink && <button onClick={onLink} title="Rattacher à une autre offre" className="rounded-lg p-1.5 text-white/25 hover:bg-purple-500/15 hover:text-purple-400"><Link2 className="h-4 w-4" /></button>}
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-white/25 hover:bg-white/10 hover:text-[#4fabdb]"><Pencil className="h-4 w-4" /></button>}
-          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/100/150/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
+          {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/15 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
         </div>
       )}
     </div>
@@ -3045,7 +3051,7 @@ function SortableCoursCard({ cours, matiereLabel, onSelect, onEdit, onDelete }: 
             </button>
           )}
           {onDelete && (
-            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500/100/150 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
+            <button onClick={onDelete} className="rounded-lg p-1 text-white/50 hover:bg-red-500/150 hover:text-white transition" style={{ background: "rgba(212,171,80,0.15)" }}>
               <Trash2 className="h-3 w-3" />
             </button>
           )}
@@ -3065,15 +3071,17 @@ function EmptyDossier({ onAdd, cloneSource, onClone }: {
   onClone?: (source: Dossier) => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-white/10 py-16 text-center">
-      <Plus className="mb-3 h-10 w-10 text-white/20" />
-      <p className="text-sm font-medium text-white/40">Dossier vide</p>
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/8 py-16 text-center" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(201,168,76,0.03) 0%, transparent 60%)" }}>
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#C9A84C]/15 to-transparent mb-4">
+        <Plus className="h-7 w-7 text-[#C9A84C]/40" />
+      </div>
+      <p className="text-sm font-semibold text-white/50">Dossier vide</p>
       <p className="mt-1 text-xs text-white/25">{onAdd ? "Ajoutez des sous-dossiers ou du contenu" : "Aucun contenu disponible"}</p>
-      <div className="mt-4 flex flex-col items-center gap-2">
+      <div className="mt-5 flex flex-col items-center gap-2">
         {onAdd && (
           <button
             onClick={onAdd}
-            className="flex items-center gap-1.5 rounded-lg bg-[#12314d] px-4 py-2 text-xs font-medium text-white hover:bg-[#12314d]-light transition-colors"
+            className="flex items-center gap-1.5 rounded-xl bg-[#C9A84C]/15 border border-[#C9A84C]/25 px-5 py-2.5 text-xs font-semibold text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all"
           >
             <Plus className="h-3.5 w-3.5" />
             Ajouter
@@ -3536,7 +3544,7 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
         <button
           type="button"
           onClick={onSwitchToBulk}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-500/20 bg-orange-500/10/50 py-2.5 text-xs font-medium text-orange-400 transition hover:bg-orange-100"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-500/20 bg-orange-500/10 py-2.5 text-xs font-medium text-orange-400 transition hover:bg-orange-500/20"
         >
           <ImagePlus className="h-4 w-4" /> Importer plusieurs cours par screenshot
         </button>
@@ -3545,7 +3553,7 @@ function CoursForm({ title, dossierId, initialData, existingSections, showActual
       {/* Visible */}
       <div
         className={`flex items-center justify-between rounded-xl border px-4 py-3 cursor-pointer transition ${
-          visible ? "border-green-500/20 bg-green-500/10/50" : "border-red-500/20 bg-red-500/10/50"
+          visible ? "border-green-500/20 bg-green-500/10" : "border-red-500/20 bg-red-500/10"
         }`}
         onClick={() => setVisible(!visible)}
       >
@@ -3853,7 +3861,7 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
                 )}
                 {onDeleteSection && <button
                   onClick={() => setShowDeleteMenu(!showDeleteMenu)}
-                  className="rounded-md p-1 text-[#4fabdb]/20 opacity-0 group-hover/section:opacity-100 hover:bg-red-500/100/15 hover:text-red-400 transition"
+                  className="rounded-md p-1 text-[#4fabdb]/20 opacity-0 group-hover/section:opacity-100 hover:bg-red-500/15 hover:text-red-400 transition"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>}
@@ -3868,7 +3876,7 @@ function EtiquetteSectionHeader({ label, coursIds, canEdit, onRenamed, onDeleteS
                     </button>
                     <button
                       onClick={() => { setShowDeleteMenu(false); onDeleteSection("delete_cours"); }}
-                      className="w-full px-3 py-2 text-left text-xs text-red-400 hover:bg-red-500/100/15 transition"
+                      className="w-full px-3 py-2 text-left text-xs text-red-400 hover:bg-red-500/15 transition"
                     >
                       <span className="font-semibold">Supprimer les {coursIds.length} cours</span>
                       <span className="block text-[10px] text-red-400">Suppression définitive</span>
@@ -4015,7 +4023,7 @@ function GlobalSettingsPanel({ allDossiers, onSaved, onClose }: {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: University list */}
-        <div className="w-64 flex-shrink-0 border-r border-white/8 overflow-y-auto bg-white/5/50 p-3">
+        <div className="w-64 flex-shrink-0 border-r border-white/8 overflow-y-auto bg-white/5 p-3">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-white/40 px-2">Universités</p>
           <div className="space-y-1">
             {uniByName.map(([name, unis]) => (
@@ -4217,7 +4225,7 @@ function UniversitySettingsTab({ university, allDossiers, onSaved }: { universit
                 <h4 className="text-sm font-bold text-white/90">{section}</h4>
                 <button
                   onClick={() => removeSection(section)}
-                  className="rounded-lg p-1 text-white/40 hover:bg-red-500/100/15 hover:text-red-400 transition"
+                  className="rounded-lg p-1 text-white/40 hover:bg-red-500/15 hover:text-red-400 transition"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -4332,7 +4340,7 @@ function SubjectSectionsSummary({ universityName, sectionNames: rawSectionNames,
           </thead>
           <tbody>
             {subjects.map(([subjectName, offerMap]) => (
-              <tr key={subjectName} className="border-b border-white/8 hover:bg-white/5/50">
+              <tr key={subjectName} className="border-b border-white/8 hover:bg-white/5">
                 <td className="px-3 py-2 font-medium text-white/90 sticky left-0 bg-[#12314d] whitespace-nowrap">{subjectName}</td>
                 {offerNames.map((offerName) => {
                   const sections = offerMap.get(offerName) ?? [];
