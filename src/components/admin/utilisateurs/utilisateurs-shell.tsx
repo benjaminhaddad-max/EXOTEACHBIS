@@ -1753,6 +1753,13 @@ function ComptesView({
     return true;
   }), [users, search, filterRole, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, groupes, groupBelongsToSubtree]);
 
+  const [page, setPage] = useState(0);
+  const [perPage, setPerPage] = useState(25);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const paged = useMemo(() => filtered.slice(page * perPage, (page + 1) * perPage), [filtered, page, perPage]);
+
+  useEffect(() => { setPage(0); }, [search, filterRole, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, perPage]);
+
   const groupMap = useMemo(() => {
     const m = new Map<string, Groupe>();
     for (const g of groupes) m.set(g.id, g);
@@ -1873,7 +1880,7 @@ function ComptesView({
             </tr>
           </thead>
           <tbody>
-            {filtered.map(u => {
+            {paged.map(u => {
               const rc = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.eleve;
               const groupe = u.groupe_id ? groupMap.get(u.groupe_id) : null;
               const formationDossierId = getGroupeInheritedFormationDossierId(groupe?.id, groupMap);
@@ -1986,6 +1993,94 @@ function ComptesView({
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mt-3 px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium" style={{ color: "rgba(255,255,255,0.35)" }}>Par page</span>
+            <div className="flex gap-1">
+              {[25, 50, 100, 200].map(n => (
+                <button key={n} onClick={() => setPerPage(n)}
+                  className="px-2 py-1 rounded-md text-[11px] font-semibold transition-colors"
+                  style={{
+                    backgroundColor: perPage === n ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.04)",
+                    color: perPage === n ? "#C9A84C" : "rgba(255,255,255,0.35)",
+                    border: perPage === n ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                  }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium" style={{ color: "rgba(255,255,255,0.35)" }}>
+              {page * perPage + 1}–{Math.min((page + 1) * perPage, filtered.length)} sur {filtered.length}
+            </span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                className="px-2 py-1 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-25"
+                style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                ‹
+              </button>
+              {totalPages <= 7 ? (
+                Array.from({ length: totalPages }).map((_, i) => (
+                  <button key={i} onClick={() => setPage(i)}
+                    className="px-2 py-1 rounded-md text-[11px] font-semibold transition-colors min-w-[28px]"
+                    style={{
+                      backgroundColor: page === i ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.04)",
+                      color: page === i ? "#C9A84C" : "rgba(255,255,255,0.4)",
+                      border: page === i ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                    }}>
+                    {i + 1}
+                  </button>
+                ))
+              ) : (
+                <>
+                  {[0, 1].map(i => (
+                    <button key={i} onClick={() => setPage(i)}
+                      className="px-2 py-1 rounded-md text-[11px] font-semibold transition-colors min-w-[28px]"
+                      style={{
+                        backgroundColor: page === i ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.04)",
+                        color: page === i ? "#C9A84C" : "rgba(255,255,255,0.4)",
+                        border: page === i ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                      }}>
+                      {i + 1}
+                    </button>
+                  ))}
+                  <span className="text-[11px] px-1" style={{ color: "rgba(255,255,255,0.2)" }}>…</span>
+                  {page > 2 && page < totalPages - 3 && (
+                    <>
+                      <button onClick={() => setPage(page)}
+                        className="px-2 py-1 rounded-md text-[11px] font-semibold min-w-[28px]"
+                        style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}>
+                        {page + 1}
+                      </button>
+                      <span className="text-[11px] px-1" style={{ color: "rgba(255,255,255,0.2)" }}>…</span>
+                    </>
+                  )}
+                  {[totalPages - 2, totalPages - 1].map(i => (
+                    <button key={i} onClick={() => setPage(i)}
+                      className="px-2 py-1 rounded-md text-[11px] font-semibold transition-colors min-w-[28px]"
+                      style={{
+                        backgroundColor: page === i ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.04)",
+                        color: page === i ? "#C9A84C" : "rgba(255,255,255,0.4)",
+                        border: page === i ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                      }}>
+                      {i + 1}
+                    </button>
+                  ))}
+                </>
+              )}
+              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                className="px-2 py-1 rounded-md text-[11px] font-semibold transition-colors disabled:opacity-25"
+                style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                ›
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

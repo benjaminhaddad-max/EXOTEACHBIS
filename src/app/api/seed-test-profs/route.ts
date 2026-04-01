@@ -45,6 +45,12 @@ export async function POST() {
 
     // Helper: create a user
     const createUser = async (firstName: string, lastName: string, email: string, role: "prof" | "coach") => {
+      // Check if user already exists
+      const { data: existing } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
+      if (existing) {
+        log.push(`  ✓ ${email} existe déjà`);
+        return existing.id;
+      }
       const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
         email,
         password: "Test1234!",
@@ -61,17 +67,33 @@ export async function POST() {
       return authUser.user.id;
     };
 
-    // Helper: get all subject dossiers under a root
+    // Helper: get all subject dossiers under a root (recursive through all levels)
     const getSubjects = (rootId: string): typeof dossiers => {
       const subjects: typeof dossiers = [];
       const collect = (parentId: string) => {
         for (const d of dossiers!.filter(d => d.parent_id === parentId)) {
           if (d.dossier_type === "subject") subjects.push(d);
-          else collect(d.id);
+          collect(d.id); // always recurse — subjects can be nested in modules
         }
       };
       collect(rootId);
       return subjects;
+    };
+
+    // Helper: ensure a matiere exists for a subject dossier, create if missing
+    const ensureMatiere = async (subject: { id: string; name: string; color: string }) => {
+      let mat = (matieres ?? []).find(m => m.dossier_id === subject.id);
+      if (mat) return mat;
+      // Create matiere
+      const { data: newMat, error } = await admin.from("matieres").insert({
+        name: subject.name,
+        color: subject.color || "#3B82F6",
+        dossier_id: subject.id,
+        visible: true,
+      }).select("*").single();
+      if (error) { log.push(`    ⚠ matière ${subject.name}: ${error.message}`); return null; }
+      matieres!.push(newMat); // cache it
+      return newMat;
     };
 
     // Helper: get all universities under a root
@@ -105,11 +127,12 @@ export async function POST() {
         continue;
       }
 
-      // Get or find matieres linked to subjects
-      const subjectMatieres = subjects.map(s => {
-        const mat = matieres.find(m => m.dossier_id === s.id);
-        return { subject: s, matiere: mat };
-      }).filter(sm => sm.matiere);
+      // Get or create matieres for subjects
+      const subjectMatieres: { subject: (typeof subjects)[0]; matiere: any }[] = [];
+      for (const s of subjects) {
+        const mat = await ensureMatiere(s);
+        if (mat) subjectMatieres.push({ subject: s, matiere: mat });
+      }
 
       log.push(`  ${subjectMatieres.length} matières, ${allGroupeIds.length} classes`);
 
@@ -130,7 +153,7 @@ export async function POST() {
               : [{ prof_id: userId, matiere_id: sm.matiere!.id, role_type: "cours", groupe_id: null }]
           );
           if (records.length > 0) {
-            await admin.from("prof_matieres").insert(records);
+            await admin.from("prof_matieres").upsert(records, { onConflict: "prof_id,matiere_id,role_type,groupe_id", ignoreDuplicates: true });
           }
           log.push(`  + ${pn.first} ${pn.last} (${email}) — COURS: ${assignMats.map(m => m.subject.name).join(", ")}`);
         }
@@ -149,7 +172,7 @@ export async function POST() {
           }
           const records = assignMats.map(sm => ({ prof_id: userId, matiere_id: sm.matiere!.id, role_type: "contenu", groupe_id: null }));
           if (records.length > 0) {
-            await admin.from("prof_matieres").insert(records);
+            await admin.from("prof_matieres").upsert(records, { onConflict: "prof_id,matiere_id,role_type,groupe_id", ignoreDuplicates: true });
           }
           log.push(`  + ${pn.first} ${pn.last} (${email}) — CONTENU: ${assignMats.map(m => m.subject.name).join(", ")}`);
         }
