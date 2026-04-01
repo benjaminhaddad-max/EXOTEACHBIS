@@ -1390,12 +1390,33 @@ export function PedagogieShell({
             )}
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center text-center px-8">
-            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-[#12314d]/5 ring-1 ring-white/10">
-              <img src="/logo-ds.svg" alt="" className="h-16 w-16 object-contain opacity-60" />
+          <div className="flex flex-1 flex-col items-center justify-center text-center px-8 relative">
+            {/* Background decoration */}
+            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 50% 40% at 50% 45%, rgba(201,168,76,0.03) 0%, transparent 70%)" }} />
+            <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 30% at 30% 60%, rgba(79,171,219,0.02) 0%, transparent 70%)" }} />
+
+            {/* Animated logo container */}
+            <div className="relative mb-8">
+              <div className="absolute inset-0 rounded-3xl" style={{ background: "conic-gradient(from 180deg, rgba(201,168,76,0.15), transparent, rgba(201,168,76,0.08), transparent, rgba(201,168,76,0.15))", filter: "blur(20px)", animation: "spin 12s linear infinite" }} />
+              <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl" style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(14,30,53,0.8) 50%, rgba(201,168,76,0.04) 100%)", border: "1px solid rgba(201,168,76,0.15)", boxShadow: "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(201,168,76,0.1)" }}>
+                <img src="/logo-ds.svg" alt="" className="h-14 w-14 object-contain" style={{ opacity: 0.7, filter: "drop-shadow(0 2px 8px rgba(201,168,76,0.2))" }} />
+              </div>
             </div>
-            <p className="text-sm font-semibold text-[#4fabdb]/60">Sélectionnez un dossier</p>
-            <p className="mt-1.5 text-xs text-white/40 max-w-[180px] leading-relaxed">Choisissez un dossier dans l'arborescence pour voir et gérer son contenu</p>
+
+            <h3 className="text-lg font-bold text-white/70 mb-2">Sélectionnez un dossier</h3>
+            <p className="text-[13px] text-white/30 max-w-[260px] leading-relaxed">
+              Choisissez une offre ou un dossier dans l&apos;arborescence pour explorer et gérer son contenu pédagogique
+            </p>
+
+            {/* Hint arrows */}
+            <div className="mt-8 flex items-center gap-2 text-white/15">
+              <ChevronRight className="h-4 w-4 animate-pulse" />
+              <span className="text-[11px] font-medium">Cliquez sur une offre à gauche</span>
+            </div>
+
+            <style jsx>{`
+              @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}</style>
           </div>
         )}
       </div>
@@ -2429,13 +2450,111 @@ function SortableTreeNode({
   const nodeCs = CARD_STYLES[node.dossier_type] ?? CARD_STYLES.generic;
   const NodeIcon = nodeCs.icon;
 
+  const isOffer = depth === 0;
+
+  if (isOffer) {
+    return (
+      <div ref={setNodeRef} style={style}>
+        <div
+          className={`group relative mb-2 rounded-xl overflow-hidden transition-all duration-250 ${selected ? "" : "hover:brightness-110"}`}
+          style={{
+            background: selected
+              ? `linear-gradient(135deg, ${nodeCs.iconColor}18 0%, ${nodeCs.iconColor}06 100%)`
+              : "linear-gradient(135deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.01) 100%)",
+            border: selected ? `1px solid ${nodeCs.iconColor}40` : "1px solid rgba(255,255,255,0.06)",
+            boxShadow: selected ? `0 4px 20px ${nodeCs.iconColor}12, inset 0 1px 0 ${nodeCs.iconColor}15` : "0 1px 3px rgba(0,0,0,0.15)",
+          }}
+        >
+          <div className="flex items-center gap-3 px-3 py-3">
+            {canEdit && (
+              <span {...attributes} {...listeners}
+                className="flex-shrink-0 cursor-grab touch-none text-white/10 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
+                <GripVertical className="h-3.5 w-3.5" />
+              </span>
+            )}
+
+            <button type="button"
+              onClick={(e) => { e.stopPropagation(); onToggle(node.id); if (!expanded) onSelect(node); }}
+              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg transition-all duration-200"
+              style={{
+                backgroundColor: expanded ? `${nodeCs.iconColor}15` : "rgba(255,255,255,0.04)",
+                border: expanded ? `1px solid ${nodeCs.iconColor}25` : "1px solid rgba(255,255,255,0.06)",
+              }}
+            >
+              <ChevronRight
+                className="h-3.5 w-3.5 transition-transform duration-200"
+                style={{
+                  transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+                  color: expanded ? nodeCs.iconColor : "rgba(255,255,255,0.35)",
+                }}
+              />
+            </button>
+
+            <button type="button" onClick={() => onSelect(node)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+              <span
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-105"
+                style={{
+                  background: `linear-gradient(135deg, ${nodeCs.iconColor}20 0%, ${nodeCs.iconColor}08 100%)`,
+                  border: `1px solid ${nodeCs.iconColor}25`,
+                  boxShadow: `0 2px 8px ${nodeCs.iconColor}10`,
+                }}
+              >
+                {node.icon_url
+                  ? <img src={node.icon_url} alt="" className="h-4.5 w-4.5 object-contain" />
+                  : <NodeIcon className="h-4.5 w-4.5" style={{ color: nodeCs.iconColor }} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={`block text-[13px] font-bold leading-tight transition-colors ${selected ? "text-white" : "text-white/85 group-hover:text-white"}`}>
+                  {node.name}
+                </span>
+                <span className="block text-[9px] font-semibold uppercase tracking-widest mt-0.5" style={{ color: `${nodeCs.badgeText}80` }}>
+                  {DOSSIER_TYPE_META[node.dossier_type]?.shortLabel ?? "Dossier"}
+                  {node.children.length > 0 && <span className="text-white/20 ml-1.5">· {node.children.length} élément{node.children.length > 1 ? "s" : ""}</span>}
+                </span>
+              </span>
+              {!node.visible && <EyeOff className="h-3.5 w-3.5 flex-shrink-0 text-white/20" />}
+            </button>
+
+            {canEdit && (
+              <div className="flex flex-shrink-0 gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="rounded-lg p-1.5 text-white/20 hover:bg-white/10 hover:text-[#4fabdb] transition-colors" title="Modifier">
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="rounded-lg p-1.5 text-white/20 hover:bg-red-500/15 hover:text-red-400 transition-colors" title="Supprimer">
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Decorative bottom line */}
+          {selected && <div className="h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${nodeCs.iconColor}50, transparent)` }} />}
+        </div>
+
+        {expanded && (
+          <div className="ml-3 pl-3 mb-2" style={{ borderLeft: `2px solid ${nodeCs.iconColor}15` }}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
+              <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                {node.children.map((child) => (
+                  <SortableTreeNode
+                    key={child.id} node={child} selectedId={selectedId} expandedIds={expandedIds}
+                    depth={depth + 1} sensors={sensors} canEdit={canEdit}
+                    onSelect={onSelect} onToggle={onToggle} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDragEndChildren={onDragEndChildren}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 0 ? "14px" : 0 }}>
+    <div ref={setNodeRef} style={{ ...style, marginLeft: depth > 1 ? "12px" : 0 }}>
       <div
-        className={`group relative mb-0.5 flex items-center gap-1.5 rounded-xl px-2 py-[7px] transition-all duration-200 ${
-          selected
-            ? "shadow-[inset_0_0_20px_rgba(201,168,76,0.06)]"
-            : "hover:bg-white/[0.04]"
+        className={`group relative mb-0.5 flex items-center gap-2 rounded-lg px-2 py-[6px] transition-all duration-200 ${
+          selected ? "" : "hover:bg-white/[0.04]"
         }`}
         style={{
           borderLeft: selected ? `2px solid ${nodeCs.iconColor}` : "2px solid transparent",
@@ -2452,14 +2571,18 @@ function SortableTreeNode({
         <button type="button"
           onClick={(e) => {
             e.stopPropagation();
-            if (hasChildren) { if (expanded) { onToggle(node.id); return; } onToggle(node.id); onSelect(node); return; }
+            if (hasChildren) { onToggle(node.id); if (!expanded) onSelect(node); return; }
             onSelect(node);
           }}
-          className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
+          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md transition-all duration-200"
+          style={{
+            backgroundColor: hasChildren ? (expanded ? `${nodeCs.iconColor}12` : "rgba(255,255,255,0.03)") : "transparent",
+            border: hasChildren ? (expanded ? `1px solid ${nodeCs.iconColor}20` : "1px solid rgba(255,255,255,0.04)") : "none",
+          }}
         >
           {hasChildren
-            ? expanded ? <ChevronDown className="h-3 w-3 text-white/50" /> : <ChevronRight className="h-3 w-3 text-white/25" />
-            : <span className="h-1 w-1 rounded-full bg-white/15" />}
+            ? <ChevronRight className="h-3 w-3 transition-transform duration-200" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", color: expanded ? nodeCs.iconColor : "rgba(255,255,255,0.3)" }} />
+            : <span className="h-1 w-1 rounded-full" style={{ backgroundColor: `${nodeCs.iconColor}30` }} />}
         </button>
 
         <button type="button" onClick={() => onSelect(node)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
@@ -2495,29 +2618,19 @@ function SortableTreeNode({
       </div>
 
       {expanded && (
-        <div className="ml-[18px]" style={{ borderLeft: `1px solid ${nodeCs.iconColor}20` }}>
+        <div className="ml-[16px]" style={{ borderLeft: `1px solid ${nodeCs.iconColor}18` }}>
           {hasChildren && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onDragEndChildren(e, node.id)}>
               <SortableContext items={node.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                 {node.children.map((child) => (
                   <SortableTreeNode
-                  key={child.id}
-                  node={child}
-                  selectedId={selectedId}
-                  expandedIds={expandedIds}
-                  depth={depth + 1}
-                  sensors={sensors}
-                  canEdit={canEdit}
-                  onSelect={onSelect}
-                  onToggle={onToggle}
-                  onAdd={onAdd}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onDragEndChildren={onDragEndChildren}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+                    key={child.id} node={child} selectedId={selectedId} expandedIds={expandedIds}
+                    depth={depth + 1} sensors={sensors} canEdit={canEdit}
+                    onSelect={onSelect} onToggle={onToggle} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDragEndChildren={onDragEndChildren}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       )}
