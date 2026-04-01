@@ -9,7 +9,7 @@ import {
   FileText, Loader2, Check, AlertCircle,
   Link as LinkIcon, Video, FileVideo, LayoutList, Search,
   FolderPlus, Home, GripVertical, BookOpen, Layers, Sparkles,
-  Building2, Calendar, Clock, GraduationCap, ImagePlus, LayoutGrid, Link2,
+  Building2, Calendar, Clock, GraduationCap, ImagePlus, LayoutGrid, Link2, RotateCcw,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -2977,19 +2977,19 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
 
       <div className="relative z-10 flex items-center gap-1.5">
         {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
-          <span className="flex-shrink-0 rounded-lg bg-orange-500/10 border border-orange-500/15 px-2 py-0.5 text-[9px] font-bold text-orange-400/80">⏳ En attente</span>
+          <span className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-orange-500/10 border border-orange-500/15 px-2 py-0.5 text-[9px] font-bold text-orange-400/80"><RotateCcw className="h-2.5 w-2.5" /> En attente d&apos;actualisation</span>
         )}
         {cours.actualisation === "aucun_changement" && (
-          <span className="flex-shrink-0 rounded-lg bg-white/[0.03] border border-white/8 px-2 py-0.5 text-[9px] font-bold text-white/30">= Inchangé</span>
+          <span className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-white/[0.03] border border-white/8 px-2 py-0.5 text-[9px] font-bold text-white/30"><RotateCcw className="h-2.5 w-2.5" /> Aucun changement</span>
         )}
         {cours.actualisation === "actualisation" && (
-          <span className="flex-shrink-0 rounded-lg bg-[#4fabdb]/10 border border-[#4fabdb]/15 px-2 py-0.5 text-[9px] font-bold text-[#4fabdb]/80">↑ Actualisé</span>
+          <span className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-[#4fabdb]/10 border border-[#4fabdb]/15 px-2 py-0.5 text-[9px] font-bold text-[#4fabdb]/80"><RotateCcw className="h-2.5 w-2.5" /> Actualisation classique</span>
         )}
         {cours.actualisation === "changements_notables" && (
-          <span className="flex-shrink-0 rounded-lg bg-amber-500/10 border border-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-400/80">⚠ Changements</span>
+          <span className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-amber-500/10 border border-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-400/80"><RotateCcw className="h-2.5 w-2.5" /> Changements notables</span>
         )}
         {cours.actualisation === "nouvelle_fiche" && (
-          <span className="flex-shrink-0 rounded-lg bg-green-500/10 border border-green-500/15 px-2 py-0.5 text-[9px] font-bold text-green-400/80">★ Nouvelle fiche</span>
+          <span className="flex-shrink-0 flex items-center gap-1 rounded-lg bg-green-500/10 border border-green-500/15 px-2 py-0.5 text-[9px] font-bold text-green-400/80"><RotateCcw className="h-2.5 w-2.5" /> Nouvelle fiche</span>
         )}
 
         {cours.visible ? (
