@@ -230,12 +230,6 @@ export function PedagogicalTeamSection({
         ))}
       </div>
 
-      {/* Coaching section */}
-      <CoachingAssignments
-        universityId={universityId}
-        users={users}
-        groupes={groupes}
-      />
     </div>
   );
 }

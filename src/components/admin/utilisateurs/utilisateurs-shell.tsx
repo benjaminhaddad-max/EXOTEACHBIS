@@ -736,6 +736,8 @@ export function UtilisateursShell({
                           {/* Members — separated by role */}
                           <InlineClassMembers
                             members={members}
+                            groupeId={g.id}
+                            allCoaches={users.filter(u => u.role === "coach")}
                             groupeColor={g.color}
                             onManage={() => { setView("groupe"); setSelectedGroupeId(g.id); setSelectedDossierId(null); }}
                             onClickUser={(u) => setModal({ type: "edit_user", user: u })}
@@ -2391,11 +2393,40 @@ function ContentAccessTree({
 
 // ─── MembresTab ───────────────────────────────────────────────────────────────
 
-function InlineClassMembers({ members, groupeColor, onManage, onClickUser }: { members: Profile[]; groupeColor: string; onManage: () => void; onClickUser?: (u: Profile) => void }) {
+function InlineClassMembers({ members, groupeId, allCoaches, groupeColor, onManage, onClickUser }: { members: Profile[]; groupeId: string; allCoaches: Profile[]; groupeColor: string; onManage: () => void; onClickUser?: (u: Profile) => void }) {
   const [search, setSearch] = useState("");
   const [elevesExpanded, setElevesExpanded] = useState(false);
+  // Coach assignments for this class
+  const [coachIds, setCoachIds] = useState<Set<string>>(new Set());
+  const [coachLoaded, setCoachLoaded] = useState(false);
+  const [showCoachAdd, setShowCoachAdd] = useState(false);
+  const [addCoachId, setAddCoachId] = useState("");
 
-  const profs = members.filter(u => ["prof", "coach"].includes(u.role));
+  useEffect(() => {
+    const sb = createBrowserClient();
+    sb.from("coach_groupe_assignments").select("coach_id").eq("groupe_id", groupeId).then(({ data }) => {
+      setCoachIds(new Set((data ?? []).map(r => r.coach_id)));
+      setCoachLoaded(true);
+    });
+  }, [groupeId]);
+
+  const assignedCoaches = allCoaches.filter(c => coachIds.has(c.id));
+  const availableCoaches = allCoaches.filter(c => !coachIds.has(c.id));
+
+  const toggleCoach = (coachId: string, add: boolean) => {
+    const sb = createBrowserClient();
+    if (add) {
+      setCoachIds(prev => new Set([...prev, coachId]));
+      sb.from("coach_groupe_assignments").upsert({ coach_id: coachId, groupe_id: groupeId }, { onConflict: "coach_id,groupe_id" }).then(() => {});
+    } else {
+      setCoachIds(prev => { const n = new Set(prev); n.delete(coachId); return n; });
+      sb.from("coach_groupe_assignments").delete().eq("coach_id", coachId).eq("groupe_id", groupeId).then(() => {});
+    }
+    setShowCoachAdd(false);
+    setAddCoachId("");
+  };
+
+  const profs = members.filter(u => ["prof"].includes(u.role));
   const eleves = members.filter(u => u.role === "eleve");
   const admins = members.filter(u => ["admin", "superadmin"].includes(u.role));
 
@@ -2452,13 +2483,69 @@ function InlineClassMembers({ members, groupeColor, onManage, onClickUser }: { m
         <p className="text-[10px] text-gray-400 px-2 py-2">Aucun membre</p>
       ) : (
         <div className="space-y-3 px-1">
-          {/* Profs & Coachs */}
+          {/* Professeurs */}
           {filteredProfs.length > 0 && (
             <div>
-              <p className="text-[9px] font-bold uppercase text-amber-500 mb-1 px-1">Professeurs & Coachs ({filteredProfs.length})</p>
+              <p className="text-[9px] font-bold uppercase text-amber-500 mb-1 px-1">Professeurs ({filteredProfs.length})</p>
               <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
                 {filteredProfs.map(u => <MemberCard key={u.id} u={u} color="#D97706" />)}
               </div>
+            </div>
+          )}
+
+          {/* Coachs — from coach_groupe_assignments */}
+          {coachLoaded && (
+            <div>
+              <div className="flex items-center justify-between mb-1 px-1">
+                <p className="text-[9px] font-bold uppercase text-orange-400">Coachs ({assignedCoaches.length})</p>
+                {!showCoachAdd && (
+                  <button onClick={() => setShowCoachAdd(true)} className="text-[9px] font-medium text-blue-600 hover:text-blue-800">+ Ajouter</button>
+                )}
+              </div>
+              {assignedCoaches.length > 0 && (
+                <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                  {assignedCoaches.filter(filterUser).map(u => (
+                    <div key={u.id} className="relative group/coachcard">
+                      <MemberCard u={u} color="#EA580C" />
+                      <button
+                        onClick={() => toggleCoach(u.id, false)}
+                        className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover/coachcard:opacity-100 transition-opacity"
+                        title="Retirer"
+                      >
+                        <X size={8} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {assignedCoaches.length === 0 && !showCoachAdd && (
+                <p className="text-[10px] text-gray-400 px-1">Aucun coach assigné</p>
+              )}
+              {showCoachAdd && (
+                <div className="flex items-center gap-2 mt-1 px-1">
+                  <select
+                    autoFocus
+                    value={addCoachId}
+                    onChange={e => setAddCoachId(e.target.value)}
+                    className="flex-1 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-100 bg-white"
+                  >
+                    <option value="">Choisir un coach...</option>
+                    {availableCoaches.map(c => (
+                      <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => { if (addCoachId) toggleCoach(addCoachId, true); }}
+                    disabled={!addCoachId}
+                    className="text-[10px] px-2.5 py-1.5 rounded-lg bg-orange-500 text-white font-medium disabled:opacity-40"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => { setShowCoachAdd(false); setAddCoachId(""); }} className="text-[10px] text-gray-500 hover:text-gray-700">
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
