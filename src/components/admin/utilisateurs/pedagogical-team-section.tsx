@@ -36,14 +36,23 @@ export function PedagogicalTeamSection({
 }: PedagogicalTeamSectionProps) {
   const supabase = createClient();
 
-  // Find all "subject" dossiers under the university's semesters
-  const matieres = useMemo(() => {
-    const semesters = dossiers.filter(d => d.parent_id === universityId);
-    const semesterIds = new Set(semesters.map(s => s.id));
-    return dossiers
-      .filter(d => d.parent_id && semesterIds.has(d.parent_id) && d.dossier_type === "subject")
-      .sort((a, b) => a.name.localeCompare(b.name)) as (Dossier & { id: string; name: string; dossier_id: string })[];
+  // Find semesters and their subject children, grouped
+  const semestersWithMatieres = useMemo(() => {
+    const semesters = dossiers
+      .filter(d => d.parent_id === universityId)
+      .sort((a, b) => a.order_index - b.order_index);
+    return semesters
+      .map(sem => ({
+        semester: sem,
+        matieres: dossiers
+          .filter(d => d.parent_id === sem.id && d.dossier_type === "subject")
+          .sort((a, b) => a.order_index - b.order_index),
+      }))
+      .filter(g => g.matieres.length > 0);
   }, [dossiers, universityId]);
+
+  // Flat list for compatibility
+  const matieres = useMemo(() => semestersWithMatieres.flatMap(g => g.matieres), [semestersWithMatieres]);
 
   // Get all profs
   const profs = useMemo(() => users.filter(u => u.role === "prof" || u.role === "admin" || u.role === "superadmin" || u.role === "coach"), [users]);
@@ -97,19 +106,23 @@ export function PedagogicalTeamSection({
     <div className="mt-6 pt-4 border-t border-gray-200">
       <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Équipe pédagogique</h3>
 
-      <div className="space-y-3">
-        {matieres.map(mat => {
-          const assignments = pmByMatiere.get(mat.id) || [];
-          return (
-            <details key={mat.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden group/mat">
-              <summary className="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors list-none [&::-webkit-details-marker]:hidden">
-                <ChevronDown size={12} className="text-gray-400 transition-transform group-open/mat:-rotate-180 shrink-0" />
-                <BookOpen size={14} className="text-emerald-500 shrink-0" />
-                <span className="text-sm font-medium text-gray-800 flex-1">{mat.name}</span>
-                <span className="text-[10px] text-gray-400">{assignments.length} prof{assignments.length !== 1 ? "s" : ""}</span>
-              </summary>
+      <div className="space-y-5">
+        {semestersWithMatieres.map(({ semester, matieres: semMatieres }) => (
+          <div key={semester.id}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-1">{semester.name}</p>
+            <div className="space-y-2">
+              {semMatieres.map(mat => {
+                const assignments = pmByMatiere.get(mat.id) || [];
+                return (
+                  <details key={mat.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden group/mat">
+                    <summary className="flex items-center gap-2 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                      <ChevronDown size={12} className="text-gray-400 transition-transform group-open/mat:-rotate-180 shrink-0" />
+                      <BookOpen size={14} className="text-emerald-500 shrink-0" />
+                      <span className="text-sm font-medium text-gray-800 flex-1">{mat.name}</span>
+                      <span className="text-[10px] text-gray-400">{assignments.length} prof{assignments.length !== 1 ? "s" : ""}</span>
+                    </summary>
 
-              <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+                    <div className="border-t border-gray-100 px-4 py-3 space-y-3">
                 {(["cours", "qa", "contenu"] as const).map(roleType => {
                   const config = ROLE_CONFIG[roleType];
                   const Icon = config.icon;
@@ -208,10 +221,13 @@ export function PedagogicalTeamSection({
                     </div>
                   );
                 })}
-              </div>
-            </details>
-          );
-        })}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
