@@ -100,6 +100,146 @@ function ImageUploadBtn({
   );
 }
 
+// ─── Inline Question Editor (in-place editing inside serie) ───────────────
+
+function InlineQuestionEditor({
+  question: q,
+  options: initialOpts,
+  coursId,
+  onSaved,
+}: {
+  question: QuestionFull;
+  options: any[];
+  coursId: string;
+  onSaved: () => void;
+}) {
+  const [text, setText] = useState(q.text);
+  const [explanation, setExplanation] = useState(q.explanation ?? "");
+  const [difficulty, setDifficulty] = useState(q.difficulty ?? 2);
+  const [imageUrl, setImageUrl] = useState<string | null>((q as any).image_url ?? null);
+  const [options, setOptions] = useState(
+    initialOpts.map((o: any) => ({
+      label: o.label as string,
+      text: o.text as string,
+      is_correct: o.is_correct as boolean,
+      justification: (o.justification ?? "") as string,
+      image_url: (o.image_url ?? null) as string | null,
+    }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  const setOpt = (i: number, field: string, value: any) => {
+    setOptions((prev) => prev.map((o, idx) => idx === i ? { ...o, [field]: value } : o));
+    setDirty(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await updateQuestion(q.id, {
+      text, explanation, type: "qcm_multiple", difficulty,
+      cours_id: coursId, matiere_id: null, image_url: imageUrl, options,
+    });
+    setSaving(false);
+    setSaved(true);
+    setDirty(false);
+    setTimeout(() => setSaved(false), 2000);
+    onSaved();
+  };
+
+  return (
+    <div className="px-3 pb-3 pt-2 border-t border-white/8 space-y-3 bg-[#0a1628] rounded-b-xl">
+      {/* Énoncé */}
+      <div>
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1 block">Énoncé</label>
+        <textarea
+          value={text}
+          onChange={(e) => { setText(e.target.value); setDirty(true); }}
+          rows={2}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-white/25 resize-none"
+        />
+        {imageUrl && (
+          <div className="mt-1.5 flex justify-center p-2 bg-white/5 rounded-lg">
+            <img src={imageUrl} alt="" className="max-h-32 object-contain" />
+          </div>
+        )}
+      </div>
+
+      {/* Propositions */}
+      <div className="space-y-2">
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider block">Propositions</label>
+        {options.map((opt, i) => (
+          <div key={opt.label} className={`rounded-lg border overflow-hidden ${opt.is_correct ? "border-green-500/30 bg-green-500/8" : "border-red-500/20 bg-red-500/5"}`}>
+            <div className="flex items-center gap-2 px-2.5 py-2">
+              <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${opt.is_correct ? "bg-green-500 text-white" : "bg-red-500/20 text-red-400"}`}>{opt.label}</span>
+              <input
+                value={opt.text}
+                onChange={(e) => setOpt(i, "text", e.target.value)}
+                className="flex-1 bg-transparent text-xs text-white placeholder-white/20 focus:outline-none min-w-0"
+                placeholder={`Proposition ${opt.label}...`}
+              />
+              <div className="flex gap-1 shrink-0">
+                <button type="button" onClick={() => setOpt(i, "is_correct", true)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${opt.is_correct ? "bg-green-500 text-white" : "bg-white/10 text-white/30 hover:text-white/50"}`}>V</button>
+                <button type="button" onClick={() => setOpt(i, "is_correct", false)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${!opt.is_correct ? "bg-red-500 text-white" : "bg-white/10 text-white/30 hover:text-white/50"}`}>F</button>
+              </div>
+            </div>
+            <div className="px-2.5 pb-2">
+              <input
+                value={opt.justification}
+                onChange={(e) => setOpt(i, "justification", e.target.value)}
+                className="w-full bg-white/5 border border-white/8 rounded px-2 py-1 text-[10px] text-white/50 placeholder-white/15 focus:outline-none focus:text-white/70"
+                placeholder={`Justification ${opt.label}...`}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Difficulté */}
+      <div>
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1 block">Difficulté</label>
+        <div className="flex gap-1.5">
+          {[1, 2, 3, 4, 5].map((d) => (
+            <button key={d} type="button" onClick={() => { setDifficulty(d); setDirty(true); }}
+              className={`flex-1 py-1 rounded text-[10px] font-bold border transition-colors ${difficulty === d ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/8 text-white/25 hover:text-white/40"}`}>{d}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Explication générale */}
+      <div>
+        <label className="text-[9px] font-semibold text-white/30 uppercase tracking-wider mb-1 block">Explication générale</label>
+        <textarea
+          value={explanation}
+          onChange={(e) => { setExplanation(e.target.value); setDirty(true); }}
+          rows={2}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white/60 placeholder-white/15 focus:outline-none focus:text-white/80 resize-none"
+          placeholder="Explication optionnelle..."
+        />
+      </div>
+
+      {/* Save */}
+      <button
+        onClick={handleSave}
+        disabled={saving || !dirty}
+        className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-colors ${
+          saved
+            ? "bg-green-600 text-white"
+            : dirty
+              ? "bg-[#C9A84C] text-[#0e1e35] hover:bg-[#b8993f]"
+              : "bg-white/8 text-white/20 cursor-not-allowed"
+        } disabled:opacity-50`}
+      >
+        {saving ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : <Check size={12} />}
+        {saved ? "Enregistré !" : "Enregistrer les modifications"}
+      </button>
+    </div>
+  );
+}
+
 // ─── Question form modal ──────────────────────────────────────────────────
 
 function QuestionModal({
@@ -603,35 +743,12 @@ function SerieEditorModal({
                       </div>
                     </div>
                     {isOpen && (
-                      <div className="px-3 pb-3 pt-2 border-t border-white/8 space-y-1.5 bg-white/95 rounded-b-xl">
-                        {(q as any).image_url && (
-                          <div className="flex justify-center py-3 px-4 mb-2 bg-white rounded-xl border border-gray-100">
-                            <img src={(q as any).image_url} alt="" className="max-h-52 object-contain" />
-                          </div>
-                        )}
-                        {opts.map((opt: any) => (
-                          <div key={opt.label} className={`text-xs px-3 py-2.5 rounded-lg flex items-start gap-2.5 ${opt.is_correct ? "bg-green-500 text-white" : "bg-red-50 text-gray-700 border border-red-100"}`}>
-                            <span className={`font-bold shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${opt.is_correct ? "bg-white/20 text-white" : "bg-red-100 text-red-600"}`}>{opt.label}</span>
-                            <div className="flex-1 min-w-0">
-                              <MathText text={opt.text} className="font-medium" />
-                              {opt.image_url && <img src={opt.image_url} alt="" className="mt-1 max-h-16 rounded" />}
-                              {opt.justification && (
-                                <p className={`text-[11px] mt-1 leading-snug ${opt.is_correct ? "text-white/80" : "text-gray-500"}`}>
-                                  💡 {opt.justification}
-                                </p>
-                              )}
-                            </div>
-                            <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${opt.is_correct ? "bg-white/20 text-white" : "bg-red-100 text-red-600"}`}>
-                              {opt.is_correct ? "VRAI" : "FAUX"}
-                            </span>
-                          </div>
-                        ))}
-                        {q.explanation && (
-                          <p className="text-[11px] text-gray-500 italic pt-2 border-t border-gray-200 flex gap-1.5 items-start">
-                            <span className="text-amber-500">💡</span>{q.explanation}
-                          </p>
-                        )}
-                      </div>
+                      <InlineQuestionEditor
+                        question={q}
+                        options={opts}
+                        coursId={coursId}
+                        onSaved={loadAll}
+                      />
                     )}
                   </div>
                 );
