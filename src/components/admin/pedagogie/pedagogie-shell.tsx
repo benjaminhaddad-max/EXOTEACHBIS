@@ -551,8 +551,8 @@ export function PedagogieShell({
 
       {/* ── LEFT: Arborescence ── */}
       <div
-        className="flex flex-shrink-0 flex-col border-r border-white/8" style={{ backgroundColor: "#0a1628" }}
-        style={{ width: treeWidth }}
+        className="flex flex-shrink-0 flex-col border-r border-white/8"
+        style={{ width: treeWidth, backgroundColor: "#0a1628" }}
       >
         <div className="flex items-center justify-between border-b border-white/8 px-4 py-3" style={{ background: "linear-gradient(135deg, #12314d 0%, #0e1e35 100%)" }}>
           <h2 className="text-sm font-bold text-white/90 tracking-wide">Arborescence</h2>
