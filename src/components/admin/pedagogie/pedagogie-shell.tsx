@@ -3155,6 +3155,10 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
           : "Racine métier de la plateforme"}
       </div>
 
+      <FormField label="Nom *">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: PREPA PASS, Université Paris-Cité, S1, UE1 Chimie..." required className={inputCls} />
+      </FormField>
+
       {!!initialData && (
         <FormField label="Parent">
           <select
@@ -3220,9 +3224,6 @@ function DossierForm({ title, allDossiers, parentDossier, initialData, onSubmit,
         </FormField>
       )}
 
-      <FormField label="Nom *">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Université Paris-Cité, S1, Oraux, UE1 Chimie..." required className={inputCls} />
-      </FormField>
       {nameSuggestions.length > 0 && (
         <div className="rounded-xl border border-gold/20 bg-gold/5 px-3 py-2">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gold-dark/80">
