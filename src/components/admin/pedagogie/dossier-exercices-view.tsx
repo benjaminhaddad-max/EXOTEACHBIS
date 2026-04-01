@@ -33,10 +33,10 @@ export type SerieSummary = {
 export type CoursBasic = { id: string; name: string; dossier_id: string; etiquettes?: string[] };
 
 const TYPE_CONFIG: Record<SerieType, { label: string; icon: React.ReactNode; svgIcon: React.ReactNode; color: string; textColor: string; bg: string; border: string; gradient: string; glowColor: string }> = {
-  annales:             { label: "Annales corrigées",   icon: <BookOpen size={14} />,   svgIcon: <AnnalesIcon className="h-4 w-4" />,   color: "text-amber-300",  textColor: "#FCD34D", bg: "bg-amber-500/15",  border: "border-amber-500/30", gradient: "linear-gradient(135deg, rgba(252,211,77,0.12) 0%, rgba(217,119,6,0.04) 100%)", glowColor: "rgba(252,211,77,0.15)" },
-  qcm_supplementaires: { label: "QCM supplémentaires", icon: <PlusCircle size={14} />, svgIcon: <QcmIcon className="h-4 w-4" />,       color: "text-teal-300",   textColor: "#5EEAD4", bg: "bg-teal-500/15",   border: "border-teal-500/30", gradient: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(20,184,166,0.04) 100%)", glowColor: "rgba(94,234,212,0.15)" },
-  concours_blanc:      { label: "Concours blanc",      icon: <Trophy size={14} />,     svgIcon: <ConcoursIcon className="h-4 w-4" />,  color: "text-red-300",    textColor: "#FCA5A5", bg: "bg-red-500/15",    border: "border-red-500/30", gradient: "linear-gradient(135deg, rgba(252,165,165,0.12) 0%, rgba(239,68,68,0.04) 100%)", glowColor: "rgba(252,165,165,0.15)" },
-  revision:            { label: "Révision",            icon: <BookMarked size={14} />, svgIcon: <RevisionIcon className="h-4 w-4" />,  color: "text-purple-300", textColor: "#C4B5FD", bg: "bg-purple-500/15", border: "border-purple-500/30", gradient: "linear-gradient(135deg, rgba(196,181,253,0.12) 0%, rgba(139,92,246,0.04) 100%)", glowColor: "rgba(196,181,253,0.15)" },
+  annales:             { label: "Annales corrigées",   icon: <BookOpen size={14} />,   svgIcon: <AnnalesIcon className="h-[18px] w-[18px]" />,   color: "text-amber-300",  textColor: "#FCD34D", bg: "bg-amber-500/15",  border: "border-amber-500/30", gradient: "linear-gradient(135deg, rgba(252,211,77,0.15) 0%, rgba(217,119,6,0.05) 100%)", glowColor: "rgba(252,211,77,0.18)" },
+  qcm_supplementaires: { label: "QCM supplémentaires", icon: <PlusCircle size={14} />, svgIcon: <QcmIcon className="h-[18px] w-[18px]" />,       color: "text-teal-300",   textColor: "#5EEAD4", bg: "bg-teal-500/15",   border: "border-teal-500/30", gradient: "linear-gradient(135deg, rgba(94,234,212,0.15) 0%, rgba(20,184,166,0.05) 100%)", glowColor: "rgba(94,234,212,0.18)" },
+  concours_blanc:      { label: "Concours blanc",      icon: <Trophy size={14} />,     svgIcon: <ConcoursIcon className="h-[18px] w-[18px]" />,  color: "text-red-300",    textColor: "#FCA5A5", bg: "bg-red-500/15",    border: "border-red-500/30", gradient: "linear-gradient(135deg, rgba(252,165,165,0.15) 0%, rgba(239,68,68,0.05) 100%)", glowColor: "rgba(252,165,165,0.18)" },
+  revision:            { label: "Révision",            icon: <BookMarked size={14} />, svgIcon: <RevisionIcon className="h-[18px] w-[18px]" />,  color: "text-purple-300", textColor: "#C4B5FD", bg: "bg-purple-500/15", border: "border-purple-500/30", gradient: "linear-gradient(135deg, rgba(196,181,253,0.15) 0%, rgba(139,92,246,0.05) 100%)", glowColor: "rgba(196,181,253,0.18)" },
 };
 
 const TYPES: SerieType[] = ["annales", "qcm_supplementaires", "concours_blanc", "revision"];
@@ -881,22 +881,22 @@ export function DossierExercicesView({
       </div>
 
       {/* Type Tabs */}
-      <div className="shrink-0 flex gap-1 px-4 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="shrink-0 flex gap-1.5 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         {TYPES.filter((t) => !hiddenTabs?.includes(t)).map((t) => {
           const cfg = TYPE_CONFIG[t];
           const count = seriesByType(t).length;
           const isActive = activeTab === t;
           return (
             <button key={t} onClick={() => setActiveTab(t)}
-              className={`relative flex-1 flex flex-col items-center gap-1.5 py-2.5 px-2 rounded-xl transition-all duration-200 ${isActive ? "" : "hover:bg-white/[0.03]"}`}
-              style={isActive ? { background: cfg.gradient, boxShadow: `0 0 16px ${cfg.glowColor}`, border: `1px solid ${cfg.textColor}20` } : { border: "1px solid transparent" }}>
-              <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-200 ${isActive ? "" : "opacity-40"}`}
-                style={isActive ? { background: `${cfg.textColor}18` } : {}}>
+              className={`relative flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all duration-200 ${isActive ? "" : "hover:bg-white/[0.05]"}`}
+              style={isActive ? { background: cfg.gradient, boxShadow: `0 0 20px ${cfg.glowColor}`, border: `1px solid ${cfg.textColor}30` } : { border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200"
+                style={isActive ? { background: `${cfg.textColor}20` } : { background: "rgba(255,255,255,0.04)" }}>
                 {cfg.svgIcon}
               </div>
-              <span className={`text-[8px] font-extrabold uppercase tracking-[0.1em] leading-tight transition-colors ${isActive ? cfg.color : "text-white/30"}`}>{cfg.label}</span>
+              <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight transition-colors ${isActive ? cfg.color : "text-white/50"}`}>{cfg.label}</span>
               {count > 0 && (
-                <span className={`text-[8px] rounded-md px-1.5 py-0.5 font-extrabold ${isActive ? cfg.bg + " " + cfg.color : "bg-white/[0.04] text-white/20"}`}>{count}</span>
+                <span className={`text-[9px] rounded-md px-1.5 py-0.5 font-bold ${isActive ? cfg.bg + " " + cfg.color : "bg-white/[0.06] text-white/35"}`}>{count}</span>
               )}
               {isActive && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${cfg.textColor}, transparent)` }} />}
             </button>
@@ -904,13 +904,13 @@ export function DossierExercicesView({
         })}
         {!hiddenTabs?.includes("flashcards") && (
           <button onClick={() => setActiveTab("flashcards")}
-            className={`relative flex-1 flex flex-col items-center gap-1.5 py-2.5 px-2 rounded-xl transition-all duration-200 ${activeTab === "flashcards" ? "" : "hover:bg-white/[0.03]"}`}
-            style={activeTab === "flashcards" ? { background: "linear-gradient(135deg, rgba(165,180,252,0.12) 0%, rgba(99,102,241,0.04) 100%)", boxShadow: "0 0 16px rgba(165,180,252,0.15)", border: "1px solid rgba(165,180,252,0.2)" } : { border: "1px solid transparent" }}>
-            <div className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-200 ${activeTab === "flashcards" ? "" : "opacity-40"}`}
-              style={activeTab === "flashcards" ? { background: "rgba(165,180,252,0.18)" } : {}}>
+            className={`relative flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl transition-all duration-200 ${activeTab === "flashcards" ? "" : "hover:bg-white/[0.05]"}`}
+            style={activeTab === "flashcards" ? { background: "linear-gradient(135deg, rgba(165,180,252,0.12) 0%, rgba(99,102,241,0.04) 100%)", boxShadow: "0 0 20px rgba(165,180,252,0.15)", border: "1px solid rgba(165,180,252,0.25)" } : { border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200"
+              style={activeTab === "flashcards" ? { background: "rgba(165,180,252,0.2)" } : { background: "rgba(255,255,255,0.04)" }}>
               <FlashcardIcon className="h-4 w-4" />
             </div>
-            <span className={`text-[8px] font-extrabold uppercase tracking-[0.1em] leading-tight transition-colors ${activeTab === "flashcards" ? "text-indigo-300" : "text-white/30"}`}>Flashcards</span>
+            <span className={`text-[9px] font-bold uppercase tracking-wider leading-tight transition-colors ${activeTab === "flashcards" ? "text-indigo-300" : "text-white/50"}`}>Flashcards</span>
             {activeTab === "flashcards" && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: "linear-gradient(90deg, transparent, #A5B4FC, transparent)" }} />}
           </button>
         )}
