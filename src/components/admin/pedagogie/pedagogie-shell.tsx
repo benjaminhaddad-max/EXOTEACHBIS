@@ -127,6 +127,7 @@ export function PedagogieShell({
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isFormPending, startFormTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState<{ label: string; onConfirm: () => void } | null>(null);
   const [coursViewMode, setCoursViewMode] = useState<"cards" | "list">(() => {
     if (typeof window !== "undefined") return (localStorage.getItem("pedagogie-cours-view") as "cards" | "list") || "cards";
@@ -506,7 +507,7 @@ export function PedagogieShell({
   };
 
   const handleAction = async (action: () => Promise<{ error?: string; success?: boolean }>) => {
-    startTransition(async () => {
+    startFormTransition(async () => {
       const result = await action();
       if (result.error) {
         showToast(result.error, "error");
@@ -1422,7 +1423,7 @@ export function PedagogieShell({
                 });
               }}
               onClose={() => setModal(null)}
-              isPending={isPending}
+              isPending={isFormPending}
               formationOffers={formationOffers}
               dossierNamePresets={dossierNamePresets}
             />
@@ -1436,7 +1437,7 @@ export function PedagogieShell({
               initialData={modal.dossier}
               onSubmit={(data) => handleAction(() => updateDossier(modal.dossier.id, data))}
               onClose={() => setModal(null)}
-              isPending={isPending}
+              isPending={isFormPending}
               formationOffers={formationOffers}
               dossierNamePresets={dossierNamePresets}
             />
@@ -1449,7 +1450,7 @@ export function PedagogieShell({
               defaultType={modal.ressourceType}
               onSubmit={(data) => handleAction(() => createRessource({ ...data, dossier_id: modal.dossierId }))}
               onClose={() => setModal(null)}
-              isPending={isPending}
+              isPending={isFormPending}
             />
           )}
 
@@ -1460,7 +1461,7 @@ export function PedagogieShell({
               initialData={modal.ressource}
               onSubmit={(data) => handleAction(() => updateRessource(modal.ressource.id, data))}
               onClose={() => setModal(null)}
-              isPending={isPending}
+              isPending={isFormPending}
             />
           )}
 
@@ -1473,7 +1474,7 @@ export function PedagogieShell({
               initialData={inlineCoursSection ? { etiquettes: [inlineCoursSection] } : undefined}
               onSubmit={(data) => { setInlineCoursSection(null); handleAction(() => createCoursInDossier({ ...data, dossier_id: modal.dossierId })); }}
               onClose={() => { setInlineCoursSection(null); setModal(null); }}
-              isPending={isPending}
+              isPending={isFormPending}
             />
           )}
 
@@ -1521,7 +1522,7 @@ export function PedagogieShell({
                 });
               }}
               onClose={() => setModal(null)}
-              isPending={isPending}
+              isPending={isFormPending}
             />
           )}
 
@@ -1614,7 +1615,7 @@ export function PedagogieShell({
               coursIds={modal.coursIds}
               sourceDossierId={modal.sourceDossierId}
               allDossiers={allDossiers as Dossier[]}
-              isPending={isPending}
+              isPending={isFormPending}
               onConfirm={(targetIds) => {
                 startTransition(async () => {
                   let totalCount = 0;
@@ -1641,7 +1642,7 @@ export function PedagogieShell({
           {modal.type === "missing_cours" && (
             <MissingCoursModal
               dossierId={modal.dossierId}
-              isPending={isPending}
+              isPending={isFormPending}
               onImport={(coursIds) => {
                 startTransition(async () => {
                   const result = await linkCoursToOtherDossier(coursIds, modal.dossierId);
