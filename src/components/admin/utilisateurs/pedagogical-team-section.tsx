@@ -245,7 +245,7 @@ export function PedagogicalTeamSection({
 function CoachingAssignments({ universityId, users, groupes }: { universityId: string; users: Profile[]; groupes: Groupe[] }) {
   const supabase = createClient();
   const uniClasses = useMemo(() => groupes.filter(g => g.formation_dossier_id === universityId), [groupes, universityId]);
-  const coaches = useMemo(() => users.filter(u => u.role === "coach" || u.role === "admin" || u.role === "superadmin"), [users]);
+  const coaches = useMemo(() => users.filter(u => u.role === "coach"), [users]);
 
   const [assignments, setAssignments] = useState<{ coach_id: string; groupe_id: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
