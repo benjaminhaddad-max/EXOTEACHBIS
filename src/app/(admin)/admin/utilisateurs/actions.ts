@@ -55,6 +55,7 @@ export async function updateUserAdminProfile(data: {
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
   matiere_roles?: { matiere_id: string; role_type: string; groupe_id?: string | null }[];
+  etiquettes?: string[];
   niveau_initial?: number | null;
   mental_initial?: number | null;
   niveau_progressif?: number | null;
@@ -143,6 +144,9 @@ export async function updateUserAdminProfile(data: {
       data.access_dossier_id !== undefined
         ? data.access_dossier_id
         : uniqueAccessIds[0] ?? null;
+  }
+  if (data.etiquettes !== undefined) {
+    profileUpdate.etiquettes = data.etiquettes;
   }
 
   const { error: profileError } = await admin

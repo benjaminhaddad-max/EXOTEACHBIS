@@ -69,6 +69,7 @@ type AdminUserChanges = {
   excluded_access_dossier_ids?: string[];
   matiere_ids?: string[];
   matiere_roles?: { matiere_id: string; role_type: string; groupe_id?: string | null }[];
+  etiquettes?: string[];
   niveau_initial?: number | null;
   mental_initial?: number | null;
   niveau_progressif?: number | null;
@@ -3796,6 +3797,8 @@ function EditUserModal({
   const [email, setEmail] = useState(user.email ?? "");
   const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState(user.role);
+  const [etiquettes, setEtiquettes] = useState<string[]>(user.etiquettes ?? []);
+  const [newEtiquette, setNewEtiquette] = useState("");
   const [niveauInitial, setNiveauInitial] = useState<number>(coachingProfile?.niveau_initial ?? 50);
   const [mentalInitial, setMentalInitial] = useState<number>(coachingProfile?.mental_initial ?? 50);
   const [niveauProgressif, setNiveauProgressif] = useState<number>(coachingProfile?.niveau_progressif ?? 50);
@@ -4396,6 +4399,51 @@ function EditUserModal({
             );
           })()}
 
+          {/* Étiquettes */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wide block mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>Étiquettes</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {etiquettes.map((tag, i) => (
+                <span key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+                  style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#E3C286", border: "1px solid rgba(201,168,76,0.25)" }}>
+                  {tag}
+                  <button onClick={() => setEtiquettes(prev => prev.filter((_, j) => j !== i))}
+                    className="hover:text-red-400 transition-colors"><X size={10} /></button>
+                </span>
+              ))}
+              {etiquettes.length === 0 && <span className="text-[11px] italic" style={{ color: "rgba(255,255,255,0.25)" }}>Aucune étiquette</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                value={newEtiquette}
+                onChange={e => setNewEtiquette(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && newEtiquette.trim()) {
+                    e.preventDefault();
+                    if (!etiquettes.includes(newEtiquette.trim())) setEtiquettes(prev => [...prev, newEtiquette.trim()]);
+                    setNewEtiquette("");
+                  }
+                }}
+                placeholder="Ajouter une étiquette…"
+                className="flex-1 px-3 py-1.5 rounded-lg text-[11px] text-white placeholder:text-white/25 outline-none"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
+              <button
+                onClick={() => {
+                  if (newEtiquette.trim() && !etiquettes.includes(newEtiquette.trim())) {
+                    setEtiquettes(prev => [...prev, newEtiquette.trim()]);
+                    setNewEtiquette("");
+                  }
+                }}
+                disabled={!newEtiquette.trim()}
+                className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold disabled:opacity-30 transition-colors"
+                style={{ backgroundColor: "rgba(201,168,76,0.15)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+          </div>
+
           {/* Statut Initial & Progressif — only for students */}
           {(role === "eleve") && (
             <div className="space-y-5">
@@ -4630,6 +4678,7 @@ function EditUserModal({
                   ),
                   ...qaContenuMatIds.map((id) => ({ matiere_id: id, role_type: "qa" })),
                 ],
+                etiquettes,
                 niveau_initial: niveauInitial,
                 mental_initial: mentalInitial,
                 niveau_progressif: niveauProgressif,

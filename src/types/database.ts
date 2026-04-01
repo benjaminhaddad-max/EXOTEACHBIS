@@ -26,6 +26,7 @@ export interface Profile {
   groupe_id: string | null;
   filiere_id: string | null;
   access_dossier_id: string | null;
+  etiquettes: string[];
   created_at: string;
   updated_at: string;
   // Relations
