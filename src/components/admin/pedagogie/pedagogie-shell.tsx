@@ -2598,17 +2598,14 @@ function SortableSubDossierRow({ dossier, selected, sectionBadges, onToggleSelec
           </span>
         </button>
       )}
-      {!renaming && (
-        <button
-          onClick={(e) => { e.stopPropagation(); setRenaming(true); setTimeout(() => renameRef.current?.select(), 0); }}
-          className="flex-shrink-0 rounded p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-blue-500 transition"
-          title="Renommer"
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
-      )}
-      {(onEdit || onDelete) && (
-        <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+      {!renaming && (onEdit || onDelete) && (
+        <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+          <button
+            onClick={(e) => { e.stopPropagation(); setRenaming(true); setTimeout(() => renameRef.current?.select(), 0); }}
+            className="rounded-md px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition"
+          >
+            Renommer
+          </button>
           {onEdit && <button onClick={onEdit} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>}
           {onDelete && <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>}
         </div>
@@ -2852,10 +2849,9 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => nameInputRef.current?.select(), 0); }}
-            className="flex-shrink-0 rounded p-0.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-blue-500 transition"
-            title="Renommer"
+            className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-blue-50 hover:text-blue-600 transition"
           >
-            <Pencil className="h-3 w-3" />
+            Renommer
           </button>
         </div>
       )}
