@@ -2477,14 +2477,6 @@ function SortableTreeNode({
             </SortableContext>
           </DndContext>
           )}
-          {canEdit && node.dossier_type !== "subject" && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onAdd(node.id); }}
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 ml-1 mt-0.5 mb-1 text-[10px] font-medium text-gray-400 transition hover:bg-navy/5 hover:text-navy"
-            >
-              <Plus className="h-3 w-3" /> Ajouter
-            </button>
-          )}
         </div>
       )}
     </div>
