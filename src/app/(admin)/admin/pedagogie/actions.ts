@@ -34,6 +34,20 @@ export async function createDossier(data: {
   etiquettes?: string[];
 }) {
   const supabase = await createClient();
+
+  // Auto-compute order_index to put new dossier at the end
+  let orderIndex = data.order_index;
+  if (orderIndex === undefined || orderIndex === 0) {
+    const { data: maxRow } = await supabase
+      .from("dossiers")
+      .select("order_index")
+      .eq("parent_id", data.parent_id ?? "")
+      .order("order_index", { ascending: false })
+      .limit(1)
+      .single();
+    orderIndex = (maxRow?.order_index ?? -1) + 1;
+  }
+
   const { error } = await supabase.from("dossiers").insert({
     name: data.name,
     description: data.description || null,
@@ -42,7 +56,7 @@ export async function createDossier(data: {
     color: data.color,
     icon_url: data.icon_url || null,
     parent_id: data.parent_id || null,
-    order_index: data.order_index ?? 0,
+    order_index: orderIndex,
     visible: data.visible,
     etiquettes: data.etiquettes ?? [],
   });
@@ -640,6 +654,20 @@ export async function createCoursInDossier(data: {
   etiquettes?: string[];
 }) {
   const supabase = await createClient();
+
+  // Auto-compute order_index to put new cours at the end
+  let orderIndex = data.order_index;
+  if (orderIndex === undefined || orderIndex === 0) {
+    const { data: maxRow } = await supabase
+      .from("cours")
+      .select("order_index")
+      .eq("dossier_id", data.dossier_id)
+      .order("order_index", { ascending: false })
+      .limit(1)
+      .single();
+    orderIndex = (maxRow?.order_index ?? -1) + 1;
+  }
+
   const { data: created, error } = await supabase.from("cours").insert({
     dossier_id: data.dossier_id,
     matiere_id: null,
@@ -650,7 +678,7 @@ export async function createCoursInDossier(data: {
     nb_pages: data.nb_pages ?? 0,
     etiquettes: data.etiquettes ?? [],
     tags: [],
-    order_index: data.order_index ?? 0,
+    order_index: orderIndex,
     visible: data.visible,
     version: 1,
   }).select("id").single();
