@@ -37,14 +37,14 @@ export async function createDossier(data: {
 
   // Auto-compute order_index to put new dossier at the end
   let orderIndex = data.order_index;
-  if (orderIndex === undefined || orderIndex === 0) {
-    const { data: maxRow } = await supabase
-      .from("dossiers")
-      .select("order_index")
-      .eq("parent_id", data.parent_id ?? "")
-      .order("order_index", { ascending: false })
-      .limit(1)
-      .single();
+  if (orderIndex === undefined) {
+    let query = supabase.from("dossiers").select("order_index");
+    if (data.parent_id) {
+      query = query.eq("parent_id", data.parent_id);
+    } else {
+      query = query.is("parent_id", null);
+    }
+    const { data: maxRow } = await query.order("order_index", { ascending: false }).limit(1).single();
     orderIndex = (maxRow?.order_index ?? -1) + 1;
   }
 
