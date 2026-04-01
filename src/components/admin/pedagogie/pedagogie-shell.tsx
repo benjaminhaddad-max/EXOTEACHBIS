@@ -2977,19 +2977,19 @@ function SortableCoursRow({ cours, dossierId, selected, onToggleSelect, onSelect
 
       <div className="relative z-10 flex items-center gap-1.5">
         {(!cours.actualisation || cours.actualisation === "non_actualisee") && (
-          <span className="flex-shrink-0 rounded-lg bg-orange-500/10 border border-orange-500/15 px-2 py-0.5 text-[9px] font-bold text-orange-400/80">⏳</span>
+          <span className="flex-shrink-0 rounded-lg bg-orange-500/10 border border-orange-500/15 px-2 py-0.5 text-[9px] font-bold text-orange-400/80">⏳ En attente</span>
         )}
         {cours.actualisation === "aucun_changement" && (
-          <span className="flex-shrink-0 rounded-lg bg-white/[0.03] border border-white/8 px-2 py-0.5 text-[9px] font-bold text-white/30">=</span>
+          <span className="flex-shrink-0 rounded-lg bg-white/[0.03] border border-white/8 px-2 py-0.5 text-[9px] font-bold text-white/30">= Inchangé</span>
         )}
         {cours.actualisation === "actualisation" && (
-          <span className="flex-shrink-0 rounded-lg bg-[#4fabdb]/10 border border-[#4fabdb]/15 px-2 py-0.5 text-[9px] font-bold text-[#4fabdb]/80">↑</span>
+          <span className="flex-shrink-0 rounded-lg bg-[#4fabdb]/10 border border-[#4fabdb]/15 px-2 py-0.5 text-[9px] font-bold text-[#4fabdb]/80">↑ Actualisé</span>
         )}
         {cours.actualisation === "changements_notables" && (
-          <span className="flex-shrink-0 rounded-lg bg-amber-500/10 border border-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-400/80">⚠</span>
+          <span className="flex-shrink-0 rounded-lg bg-amber-500/10 border border-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-400/80">⚠ Changements</span>
         )}
         {cours.actualisation === "nouvelle_fiche" && (
-          <span className="flex-shrink-0 rounded-lg bg-green-500/10 border border-green-500/15 px-2 py-0.5 text-[9px] font-bold text-green-400/80">★</span>
+          <span className="flex-shrink-0 rounded-lg bg-green-500/10 border border-green-500/15 px-2 py-0.5 text-[9px] font-bold text-green-400/80">★ Nouvelle fiche</span>
         )}
 
         {cours.visible ? (
