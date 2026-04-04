@@ -2026,41 +2026,42 @@ function ComptesView({
                         </td>
                       );
                     }
+                    const MAX_PILLS = 3;
                     return (
                       <td colSpan={3} className="px-4 py-2.5">
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {/* Cours section */}
-                          {hasCours && detail.cours.map(g => (
-                            <div key={`cours-${g.formation}`}>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <BookOpen size={10} style={{ color: "rgba(52,211,153,0.8)", flexShrink: 0 }} />
-                                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "rgba(52,211,153,0.9)" }}>Cours</span>
-                                <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.6)" }}>{g.formation}</span>
+                          {hasCours && detail.cours.map(g => {
+                            const shown = g.matieres.slice(0, MAX_PILLS);
+                            const rest = g.matieres.length - MAX_PILLS;
+                            return (
+                              <div key={`cours-${g.formation}`} className="flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "rgba(52,211,153,0.9)" }}>
+                                  <BookOpen size={9} /> Cours
+                                </span>
+                                <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
+                                <span className="text-[10px]" style={{ color: "rgba(52,211,153,0.6)" }}>
+                                  {shown.join(", ")}{rest > 0 ? ` +${rest}` : ""}
+                                </span>
                               </div>
-                              <div className="flex flex-wrap gap-1 pl-4">
-                                {g.matieres.map(m => (
-                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-medium" style={{ backgroundColor: "rgba(52,211,153,0.1)", color: "rgba(52,211,153,0.8)", border: "1px solid rgba(52,211,153,0.15)" }}>{m}</span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           {/* Contenu section */}
-                          {hasContenu && detail.contenu.map(g => (
-                            <div key={`contenu-${g.formation}`}>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <FileText size={10} style={{ color: "rgba(96,165,250,0.8)", flexShrink: 0 }} />
-                                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "rgba(96,165,250,0.9)" }}>Contenu</span>
-                                <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.6)" }}>{g.formation}</span>
+                          {hasContenu && detail.contenu.map(g => {
+                            const shown = g.matieres.slice(0, MAX_PILLS);
+                            const rest = g.matieres.length - MAX_PILLS;
+                            return (
+                              <div key={`contenu-${g.formation}`} className="flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(96,165,250,0.12)", color: "rgba(96,165,250,0.9)" }}>
+                                  <FileText size={9} /> Contenu
+                                </span>
+                                <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
+                                <span className="text-[10px]" style={{ color: "rgba(96,165,250,0.6)" }}>
+                                  {shown.join(", ")}{rest > 0 ? ` +${rest}` : ""}
+                                </span>
                               </div>
-                              <div className="flex flex-wrap gap-1 pl-4">
-                                {g.matieres.map(m => (
-                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-medium" style={{ backgroundColor: "rgba(96,165,250,0.1)", color: "rgba(96,165,250,0.8)", border: "1px solid rgba(96,165,250,0.15)" }}>{m}</span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </td>
                     );
