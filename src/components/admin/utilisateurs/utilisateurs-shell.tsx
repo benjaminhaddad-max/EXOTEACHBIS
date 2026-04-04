@@ -1793,11 +1793,11 @@ function ComptesView({
     return chain;
   };
 
-  // Build prof detail summaries: matières grouped by formation, split by role_type
-  type ProfFormationGroup = { formation: string; matieres: string[] };
+  // Build prof detail summaries: matières grouped by formation+university, split by role_type
+  type ProfFormationGroup = { formation: string; university: string | null; matieres: string[] };
   type ProfDetail = { cours: ProfFormationGroup[]; contenu: ProfFormationGroup[] };
   const profDetailSummary = useMemo(() => {
-    const map = new Map<string, { cours: Map<string, string[]>; contenu: Map<string, string[]> }>();
+    const map = new Map<string, { cours: Map<string, { uni: string | null; mats: string[] }>; contenu: Map<string, { uni: string | null; mats: string[] }> }>();
     for (const pm of profMatieres) {
       if (!map.has(pm.prof_id)) map.set(pm.prof_id, { cours: new Map(), contenu: new Map() });
       const entry = map.get(pm.prof_id)!;
@@ -1806,25 +1806,23 @@ function ComptesView({
       const matDossier = matiere.dossier_id ? dMap.get(matiere.dossier_id) : null;
       const chain = matDossier ? getAncestorChain(matDossier.id) : [];
       const offer = chain.find(d => d.dossier_type === "offer");
+      const uni = chain.find(d => d.dossier_type === "university");
+      const groupKey = `${offer?.name ?? "Autre"}||${uni?.name ?? ""}`;
       const formationLabel = offer?.name ?? "Autre";
-      if (pm.role_type === "cours" || !pm.role_type) {
-        if (!entry.cours.has(formationLabel)) entry.cours.set(formationLabel, []);
-        const arr = entry.cours.get(formationLabel)!;
-        if (!arr.includes(matiere.name)) arr.push(matiere.name);
-      }
-      if (pm.role_type === "contenu" || pm.role_type === "qa") {
-        if (!entry.contenu.has(formationLabel)) entry.contenu.set(formationLabel, []);
-        const arr = entry.contenu.get(formationLabel)!;
-        if (!arr.includes(matiere.name)) arr.push(matiere.name);
-      }
+      const uniLabel = uni?.name?.replace("Université ", "") ?? null;
+      const addTo = (target: Map<string, { uni: string | null; mats: string[] }>) => {
+        if (!target.has(groupKey)) target.set(groupKey, { uni: uniLabel, mats: [] });
+        const arr = target.get(groupKey)!;
+        if (!arr.mats.includes(matiere.name)) arr.mats.push(matiere.name);
+      };
+      if (pm.role_type === "cours" || !pm.role_type) addTo(entry.cours);
+      if (pm.role_type === "contenu" || pm.role_type === "qa") addTo(entry.contenu);
     }
-    // Convert to final shape
     const result = new Map<string, ProfDetail>();
     for (const [profId, entry] of map) {
-      result.set(profId, {
-        cours: [...entry.cours.entries()].map(([formation, matieres]) => ({ formation, matieres })),
-        contenu: [...entry.contenu.entries()].map(([formation, matieres]) => ({ formation, matieres })),
-      });
+      const toGroups = (m: Map<string, { uni: string | null; mats: string[] }>) =>
+        [...m.entries()].map(([key, v]) => ({ formation: key.split("||")[0], university: v.uni, matieres: v.mats }));
+      result.set(profId, { cours: toGroups(entry.cours), contenu: toGroups(entry.contenu) });
     }
     return result;
   }, [profMatieres, matiereMap, dMap]);
@@ -2026,42 +2024,45 @@ function ComptesView({
                         </td>
                       );
                     }
-                    const MAX_PILLS = 3;
                     return (
                       <td colSpan={3} className="px-4 py-2.5">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           {/* Cours section */}
-                          {hasCours && detail.cours.map(g => {
-                            const shown = g.matieres.slice(0, MAX_PILLS);
-                            const rest = g.matieres.length - MAX_PILLS;
-                            return (
-                              <div key={`cours-${g.formation}`} className="flex items-center gap-1.5 flex-wrap">
+                          {hasCours && detail.cours.map(g => (
+                            <div key={`cours-${g.formation}-${g.university}`}>
+                              <div className="flex items-center gap-1.5 mb-0.5">
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "rgba(52,211,153,0.9)" }}>
                                   <BookOpen size={9} /> Cours
                                 </span>
-                                <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
-                                <span className="text-[10px]" style={{ color: "rgba(52,211,153,0.6)" }}>
-                                  {shown.join(", ")}{rest > 0 ? ` +${rest}` : ""}
-                                </span>
+                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
+                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}</span>}
+                                <span className="text-[9px] font-medium" style={{ color: "rgba(52,211,153,0.5)" }}>({g.matieres.length})</span>
                               </div>
-                            );
-                          })}
+                              <div className="flex flex-wrap gap-1 pl-4">
+                                {g.matieres.map(m => (
+                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: "rgba(52,211,153,0.08)", color: "rgba(52,211,153,0.75)", border: "1px solid rgba(52,211,153,0.12)" }}>{m}</span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                           {/* Contenu section */}
-                          {hasContenu && detail.contenu.map(g => {
-                            const shown = g.matieres.slice(0, MAX_PILLS);
-                            const rest = g.matieres.length - MAX_PILLS;
-                            return (
-                              <div key={`contenu-${g.formation}`} className="flex items-center gap-1.5 flex-wrap">
+                          {hasContenu && detail.contenu.map(g => (
+                            <div key={`contenu-${g.formation}-${g.university}`}>
+                              <div className="flex items-center gap-1.5 mb-0.5">
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(96,165,250,0.12)", color: "rgba(96,165,250,0.9)" }}>
                                   <FileText size={9} /> Contenu
                                 </span>
-                                <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
-                                <span className="text-[10px]" style={{ color: "rgba(96,165,250,0.6)" }}>
-                                  {shown.join(", ")}{rest > 0 ? ` +${rest}` : ""}
-                                </span>
+                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
+                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}</span>}
+                                <span className="text-[9px] font-medium" style={{ color: "rgba(96,165,250,0.5)" }}>({g.matieres.length})</span>
                               </div>
-                            );
-                          })}
+                              <div className="flex flex-wrap gap-1 pl-4">
+                                {g.matieres.map(m => (
+                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: "rgba(96,165,250,0.08)", color: "rgba(96,165,250,0.75)", border: "1px solid rgba(96,165,250,0.12)" }}>{m}</span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </td>
                     );
@@ -4766,19 +4767,25 @@ function EditUserModal({
               return [...map.entries()];
             };
 
-            const PillFilter = ({ items, value, onChange, color }: { items: { id: string; name: string }[]; value: string; onChange: (v: string) => void; color: string }) => (
+            const PillFilter = ({ items, value, onChange, color, badges }: { items: { id: string; name: string }[]; value: string; onChange: (v: string) => void; color: string; badges?: Map<string, number> }) => (
               <div className="flex flex-wrap gap-1">
                 {items.map((item) => {
                   const active = value === item.id;
+                  const badge = badges?.get(item.id) ?? 0;
                   return (
                     <button key={item.id} type="button" onClick={() => onChange(active ? "" : item.id)}
-                      className="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
+                      className="relative rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
                       style={{
                         borderColor: active ? color + "99" : "rgba(255,255,255,0.08)",
                         backgroundColor: active ? color + "22" : "rgba(255,255,255,0.02)",
                         color: active ? color : "rgba(255,255,255,0.45)",
                       }}>
                       {item.name.replace("Université ", "")}
+                      {badge > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[8px] font-bold text-white px-0.5" style={{ backgroundColor: "#EF4444" }}>
+                          {badge}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -4796,6 +4803,44 @@ function EditUserModal({
             const qaRootId = qaUni || (qaFormation && qaUnis.length === 0 ? qaFormation : "");
             const qaTree = qaRootId ? buildMatiereTree(qaRootId) : [];
 
+            // Compute badge counts: how many matières assigned per offer
+            const coursBadges = new Map<string, number>();
+            const qaBadges = new Map<string, number>();
+            for (const offr of offers) {
+              // Get all matière IDs under this offer
+              const descendantIds = new Set<string>();
+              const walkD = (pid: string) => { descendantIds.add(pid); dossiers.filter((d) => d.parent_id === pid).forEach((d) => walkD(d.id)); };
+              walkD(offr.id);
+              const matIdsUnderOffer = matieres.filter(m => descendantIds.has(m.dossier_id)).map(m => m.id);
+              const coursCount = matIdsUnderOffer.filter(id => coursAssignments.has(id)).length;
+              const qaCount = matIdsUnderOffer.filter(id => qaContenuMatIds.includes(id)).length;
+              if (coursCount > 0) coursBadges.set(offr.id, coursCount);
+              if (qaCount > 0) qaBadges.set(offr.id, qaCount);
+            }
+            // Also for university-level badges
+            const coursUniBadges = new Map<string, number>();
+            const qaUniBadges = new Map<string, number>();
+            if (coursFormation) {
+              for (const uniItem of coursUnis) {
+                const desc = new Set<string>();
+                const wk = (pid: string) => { desc.add(pid); dossiers.filter(d => d.parent_id === pid).forEach(d => wk(d.id)); };
+                wk(uniItem.id);
+                const matIds = matieres.filter(m => desc.has(m.dossier_id)).map(m => m.id);
+                const c = matIds.filter(id => coursAssignments.has(id)).length;
+                if (c > 0) coursUniBadges.set(uniItem.id, c);
+              }
+            }
+            if (qaFormation) {
+              for (const uniItem of qaUnis) {
+                const desc = new Set<string>();
+                const wk = (pid: string) => { desc.add(pid); dossiers.filter(d => d.parent_id === pid).forEach(d => wk(d.id)); };
+                wk(uniItem.id);
+                const matIds = matieres.filter(m => desc.has(m.dossier_id)).map(m => m.id);
+                const c = matIds.filter(id => qaContenuMatIds.includes(id)).length;
+                if (c > 0) qaUniBadges.set(uniItem.id, c);
+              }
+            }
+
             return (
             <div className="space-y-5">
               {/* ── Section 1: Donne cours ── */}
@@ -4809,13 +4854,13 @@ function EditUserModal({
                   {/* Formation */}
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
-                    <PillFilter items={offers} value={coursFormation} onChange={(v) => { setCoursFormation(v); setCoursUni(""); }} color="#60A5FA" />
+                    <PillFilter items={offers} value={coursFormation} onChange={(v) => { setCoursFormation(v); setCoursUni(""); }} color="#60A5FA" badges={coursBadges} />
                   </div>
                   {/* Université */}
                   {coursFormation && coursUnis.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
-                      <PillFilter items={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" />
+                      <PillFilter items={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" badges={coursUniBadges} />
                     </div>
                   )}
                   {/* Matières tree */}
@@ -4888,13 +4933,13 @@ function EditUserModal({
                   {/* Formation */}
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Formation</span>
-                    <PillFilter items={offers} value={qaFormation} onChange={(v) => { setQaFormation(v); setQaUni(""); }} color="#FBBF24" />
+                    <PillFilter items={offers} value={qaFormation} onChange={(v) => { setQaFormation(v); setQaUni(""); }} color="#FBBF24" badges={qaBadges} />
                   </div>
                   {/* Université */}
                   {qaFormation && qaUnis.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
-                      <PillFilter items={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" />
+                      <PillFilter items={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" badges={qaUniBadges} />
                     </div>
                   )}
                   {/* Matières tree */}
