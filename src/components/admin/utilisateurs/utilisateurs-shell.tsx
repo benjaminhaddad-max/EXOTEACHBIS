@@ -1733,12 +1733,10 @@ function ComptesView({
     });
   }, [groupes, users, filterUniversityId, filterSubOfferId, filterFormationId, groupBelongsToSubtree]);
 
-  // Filtered users
-  const filtered = useMemo(() => users.filter(u => {
+  // Filtered users (without role filter — for dynamic role counts)
+  const filteredBeforeRole = useMemo(() => users.filter(u => {
     const q = search.toLowerCase();
     if (q && !`${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q)) return false;
-    if (filterRole === "admin" && !["admin", "superadmin"].includes(u.role)) return false;
-    if (filterRole && filterRole !== "admin" && u.role !== filterRole) return false;
     if (filterGroupeId && u.groupe_id !== filterGroupeId) return false;
     if (filterUniversityId && !filterGroupeId) {
       const uniGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterUniversityId));
@@ -1753,7 +1751,14 @@ function ComptesView({
       if (!formGroupes.some(g => g.id === u.groupe_id)) return false;
     }
     return true;
-  }), [users, search, filterRole, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, groupes, groupBelongsToSubtree]);
+  }), [users, search, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, groupes, groupBelongsToSubtree]);
+
+  // Filtered users (with role filter)
+  const filtered = useMemo(() => filteredBeforeRole.filter(u => {
+    if (filterRole === "admin" && !["admin", "superadmin"].includes(u.role)) return false;
+    if (filterRole && filterRole !== "admin" && u.role !== filterRole) return false;
+    return true;
+  }), [filteredBeforeRole, filterRole]);
 
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(25);
@@ -1956,11 +1961,11 @@ function ComptesView({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[9px] font-bold uppercase tracking-widest w-20 shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>Rôle</span>
           {[
-            { val: "", label: "Tout", count: users.length },
-            { val: "eleve", label: "Élèves", count: users.filter(u => u.role === "eleve").length },
-            { val: "coach", label: "Coachs", count: users.filter(u => u.role === "coach").length },
-            { val: "prof", label: "Profs", count: users.filter(u => u.role === "prof").length },
-            { val: "admin", label: "Admins", count: users.filter(u => ["admin", "superadmin"].includes(u.role)).length },
+            { val: "", label: "Tout", count: filteredBeforeRole.length },
+            { val: "eleve", label: "Élèves", count: filteredBeforeRole.filter(u => u.role === "eleve").length },
+            { val: "coach", label: "Coachs", count: filteredBeforeRole.filter(u => u.role === "coach").length },
+            { val: "prof", label: "Profs", count: filteredBeforeRole.filter(u => u.role === "prof").length },
+            { val: "admin", label: "Admins", count: filteredBeforeRole.filter(u => ["admin", "superadmin"].includes(u.role)).length },
           ].map(f => (
             <button key={f.val} onClick={() => setFilterRole(f.val)}
               className="px-2.5 py-1 rounded-full text-[11px] transition-all flex items-center gap-1.5"
