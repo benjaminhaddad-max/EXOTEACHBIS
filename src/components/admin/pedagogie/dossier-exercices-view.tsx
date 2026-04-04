@@ -749,6 +749,7 @@ export function DossierExercicesView({
   const [showImportExoteach, setShowImportExoteach] = useState(false);
   const [checkedSerieIds, setCheckedSerieIds] = useState<Set<string>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -870,7 +871,7 @@ export function DossierExercicesView({
             const count = seriesByType(t).length;
             const isActive = activeTab === t;
             return (
-              <button key={t} onClick={() => setActiveTab(t)}
+              <button key={t} onClick={() => { setActiveTab(t); setSelectedChapter(null); }}
                 className="relative flex items-center gap-1.5 px-3 py-2 rounded-t-lg text-[10px] font-bold uppercase tracking-wide transition-all"
                 style={isActive
                   ? { background: cfg.gradient, color: cfg.textColor, borderBottom: `2px solid ${cfg.textColor}` }
@@ -885,7 +886,7 @@ export function DossierExercicesView({
             );
           })}
           {!hiddenTabs?.includes("flashcards") && (
-            <button onClick={() => setActiveTab("flashcards")}
+            <button onClick={() => { setActiveTab("flashcards"); setSelectedChapter(null); }}
               className="relative flex items-center gap-1.5 px-3 py-2 rounded-t-lg text-[10px] font-bold uppercase tracking-wide transition-all"
               style={activeTab === "flashcards"
                 ? { background: "linear-gradient(135deg, rgba(165,180,252,0.12) 0%, rgba(99,102,241,0.04) 100%)", color: "#A5B4FC", borderBottom: "2px solid #A5B4FC" }
@@ -1011,69 +1012,128 @@ export function DossierExercicesView({
           </div>
         ) : (
           /* ─── Other types (default rendering) ─── */
-          <>
-            {seriesByType(activeTab).length === 0 ? (
-              <div className="rounded-xl border-2 border-dashed border-white/8 p-6 text-center">
-                {TYPE_CONFIG[activeTab].icon}
-                <p className="text-xs text-white/30 mt-2">Aucune série &quot;{TYPE_CONFIG[activeTab].label}&quot;</p>
-                <button onClick={() => { setNewSerieType(activeTab); setShowNewSerie(true); }}
-                  className={`mt-3 flex items-center gap-1.5 mx-auto px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${TYPE_CONFIG[activeTab].bg} ${TYPE_CONFIG[activeTab].color} ${TYPE_CONFIG[activeTab].border} border`}>
-                  <Plus size={12} /> Créer une série
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {seriesByType(activeTab).map((s) => {
-                  const cfg = TYPE_CONFIG[activeTab];
-                  return (
-                    <div key={s.id} className="group relative rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-[0_2px_16px_rgba(0,0,0,0.2)]"
-                      style={{ borderLeft: `3px solid ${cfg.textColor}40`, background: "transparent" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = cfg.textColor; e.currentTarget.style.background = cfg.gradient; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = `${cfg.textColor}40`; e.currentTarget.style.background = "transparent"; }}>
+          (() => {
+            const cfg = TYPE_CONFIG[activeTab as SerieType];
+            const allTypeSeries = seriesByType(activeTab as SerieType);
 
-                      <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
-                        className="shrink-0 mt-1.5 h-3.5 w-3.5 rounded border-white/20 cursor-pointer" style={{ accentColor: cfg.textColor }} />
+            const chapterCounts = new Map<string, number>();
+            for (const s of allTypeSeries) {
+              const cName = s.cours_id ? coursName(s.cours_id) : "";
+              if (cName) chapterCounts.set(cName, (chapterCounts.get(cName) ?? 0) + 1);
+            }
+            const chapterNames = Array.from(chapterCounts.keys()).sort();
+            const hasChapters = chapterNames.length > 1;
 
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
-                        style={{ background: `${cfg.textColor}12`, border: `1px solid ${cfg.textColor}25` }}>
-                        {cfg.svgIcon}
-                      </div>
+            const displaySeries = selectedChapter
+              ? allTypeSeries.filter((s) => s.cours_id && coursName(s.cours_id) === selectedChapter)
+              : allTypeSeries;
 
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(`/serie/${s.id}`, "_blank")}>
-                        <p className="text-[12px] font-bold text-white/90 group-hover:text-white transition-colors truncate">{s.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="flex items-center gap-0.5 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[8px] font-bold text-green-400/70">
-                            <Eye size={8} /> Visible
-                          </span>
-                          <span className="text-[9px] text-white/30">
-                            {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
-                            {s.timed && ` · ${s.duration_minutes}min`}
-                          </span>
-                          {s.cours_id && <span className="text-[9px] text-white/20 truncate">{coursName(s.cours_id)}</span>}
+            return (
+              <>
+                {/* Chapter filter pills */}
+                {hasChapters && (
+                  <div className="mb-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-white/25 mr-1">Chapitre</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => setSelectedChapter(null)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all duration-150"
+                        style={!selectedChapter ? {
+                          background: cfg.gradient, color: cfg.textColor,
+                          border: `1px solid ${cfg.textColor}40`,
+                          boxShadow: `0 0 8px ${cfg.glowColor}`,
+                        } : {
+                          background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)",
+                          border: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        Tout <span className="ml-1 text-[8px] opacity-60">{allTypeSeries.length}</span>
+                      </button>
+                      {chapterNames.map((name) => (
+                        <button key={name}
+                          onClick={() => setSelectedChapter(selectedChapter === name ? null : name)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all duration-150 max-w-[200px] truncate"
+                          style={selectedChapter === name ? {
+                            background: cfg.gradient, color: cfg.textColor,
+                            border: `1px solid ${cfg.textColor}40`,
+                            boxShadow: `0 0 8px ${cfg.glowColor}`,
+                          } : {
+                            background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)",
+                            border: "1px solid rgba(255,255,255,0.06)",
+                          }}
+                        >
+                          {name} <span className="ml-1 text-[8px] opacity-60">{chapterCounts.get(name)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {displaySeries.length === 0 ? (
+                  <div className="rounded-xl border-2 border-dashed border-white/8 p-6 text-center">
+                    {cfg.icon}
+                    <p className="text-xs text-white/30 mt-2">
+                      {selectedChapter ? `Aucune série pour "${selectedChapter}"` : `Aucune série "${cfg.label}"`}
+                    </p>
+                    <button onClick={() => { setNewSerieType(activeTab as SerieType); setShowNewSerie(true); }}
+                      className={`mt-3 flex items-center gap-1.5 mx-auto px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${cfg.bg} ${cfg.color} ${cfg.border} border`}>
+                      <Plus size={12} /> Créer une série
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {displaySeries.map((s) => (
+                      <div key={s.id} className="group relative rounded-xl p-3.5 flex items-start gap-3 transition-all duration-200 hover:shadow-[0_2px_16px_rgba(0,0,0,0.2)]"
+                        style={{ borderLeft: `3px solid ${cfg.textColor}40`, background: "transparent" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = cfg.textColor; e.currentTarget.style.background = cfg.gradient; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = `${cfg.textColor}40`; e.currentTarget.style.background = "transparent"; }}>
+
+                        <input type="checkbox" checked={checkedSerieIds.has(s.id)} onChange={() => toggleCheckedSerie(s.id)}
+                          className="shrink-0 mt-1.5 h-3.5 w-3.5 rounded border-white/20 cursor-pointer" style={{ accentColor: cfg.textColor }} />
+
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover:scale-110"
+                          style={{ background: `${cfg.textColor}12`, border: `1px solid ${cfg.textColor}25` }}>
+                          {cfg.svgIcon}
+                        </div>
+
+                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(`/serie/${s.id}`, "_blank")}>
+                          <p className="text-[12px] font-bold text-white/90 group-hover:text-white transition-colors truncate">{s.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="flex items-center gap-0.5 rounded-md bg-green-500/10 px-1.5 py-0.5 text-[8px] font-bold text-green-400/70">
+                              <Eye size={8} /> Visible
+                            </span>
+                            <span className="text-[9px] text-white/30">
+                              {s.nb_questions} question{s.nb_questions !== 1 ? "s" : ""}
+                              {s.timed && ` · ${s.duration_minutes}min`}
+                            </span>
+                            {s.cours_id && !selectedChapter && <span className="text-[9px] text-white/20 truncate">{coursName(s.cours_id)}</span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                          <button onClick={() => handleToggleVisible(s.id, false)} className="p-1.5 rounded-lg hover:bg-orange-500/10 text-white/20 hover:text-orange-400 transition-colors" title="Archiver">
+                            <EyeOff size={12} />
+                          </button>
+                          <button onClick={() => setComposeSerie(s)} className="p-1.5 rounded-lg hover:bg-white/8 text-white/20 hover:text-[#7DD3FC] transition-colors" title="Éditer">
+                            <Pencil size={12} />
+                          </button>
+                          <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors" title="Supprimer">
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                        <button onClick={() => handleToggleVisible(s.id, false)} className="p-1.5 rounded-lg hover:bg-orange-500/10 text-white/20 hover:text-orange-400 transition-colors" title="Archiver">
-                          <EyeOff size={12} />
-                        </button>
-                        <button onClick={() => setComposeSerie(s)} className="p-1.5 rounded-lg hover:bg-white/8 text-white/20 hover:text-[#7DD3FC] transition-colors" title="Éditer">
-                          <Pencil size={12} />
-                        </button>
-                        <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-colors" title="Supprimer">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                <button onClick={() => { setNewSerieType(activeTab); setShowNewSerie(true); }}
-                  className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed text-xs font-semibold transition-colors ${TYPE_CONFIG[activeTab].color} border-current/30 hover:bg-white/4`}>
-                  <Plus size={12} /> Nouvelle série
-                </button>
-              </div>
-            )}
-          </>
+                    ))}
+                    <button onClick={() => { setNewSerieType(activeTab as SerieType); setShowNewSerie(true); }}
+                      className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed text-xs font-semibold transition-colors ${cfg.color} border-current/30 hover:bg-white/4`}>
+                      <Plus size={12} /> Nouvelle série
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()
         )}
 
         {/* ── Archives ── */}
