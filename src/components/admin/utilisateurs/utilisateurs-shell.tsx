@@ -1980,9 +1980,7 @@ function ComptesView({
             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.03)" }}>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Utilisateur</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Rôle</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Donne cours</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Contenu</th>
-              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Groupe</th>
+              <th colSpan={3} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Activité</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
@@ -2029,51 +2027,56 @@ function ComptesView({
                       );
                     }
                     return (
-                      <td colSpan={3} className="px-4 py-2">
-                        <div className="flex flex-wrap gap-x-5 gap-y-1">
+                      <td colSpan={3} className="px-4 py-2.5">
+                        <div className="space-y-1.5">
+                          {/* Cours section */}
                           {hasCours && detail.cours.map(g => (
-                            <div key={`cours-${g.formation}`} className="flex items-center gap-1.5 min-w-0">
-                              <BookOpen size={10} style={{ color: "rgba(52,211,153,0.7)", flexShrink: 0 }} />
-                              <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(52,211,153,0.9)" }}>{g.formation}</span>
-                              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.15)" }}>·</span>
-                              <span className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{g.matieres.join(", ")}</span>
+                            <div key={`cours-${g.formation}`}>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <BookOpen size={10} style={{ color: "rgba(52,211,153,0.8)", flexShrink: 0 }} />
+                                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "rgba(52,211,153,0.9)" }}>Cours</span>
+                                <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.6)" }}>{g.formation}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 pl-4">
+                                {g.matieres.map(m => (
+                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-medium" style={{ backgroundColor: "rgba(52,211,153,0.1)", color: "rgba(52,211,153,0.8)", border: "1px solid rgba(52,211,153,0.15)" }}>{m}</span>
+                                ))}
+                              </div>
                             </div>
                           ))}
+                          {/* Contenu section */}
                           {hasContenu && detail.contenu.map(g => (
-                            <div key={`contenu-${g.formation}`} className="flex items-center gap-1.5 min-w-0">
-                              <FileText size={10} style={{ color: "rgba(96,165,250,0.7)", flexShrink: 0 }} />
-                              <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(96,165,250,0.9)" }}>{g.formation}</span>
-                              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.15)" }}>·</span>
-                              <span className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{g.matieres.join(", ")}</span>
+                            <div key={`contenu-${g.formation}`}>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <FileText size={10} style={{ color: "rgba(96,165,250,0.8)", flexShrink: 0 }} />
+                                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "rgba(96,165,250,0.9)" }}>Contenu</span>
+                                <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.6)" }}>{g.formation}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 pl-4">
+                                {g.matieres.map(m => (
+                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-medium" style={{ backgroundColor: "rgba(96,165,250,0.1)", color: "rgba(96,165,250,0.8)", border: "1px solid rgba(96,165,250,0.15)" }}>{m}</span>
+                                ))}
+                              </div>
                             </div>
                           ))}
                         </div>
                       </td>
                     );
                   })() : (
-                    <>
-                      {/* Donne cours — non-prof */}
-                      <td className="px-4 py-3">
+                    <td colSpan={3} className="px-4 py-3">
+                      {info.classe ? (
+                        <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
+                          {info.classe.name}
+                        </span>
+                      ) : u.role === "coach" ? (
+                        <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Multi-classes</span>
+                      ) : (
                         <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                      </td>
-                      {/* Contenu — non-prof */}
-                      <td className="px-4 py-3">
-                        <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                      </td>
-                      {/* Groupe */}
-                      <td className="px-4 py-3">
-                        {info.classe ? (
-                          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
-                            {info.classe.name}
-                          </span>
-                        ) : u.role === "coach" ? (
-                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Multi-classes</span>
-                        ) : (
-                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                        )}
-                      </td>
-                    </>
+                      )}
+                    </td>
                   )}
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
