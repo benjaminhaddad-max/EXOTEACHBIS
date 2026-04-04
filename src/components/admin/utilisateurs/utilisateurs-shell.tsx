@@ -4803,6 +4803,13 @@ function EditUserModal({
             const qaRootId = qaUni || (qaFormation && qaUnis.length === 0 ? qaFormation : "");
             const qaTree = qaRootId ? buildMatiereTree(qaRootId) : [];
 
+            // Recursively collect ALL matières from a tree node and all descendants
+            type TreeNodeType = { dossier: Dossier; matieres: { id: string; name: string; color: string }[]; children: TreeNodeType[] };
+            const getAllMatieres = (n: TreeNodeType): { id: string; name: string; color: string }[] => [
+              ...n.matieres,
+              ...n.children.flatMap(c => getAllMatieres(c)),
+            ];
+
             // Compute badge counts: how many matières assigned per offer
             const coursBadges = new Map<string, number>();
             const qaBadges = new Map<string, number>();
@@ -4867,7 +4874,8 @@ function EditUserModal({
                   {coursTree.length > 0 && (
                     <div className="mt-1 pt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {coursTree.map(node => {
-                        const allNodeMatIds = [...node.matieres.map(m => m.id), ...node.children.flatMap(c => c.matieres.map(m => m.id))];
+                        const allMats = getAllMatieres(node);
+                        const allNodeMatIds = allMats.map(m => m.id);
                         const allChecked = allNodeMatIds.length > 0 && allNodeMatIds.every(id => coursAssignments.has(id));
                         const someChecked = allNodeMatIds.some(id => coursAssignments.has(id));
                         return (
@@ -4881,7 +4889,7 @@ function EditUserModal({
                               </span>
                             </summary>
                             <div className="ml-5 space-y-0.5 pb-1">
-                              {[...node.matieres, ...node.children.flatMap(c => c.matieres)].map(m => {
+                              {allMats.map(m => {
                                 const checked = coursAssignments.has(m.id);
                                 const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
                                 return (
@@ -4946,7 +4954,8 @@ function EditUserModal({
                   {qaTree.length > 0 && (
                     <div className="mt-1 pt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {qaTree.map(node => {
-                        const allNodeMatIds = [...node.matieres.map(m => m.id), ...node.children.flatMap(c => c.matieres.map(m => m.id))];
+                        const allMats = getAllMatieres(node);
+                        const allNodeMatIds = allMats.map(m => m.id);
                         const someChecked = allNodeMatIds.some(id => qaContenuMatIds.includes(id));
                         return (
                           <details key={node.dossier.id} open={someChecked}>
@@ -4959,7 +4968,7 @@ function EditUserModal({
                               </span>
                             </summary>
                             <div className="ml-5 space-y-0.5 pb-1">
-                              {[...node.matieres, ...node.children.flatMap(c => c.matieres)].map(m => {
+                              {allMats.map(m => {
                                 const checked = qaContenuMatIds.includes(m.id);
                                 return (
                                   <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
