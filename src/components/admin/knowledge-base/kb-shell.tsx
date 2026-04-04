@@ -8,6 +8,7 @@ import {
   Check, Loader2, Upload, Tag, Globe, Shield, Building2,
   Zap, Brain, Archive, ExternalLink, RefreshCw, MessageCircleQuestion,
   Lightbulb, Database, Bot, ArrowRight, Play, Eye, EyeOff,
+  HeartHandshake, MessageSquare, Stethoscope, School, Target,
 } from "lucide-react";
 import type { KbArticle, KbCategory, KbArticleStatus, Dossier, Groupe } from "@/types/database";
 import {
@@ -28,6 +29,7 @@ const STATUS_CONFIG: Record<KbArticleStatus, { label: string; color: string; bg:
 
 const CATEGORY_ICONS: Record<string, typeof FileText> = {
   GraduationCap, BookOpen, Users, Calendar, FileText, Globe, Shield, Building2, Brain,
+  HeartHandshake, MessageSquare, Stethoscope, School, Target,
 };
 
 interface KbShellProps {
@@ -57,7 +59,7 @@ export function KnowledgeBaseShell({ initialCategories, initialArticles, dossier
   const [toast, setToast] = useState<{ message: string; kind: "success" | "error" } | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
-  const [view, setView] = useState<"articles" | "chatbot">("articles");
+  const [view, setView] = useState<"articles" | "coaching" | "chatbot">("articles");
 
   const showToast = useCallback((msg: string, kind: "success" | "error") => {
     setToast({ message: msg, kind });
@@ -252,6 +254,7 @@ export function KnowledgeBaseShell({ initialCategories, initialArticles, dossier
         <div className="flex items-center gap-2">
           {[
             { id: "articles" as const, label: "Base de connaissances", icon: Database, count: articles.length },
+            { id: "coaching" as const, label: "Coaching", icon: HeartHandshake, count: articles.filter(a => categories.find(c => c.id === a.category_id)?.slug?.startsWith("coaching")).length },
             { id: "chatbot" as const, label: "Chatbot & Analytics", icon: Bot, count: stats.totalQuestions },
           ].map(tab => (
             <button key={tab.id} onClick={() => setView(tab.id)}
@@ -329,6 +332,21 @@ export function KnowledgeBaseShell({ initialCategories, initialArticles, dossier
             </div>
           </div>
         </div>
+      )}
+
+      {/* ═══ Coaching view ═══ */}
+      {view === "coaching" && (
+        <CoachingKbView
+          categories={categories}
+          articles={articles}
+          dossiers={dossiers}
+          groupes={groupes}
+          articleCountByCat={articleCountByCat}
+          onSelectArticle={(a) => { setSelectedArticle(a); setView("articles"); }}
+          onNewArticle={(catId) => { setSelectedCatId(catId); setView("articles"); setShowArticleEditor(true); }}
+          onNewCategory={() => { setEditingCategory(null); setShowCategoryForm(true); }}
+          showToast={showToast}
+        />
       )}
 
       {/* ═══ Articles view ═══ */}
@@ -655,6 +673,285 @@ export function KnowledgeBaseShell({ initialCategories, initialArticles, dossier
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Coaching KB View
+// ═══════════════════════════════════════════════════════════════
+
+function CoachingKbView({ categories, articles, dossiers, groupes, articleCountByCat, onSelectArticle, onNewArticle, onNewCategory, showToast }: {
+  categories: KbCategory[];
+  articles: KbArticle[];
+  dossiers: Dossier[];
+  groupes: Groupe[];
+  articleCountByCat: Map<string, number>;
+  onSelectArticle: (a: KbArticle) => void;
+  onNewArticle: (catId: string | null) => void;
+  onNewCategory: () => void;
+  showToast: (msg: string, kind: "success" | "error") => void;
+}) {
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["general"]));
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const coachingCats = useMemo(() =>
+    categories.filter(c => c.slug?.startsWith("coaching")),
+  [categories]);
+
+  const coachingCatIds = useMemo(() => new Set(coachingCats.map(c => c.id)), [coachingCats]);
+
+  const coachingArticles = useMemo(() => {
+    let list = articles.filter(a => a.category_id && coachingCatIds.has(a.category_id));
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(a => a.title.toLowerCase().includes(q) || a.tags.some(t => t.includes(q)));
+    }
+    return list;
+  }, [articles, coachingCatIds, searchQuery]);
+
+  const generalCat = coachingCats.find(c => c.slug === "coaching");
+  const coachingRootCats = coachingCats.filter(c => !c.parent_id && c.slug !== "coaching");
+  const coachingChildCatsMap = useMemo(() => {
+    const m = new Map<string, KbCategory[]>();
+    for (const c of coachingCats) {
+      if (c.parent_id) {
+        if (!m.has(c.parent_id)) m.set(c.parent_id, []);
+        m.get(c.parent_id)!.push(c);
+      }
+    }
+    return m;
+  }, [coachingCats]);
+
+  const toggleSection = (id: string) => {
+    setExpandedSections(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+
+  const formations = dossiers.filter(d => d.dossier_type === "offer" || d.dossier_type === "university");
+
+  const renderCatArticles = (catId: string) => {
+    const catArticles = coachingArticles.filter(a => a.category_id === catId);
+    if (catArticles.length === 0) return (
+      <div className="px-4 py-3 text-center">
+        <p className="text-xs text-gray-400">Aucun article dans cette catégorie</p>
+        <button onClick={() => onNewArticle(catId)}
+          className="mt-1.5 text-[11px] text-violet-500 hover:text-violet-700 font-semibold">
+          + Créer le premier article
+        </button>
+      </div>
+    );
+    return (
+      <div className="divide-y divide-gray-50">
+        {catArticles.map(a => {
+          const sc = STATUS_CONFIG[a.status];
+          return (
+            <button key={a.id} onClick={() => onSelectArticle(a)}
+              className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/60 transition-colors">
+              <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: sc.bg }}>
+                {React.createElement(sc.icon, { size: 11, style: { color: sc.color } })}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-800 truncate">{a.title}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {a.tags.slice(0, 2).map(t => (
+                    <span key={t} className="text-[9px] px-1 py-0.5 rounded bg-gray-100 text-gray-500">{t}</span>
+                  ))}
+                </div>
+              </div>
+              <span className="text-[10px] text-gray-400 shrink-0">{new Date(a.updated_at).toLocaleDateString("fr-FR")}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-pink-50/80 via-white to-violet-50/80">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center shadow-lg shadow-pink-200">
+              <HeartHandshake size={22} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Knowledge Base Coaching</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Entraînez le chatbot coaching par formation, par fac — articles généraux & spécifiques
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Rechercher..."
+                className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:outline-none focus:border-pink-300 w-48" />
+            </div>
+            <button onClick={() => onNewArticle(generalCat?.id ?? null)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:shadow-md transition-all">
+              <Plus size={13} /> Nouvel article coaching
+            </button>
+          </div>
+        </div>
+
+        {/* Stats strip */}
+        <div className="mt-4 flex items-center gap-4">
+          {[
+            { label: "Articles coaching", value: coachingArticles.length, color: "#EC4899" },
+            { label: "Publiés", value: coachingArticles.filter(a => a.status === "approved").length, color: "#10B981" },
+            { label: "Brouillons", value: coachingArticles.filter(a => a.status === "draft").length, color: "#94A3B8" },
+            { label: "Formations couvertes", value: formations.length, color: "#8B5CF6" },
+          ].map(s => (
+            <div key={s.label} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-100">
+              <span className="text-sm font-bold" style={{ color: s.color }}>{s.value}</span>
+              <span className="text-[10px] text-gray-500">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* General Coaching */}
+        <div className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => toggleSection("general")}
+            className="w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-pink-50 to-white hover:from-pink-100/80 transition-colors">
+            {expandedSections.has("general") ? <ChevronDown size={14} className="text-pink-400" /> : <ChevronRight size={14} className="text-pink-400" />}
+            <HeartHandshake size={16} className="text-pink-500" />
+            <span className="text-sm font-semibold text-gray-900 flex-1 text-left">Coaching Général</span>
+            <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+              {generalCat ? (articleCountByCat.get(generalCat.id) ?? 0) : 0} articles
+            </span>
+          </button>
+          {expandedSections.has("general") && (
+            <div className="border-t border-gray-50 bg-white">
+              <div className="px-4 py-2 border-b border-gray-50">
+                <p className="text-[11px] text-gray-400 italic">
+                  Articles applicables à toutes les formations : FAQ coaching, méthodologie générale, motivation, gestion du stress...
+                </p>
+              </div>
+              {generalCat ? renderCatArticles(generalCat.id) : (
+                <div className="px-4 py-4 text-center">
+                  <p className="text-xs text-gray-400">La catégorie Coaching sera créée à la prochaine synchronisation.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Cliquez "Re-synchroniser" en haut à droite pour initialiser.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Per-formation coaching */}
+        {formations.map(formation => {
+          const formationCat = coachingRootCats.find(c => c.slug === `coaching-${formation.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
+          const formationGroupes = groupes.filter(g => g.formation_dossier_id === formation.id);
+          const children = formationCat ? (coachingChildCatsMap.get(formationCat.id) ?? []) : [];
+          const totalArticles = formationCat
+            ? (articleCountByCat.get(formationCat.id) ?? 0) + children.reduce((s, c) => s + (articleCountByCat.get(c.id) ?? 0), 0)
+            : 0;
+
+          return (
+            <div key={formation.id} className="rounded-xl border border-gray-100 overflow-hidden">
+              <button onClick={() => toggleSection(formation.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-violet-50/60 to-white hover:from-violet-100/60 transition-colors">
+                {expandedSections.has(formation.id) ? <ChevronDown size={14} className="text-violet-400" /> : <ChevronRight size={14} className="text-violet-400" />}
+                <School size={16} className="text-violet-500" />
+                <span className="text-sm font-semibold text-gray-900 flex-1 text-left">{formation.name}</span>
+                <div className="flex items-center gap-2">
+                  {formationGroupes.length > 0 && (
+                    <span className="text-[10px] text-violet-500 bg-violet-50 px-2 py-0.5 rounded-full">
+                      {formationGroupes.length} classes
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {totalArticles} articles
+                  </span>
+                </div>
+              </button>
+              {expandedSections.has(formation.id) && (
+                <div className="border-t border-gray-50 bg-white">
+                  {formationCat ? (
+                    <>
+                      {/* Sub-categories for this formation */}
+                      {children.length > 0 && (
+                        <div className="px-4 py-2 space-y-1 border-b border-gray-50">
+                          {children.map(child => {
+                            const ChildIcon = CATEGORY_ICONS[child.icon ?? ""] ?? FileText;
+                            const count = articleCountByCat.get(child.id) ?? 0;
+                            return (
+                              <div key={child.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+                                onClick={() => { /* could filter or navigate */ }}>
+                                <ChildIcon size={12} style={{ color: child.color ?? "#6B7280" }} />
+                                <span className="text-xs text-gray-700 flex-1">{child.name}</span>
+                                <span className="text-[10px] text-gray-400">{count}</span>
+                                <button onClick={(e) => { e.stopPropagation(); onNewArticle(child.id); }}
+                                  className="p-0.5 text-gray-300 hover:text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Plus size={10} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {renderCatArticles(formationCat.id)}
+                      {children.map(child => (
+                        <React.Fragment key={child.id}>
+                          {(coachingArticles.filter(a => a.category_id === child.id).length > 0) && (
+                            <div className="border-t border-gray-50">
+                              <p className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                {child.name}
+                              </p>
+                              {renderCatArticles(child.id)}
+                            </div>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="px-4 py-4 text-center">
+                      <p className="text-xs text-gray-400 mb-2">
+                        Pas encore de catégorie coaching pour cette formation.
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Elle sera créée automatiquement à la prochaine synchronisation, ou vous pouvez la créer manuellement.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Help section */}
+        <div className="rounded-xl border border-dashed border-gray-200 p-5 mt-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Lightbulb size={14} className="text-amber-500" /> Comment structurer la KB Coaching
+          </h3>
+          <div className="grid grid-cols-2 gap-4 text-[12px] text-gray-600 leading-relaxed">
+            <div className="space-y-2">
+              <p className="flex items-start gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-pink-100 text-pink-600 text-[10px] font-bold flex items-center justify-center">1</span>
+                <span><strong>Articles généraux</strong> — FAQ communes, techniques de motivation, gestion du stress, méthodologie de travail. S&apos;appliquent à tous les étudiants.</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-pink-100 text-pink-600 text-[10px] font-bold flex items-center justify-center">2</span>
+                <span><strong>Articles par formation</strong> — Spécificités de chaque fac/formation : planning type, matières clés, conseils adaptés, pièges à éviter.</span>
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="flex items-start gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px] font-bold flex items-center justify-center">3</span>
+                <span><strong>Sous-catégories</strong> — Pour chaque formation, créez des sous-catégories : &quot;Organisation&quot;, &quot;Matières spécifiques&quot;, &quot;Examens&quot;, &quot;Vie étudiante&quot;.</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-[10px] font-bold flex items-center justify-center">4</span>
+                <span><strong>Le chatbot coaching</strong> utilisera ces articles pour répondre aux questions classiques AVANT de solliciter un coach humain. Plus la base est riche, moins les coachs sont surchargés.</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Article Editor Modal
 // ═══════════════════════════════════════════════════════════════
 
@@ -832,7 +1129,7 @@ function CategoryFormModal({ category, parentCategories, onClose, onSaved, onDel
   const [color, setColor] = useState(category?.color ?? "#3B82F6");
   const [isPending, startTransition] = useTransition();
 
-  const iconOptions = ["FileText", "GraduationCap", "BookOpen", "Users", "Calendar", "Globe", "Shield", "Building2", "Brain"];
+  const iconOptions = ["FileText", "GraduationCap", "BookOpen", "Users", "Calendar", "Globe", "Shield", "Building2", "Brain", "HeartHandshake", "MessageSquare", "Stethoscope", "School", "Target"];
   const colorOptions = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#6366F1", "#14B8A6", "#F97316"];
 
   const handleSave = () => {

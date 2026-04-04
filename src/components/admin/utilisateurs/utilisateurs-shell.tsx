@@ -1793,27 +1793,40 @@ function ComptesView({
     return chain;
   };
 
-  // Build prof formation summaries by role_type
-  const profFormationSummary = useMemo(() => {
-    const map = new Map<string, { cours: string[]; contenu: string[] }>();
+  // Build prof detail summaries: matières grouped by formation, split by role_type
+  type ProfFormationGroup = { formation: string; matieres: string[] };
+  type ProfDetail = { cours: ProfFormationGroup[]; contenu: ProfFormationGroup[] };
+  const profDetailSummary = useMemo(() => {
+    const map = new Map<string, { cours: Map<string, string[]>; contenu: Map<string, string[]> }>();
     for (const pm of profMatieres) {
-      if (!map.has(pm.prof_id)) map.set(pm.prof_id, { cours: [], contenu: [] });
+      if (!map.has(pm.prof_id)) map.set(pm.prof_id, { cours: new Map(), contenu: new Map() });
       const entry = map.get(pm.prof_id)!;
       const matiere = matiereMap.get(pm.matiere_id);
       if (!matiere) continue;
       const matDossier = matiere.dossier_id ? dMap.get(matiere.dossier_id) : null;
       const chain = matDossier ? getAncestorChain(matDossier.id) : [];
       const offer = chain.find(d => d.dossier_type === "offer");
-      const uni = chain.find(d => d.dossier_type === "university");
-      const label = uni ? `${offer?.name ?? ""} - ${uni.name.replace("Université ", "")}` : offer?.name ?? "";
+      const formationLabel = offer?.name ?? "Autre";
       if (pm.role_type === "cours" || !pm.role_type) {
-        if (label && !entry.cours.includes(label)) entry.cours.push(label);
+        if (!entry.cours.has(formationLabel)) entry.cours.set(formationLabel, []);
+        const arr = entry.cours.get(formationLabel)!;
+        if (!arr.includes(matiere.name)) arr.push(matiere.name);
       }
       if (pm.role_type === "contenu" || pm.role_type === "qa") {
-        if (label && !entry.contenu.includes(label)) entry.contenu.push(label);
+        if (!entry.contenu.has(formationLabel)) entry.contenu.set(formationLabel, []);
+        const arr = entry.contenu.get(formationLabel)!;
+        if (!arr.includes(matiere.name)) arr.push(matiere.name);
       }
     }
-    return map;
+    // Convert to final shape
+    const result = new Map<string, ProfDetail>();
+    for (const [profId, entry] of map) {
+      result.set(profId, {
+        cours: [...entry.cours.entries()].map(([formation, matieres]) => ({ formation, matieres })),
+        contenu: [...entry.contenu.entries()].map(([formation, matieres]) => ({ formation, matieres })),
+      });
+    }
+    return result;
   }, [profMatieres, matiereMap, dMap]);
 
   const getUserFormationInfo = (u: Profile) => {
@@ -2002,47 +2015,66 @@ function ComptesView({
                       {rc.icon} {rc.label}
                     </span>
                   </td>
-                  {/* Donne cours */}
-                  <td className="px-4 py-3">
-                    {u.role === "prof" ? (() => {
-                      const summary = profFormationSummary.get(u.id);
-                      const cours = summary?.cours ?? [];
-                      return cours.length > 0 ? (
-                        <div className="space-y-0.5">
-                          {cours.map(f => (
-                            <span key={f} className="block text-[10px] font-medium truncate max-w-[200px]" style={{ color: "rgba(52,211,153,0.8)" }}>{f}</span>
+                  {u.role === "prof" ? (() => {
+                    const detail = profDetailSummary.get(u.id);
+                    const hasCours = detail && detail.cours.length > 0;
+                    const hasContenu = detail && detail.contenu.length > 0;
+                    if (!hasCours && !hasContenu) {
+                      return (
+                        <td colSpan={3} className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px]" style={{ backgroundColor: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.25)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                            Aucune matière assignée
+                          </span>
+                        </td>
+                      );
+                    }
+                    return (
+                      <td colSpan={3} className="px-4 py-2">
+                        <div className="flex flex-wrap gap-x-5 gap-y-1">
+                          {hasCours && detail.cours.map(g => (
+                            <div key={`cours-${g.formation}`} className="flex items-center gap-1.5 min-w-0">
+                              <BookOpen size={10} style={{ color: "rgba(52,211,153,0.7)", flexShrink: 0 }} />
+                              <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(52,211,153,0.9)" }}>{g.formation}</span>
+                              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.15)" }}>·</span>
+                              <span className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{g.matieres.join(", ")}</span>
+                            </div>
+                          ))}
+                          {hasContenu && detail.contenu.map(g => (
+                            <div key={`contenu-${g.formation}`} className="flex items-center gap-1.5 min-w-0">
+                              <FileText size={10} style={{ color: "rgba(96,165,250,0.7)", flexShrink: 0 }} />
+                              <span className="text-[10px] font-semibold shrink-0" style={{ color: "rgba(96,165,250,0.9)" }}>{g.formation}</span>
+                              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.15)" }}>·</span>
+                              <span className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{g.matieres.join(", ")}</span>
+                            </div>
                           ))}
                         </div>
-                      ) : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>;
-                    })() : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
-                  </td>
-                  {/* Contenu */}
-                  <td className="px-4 py-3">
-                    {u.role === "prof" ? (() => {
-                      const summary = profFormationSummary.get(u.id);
-                      const contenu = summary?.contenu ?? [];
-                      return contenu.length > 0 ? (
-                        <div className="space-y-0.5">
-                          {contenu.map(f => (
-                            <span key={f} className="block text-[10px] font-medium truncate max-w-[200px]" style={{ color: "rgba(96,165,250,0.8)" }}>{f}</span>
-                          ))}
-                        </div>
-                      ) : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>;
-                    })() : <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
-                  </td>
-                  {/* Groupe */}
-                  <td className="px-4 py-3">
-                    {info.classe ? (
-                      <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
-                        {info.classe.name}
-                      </span>
-                    ) : u.role === "coach" ? (
-                      <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Multi-classes</span>
-                    ) : (
-                      <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
-                    )}
-                  </td>
+                      </td>
+                    );
+                  })() : (
+                    <>
+                      {/* Donne cours — non-prof */}
+                      <td className="px-4 py-3">
+                        <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                      </td>
+                      {/* Contenu — non-prof */}
+                      <td className="px-4 py-3">
+                        <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                      </td>
+                      {/* Groupe */}
+                      <td className="px-4 py-3">
+                        {info.classe ? (
+                          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.6)" }}>
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: info.classe.color }} />
+                            {info.classe.name}
+                          </span>
+                        ) : u.role === "coach" ? (
+                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Multi-classes</span>
+                        ) : (
+                          <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>—</span>
+                        )}
+                      </td>
+                    </>
+                  )}
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button

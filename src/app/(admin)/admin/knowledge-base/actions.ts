@@ -341,6 +341,7 @@ export async function syncPlatformToKb() {
     { slug: "personnel", name: "Personnel & Contacts", icon: "Users", color: "#10B981" },
     { slug: "plannings", name: "Plannings & Calendriers", icon: "Calendar", color: "#F59E0B" },
     { slug: "procedures", name: "Procédures & Règlement", icon: "FileText", color: "#EF4444" },
+    { slug: "coaching", name: "Coaching — Général", icon: "HeartHandshake", color: "#EC4899" },
   ];
 
   const catMap = new Map<string, string>();
@@ -469,6 +470,96 @@ export async function syncPlatformToKb() {
           published_at: new Date().toISOString(),
           visibility: "staff_only",
           tags: ["personnel", p.role, (p.last_name ?? "").toLowerCase()],
+        });
+        created++;
+      }
+    }
+  }
+
+  // ─── Create coaching categories per formation ───
+  if (dossiers) {
+    const formationDossiers = dossiers.filter(d => d.dossier_type === "offer" || d.dossier_type === "university");
+    for (const formation of formationDossiers) {
+      const slug = `coaching-${formation.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+      const { data: existing } = await admin.from("kb_categories").select("id").eq("slug", slug).single();
+      if (existing) {
+        catMap.set(slug, existing.id);
+      } else {
+        const { data: newCat } = await admin.from("kb_categories")
+          .insert({
+            name: `Coaching — ${formation.name}`,
+            slug,
+            icon: "HeartHandshake",
+            color: "#EC4899",
+            order_index: 10 + formationDossiers.indexOf(formation),
+          })
+          .select("id").single();
+        if (newCat) { catMap.set(slug, newCat.id); created++; }
+      }
+
+      const parentId = catMap.get(slug);
+      if (parentId) {
+        const subCats = [
+          { suffix: "orga", name: "Organisation & Planning", icon: "Calendar", color: "#F59E0B" },
+          { suffix: "matieres", name: "Matières & Révisions", icon: "BookOpen", color: "#8B5CF6" },
+          { suffix: "examens", name: "Examens & Concours", icon: "Target", color: "#EF4444" },
+          { suffix: "methode", name: "Méthodologie", icon: "Stethoscope", color: "#10B981" },
+        ];
+        for (const sub of subCats) {
+          const subSlug = `${slug}-${sub.suffix}`;
+          const { data: existingSub } = await admin.from("kb_categories").select("id").eq("slug", subSlug).single();
+          if (!existingSub) {
+            await admin.from("kb_categories").insert({
+              name: sub.name,
+              slug: subSlug,
+              parent_id: parentId,
+              icon: sub.icon,
+              color: sub.color,
+              order_index: subCats.indexOf(sub),
+            });
+            created++;
+          }
+        }
+      }
+    }
+  }
+
+  // ─── Create per-formation sub-categories for matières & pédagogie ───
+  if (dossiers && catMap.has("matieres-pedagogie")) {
+    const matPedaParent = catMap.get("matieres-pedagogie")!;
+    const formationDossiers = dossiers.filter(d => d.dossier_type === "offer" || d.dossier_type === "university");
+    for (const formation of formationDossiers) {
+      const subSlug = `matieres-${formation.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+      const { data: existing } = await admin.from("kb_categories").select("id").eq("slug", subSlug).single();
+      if (!existing) {
+        await admin.from("kb_categories").insert({
+          name: formation.name,
+          slug: subSlug,
+          parent_id: matPedaParent,
+          icon: "School",
+          color: formation.color || "#3B82F6",
+          order_index: formationDossiers.indexOf(formation),
+        });
+        created++;
+      }
+    }
+  }
+
+  // ─── Create per-formation sub-categories for formations & classes ───
+  if (dossiers && catMap.has("formations")) {
+    const formationsParent = catMap.get("formations")!;
+    const formationDossiers = dossiers.filter(d => d.dossier_type === "offer" || d.dossier_type === "university");
+    for (const formation of formationDossiers) {
+      const subSlug = `formations-${formation.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+      const { data: existing } = await admin.from("kb_categories").select("id").eq("slug", subSlug).single();
+      if (!existing) {
+        await admin.from("kb_categories").insert({
+          name: formation.name,
+          slug: subSlug,
+          parent_id: formationsParent,
+          icon: "GraduationCap",
+          color: formation.color || "#3B82F6",
+          order_index: formationDossiers.indexOf(formation),
         });
         created++;
       }
