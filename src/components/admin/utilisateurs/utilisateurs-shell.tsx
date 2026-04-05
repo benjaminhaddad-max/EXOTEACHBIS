@@ -4837,6 +4837,11 @@ function EditUserModal({
                 g.ids.push(u.id);
                 g.subOffers.push({ id: u.id, label: u.parentSubOffer ?? "" });
               }
+              // Sort sub-offers by label (natural sort for "LSPS 1", "LSPS 2", etc.)
+              for (const g of groups.values()) {
+                g.subOffers.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+                g.ids = g.subOffers.map(so => so.id);
+              }
               const selectedGroup = [...groups.entries()].find(([, g]) => g.ids.includes(value));
               return (
                 <div className="space-y-1.5">
