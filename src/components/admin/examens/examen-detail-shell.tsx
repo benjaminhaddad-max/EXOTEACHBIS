@@ -727,7 +727,17 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
         setPopupPos({ top: r.bottom + 6, left });
       }
     }
-    setOpen(o => !o);
+    setOpen(o => {
+      // Auto-select today when opening with no date selected
+      if (!o && !selectedDate) {
+        const now = new Date();
+        setSelectedDate(now);
+        setViewYear(now.getFullYear());
+        setViewMonth(now.getMonth());
+        applyDateTime(now, timeH, timeM);
+      }
+      return !o;
+    });
   };
 
   useEffect(() => {
