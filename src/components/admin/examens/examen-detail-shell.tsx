@@ -767,11 +767,15 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const POPUP_W = 256;
+      const POPUP_H = 370; // approximate popup height
+      // Open above if not enough room below
+      const openAbove = r.bottom + POPUP_H + 10 > window.innerHeight;
+      const top = openAbove ? Math.max(4, r.top - POPUP_H - 6) : r.bottom + 6;
       if (placement === "right") {
-        setPopupPos({ top: r.bottom + 6, right: Math.max(4, window.innerWidth - r.right) });
+        setPopupPos({ top, right: Math.max(4, window.innerWidth - r.right) });
       } else {
         const left = Math.max(4, Math.min(r.left, window.innerWidth - POPUP_W - 4));
-        setPopupPos({ top: r.bottom + 6, left });
+        setPopupPos({ top, left });
       }
     }
     setOpen(o => {
