@@ -730,9 +730,16 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
   };
 
   const handleTime = (field: "h" | "m", val: string) => {
-    const padded = val.padStart(2, "0");
-    if (field === "h") { setTimeH(padded); if (selectedDate) applyDateTime(selectedDate, padded, timeM); }
-    else { setTimeM(padded); if (selectedDate) applyDateTime(selectedDate, timeH, padded); }
+    // Clamp values: hours 0-23, minutes 0-59
+    const num = parseInt(val) || 0;
+    const clamped = field === "h" ? Math.min(num, 23) : Math.min(num, 59);
+    const raw = val === "" ? "" : String(clamped);
+    if (field === "h") { setTimeH(raw); if (selectedDate) applyDateTime(selectedDate, raw || "0", timeM); }
+    else { setTimeM(raw); if (selectedDate) applyDateTime(selectedDate, timeH, raw || "0"); }
+  };
+  const handleTimeBlur = (field: "h" | "m") => {
+    if (field === "h") setTimeH(prev => prev.padStart(2, "0"));
+    else setTimeM(prev => prev.padStart(2, "0"));
   };
 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
@@ -806,12 +813,16 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
               <input
                 type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={timeH}
                 onChange={e => handleTime("h", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                onBlur={() => handleTimeBlur("h")}
+                onFocus={e => e.target.select()}
                 className="w-10 bg-white/8 border border-white/15 rounded-lg py-1.5 text-xs text-white text-center font-mono focus:outline-none focus:border-[#C9A84C]/60"
               />
               <span className="text-white/40 text-sm font-bold">:</span>
               <input
                 type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={timeM}
                 onChange={e => handleTime("m", e.target.value.replace(/\D/g, "").slice(0, 2))}
+                onBlur={() => handleTimeBlur("m")}
+                onFocus={e => e.target.select()}
                 className="w-10 bg-white/8 border border-white/15 rounded-lg py-1.5 text-xs text-white text-center font-mono focus:outline-none focus:border-[#C9A84C]/60"
               />
             </div>
