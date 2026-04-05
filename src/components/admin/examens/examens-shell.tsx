@@ -657,10 +657,9 @@ export function ExamensShell({
                         )}
                       </div>
                       {!isProf && (
-                        <div className="flex gap-1 shrink-0" onClick={(ev) => ev.preventDefault()}>
+                        <div className="flex gap-1 shrink-0" onClick={(ev) => ev.stopPropagation()}>
                           <a
                             href={`/admin/examens/${e.id}`}
-                            onClick={(ev) => ev.stopPropagation()}
                             className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
                           >
                             <Pencil size={13} />
