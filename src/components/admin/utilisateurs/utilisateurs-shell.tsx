@@ -4776,12 +4776,23 @@ function EditUserModal({
             // Build formation offers & universities from dossiers
             const offers = dossiers.filter((d) => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
 
-            const getUnisForOffer = (offerId: string) => {
+            const getUnisForOffer = (offerId: string): { id: string; name: string }[] => {
               // Find universities anywhere under the offer (not just direct children)
               const descendantIds = new Set<string>();
               const walkOfferTree = (pid: string) => { descendantIds.add(pid); dossiers.filter(d => d.parent_id === pid).forEach(d => walkOfferTree(d.id)); };
               walkOfferTree(offerId);
-              return dossiers.filter(d => d.dossier_type === "university" && descendantIds.has(d.parent_id!)).sort((a, b) => a.order_index - b.order_index);
+              const unis = dossiers.filter(d => d.dossier_type === "university" && descendantIds.has(d.parent_id!)).sort((a, b) => a.order_index - b.order_index);
+              // Check for duplicate names — append parent sub-offer to disambiguate
+              const nameCount = new Map<string, number>();
+              for (const u of unis) { nameCount.set(u.name, (nameCount.get(u.name) ?? 0) + 1); }
+              return unis.map(u => {
+                if ((nameCount.get(u.name) ?? 0) > 1) {
+                  const parent = dossiers.find(d => d.id === u.parent_id);
+                  const suffix = parent && parent.dossier_type !== "offer" ? ` · ${parent.name}` : "";
+                  return { id: u.id, name: u.name + suffix };
+                }
+                return { id: u.id, name: u.name };
+              });
             };
 
             const getGroupesForUni = (uniId: string) =>
