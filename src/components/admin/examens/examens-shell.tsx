@@ -658,12 +658,13 @@ export function ExamensShell({
                       </div>
                       {!isProf && (
                         <div className="flex gap-1 shrink-0" onClick={(ev) => ev.preventDefault()}>
-                          <button
-                            onClick={(ev) => { ev.preventDefault(); setModal({ type: "edit", examen: e }); }}
+                          <a
+                            href={`/admin/examens/${e.id}`}
+                            onClick={(ev) => ev.stopPropagation()}
                             className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors"
                           >
                             <Pencil size={13} />
-                          </button>
+                          </a>
                           <button
                             onClick={(ev) => { ev.preventDefault(); handleDeleteExamen(e.id); }}
                             className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition-colors"
