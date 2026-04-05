@@ -457,40 +457,26 @@ export function UtilisateursShell({
       {/* ── Left Panel ────────────────────────────────────────────────────── */}
       <div className="w-[380px] flex-shrink-0 flex flex-col" style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}>
 
-        {/* Header */}
-        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <div>
-            <h1 className="text-base font-bold text-white">Administration</h1>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-orange-300" style={{ backgroundColor: "rgba(249,115,22,0.1)" }}>
-                {stats.admins} admin{stats.admins !== 1 ? "s" : ""}
-              </span>
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-blue-300" style={{ backgroundColor: "rgba(59,130,246,0.1)" }}>
-                {stats.profs} prof{stats.profs !== 1 ? "s" : ""}
-              </span>
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full text-green-300" style={{ backgroundColor: "rgba(16,185,129,0.1)" }}>
-                {stats.eleves} élève{stats.eleves !== 1 ? "s" : ""}
-              </span>
-            </div>
-          </div>
+        {/* Sidebar nav */}
+        <div className="px-3 pt-4 pb-2 space-y-1">
           <button
             onClick={() => { setView("comptes"); setSelectedGroupeId(null); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-colors"
             style={{
-              backgroundColor: view === "comptes" ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)",
-              color: view === "comptes" ? "#C9A84C" : "rgba(255,255,255,0.5)",
-              border: view === "comptes" ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.08)",
+              backgroundColor: view === "comptes" ? "rgba(201,168,76,0.12)" : "transparent",
+              color: view === "comptes" ? "#C9A84C" : "rgba(255,255,255,0.6)",
+              border: view === "comptes" ? "1px solid rgba(201,168,76,0.2)" : "1px solid transparent",
             }}
           >
-            <Users size={12} />
+            <Users size={14} />
             Liste des utilisateurs
           </button>
         </div>
 
         {/* Arborescence header */}
-        <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+        <div className="px-5 pt-3 pb-2 flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-            Formations & Classes
+            Offres & Classes
           </span>
         </div>
 
@@ -2085,8 +2071,8 @@ function ComptesView({
                         bySubOffer.get(key)!.push(g);
                       }
                       return [...bySubOffer.entries()].map(([subOfferKey, subGroups]) => (
-                        <div key={`${roleLabel}-${subOfferKey}`} className="space-y-1">
-                          {/* Sub-offer header */}
+                        <div key={`${roleLabel}-${subOfferKey}`} className="space-y-1.5">
+                          {/* Header: role + formation + sub-offer */}
                           <div className="flex items-center gap-1.5">
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: `${accentColor}1F`, color: accentColor }}>
                               <RoleIcon size={9} /> {roleLabel}
@@ -2098,14 +2084,15 @@ function ComptesView({
                           </div>
                           {/* Universities under this sub-offer */}
                           {subGroups.map(g => (
-                            <div key={`${g.university}`} className="pl-4">
-                              {g.university && subGroups.length > 1 && (
-                                <div className="text-[9px] mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{g.university} ({g.matieres.length})</div>
+                            <div key={`${g.university}`} className="pl-4 pb-1">
+                              {g.university && (
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <Building2 size={10} style={{ color: "rgba(255,255,255,0.35)", flexShrink: 0 }} />
+                                  <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.6)" }}>{g.university}</span>
+                                  <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>({g.matieres.length})</span>
+                                </div>
                               )}
-                              {g.university && subGroups.length === 1 && (
-                                <div className="text-[9px] mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{g.university} ({g.matieres.length})</div>
-                              )}
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex flex-wrap gap-1 pl-4">
                                 {g.matieres.map(m => (
                                   <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: `${accentColor}14`, color: `${accentColor}BF`, border: `1px solid ${accentColor}1F` }}>{m}</span>
                                 ))}
