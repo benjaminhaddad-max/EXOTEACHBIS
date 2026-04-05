@@ -1869,7 +1869,9 @@ function ComptesView({
     const result = new Map<string, ProfDetail>();
     for (const [profId, entry] of map) {
       const toGroups = (m: Map<string, EntryVal>) =>
-        [...m.entries()].map(([key, v]) => ({ formation: key.split("||")[0], university: v.uni, subOffer: v.subOffer, matieres: v.mats }));
+        [...m.entries()]
+          .map(([key, v]) => ({ formation: key.split("||")[0], university: v.uni, subOffer: v.subOffer, matieres: v.mats }))
+          .sort((a, b) => (a.subOffer ?? "").localeCompare(b.subOffer ?? "", undefined, { numeric: true }) || (a.university ?? "").localeCompare(b.university ?? ""));
       result.set(profId, { cours: toGroups(entry.cours), contenu: toGroups(entry.contenu) });
     }
     return result;
@@ -2072,45 +2074,52 @@ function ComptesView({
                         </td>
                       );
                     }
+                    // Group entries by subOffer for clean display
+                    const renderSection = (groups: ProfFormationGroup[], roleLabel: string, RoleIcon: typeof BookOpen, accentColor: string) => {
+                      if (groups.length === 0) return null;
+                      // Group by subOffer
+                      const bySubOffer = new Map<string, ProfFormationGroup[]>();
+                      for (const g of groups) {
+                        const key = g.subOffer ?? "__none__";
+                        if (!bySubOffer.has(key)) bySubOffer.set(key, []);
+                        bySubOffer.get(key)!.push(g);
+                      }
+                      return [...bySubOffer.entries()].map(([subOfferKey, subGroups]) => (
+                        <div key={`${roleLabel}-${subOfferKey}`} className="space-y-1">
+                          {/* Sub-offer header */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: `${accentColor}1F`, color: accentColor }}>
+                              <RoleIcon size={9} /> {roleLabel}
+                            </span>
+                            <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{subGroups[0].formation}</span>
+                            {subOfferKey !== "__none__" && (
+                              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>{subOfferKey}</span>
+                            )}
+                          </div>
+                          {/* Universities under this sub-offer */}
+                          {subGroups.map(g => (
+                            <div key={`${g.university}`} className="pl-4">
+                              {g.university && subGroups.length > 1 && (
+                                <div className="text-[9px] mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{g.university} ({g.matieres.length})</div>
+                              )}
+                              {g.university && subGroups.length === 1 && (
+                                <div className="text-[9px] mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{g.university} ({g.matieres.length})</div>
+                              )}
+                              <div className="flex flex-wrap gap-1">
+                                {g.matieres.map(m => (
+                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: `${accentColor}14`, color: `${accentColor}BF`, border: `1px solid ${accentColor}1F` }}>{m}</span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ));
+                    };
                     return (
                       <td colSpan={3} className="px-4 py-2.5">
-                        <div className="space-y-1.5">
-                          {/* Cours section */}
-                          {hasCours && detail.cours.map(g => (
-                            <div key={`cours-${g.formation}-${g.university}-${g.subOffer}`}>
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "rgba(52,211,153,0.9)" }}>
-                                  <BookOpen size={9} /> Cours
-                                </span>
-                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
-                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}{g.subOffer ? ` · ${g.subOffer}` : ""}</span>}
-                                <span className="text-[9px] font-medium" style={{ color: "rgba(52,211,153,0.5)" }}>({g.matieres.length})</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1 pl-4">
-                                {g.matieres.map(m => (
-                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: "rgba(52,211,153,0.08)", color: "rgba(52,211,153,0.75)", border: "1px solid rgba(52,211,153,0.12)" }}>{m}</span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                          {/* Contenu section */}
-                          {hasContenu && detail.contenu.map(g => (
-                            <div key={`contenu-${g.formation}-${g.university}-${g.subOffer}`}>
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(96,165,250,0.12)", color: "rgba(96,165,250,0.9)" }}>
-                                  <FileText size={9} /> Contenu
-                                </span>
-                                <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
-                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}{g.subOffer ? ` · ${g.subOffer}` : ""}</span>}
-                                <span className="text-[9px] font-medium" style={{ color: "rgba(96,165,250,0.5)" }}>({g.matieres.length})</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1 pl-4">
-                                {g.matieres.map(m => (
-                                  <span key={m} className="inline-flex px-1.5 py-0.5 rounded text-[9px]" style={{ backgroundColor: "rgba(96,165,250,0.08)", color: "rgba(96,165,250,0.75)", border: "1px solid rgba(96,165,250,0.12)" }}>{m}</span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                        <div className="space-y-2">
+                          {renderSection(detail.cours, "Cours", BookOpen, "#34D399")}
+                          {renderSection(detail.contenu, "Contenu", FileText, "#60A5FA")}
                         </div>
                       </td>
                     );
