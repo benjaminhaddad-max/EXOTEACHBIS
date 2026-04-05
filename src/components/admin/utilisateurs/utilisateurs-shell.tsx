@@ -1678,43 +1678,67 @@ function ComptesView({
     return descendants.has(g.formation_dossier_id);
   }, [getDescendantIds]);
 
+  // Map prof_id -> set of ancestor dossier IDs (for formation filtering of profs)
+  const profAncestorDossierIds = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const pm of profMatieres) {
+      if (!map.has(pm.prof_id)) map.set(pm.prof_id, new Set());
+      const matiere = matieres.find(m => m.id === pm.matiere_id);
+      if (matiere?.dossier_id) {
+        let dId: string | null = matiere.dossier_id;
+        while (dId) {
+          map.get(pm.prof_id)!.add(dId);
+          const d = dMap.get(dId);
+          dId = d?.parent_id ?? null;
+        }
+      }
+    }
+    return map;
+  }, [profMatieres, matieres, dMap]);
+
+  // Check if a prof teaches in a given dossier subtree
+  const profBelongsToSubtree = useCallback((profId: string, rootId: string): boolean => {
+    return profAncestorDossierIds.get(profId)?.has(rootId) ?? false;
+  }, [profAncestorDossierIds]);
+
   // Formations (offers)
   const formations = useMemo(() => {
     return dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index).map(d => {
       const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === d.id);
-      const count = users.filter(u => u.groupe_id && formGroupes.some(g => g.id === u.groupe_id)).length;
-      return { id: d.id, name: d.name, count };
+      const groupCount = users.filter(u => u.groupe_id && formGroupes.some(g => g.id === u.groupe_id)).length;
+      const profCount = users.filter(u => u.role === "prof" && (profAncestorDossierIds.get(u.id)?.has(d.id) ?? false)).length;
+      return { id: d.id, name: d.name, count: groupCount + profCount };
     });
-  }, [dossiers, groupes, users]);
+  }, [dossiers, groupes, users, profAncestorDossierIds]);
 
   // Sub-offers (only when formation is selected and has sub_offer children)
   const filteredSubOffers = useMemo(() => {
     if (!filterFormationId) return [];
     return dossiers.filter(d => d.dossier_type === "sub_offer" && d.parent_id === filterFormationId).sort((a, b) => a.order_index - b.order_index).map(d => {
       const subGroupes = groupes.filter(g => groupBelongsToSubtree(g, d.id));
-      const count = users.filter(u => u.groupe_id && subGroupes.some(g => g.id === u.groupe_id)).length;
-      return { id: d.id, name: d.name, count };
+      const groupCount = users.filter(u => u.groupe_id && subGroupes.some(g => g.id === u.groupe_id)).length;
+      const profCount = users.filter(u => u.role === "prof" && profBelongsToSubtree(u.id, d.id)).length;
+      return { id: d.id, name: d.name, count: groupCount + profCount };
     });
-  }, [dossiers, groupes, users, filterFormationId, groupBelongsToSubtree]);
+  }, [dossiers, groupes, users, filterFormationId, groupBelongsToSubtree, profBelongsToSubtree]);
 
   // Universities (filtered by selected formation or sub-offer)
   const filteredUniversities = useMemo(() => {
     let unis = dossiers.filter(d => d.dossier_type === "university");
     if (filterSubOfferId) {
-      // Show universities under this sub-offer (direct or nested)
       const descendants = getDescendantIds(filterSubOfferId);
       unis = unis.filter(d => d.parent_id === filterSubOfferId || descendants.has(d.id));
     } else if (filterFormationId) {
-      // Show universities anywhere under this formation
       const descendants = getDescendantIds(filterFormationId);
       unis = unis.filter(d => descendants.has(d.id) || d.parent_id === filterFormationId);
     }
     return unis.sort((a, b) => a.order_index - b.order_index).map(d => {
       const uniGroupes = groupes.filter(g => groupBelongsToSubtree(g, d.id));
-      const count = users.filter(u => u.groupe_id && uniGroupes.some(g => g.id === u.groupe_id)).length;
-      return { id: d.id, name: d.name, count };
+      const groupCount = users.filter(u => u.groupe_id && uniGroupes.some(g => g.id === u.groupe_id)).length;
+      const profCount = users.filter(u => u.role === "prof" && profBelongsToSubtree(u.id, d.id)).length;
+      return { id: d.id, name: d.name, count: groupCount + profCount };
     });
-  }, [dossiers, groupes, users, filterFormationId, filterSubOfferId, getDescendantIds, groupBelongsToSubtree]);
+  }, [dossiers, groupes, users, filterFormationId, filterSubOfferId, getDescendantIds, groupBelongsToSubtree, profBelongsToSubtree]);
 
   // Classes (filtered by selected university or higher)
   const filteredClasses = useMemo(() => {
@@ -1737,21 +1761,38 @@ function ComptesView({
   const filteredBeforeRole = useMemo(() => users.filter(u => {
     const q = search.toLowerCase();
     if (q && !`${u.first_name ?? ""} ${u.last_name ?? ""} ${u.email}`.toLowerCase().includes(q)) return false;
-    if (filterGroupeId && u.groupe_id !== filterGroupeId) return false;
+    if (filterGroupeId && u.groupe_id !== filterGroupeId && u.role !== "prof") return false;
+    if (filterGroupeId && u.role === "prof") {
+      // Profs don't have groupe_id — check via prof_matieres
+      const g = groupes.find(gr => gr.id === filterGroupeId);
+      if (g?.formation_dossier_id && !profBelongsToSubtree(u.id, g.formation_dossier_id)) return false;
+    }
     if (filterUniversityId && !filterGroupeId) {
-      const uniGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterUniversityId));
-      if (!uniGroupes.some(g => g.id === u.groupe_id)) return false;
+      if (u.role === "prof") {
+        if (!profBelongsToSubtree(u.id, filterUniversityId)) return false;
+      } else {
+        const uniGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterUniversityId));
+        if (!uniGroupes.some(g => g.id === u.groupe_id)) return false;
+      }
     }
     if (filterSubOfferId && !filterUniversityId && !filterGroupeId) {
-      const subGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterSubOfferId));
-      if (!subGroupes.some(g => g.id === u.groupe_id)) return false;
+      if (u.role === "prof") {
+        if (!profBelongsToSubtree(u.id, filterSubOfferId)) return false;
+      } else {
+        const subGroupes = groupes.filter(g => groupBelongsToSubtree(g, filterSubOfferId));
+        if (!subGroupes.some(g => g.id === u.groupe_id)) return false;
+      }
     }
     if (filterFormationId && !filterSubOfferId && !filterUniversityId && !filterGroupeId) {
-      const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === filterFormationId);
-      if (!formGroupes.some(g => g.id === u.groupe_id)) return false;
+      if (u.role === "prof") {
+        if (!profBelongsToSubtree(u.id, filterFormationId)) return false;
+      } else {
+        const formGroupes = groupes.filter(g => getFormationForGroup(g)?.id === filterFormationId);
+        if (!formGroupes.some(g => g.id === u.groupe_id)) return false;
+      }
     }
     return true;
-  }), [users, search, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, groupes, groupBelongsToSubtree]);
+  }), [users, search, filterGroupeId, filterUniversityId, filterSubOfferId, filterFormationId, groupes, groupBelongsToSubtree, profBelongsToSubtree]);
 
   // Filtered users (with role filter)
   const filtered = useMemo(() => filteredBeforeRole.filter(u => {
