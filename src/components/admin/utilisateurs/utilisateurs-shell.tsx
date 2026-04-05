@@ -1839,11 +1839,12 @@ function ComptesView({
     return chain;
   };
 
-  // Build prof detail summaries: matières grouped by formation+university, split by role_type
-  type ProfFormationGroup = { formation: string; university: string | null; matieres: string[] };
+  // Build prof detail summaries: matières grouped by formation+university+subOffer, split by role_type
+  type ProfFormationGroup = { formation: string; university: string | null; subOffer: string | null; matieres: string[] };
   type ProfDetail = { cours: ProfFormationGroup[]; contenu: ProfFormationGroup[] };
   const profDetailSummary = useMemo(() => {
-    const map = new Map<string, { cours: Map<string, { uni: string | null; mats: string[] }>; contenu: Map<string, { uni: string | null; mats: string[] }> }>();
+    type EntryVal = { uni: string | null; subOffer: string | null; mats: string[] };
+    const map = new Map<string, { cours: Map<string, EntryVal>; contenu: Map<string, EntryVal> }>();
     for (const pm of profMatieres) {
       if (!map.has(pm.prof_id)) map.set(pm.prof_id, { cours: new Map(), contenu: new Map() });
       const entry = map.get(pm.prof_id)!;
@@ -1852,12 +1853,13 @@ function ComptesView({
       const matDossier = matiere.dossier_id ? dMap.get(matiere.dossier_id) : null;
       const chain = matDossier ? getAncestorChain(matDossier.id) : [];
       const offer = chain.find(d => d.dossier_type === "offer");
+      const subOffer = chain.find(d => d.dossier_type === "sub_offer");
       const uni = chain.find(d => d.dossier_type === "university");
-      const groupKey = `${offer?.name ?? "Autre"}||${uni?.name ?? ""}`;
-      const formationLabel = offer?.name ?? "Autre";
+      const groupKey = `${offer?.name ?? "Autre"}||${uni?.name ?? ""}||${subOffer?.name ?? ""}`;
       const uniLabel = uni?.name?.replace("Université ", "") ?? null;
-      const addTo = (target: Map<string, { uni: string | null; mats: string[] }>) => {
-        if (!target.has(groupKey)) target.set(groupKey, { uni: uniLabel, mats: [] });
+      const subOfferLabel = subOffer?.name ?? null;
+      const addTo = (target: Map<string, EntryVal>) => {
+        if (!target.has(groupKey)) target.set(groupKey, { uni: uniLabel, subOffer: subOfferLabel, mats: [] });
         const arr = target.get(groupKey)!;
         if (!arr.mats.includes(matiere.name)) arr.mats.push(matiere.name);
       };
@@ -1866,8 +1868,8 @@ function ComptesView({
     }
     const result = new Map<string, ProfDetail>();
     for (const [profId, entry] of map) {
-      const toGroups = (m: Map<string, { uni: string | null; mats: string[] }>) =>
-        [...m.entries()].map(([key, v]) => ({ formation: key.split("||")[0], university: v.uni, matieres: v.mats }));
+      const toGroups = (m: Map<string, EntryVal>) =>
+        [...m.entries()].map(([key, v]) => ({ formation: key.split("||")[0], university: v.uni, subOffer: v.subOffer, matieres: v.mats }));
       result.set(profId, { cours: toGroups(entry.cours), contenu: toGroups(entry.contenu) });
     }
     return result;
@@ -2075,13 +2077,13 @@ function ComptesView({
                         <div className="space-y-1.5">
                           {/* Cours section */}
                           {hasCours && detail.cours.map(g => (
-                            <div key={`cours-${g.formation}-${g.university}`}>
+                            <div key={`cours-${g.formation}-${g.university}-${g.subOffer}`}>
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(52,211,153,0.12)", color: "rgba(52,211,153,0.9)" }}>
                                   <BookOpen size={9} /> Cours
                                 </span>
                                 <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
-                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}</span>}
+                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}{g.subOffer ? ` · ${g.subOffer}` : ""}</span>}
                                 <span className="text-[9px] font-medium" style={{ color: "rgba(52,211,153,0.5)" }}>({g.matieres.length})</span>
                               </div>
                               <div className="flex flex-wrap gap-1 pl-4">
@@ -2093,13 +2095,13 @@ function ComptesView({
                           ))}
                           {/* Contenu section */}
                           {hasContenu && detail.contenu.map(g => (
-                            <div key={`contenu-${g.formation}-${g.university}`}>
+                            <div key={`contenu-${g.formation}-${g.university}-${g.subOffer}`}>
                               <div className="flex items-center gap-1.5 mb-0.5">
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0" style={{ backgroundColor: "rgba(96,165,250,0.12)", color: "rgba(96,165,250,0.9)" }}>
                                   <FileText size={9} /> Contenu
                                 </span>
                                 <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>{g.formation}</span>
-                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}</span>}
+                                {g.university && <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>· {g.university}{g.subOffer ? ` · ${g.subOffer}` : ""}</span>}
                                 <span className="text-[9px] font-medium" style={{ color: "rgba(96,165,250,0.5)" }}>({g.matieres.length})</span>
                               </div>
                               <div className="flex flex-wrap gap-1 pl-4">
