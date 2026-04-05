@@ -4776,8 +4776,13 @@ function EditUserModal({
             // Build formation offers & universities from dossiers
             const offers = dossiers.filter((d) => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
 
-            const getUnisForOffer = (offerId: string) =>
-              dossiers.filter((d) => d.dossier_type === "university" && d.parent_id === offerId).sort((a, b) => a.order_index - b.order_index);
+            const getUnisForOffer = (offerId: string) => {
+              // Find universities anywhere under the offer (not just direct children)
+              const descendantIds = new Set<string>();
+              const walkOfferTree = (pid: string) => { descendantIds.add(pid); dossiers.filter(d => d.parent_id === pid).forEach(d => walkOfferTree(d.id)); };
+              walkOfferTree(offerId);
+              return dossiers.filter(d => d.dossier_type === "university" && descendantIds.has(d.parent_id!)).sort((a, b) => a.order_index - b.order_index);
+            };
 
             const getGroupesForUni = (uniId: string) =>
               groupes.filter((g) => g.formation_dossier_id === uniId);
