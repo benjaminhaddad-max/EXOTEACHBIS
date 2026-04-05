@@ -11,6 +11,7 @@ import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/type
 import {
   addSerieToExamen, removeSerieFromExamen, updateExamen,
   updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility, updateSerieGroupes, ensureSubjectMatiere,
+  getUniversityCoefficients,
 } from "@/app/(admin)/admin/examens/actions";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
@@ -145,6 +146,25 @@ export function ExamenDetailShell({
   const addedMatiereIds = new Set(epreuves.map(es => es.series?.matiere_id).filter(Boolean));
   const addedSerieNames = new Set(epreuves.map(es => es.series?.name).filter(Boolean));
 
+  // Load university coefficients for auto-fill
+  const [uniCoeffMap, setUniCoeffMap] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    const uniIds = [...targetUniIds];
+    if (uniIds.length === 0) return;
+    // Load coefficients for the first target university
+    getUniversityCoefficients(uniIds[0]).then(res => {
+      if (res.data) {
+        const m = new Map<string, number>();
+        for (const row of res.data as any[]) {
+          if (row.subject_dossier_id && row.coefficient != null) {
+            m.set(row.subject_dossier_id, row.coefficient);
+          }
+        }
+        setUniCoeffMap(m);
+      }
+    });
+  }, [targetUniIds]);
+
   // --- HANDLERS ---
   const handleAddSubject = async (subject: Dossier) => {
     setCreating(subject.id);
@@ -156,12 +176,14 @@ export function ExamenDetailShell({
         if ("error" in matiereRes) { showToast(matiereRes.error!, "error"); return; }
         matiere = (matiereRes as any).data ?? null;
       }
+      // Use university coefficient if configured, otherwise default to 1
+      const coeff = uniCoeffMap.get(subject.id) ?? 1;
       const res = await createSerie({ name: serieName, type: "concours_blanc" as SerieType, timed: false, score_definitif: false, visible: true, matiere_id: matiere?.id ?? null });
       if ("error" in res) { showToast(res.error!, "error"); return; }
-      const addRes = await addSerieToExamen(initialExamen.id, res.id!, epreuves.length, 1);
+      const addRes = await addSerieToExamen(initialExamen.id, res.id!, epreuves.length, coeff);
       if ("error" in addRes) { showToast(addRes.error!, "error"); return; }
       const newSerie: Serie = { id: res.id!, name: serieName, type: "concours_blanc", description: null, cours_id: null, matiere_id: matiere?.id ?? null, timed: false, duration_minutes: null, score_definitif: false, visible: true, annee: null, linked_serie_id: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      setEpreuves(prev => [...prev, { series_id: res.id!, order_index: prev.length, coefficient: 1, series: newSerie }]);
+      setEpreuves(prev => [...prev, { series_id: res.id!, order_index: prev.length, coefficient: coeff, series: newSerie }]);
       showToast(`${subject.name} ajoutée`, "success");
     } finally { setCreating(null); }
   };
