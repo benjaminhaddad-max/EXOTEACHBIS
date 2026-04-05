@@ -762,16 +762,22 @@ export function DateTimePicker({ value, onChange, placeholder, placement = "left
   };
 
   const handleTime = (field: "h" | "m", val: string) => {
-    // Clamp values: hours 0-23, minutes 0-59
-    const num = parseInt(val) || 0;
-    const clamped = field === "h" ? Math.min(num, 23) : Math.min(num, 59);
-    const raw = val === "" ? "" : String(clamped);
-    if (field === "h") { setTimeH(raw); if (selectedDate) applyDateTime(selectedDate, raw || "0", timeM); }
-    else { setTimeM(raw); if (selectedDate) applyDateTime(selectedDate, timeH, raw || "0"); }
+    // Store raw value during typing — validate on blur
+    if (field === "h") { setTimeH(val); if (selectedDate) applyDateTime(selectedDate, val || "0", timeM); }
+    else { setTimeM(val); if (selectedDate) applyDateTime(selectedDate, timeH, val || "0"); }
   };
   const handleTimeBlur = (field: "h" | "m") => {
-    if (field === "h") setTimeH(prev => prev.padStart(2, "0"));
-    else setTimeM(prev => prev.padStart(2, "0"));
+    if (field === "h") {
+      setTimeH(prev => {
+        const n = Math.min(parseInt(prev) || 0, 23);
+        return String(n).padStart(2, "0");
+      });
+    } else {
+      setTimeM(prev => {
+        const n = Math.min(parseInt(prev) || 0, 59);
+        return String(n).padStart(2, "0");
+      });
+    }
   };
 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
