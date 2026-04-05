@@ -70,9 +70,36 @@ export async function updateExamen(
 
 export async function deleteExamen(id: string) {
   const supabase = await createClient();
+
+  // Retrieve associated series before deleting the exam
+  const { data: linkedSeries } = await supabase
+    .from("examens_series")
+    .select("series_id")
+    .eq("examen_id", id);
+
+  const seriesIds = (linkedSeries ?? []).map(r => r.series_id);
+
+  // Delete the exam (cascades to examens_series, examens_groupes, examen_results, etc.)
   const { error } = await supabase.from("examens").delete().eq("id", id);
   if (error) return { error: error.message };
+
+  // Delete orphaned series that are no longer linked to any other exam
+  if (seriesIds.length > 0) {
+    const { data: stillLinked } = await supabase
+      .from("examens_series")
+      .select("series_id")
+      .in("series_id", seriesIds);
+
+    const stillLinkedIds = new Set((stillLinked ?? []).map(r => r.series_id));
+    const orphanedIds = seriesIds.filter(sid => !stillLinkedIds.has(sid));
+
+    if (orphanedIds.length > 0) {
+      await supabase.from("series").delete().in("id", orphanedIds);
+    }
+  }
+
   revalidatePath(PATH);
+  revalidatePath("/admin/exercices");
   return { success: true };
 }
 
@@ -142,7 +169,7 @@ export async function updateSerieGroupes(
   return { success: true };
 }
 
-export async function removeSerieFromExamen(examen_id: string, series_id: string) {
+export async function removeSerieFromExamen(examen_id: string, series_id: string, alsoDeleteSerie: boolean = true) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("examens_series")
@@ -150,7 +177,22 @@ export async function removeSerieFromExamen(examen_id: string, series_id: string
     .eq("examen_id", examen_id)
     .eq("series_id", series_id);
   if (error) return { error: error.message };
+
+  // If requested, delete the serie if it's no longer linked to any exam
+  if (alsoDeleteSerie) {
+    const { data: stillLinked } = await supabase
+      .from("examens_series")
+      .select("series_id")
+      .eq("series_id", series_id)
+      .limit(1);
+
+    if (!stillLinked || stillLinked.length === 0) {
+      await supabase.from("series").delete().eq("id", series_id);
+    }
+  }
+
   revalidatePath(PATH);
+  revalidatePath("/admin/exercices");
   return { success: true };
 }
 
@@ -448,6 +490,34 @@ export async function getExamenResults(examen_id: string) {
     examen: examenRes.data,
     error: resultsRes.error?.message || serieResultsRes.error?.message || examenRes.error?.message,
   };
+}
+
+// --- Barème par défaut (admin_settings) ---
+
+export async function getDefaultGradingScale() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("admin_settings")
+    .select("value")
+    .eq("key", "default_grading_scale")
+    .single();
+  if (error || !data) return { data: [] };
+  try {
+    return { data: JSON.parse(data.value) as { nb_errors: number; points: number }[] };
+  } catch {
+    return { data: [] };
+  }
+}
+
+export async function saveDefaultGradingScale(scales: { nb_errors: number; points: number }[]) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("admin_settings")
+    .upsert({ key: "default_grading_scale", value: JSON.stringify(scales) }, { onConflict: "key" });
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  revalidatePath("/admin/examens/parametrage");
+  return { success: true };
 }
 
 // --- Paramétrage par université (barème QCM + coefficients matières) ---

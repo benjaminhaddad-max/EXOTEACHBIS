@@ -3,11 +3,13 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Check, Loader2, Plus, Save,
-  GraduationCap, Building2, ChevronDown, Layers,
+  GraduationCap, Building2, ChevronDown, Layers, Settings,
 } from "lucide-react";
 import Link from "next/link";
 import type { Dossier, Filiere, Matiere } from "@/types/database";
 import {
+  getDefaultGradingScale,
+  saveDefaultGradingScale,
   getUniversityGradingScale,
   upsertUniversityGradingScale,
   getUniversityCoefficients,
@@ -48,6 +50,7 @@ export function ParametrageShell({
     setTimeout(() => setToast(null), 3000);
   };
 
+  const isDefault = selectedId === "__default__";
   const selectedUni = useMemo(() => dossiers.find(d => d.id === selectedId), [dossiers, selectedId]);
 
   return (
@@ -81,7 +84,17 @@ export function ParametrageShell({
           </div>
         )}
 
-        {!selectedUni ? (
+        {isDefault ? (
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            <div>
+              <h2 className="text-sm font-bold text-white">Barème par défaut</h2>
+              <p className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>
+                Ce barème sera utilisé pour toute offre ou université qui n&apos;a pas de configuration spécifique.
+              </p>
+            </div>
+            <DefaultGradingSection showToast={showToast} />
+          </div>
+        ) : !selectedUni ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-2">
               <Building2 size={32} style={{ color: "rgba(255,255,255,0.15)" }} className="mx-auto" />
@@ -198,7 +211,26 @@ function ParametrageSidebar({ dossiers, selectedId, onSelect }: {
 
   return (
     <div className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full" style={{ width: 260, backgroundColor: "rgba(0,0,0,0.15)" }}>
-      <div className="px-4 pt-4 pb-2 shrink-0">
+      {/* Barème par défaut */}
+      <div className="px-3 pt-3 pb-2">
+        <button
+          onClick={() => onSelect("__default__")}
+          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all text-left"
+          style={{
+            backgroundColor: selectedId === "__default__" ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.03)",
+            border: selectedId === "__default__" ? "1px solid rgba(201,168,76,0.3)" : "1px solid rgba(255,255,255,0.06)",
+          }}
+          onMouseOver={e => { if (selectedId !== "__default__") e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.06)"; }}
+          onMouseOut={e => { e.currentTarget.style.backgroundColor = selectedId === "__default__" ? "rgba(201,168,76,0.12)" : "rgba(255,255,255,0.03)"; }}>
+          <Settings size={12} style={{ color: selectedId === "__default__" ? "#C9A84C" : "rgba(255,255,255,0.4)" }} />
+          <div>
+            <span className="text-[11px] font-bold block" style={{ color: selectedId === "__default__" ? "#C9A84C" : "rgba(255,255,255,0.6)" }}>Barème par défaut</span>
+            <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>Appliqué si aucun barème spécifique</span>
+          </div>
+        </button>
+      </div>
+
+      <div className="px-4 pt-1 pb-2 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
           Offres &amp; Universités
         </p>
@@ -296,6 +328,106 @@ function penaltiesToDbRows(penalties: number[]): ScaleRow[] {
     rows.push({ nb_errors: i + 1, points: +score.toFixed(4) });
   }
   return rows;
+}
+
+// ─── Default Grading Section (admin_settings) ────────────────────────────────
+
+function DefaultGradingSection({ showToast }: { showToast: (msg: string, kind: "success" | "error") => void }) {
+  const [penalties, setPenalties] = useState<number[]>(DEFAULT_PENALTIES);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getDefaultGradingScale().then(res => {
+      if (cancelled) return;
+      if (res.data && res.data.length > 0) {
+        setPenalties(dbRowsToPenalties(res.data));
+      } else {
+        setPenalties(DEFAULT_PENALTIES);
+      }
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const totals = useMemo(() => {
+    const t: number[] = [];
+    let score = 1;
+    for (const p of penalties) { score = score - p; t.push(Math.max(0, +score.toFixed(4))); }
+    return t;
+  }, [penalties]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const dbRows = penaltiesToDbRows(penalties);
+    const res = await saveDefaultGradingScale(dbRows);
+    setSaving(false);
+    if ("error" in res && res.error) showToast("Erreur : " + res.error, "error");
+    else showToast("Barème par défaut enregistré", "success");
+  };
+
+  if (loading) return (
+    <div className="flex items-center gap-2 py-8 justify-center">
+      <Loader2 size={16} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+      <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>Chargement…</span>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-white/10 px-5 py-4 text-xs leading-relaxed" style={{ backgroundColor: "rgba(0,0,0,0.15)", color: "rgba(255,255,255,0.55)" }}>
+        Si une réponse <span className="font-bold" style={{ color: "#4ade80" }}>VRAIE</span> n&apos;est pas cochée
+        <span className="mx-2 opacity-40">ou</span>
+        si une réponse <span className="font-bold" style={{ color: "#f87171" }}>FAUSSE</span> est cochée
+      </div>
+
+      <div className="rounded-xl overflow-hidden border border-white/10">
+        <div style={{ backgroundColor: "rgba(0,0,0,0.2)" }} className="grid grid-cols-3 px-5 py-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Erreur</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>Points perdus</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-right" style={{ color: "rgba(255,255,255,0.4)" }}>Total</span>
+        </div>
+        <div className="divide-y divide-white/5">
+          {penalties.map((penalty, idx) => (
+            <div key={idx} className="grid grid-cols-3 items-center px-5 py-3" style={{ backgroundColor: idx % 2 === 0 ? "transparent" : "rgba(0,0,0,0.06)" }}>
+              <span className="text-sm font-semibold text-white/80">{ordinal(idx + 1)} erreur&nbsp;:</span>
+              <div>
+                <input type="number" min={0} step={0.25} value={penalty}
+                  onChange={e => setPenalties(prev => prev.map((p, i) => i === idx ? (parseFloat(e.target.value) || 0) : p))}
+                  className="w-24 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white text-center focus:outline-none focus:border-[#C9A84C]/50" />
+              </div>
+              <span className="text-sm font-semibold text-right" style={{ color: totals[idx] > 0 ? "#C9A84C" : "rgba(255,255,255,0.3)" }}>
+                {totals[idx].toFixed(2)}<span className="text-xs font-normal opacity-50">/ 1</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 px-5 py-3 border-t border-white/5">
+          <button onClick={() => setPenalties(prev => [...prev, 0.5])}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-white/5"
+            style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.12)" }}>
+            <Plus size={11} /> Ajouter une erreur
+          </button>
+          <button onClick={() => { if (penalties.length > 1) setPenalties(prev => prev.slice(0, -1)); }} disabled={penalties.length <= 1}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-white/5 disabled:opacity-30"
+            style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.12)" }}>
+            <span className="text-base leading-none" style={{ marginTop: -1 }}>—</span> Enlever une erreur
+          </button>
+        </div>
+      </div>
+
+      <div className="pt-2">
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all"
+          style={{ backgroundColor: "#C9A84C", color: "#0e1e35", opacity: saving ? 0.6 : 1 }}>
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          Enregistrer le barème par défaut
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function GradingScaleSection({ universityId, universityName, showToast }: {
