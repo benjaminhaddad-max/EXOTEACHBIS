@@ -4925,6 +4925,44 @@ function EditUserModal({
                           const allIds = allMats.map(m => m.id);
                           const checkedCount = allIds.filter(id => coursAssignments.has(id)).length;
                           const someChecked = checkedCount > 0;
+                          // Leaf node with no children: render matières directly (no collapsible)
+                          if (n.children.length === 0 && n.matieres.length > 0) {
+                            // Single matière with same name as dossier: just the checkbox
+                            if (n.matieres.length === 1) {
+                              const m = n.matieres[0];
+                              const checked = coursAssignments.has(m.id);
+                              const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
+                              return (
+                                <div key={m.id}>
+                                  <label className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
+                                    <input type="checkbox" checked={checked} onChange={() => toggleCoursMatiere(m.id)}
+                                      className="w-3.5 h-3.5 rounded border-gray-500 text-blue-500 focus:ring-blue-400/30" />
+                                    <span className="text-[11px]" style={{ color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
+                                    {checked && assignedGroupes.size > 0 && (
+                                      <span className="ml-auto text-[9px] text-blue-400/50">{assignedGroupes.size} cl.</span>
+                                    )}
+                                  </label>
+                                  {checked && allUniGroupes.length > 0 && (
+                                    <div className="ml-8 mt-0.5 mb-1 flex flex-wrap gap-1">
+                                      {allUniGroupes.map(g => {
+                                        const gChecked = assignedGroupes.has(g.id);
+                                        return (
+                                          <button key={g.id} type="button" onClick={() => toggleCoursGroupe(m.id, g.id)}
+                                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] transition-colors"
+                                            style={{ backgroundColor: gChecked ? "#60A5FA22" : "rgba(255,255,255,0.03)", color: gChecked ? "#60A5FA" : "rgba(255,255,255,0.35)" }}>
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: gChecked ? "#60A5FA" : g.color }} />
+                                            {g.name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            // Multiple matières, no children: skip collapsible, just list them
+                            // (falls through to normal rendering below)
+                          }
                           return (
                             <details key={n.dossier.id} open={someChecked}>
                               <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
@@ -5015,6 +5053,18 @@ function EditUserModal({
                           const allIds = allMats.map(m => m.id);
                           const checkedCount = allIds.filter(id => qaContenuMatIds.includes(id)).length;
                           const someChecked = checkedCount > 0;
+                          // Leaf node with single matière: just render checkbox
+                          if (n.children.length === 0 && n.matieres.length === 1) {
+                            const m = n.matieres[0];
+                            const checked = qaContenuMatIds.includes(m.id);
+                            return (
+                              <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
+                                <input type="checkbox" checked={checked} onChange={() => toggleQaMatiere(m.id)}
+                                  className="w-3.5 h-3.5 rounded border-gray-500 text-amber-500 focus:ring-amber-400/30" />
+                                <span className="text-[11px]" style={{ color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
+                              </label>
+                            );
+                          }
                           return (
                             <details key={n.dossier.id} open={someChecked}>
                               <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
