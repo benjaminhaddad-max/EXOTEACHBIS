@@ -4875,59 +4875,69 @@ function EditUserModal({
                       <PillFilter items={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" badges={coursUniBadges} />
                     </div>
                   )}
-                  {/* Matières tree */}
+                  {/* Matières tree — recursive */}
                   {coursTree.length > 0 && (
                     <div className="mt-1 pt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {coursTree.map(node => {
-                        const allMats = getAllMatieres(node);
-                        const allNodeMatIds = allMats.map(m => m.id);
-                        const allChecked = allNodeMatIds.length > 0 && allNodeMatIds.every(id => coursAssignments.has(id));
-                        const someChecked = allNodeMatIds.some(id => coursAssignments.has(id));
-                        return (
-                          <details key={node.dossier.id} open={someChecked || allChecked}>
-                            <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
-                              <ChevronRight size={11} className="text-[#C9A84C]/40 transition-transform [details[open]>&]:rotate-90" />
-                              <Layers size={11} className="text-[#C9A84C]/60 shrink-0" />
-                              <span className="text-[11px] font-bold tracking-wide" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
-                              <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#60A5FA" : "rgba(255,255,255,0.2)" }}>
-                                {allNodeMatIds.filter(id => coursAssignments.has(id)).length}/{allNodeMatIds.length}
-                              </span>
-                            </summary>
-                            <div className="ml-5 space-y-0.5 pb-1">
-                              {allMats.map(m => {
-                                const checked = coursAssignments.has(m.id);
-                                const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
-                                return (
-                                  <div key={m.id}>
-                                    <label className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
-                                      <input type="checkbox" checked={checked} onChange={() => toggleCoursMatiere(m.id)}
-                                        className="w-3.5 h-3.5 rounded border-gray-500 text-blue-500 focus:ring-blue-400/30" />
-                                      <span className="text-[11px]" style={{ color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
-                                      {checked && assignedGroupes.size > 0 && (
-                                        <span className="ml-auto text-[9px] text-blue-400/50">{assignedGroupes.size} cl.</span>
+                        const CoursNodeRender = ({ n, depth }: { n: TreeNodeType; depth: number }) => {
+                          const allMats = getAllMatieres(n);
+                          const allIds = allMats.map(m => m.id);
+                          const checkedCount = allIds.filter(id => coursAssignments.has(id)).length;
+                          const someChecked = checkedCount > 0;
+                          return (
+                            <details key={n.dossier.id} open={someChecked}>
+                              <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                                <ChevronRight size={11} className="text-[#C9A84C]/40 transition-transform [details[open]>&]:rotate-90" />
+                                <Layers size={11} className="text-[#C9A84C]/60 shrink-0" />
+                                <span className="text-[11px] font-bold tracking-wide" style={{ color: "#C9A84C" }}>{n.dossier.name}</span>
+                                <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#60A5FA" : "rgba(255,255,255,0.2)" }}>
+                                  {checkedCount}/{allIds.length}
+                                </span>
+                              </summary>
+                              <div className="ml-5 space-y-0.5 pb-1">
+                                {/* Direct matières on this node */}
+                                {n.matieres.map(m => {
+                                  const checked = coursAssignments.has(m.id);
+                                  const assignedGroupes = coursAssignments.get(m.id) ?? new Set<string>();
+                                  return (
+                                    <div key={m.id}>
+                                      <label className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
+                                        <input type="checkbox" checked={checked} onChange={() => toggleCoursMatiere(m.id)}
+                                          className="w-3.5 h-3.5 rounded border-gray-500 text-blue-500 focus:ring-blue-400/30" />
+                                        <span className="text-[11px]" style={{ color: checked ? "#60A5FA" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
+                                        {checked && assignedGroupes.size > 0 && (
+                                          <span className="ml-auto text-[9px] text-blue-400/50">{assignedGroupes.size} cl.</span>
+                                        )}
+                                      </label>
+                                      {checked && allUniGroupes.length > 0 && (
+                                        <div className="ml-8 mt-0.5 mb-1 flex flex-wrap gap-1">
+                                          {allUniGroupes.map(g => {
+                                            const gChecked = assignedGroupes.has(g.id);
+                                            return (
+                                              <button key={g.id} type="button" onClick={() => toggleCoursGroupe(m.id, g.id)}
+                                                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] transition-colors"
+                                                style={{ backgroundColor: gChecked ? "#60A5FA22" : "rgba(255,255,255,0.03)", color: gChecked ? "#60A5FA" : "rgba(255,255,255,0.35)" }}>
+                                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: gChecked ? "#60A5FA" : g.color }} />
+                                                {g.name}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
                                       )}
-                                    </label>
-                                    {checked && allUniGroupes.length > 0 && (
-                                      <div className="ml-8 mt-0.5 mb-1 flex flex-wrap gap-1">
-                                        {allUniGroupes.map(g => {
-                                          const gChecked = assignedGroupes.has(g.id);
-                                          return (
-                                            <button key={g.id} type="button" onClick={() => toggleCoursGroupe(m.id, g.id)}
-                                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] transition-colors"
-                                              style={{ backgroundColor: gChecked ? "#60A5FA22" : "rgba(255,255,255,0.03)", color: gChecked ? "#60A5FA" : "rgba(255,255,255,0.35)" }}>
-                                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: gChecked ? "#60A5FA" : g.color }} />
-                                              {g.name}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                    </div>
+                                  );
+                                })}
+                                {/* Recurse into children sub-sections */}
+                                {n.children.length > 0 && (
+                                  <div className="space-y-1 mt-1">
+                                    {n.children.map(child => <CoursNodeRender key={child.dossier.id} n={child} depth={depth + 1} />)}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </details>
-                        );
+                                )}
+                              </div>
+                            </details>
+                          );
+                        };
+                        return <CoursNodeRender key={node.dossier.id} n={node} depth={0} />;
                       })}
                     </div>
                   )}
@@ -4955,37 +4965,48 @@ function EditUserModal({
                       <PillFilter items={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" badges={qaUniBadges} />
                     </div>
                   )}
-                  {/* Matières tree */}
+                  {/* Matières tree — recursive */}
                   {qaTree.length > 0 && (
                     <div className="mt-1 pt-2 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                       {qaTree.map(node => {
-                        const allMats = getAllMatieres(node);
-                        const allNodeMatIds = allMats.map(m => m.id);
-                        const someChecked = allNodeMatIds.some(id => qaContenuMatIds.includes(id));
-                        return (
-                          <details key={node.dossier.id} open={someChecked}>
-                            <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
-                              <ChevronRight size={11} className="text-[#C9A84C]/40 transition-transform [details[open]>&]:rotate-90" />
-                              <Layers size={11} className="text-[#C9A84C]/60 shrink-0" />
-                              <span className="text-[11px] font-bold tracking-wide" style={{ color: "#C9A84C" }}>{node.dossier.name}</span>
-                              <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#FBBF24" : "rgba(255,255,255,0.2)" }}>
-                                {allNodeMatIds.filter(id => qaContenuMatIds.includes(id)).length}/{allNodeMatIds.length}
-                              </span>
-                            </summary>
-                            <div className="ml-5 space-y-0.5 pb-1">
-                              {allMats.map(m => {
-                                const checked = qaContenuMatIds.includes(m.id);
-                                return (
-                                  <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
-                                    <input type="checkbox" checked={checked} onChange={() => toggleQaMatiere(m.id)}
-                                      className="w-3.5 h-3.5 rounded border-gray-500 text-amber-500 focus:ring-amber-400/30" />
-                                    <span className="text-[11px]" style={{ color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </details>
-                        );
+                        const QaNodeRender = ({ n, depth }: { n: TreeNodeType; depth: number }) => {
+                          const allMats = getAllMatieres(n);
+                          const allIds = allMats.map(m => m.id);
+                          const checkedCount = allIds.filter(id => qaContenuMatIds.includes(id)).length;
+                          const someChecked = checkedCount > 0;
+                          return (
+                            <details key={n.dossier.id} open={someChecked}>
+                              <summary className="flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:bg-white/[0.04] list-none [&::-webkit-details-marker]:hidden" style={{ backgroundColor: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.08)" }}>
+                                <ChevronRight size={11} className="text-[#C9A84C]/40 transition-transform [details[open]>&]:rotate-90" />
+                                <Layers size={11} className="text-[#C9A84C]/60 shrink-0" />
+                                <span className="text-[11px] font-bold tracking-wide" style={{ color: "#C9A84C" }}>{n.dossier.name}</span>
+                                <span className="ml-auto text-[9px]" style={{ color: someChecked ? "#FBBF24" : "rgba(255,255,255,0.2)" }}>
+                                  {checkedCount}/{allIds.length}
+                                </span>
+                              </summary>
+                              <div className="ml-5 space-y-0.5 pb-1">
+                                {/* Direct matières on this node */}
+                                {n.matieres.map(m => {
+                                  const checked = qaContenuMatIds.includes(m.id);
+                                  return (
+                                    <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-white/[0.03]">
+                                      <input type="checkbox" checked={checked} onChange={() => toggleQaMatiere(m.id)}
+                                        className="w-3.5 h-3.5 rounded border-gray-500 text-amber-500 focus:ring-amber-400/30" />
+                                      <span className="text-[11px]" style={{ color: checked ? "#FBBF24" : "rgba(255,255,255,0.55)" }}>{m.name}</span>
+                                    </label>
+                                  );
+                                })}
+                                {/* Recurse into children sub-sections */}
+                                {n.children.length > 0 && (
+                                  <div className="space-y-1 mt-1">
+                                    {n.children.map(child => <QaNodeRender key={child.dossier.id} n={child} depth={depth + 1} />)}
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          );
+                        };
+                        return <QaNodeRender key={node.dossier.id} n={node} depth={0} />;
                       })}
                     </div>
                   )}
