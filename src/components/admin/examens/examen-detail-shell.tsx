@@ -460,7 +460,7 @@ export function ExamenDetailShell({
                                 }
                                 handleGroupesChange(es.series_id, next);
                               }}
-                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${active ? "bg-[#C9A84C]/15 border-[#C9A84C]/40 text-[#C9A84C]" : "bg-white/5 border-white/10 text-white/25 hover:text-white/50"}`}
+                              className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all border ${active ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C] shadow-sm shadow-[#C9A84C]/10" : "bg-transparent border-white/8 text-white/20 line-through decoration-white/10"}`}
                             >
                               {g.name}
                             </button>
