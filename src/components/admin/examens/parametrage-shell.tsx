@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Check, Loader2, Plus, Save,
-  GraduationCap, Building2, ChevronDown,
+  GraduationCap, Building2, ChevronDown, Layers,
 } from "lucide-react";
 import Link from "next/link";
 import type { Dossier, Filiere, Matiere } from "@/types/database";
@@ -154,66 +154,102 @@ function ParametrageSidebar({ dossiers, selectedId, onSelect }: {
   dossiers: Dossier[]; selectedId: string | null; onSelect: (id: string) => void;
 }) {
   const offers = useMemo(() => dossiers.filter(d => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
+  const subOffers = useMemo(() => dossiers.filter(d => d.dossier_type === "sub_offer").sort((a, b) => a.order_index - b.order_index), [dossiers]);
   const universities = useMemo(() => dossiers.filter(d => d.dossier_type === "university").sort((a, b) => a.order_index - b.order_index), [dossiers]);
-  const unisByOffer = useMemo(() => {
-    const m = new Map<string, Dossier[]>();
-    for (const u of universities) if (u.parent_id) { if (!m.has(u.parent_id)) m.set(u.parent_id, []); m.get(u.parent_id)!.push(u); }
+
+  // Build children map: for each offer, find direct universities OR sub-offers
+  const offerChildren = useMemo(() => {
+    const m = new Map<string, { type: "unis"; unis: Dossier[] } | { type: "subOffers"; subOffers: { subOffer: Dossier; unis: Dossier[] }[] }>();
+    for (const offer of offers) {
+      const directUnis = universities.filter(u => u.parent_id === offer.id);
+      const directSubOffers = subOffers.filter(so => so.parent_id === offer.id);
+      if (directSubOffers.length > 0) {
+        // Has sub-offers → find universities under each sub-offer
+        m.set(offer.id, {
+          type: "subOffers",
+          subOffers: directSubOffers.map(so => ({
+            subOffer: so,
+            unis: universities.filter(u => u.parent_id === so.id),
+          })),
+        });
+      } else if (directUnis.length > 0) {
+        m.set(offer.id, { type: "unis", unis: directUnis });
+      }
+    }
     return m;
-  }, [universities]);
+  }, [offers, subOffers, universities]);
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(offers.map(o => o.id)));
   const toggleExpand = (id: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  const renderUniButton = (uni: Dossier, indent: number) => {
+    const isSelected = selectedId === uni.id;
+    return (
+      <button key={uni.id} onClick={() => onSelect(uni.id)}
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all text-left"
+        style={{ marginLeft: indent, backgroundColor: isSelected ? "rgba(167,139,250,0.12)" : "transparent", border: isSelected ? "1px solid rgba(167,139,250,0.25)" : "1px solid transparent" }}
+        onMouseOver={e => { if (!isSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+        onMouseOut={e => { e.currentTarget.style.backgroundColor = isSelected ? "rgba(167,139,250,0.12)" : "transparent"; }}>
+        <Building2 size={9} style={{ color: isSelected ? "#c4b5fd" : "#A78BFA" }} />
+        <span className="text-[10px] font-semibold truncate" style={{ color: isSelected ? "#c4b5fd" : "#A78BFA" }}>{uni.name}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="flex flex-col shrink-0 border-r border-white/10 overflow-y-auto h-full" style={{ width: 260, backgroundColor: "rgba(0,0,0,0.15)" }}>
       <div className="px-4 pt-4 pb-2 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-          Formations &amp; Universités
+          Offres &amp; Universités
         </p>
       </div>
 
       <div className="px-3 pb-2 space-y-0.5 flex-1">
         {offers.map(offer => {
-          const offerUnis = unisByOffer.get(offer.id) ?? [];
-          const hasUnis = offerUnis.length > 0;
+          const children = offerChildren.get(offer.id);
+          const hasChildren = !!children;
           const isOpen = expanded.has(offer.id);
           const isOfferSelected = selectedId === offer.id;
 
           return (
             <div key={offer.id}>
               <div className="flex items-center gap-0.5">
-                {/* Offer row — clickable to select + toggle expand */}
                 <button
-                  onClick={() => { onSelect(offer.id); if (hasUnis) toggleExpand(offer.id); }}
+                  onClick={() => { onSelect(offer.id); if (hasChildren) toggleExpand(offer.id); }}
                   className="flex-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all text-left"
-                  style={{
-                    backgroundColor: isOfferSelected ? "rgba(201,168,76,0.12)" : "transparent",
-                    border: isOfferSelected ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent",
-                  }}
+                  style={{ backgroundColor: isOfferSelected ? "rgba(201,168,76,0.12)" : "transparent", border: isOfferSelected ? "1px solid rgba(201,168,76,0.3)" : "1px solid transparent" }}
                   onMouseOver={e => { if (!isOfferSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                  onMouseOut={e => { if (!isOfferSelected) e.currentTarget.style.backgroundColor = isOfferSelected ? "rgba(201,168,76,0.12)" : "transparent"; }}>
+                  onMouseOut={e => { e.currentTarget.style.backgroundColor = isOfferSelected ? "rgba(201,168,76,0.12)" : "transparent"; }}>
                   <GraduationCap size={11} style={{ color: "#C9A84C" }} />
                   <span className="flex-1 text-[11px] font-bold truncate" style={{ color: "#C9A84C" }}>{offer.name}</span>
-                  {hasUnis && (
+                  {hasChildren && (
                     <ChevronDown size={10} style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
                   )}
                 </button>
               </div>
 
-              {hasUnis && isOpen && offerUnis.map(uni => {
-                const isSelected = selectedId === uni.id;
+              {hasChildren && isOpen && children.type === "unis" && children.unis.map(uni => renderUniButton(uni, 12))}
+
+              {hasChildren && isOpen && children.type === "subOffers" && children.subOffers.map(({ subOffer, unis }) => {
+                const isSoSelected = selectedId === subOffer.id;
+                const isSoOpen = expanded.has(subOffer.id);
+                const hasUnis = unis.length > 0;
                 return (
-                  <button key={uni.id} onClick={() => onSelect(uni.id)}
-                    className="w-full flex items-center gap-1.5 ml-3 px-2 py-1.5 rounded-lg transition-all text-left"
-                    style={{
-                      backgroundColor: isSelected ? "rgba(167,139,250,0.12)" : "transparent",
-                      border: isSelected ? "1px solid rgba(167,139,250,0.25)" : "1px solid transparent",
-                    }}
-                    onMouseOver={e => { if (!isSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
-                    onMouseOut={e => { if (!isSelected) e.currentTarget.style.backgroundColor = "transparent"; }}>
-                    <Building2 size={9} style={{ color: isSelected ? "#c4b5fd" : "#A78BFA" }} />
-                    <span className="text-[10px] font-semibold truncate" style={{ color: isSelected ? "#c4b5fd" : "#A78BFA" }}>{uni.name}</span>
-                  </button>
+                  <div key={subOffer.id} className="ml-2">
+                    <button
+                      onClick={() => { onSelect(subOffer.id); if (hasUnis) toggleExpand(subOffer.id); }}
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all text-left"
+                      style={{ backgroundColor: isSoSelected ? "rgba(234,179,8,0.1)" : "transparent", border: isSoSelected ? "1px solid rgba(234,179,8,0.2)" : "1px solid transparent" }}
+                      onMouseOver={e => { if (!isSoSelected) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)"; }}
+                      onMouseOut={e => { e.currentTarget.style.backgroundColor = isSoSelected ? "rgba(234,179,8,0.1)" : "transparent"; }}>
+                      <Layers size={10} style={{ color: "#EAB308" }} />
+                      <span className="flex-1 text-[10px] font-bold truncate" style={{ color: "#EAB308" }}>{subOffer.name}</span>
+                      {hasUnis && (
+                        <ChevronDown size={9} style={{ color: "rgba(255,255,255,0.2)", transform: isSoOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }} />
+                      )}
+                    </button>
+                    {hasUnis && isSoOpen && unis.map(uni => renderUniButton(uni, 12))}
+                  </div>
                 );
               })}
             </div>
