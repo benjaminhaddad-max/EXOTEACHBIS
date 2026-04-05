@@ -457,31 +457,30 @@ export function UtilisateursShell({
       {/* ── Left Panel ────────────────────────────────────────────────────── */}
       <div className="w-[380px] flex-shrink-0 flex flex-col" style={{ borderRight: "1px solid rgba(255,255,255,0.08)" }}>
 
-        {/* Sidebar nav */}
-        <div className="px-3 pt-4 pb-2 space-y-1">
+        {/* Tab navigation */}
+        <div className="flex" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <button
-            onClick={() => { setView("comptes"); setSelectedGroupeId(null); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-colors"
-            style={{
-              backgroundColor: view === "comptes" ? "rgba(201,168,76,0.12)" : "transparent",
-              color: view === "comptes" ? "#C9A84C" : "rgba(255,255,255,0.6)",
-              border: view === "comptes" ? "1px solid rgba(201,168,76,0.2)" : "1px solid transparent",
-            }}
+            onClick={() => { setView("comptes"); setSelectedGroupeId(null); setSelectedDossierId(null); }}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-3 text-[11px] font-semibold transition-colors relative"
+            style={{ color: view === "comptes" ? "#C9A84C" : "rgba(255,255,255,0.45)" }}
           >
-            <Users size={14} />
-            Liste des utilisateurs
+            <Users size={13} />
+            Utilisateurs
+            {view === "comptes" && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ backgroundColor: "#C9A84C" }} />}
+          </button>
+          <button
+            onClick={() => { if (view === "comptes") { setView("dossier_summary"); setSelectedDossierId(null); setSelectedGroupeId(null); } }}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-3 text-[11px] font-semibold transition-colors relative"
+            style={{ color: view !== "comptes" ? "#C9A84C" : "rgba(255,255,255,0.45)" }}
+          >
+            <Folder size={13} />
+            Offres & Classes
+            {view !== "comptes" && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ backgroundColor: "#C9A84C" }} />}
           </button>
         </div>
 
-        {/* Arborescence header */}
-        <div className="px-5 pt-3 pb-2 flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.3)" }}>
-            Offres & Classes
-          </span>
-        </div>
-
         {/* Dossier tree with groups */}
-        <div className="flex-1 overflow-y-auto px-2 pb-4">
+        <div className="flex-1 overflow-y-auto px-2 pb-4 pt-2" style={{ display: view === "comptes" ? "none" : undefined }}>
           <DossierGroupTree
             dossiers={initialDossiers}
             groupes={groupes}
