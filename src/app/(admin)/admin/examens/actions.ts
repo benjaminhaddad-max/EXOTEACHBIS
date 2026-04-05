@@ -120,6 +120,23 @@ export async function addSerieToExamen(
   return { success: true };
 }
 
+export async function updateSerieFileUrl(
+  examen_id: string,
+  series_id: string,
+  field: "sujet_url" | "correction_url",
+  url: string | null
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("examens_series")
+    .update({ [field]: url })
+    .eq("examen_id", examen_id)
+    .eq("series_id", series_id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function updateSerieSchedule(
   examen_id: string,
   series_id: string,

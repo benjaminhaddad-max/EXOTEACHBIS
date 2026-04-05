@@ -12,7 +12,7 @@ export default async function ExamenDetailPage({ params }: { params: Promise<{ e
   const [examenRes, allDossiersRes, groupesRes, filieresRes, matieresRes, exGroupesRes] = await Promise.all([
     supabase
       .from("examens")
-      .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, groupe_ids, series:series(id, name, type, matiere_id, timed, duration_minutes, description, cours_id, score_definitif, visible, annee, created_at, updated_at))")
+      .select("*, examens_series(series_id, order_index, coefficient, debut_at, fin_at, groupe_ids, sujet_url, correction_url, series:series(id, name, type, matiere_id, timed, duration_minutes, description, cours_id, score_definitif, visible, annee, created_at, updated_at))")
       .eq("id", examenId)
       .single(),
     supabase.from("dossiers").select("*").eq("visible", true).order("order_index"),

@@ -11,8 +11,9 @@ import type { Serie, Filiere, SerieType, Dossier, Groupe, Matiere } from "@/type
 import {
   addSerieToExamen, removeSerieFromExamen, updateExamen,
   updateSerieCoefficient, updateSerieSchedule, toggleResultsVisibility, updateSerieGroupes, ensureSubjectMatiere,
-  getUniversityCoefficients,
+  getUniversityCoefficients, updateSerieFileUrl,
 } from "@/app/(admin)/admin/examens/actions";
+import { uploadPdf } from "@/lib/upload-pdf";
 import { createSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
 import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
@@ -26,6 +27,8 @@ type ExamenSerieWithCoeff = {
   debut_at?: string | null;
   fin_at?: string | null;
   groupe_ids?: string[] | null;
+  sujet_url?: string | null;
+  correction_url?: string | null;
   series?: Serie;
 };
 
@@ -470,14 +473,58 @@ export function ExamenDetailShell({
                   </div>
                 )}
 
-                {/* Actions */}
+                {/* Actions — Sujet & Correction upload */}
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => exportSerie(es.series_id, false)} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors">
-                    <FileText size={10} /> Sujet
-                  </button>
-                  <button onClick={() => exportSerie(es.series_id, true)} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-green-400/80 hover:bg-green-500/10 transition-colors">
-                    <Download size={10} /> Correction
-                  </button>
+                  {/* Sujet */}
+                  {es.sujet_url ? (
+                    <div className="flex items-center gap-0.5">
+                      <a href={es.sujet_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg text-[10px] text-green-400 hover:bg-green-500/20 transition-colors">
+                        <FileText size={10} /> Sujet ✓
+                      </a>
+                      <button onClick={() => { startTransition(async () => { await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", null); setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: null } : s)); }); }}
+                        className="p-1 rounded text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Supprimer le sujet">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors cursor-pointer">
+                      <Upload size={10} /> Sujet
+                      <input type="file" accept=".pdf" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        const res = await uploadPdf(file, `examens/${initialExamen.id}`);
+                        if ("error" in res) { showToast(res.error, "error"); return; }
+                        await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", res.url);
+                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: res.url } : s));
+                        showToast("Sujet uploadé", "success");
+                        e.target.value = "";
+                      }} />
+                    </label>
+                  )}
+                  {/* Correction */}
+                  {es.correction_url ? (
+                    <div className="flex items-center gap-0.5">
+                      <a href={es.correction_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg text-[10px] text-green-400 hover:bg-green-500/20 transition-colors">
+                        <Download size={10} /> Correction ✓
+                      </a>
+                      <button onClick={() => { startTransition(async () => { await updateSerieFileUrl(initialExamen.id, es.series_id, "correction_url", null); setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: null } : s)); }); }}
+                        className="p-1 rounded text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Supprimer la correction">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-green-400/80 hover:bg-green-500/10 transition-colors cursor-pointer">
+                      <Upload size={10} /> Correction
+                      <input type="file" accept=".pdf" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        const res = await uploadPdf(file, `examens/${initialExamen.id}`);
+                        if ("error" in res) { showToast(res.error, "error"); return; }
+                        await updateSerieFileUrl(initialExamen.id, es.series_id, "correction_url", res.url);
+                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: res.url } : s));
+                        showToast("Correction uploadée", "success");
+                        e.target.value = "";
+                      }} />
+                    </label>
+                  )}
                   <button
                     onClick={() => {
                       if (!es.series) return;
