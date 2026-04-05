@@ -4776,22 +4776,16 @@ function EditUserModal({
             // Build formation offers & universities from dossiers
             const offers = dossiers.filter((d) => d.dossier_type === "offer").sort((a, b) => a.order_index - b.order_index);
 
-            const getUnisForOffer = (offerId: string): { id: string; name: string }[] => {
+            const getUnisForOffer = (offerId: string): { id: string; name: string; parentSubOffer: string | null }[] => {
               // Find universities anywhere under the offer (not just direct children)
               const descendantIds = new Set<string>();
               const walkOfferTree = (pid: string) => { descendantIds.add(pid); dossiers.filter(d => d.parent_id === pid).forEach(d => walkOfferTree(d.id)); };
               walkOfferTree(offerId);
               const unis = dossiers.filter(d => d.dossier_type === "university" && descendantIds.has(d.parent_id!)).sort((a, b) => a.order_index - b.order_index);
-              // Check for duplicate names — append parent sub-offer to disambiguate
-              const nameCount = new Map<string, number>();
-              for (const u of unis) { nameCount.set(u.name, (nameCount.get(u.name) ?? 0) + 1); }
               return unis.map(u => {
-                if ((nameCount.get(u.name) ?? 0) > 1) {
-                  const parent = dossiers.find(d => d.id === u.parent_id);
-                  const suffix = parent && parent.dossier_type !== "offer" ? ` · ${parent.name}` : "";
-                  return { id: u.id, name: u.name + suffix };
-                }
-                return { id: u.id, name: u.name };
+                const parent = dossiers.find(d => d.id === u.parent_id);
+                const parentSubOffer = parent && parent.dossier_type === "sub_offer" ? parent.name : null;
+                return { id: u.id, name: u.name, parentSubOffer };
               });
             };
 
@@ -4827,6 +4821,71 @@ function EditUserModal({
               const map = new Map<string, typeof mats>();
               for (const m of mats) { const arr = map.get(m.dossierLabel) ?? []; arr.push(m); map.set(m.dossierLabel, arr); }
               return [...map.entries()];
+            };
+
+            // Grouped university filter: shows unique uni names, with sub-offer sub-pills for duplicates
+            const GroupedUniFilter = ({ unis, value, onChange, color, badges }: {
+              unis: { id: string; name: string; parentSubOffer: string | null }[];
+              value: string; onChange: (v: string) => void; color: string; badges?: Map<string, number>;
+            }) => {
+              // Group by clean university name
+              const groups = new Map<string, { ids: string[]; subOffers: { id: string; label: string }[] }>();
+              for (const u of unis) {
+                const cleanName = u.name.replace("Université ", "");
+                if (!groups.has(cleanName)) groups.set(cleanName, { ids: [], subOffers: [] });
+                const g = groups.get(cleanName)!;
+                g.ids.push(u.id);
+                g.subOffers.push({ id: u.id, label: u.parentSubOffer ?? "" });
+              }
+              const selectedGroup = [...groups.entries()].find(([, g]) => g.ids.includes(value));
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap gap-1">
+                    {[...groups.entries()].map(([name, g]) => {
+                      const isActive = g.ids.includes(value);
+                      const totalBadge = g.ids.reduce((sum, id) => sum + (badges?.get(id) ?? 0), 0);
+                      // Single uni (no duplicates) — click directly selects
+                      if (g.ids.length === 1) {
+                        return (
+                          <button key={g.ids[0]} type="button" onClick={() => onChange(isActive ? "" : g.ids[0])}
+                            className="relative rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
+                            style={{ borderColor: isActive ? color + "99" : "rgba(255,255,255,0.08)", backgroundColor: isActive ? color + "22" : "rgba(255,255,255,0.02)", color: isActive ? color : "rgba(255,255,255,0.45)" }}>
+                            {name}
+                            {totalBadge > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[8px] font-bold text-white px-0.5" style={{ backgroundColor: "#EF4444" }}>{totalBadge}</span>}
+                          </button>
+                        );
+                      }
+                      // Multiple sub-offers — show as group header
+                      return (
+                        <button key={name} type="button" onClick={() => onChange(isActive ? "" : g.ids[0])}
+                          className="relative rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
+                          style={{ borderColor: isActive ? color + "99" : "rgba(255,255,255,0.08)", backgroundColor: isActive ? color + "22" : "rgba(255,255,255,0.02)", color: isActive ? color : "rgba(255,255,255,0.45)" }}>
+                          {name}
+                          {totalBadge > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[8px] font-bold text-white px-0.5" style={{ backgroundColor: "#EF4444" }}>{totalBadge}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Sub-offer pills for selected grouped university */}
+                  {selectedGroup && selectedGroup[1].ids.length > 1 && (
+                    <div className="flex items-center gap-1.5 pl-4">
+                      <span className="text-[8px] font-bold uppercase tracking-widest shrink-0" style={{ color: "rgba(255,255,255,0.2)" }}>↳</span>
+                      {selectedGroup[1].subOffers.map(so => {
+                        const isActive = value === so.id;
+                        const badge = badges?.get(so.id) ?? 0;
+                        return (
+                          <button key={so.id} type="button" onClick={() => onChange(isActive ? "" : so.id)}
+                            className="relative rounded-md border px-2 py-0.5 text-[9px] font-medium transition-colors"
+                            style={{ borderColor: isActive ? color + "99" : "rgba(255,255,255,0.06)", backgroundColor: isActive ? color + "22" : "rgba(255,255,255,0.02)", color: isActive ? color : "rgba(255,255,255,0.35)" }}>
+                            {so.label}
+                            {badge > 0 && <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full text-[8px] font-bold text-white px-0.5" style={{ backgroundColor: "#EF4444" }}>{badge}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
             };
 
             const PillFilter = ({ items, value, onChange, color, badges }: { items: { id: string; name: string }[]; value: string; onChange: (v: string) => void; color: string; badges?: Map<string, number> }) => (
@@ -4929,7 +4988,7 @@ function EditUserModal({
                   {coursFormation && coursUnis.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
-                      <PillFilter items={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" badges={coursUniBadges} />
+                      <GroupedUniFilter unis={coursUnis} value={coursUni} onChange={setCoursUni} color="#60A5FA" badges={coursUniBadges} />
                     </div>
                   )}
                   {/* Matières tree — recursive */}
@@ -5057,7 +5116,7 @@ function EditUserModal({
                   {qaFormation && qaUnis.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-bold uppercase tracking-widest shrink-0 w-16" style={{ color: "rgba(255,255,255,0.3)" }}>Université</span>
-                      <PillFilter items={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" badges={qaUniBadges} />
+                      <GroupedUniFilter unis={qaUnis} value={qaUni} onChange={setQaUni} color="#FBBF24" badges={qaUniBadges} />
                     </div>
                   )}
                   {/* Matières tree — recursive */}
