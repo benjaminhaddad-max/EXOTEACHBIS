@@ -357,9 +357,19 @@ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
       if (i < pages.length) {
         try {
           // Trim white borders
+          // Trim whitespace, then add padding so images breathe
+          const PADDING = 40; // px of white margin around the image
           const trimmed = await sharp(pages[i]).trim({ threshold: 20 }).png().toBuffer();
-          results.push(trimmed);
-          console.log(`[emf-batch] Image ${i + 1}: ${Math.round(trimmed.length / 1024)}KB`);
+          const meta = await sharp(trimmed).metadata();
+          const padded = await sharp(trimmed)
+            .extend({
+              top: PADDING, bottom: PADDING, left: PADDING, right: PADDING,
+              background: { r: 255, g: 255, b: 255, alpha: 1 },
+            })
+            .png()
+            .toBuffer();
+          results.push(padded);
+          console.log(`[emf-batch] Image ${i + 1}: ${meta.width}x${meta.height} + ${PADDING}px padding → ${Math.round(padded.length / 1024)}KB`);
         } catch {
           results.push(pages[i]); // Keep untrimmed if trim fails
         }
