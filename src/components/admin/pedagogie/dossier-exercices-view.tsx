@@ -487,6 +487,11 @@ export function FullSerieEditor({
               </a>
             </div>
           </div>
+          {/* Preview */}
+          <a href={`/serie/${serie.id}`} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+            <Eye size={12} /> Vue élève
+          </a>
           {/* Save */}
           <button onClick={handleSaveSettings} disabled={savingSettings}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${savedMsg ? "bg-green-600 text-white" : "bg-[#C9A84C] text-[#0e1e35]"} disabled:opacity-50`}>

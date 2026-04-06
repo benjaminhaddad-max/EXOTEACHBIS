@@ -707,6 +707,14 @@ export function ExamenDetailShell({
                   >
                     Éditer QCM →
                   </button>
+                  <a
+                    href={`/serie/${es.series_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
+                  >
+                    <Eye size={10} /> Vue élève
+                  </a>
                 </div>
               </div>
             ))}
