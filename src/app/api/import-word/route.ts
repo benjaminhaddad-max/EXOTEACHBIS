@@ -2,7 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import mammoth from "mammoth";
 import JSZip from "jszip";
+import sharp from "sharp";
 import { extractAllParagraphTexts } from "@/lib/omml-to-latex";
+
+// Formats that browsers cannot display
+const NON_WEB_FORMATS = /^data:image\/(x-emf|x-wmf|emf|wmf|tiff|x-bmp);/i;
+
+/** Convert non-web image data URIs to PNG, return null if unconvertible */
+async function ensureWebFormat(dataUri: string): Promise<string | null> {
+  if (!NON_WEB_FORMATS.test(dataUri)) return dataUri; // already web-compatible
+  try {
+    const match = dataUri.match(/^data:image\/[\w+\-]+;base64,(.+)$/);
+    if (!match) return null;
+    const pngBuffer = await sharp(Buffer.from(match[1], "base64")).png().toBuffer();
+    return `data:image/png;base64,${pngBuffer.toString("base64")}`;
+  } catch {
+    return null; // skip if conversion fails
+  }
+}
 
 // ─── HTML → Clean text (with Unicode sub/sup) ────────────────────────────
 
@@ -260,6 +277,9 @@ export async function POST(req: NextRequest) {
     for (let qi = 0; qi < questions.length; qi++) {
       const q = questions[qi];
 
+      // Convert non-web image formats (EMF/WMF) to PNG
+      const qImage = q.image ? await ensureWebFormat(q.image) : null;
+
       const { data: newQ, error: qErr } = await supabase.from("questions").insert({
         text: q.text,
         type: "qcm_multiple",
@@ -267,22 +287,22 @@ export async function POST(req: NextRequest) {
         cours_id: coursId,
         matiere_id: matiereId,
         explanation: q.options.some(o => o.explanation) ? q.options.filter(o => o.explanation).map(o => `${o.label}: ${o.explanation}`).join("\n") : null,
-        image_url: q.image,
+        image_url: qImage,
         tags: [],
       }).select("id").single();
 
       if (qErr || !newQ) continue;
 
-      // Insert options
-      const opts = q.options.map((opt, idx) => ({
+      // Insert options (convert non-web images too)
+      const opts = await Promise.all(q.options.map(async (opt, idx) => ({
         question_id: newQ.id,
         label: opt.label || indexToLabel(idx),
         text: opt.text,
         is_correct: opt.isCorrect,
         order_index: idx,
         justification: opt.explanation,
-        image_url: opt.image,
-      }));
+        image_url: opt.image ? await ensureWebFormat(opt.image) : null,
+      })));
 
       if (opts.length > 0) await supabase.from("options").insert(opts);
 

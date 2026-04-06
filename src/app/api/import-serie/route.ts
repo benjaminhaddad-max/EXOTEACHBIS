@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 // @ts-ignore — mammoth has no types bundled
 import mammoth from "mammoth";
 import JSZip from "jszip";
+import sharp from "sharp";
 import { extractParagraphText } from "@/lib/omml-to-latex";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -513,6 +514,9 @@ function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, st
 
 // ─── Image upload helper ──────────────────────────────────────────────────────
 
+// Formats that browsers cannot display — must be converted to PNG
+const NON_WEB_FORMATS = new Set(["x-emf", "x-wmf", "emf", "wmf", "tiff", "bmp", "x-bmp"]);
+
 async function uploadBase64Image(
   supabase: any,
   dataUri: string,
@@ -521,16 +525,31 @@ async function uploadBase64Image(
 ): Promise<string | null> {
   try {
     // Parse data URI: "data:image/jpeg;base64,/9j/..."
-    const match = dataUri.match(/^data:image\/([\w+]+);base64,(.+)$/);
+    const match = dataUri.match(/^data:image\/([\w+\-]+);base64,(.+)$/);
     if (!match) return null;
-    const ext = match[1] === "jpeg" ? "jpg" : match[1];
-    const base64 = match[2];
-    const buffer = Buffer.from(base64, "base64");
+    let format = match[1];
+    let base64 = match[2];
+    let buffer = Buffer.from(base64, "base64");
 
+    // Convert non-web-compatible formats (EMF, WMF, TIFF, BMP) to PNG via sharp
+    if (NON_WEB_FORMATS.has(format)) {
+      try {
+        console.log(`[upload-img] Converting ${format} → PNG for Q ${questionId}`);
+        const pngBuf = await sharp(buffer).png().toBuffer();
+        buffer = Buffer.from(pngBuf);
+        format = "png";
+      } catch (convErr: any) {
+        console.warn(`[upload-img] Cannot convert ${format} to PNG:`, convErr.message);
+        return null; // Skip non-displayable images
+      }
+    }
+
+    const ext = format === "jpeg" ? "jpg" : format === "svg+xml" ? "svg" : format;
+    const contentType = format === "svg+xml" ? "image/svg+xml" : `image/${format}`;
     const path = `questions/${questionId}/${idx > 0 ? `img_${idx}` : "image"}.${ext}`;
     const { error } = await supabase.storage
       .from("question-images")
-      .upload(path, buffer, { contentType: `image/${match[1]}`, upsert: true });
+      .upload(path, buffer, { contentType, upsert: true });
 
     if (error) {
       console.error("[upload-img]", error.message);

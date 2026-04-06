@@ -12,11 +12,16 @@ import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 
 function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [broken, setBroken] = useState(false);
+
+  // Don't render anything if image source is clearly invalid
+  if (!src || broken) return null;
 
   return (
     <>
       <div className="mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 p-3 cursor-pointer" onClick={() => setFullscreen(true)}>
-        <img src={src} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }} />
+        <img src={src} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }}
+          onError={() => setBroken(true)} />
         <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
           <ZoomIn size={11} /> Cliquer pour agrandir
         </p>
@@ -31,7 +36,8 @@ function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
             <X size={24} />
           </button>
           <img src={src} alt="" className="max-w-[90vw] max-h-[90vh] object-contain"
-            onClick={(e) => e.stopPropagation()} />
+            onClick={(e) => e.stopPropagation()}
+            onError={() => { setBroken(true); setFullscreen(false); }} />
         </div>
       )}
     </>
