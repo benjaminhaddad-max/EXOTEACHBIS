@@ -493,10 +493,37 @@ export function ExamenDetailShell({
                         const file = e.target.files?.[0]; if (!file) return;
                         const res = await uploadPdf(file, `examens/${initialExamen.id}`);
                         if ("error" in res) { showToast(res.error, "error"); return; }
-                        await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", res.url);
-                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: res.url } : s));
+                        const sujUrl = res.url;
+                        await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", sujUrl);
+                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: sujUrl } : s));
                         showToast("Sujet uploadé", "success");
                         e.target.value = "";
+
+                        // Auto-import QCM if correction also exists
+                        const corrUrl = es.correction_url;
+                        if (corrUrl) {
+                          showToast("Import des QCM depuis les PDFs en cours…", "success");
+                          try {
+                            const importRes = await fetch("/api/import-from-pdf", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                serieId: es.series_id,
+                                sujetUrl: sujUrl,
+                                correctionUrl: corrUrl,
+                                coursId: (es.series as any)?.cours_id ?? null,
+                              }),
+                            });
+                            const importJson = await importRes.json();
+                            if (importRes.ok && importJson.success) {
+                              showToast(importJson.message, "success");
+                            } else {
+                              showToast(importJson.error ?? "Erreur import PDF", "error");
+                            }
+                          } catch {
+                            showToast("Erreur lors de l'import depuis les PDFs", "error");
+                          }
+                        }
                       }} />
                     </label>
                   )}
@@ -518,10 +545,37 @@ export function ExamenDetailShell({
                         const file = e.target.files?.[0]; if (!file) return;
                         const res = await uploadPdf(file, `examens/${initialExamen.id}`);
                         if ("error" in res) { showToast(res.error, "error"); return; }
-                        await updateSerieFileUrl(initialExamen.id, es.series_id, "correction_url", res.url);
-                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: res.url } : s));
+                        const corrUrl = res.url;
+                        await updateSerieFileUrl(initialExamen.id, es.series_id, "correction_url", corrUrl);
+                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: corrUrl } : s));
                         showToast("Correction uploadée", "success");
                         e.target.value = "";
+
+                        // Auto-import QCM if sujet also exists
+                        const sujetUrl = es.sujet_url;
+                        if (sujetUrl) {
+                          showToast("Import des QCM depuis les PDFs en cours…", "success");
+                          try {
+                            const importRes = await fetch("/api/import-from-pdf", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                serieId: es.series_id,
+                                sujetUrl,
+                                correctionUrl: corrUrl,
+                                coursId: (es.series as any)?.cours_id ?? null,
+                              }),
+                            });
+                            const importJson = await importRes.json();
+                            if (importRes.ok && importJson.success) {
+                              showToast(importJson.message, "success");
+                            } else {
+                              showToast(importJson.error ?? "Erreur import PDF", "error");
+                            }
+                          } catch {
+                            showToast("Erreur lors de l'import depuis les PDFs", "error");
+                          }
+                        }
                       }} />
                     </label>
                   )}
