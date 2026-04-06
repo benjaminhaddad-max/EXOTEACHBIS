@@ -40,7 +40,7 @@ async function tryConvertMetafile(src: string): Promise<string | null> {
     // Dynamic import to avoid bundling if not needed
     const { convertEmfToDataUrl, convertWmfToDataUrl } = await import("emf-converter");
     const isWmf = isWmfDataUri || isWmfUrl;
-    const pngDataUrl = await (isWmf ? convertWmfToDataUrl : convertEmfToDataUrl)(buffer, 1200, 900);
+    const pngDataUrl = await (isWmf ? convertWmfToDataUrl : convertEmfToDataUrl)(buffer, 2400, 1800);
     return pngDataUrl || null;
   } catch (e) {
     console.warn("[ZoomableImage] metafile conversion failed:", e);
