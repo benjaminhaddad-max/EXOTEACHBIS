@@ -28,14 +28,14 @@ const MAX_COLS = 4;
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 // Per-question box sizes
-const SMALL_BOX_W = 3.2 * MM; // width of each small square
-const SMALL_BOX_H = 3.2 * MM; // height of each small square
-const SMALL_BOX_GAP = 0.3 * MM; // gap between the 3 small squares in a group
-const GROUP_GAP = 2.5 * MM; // gap between letter groups (A, B, C...)
-const ROW_GAP = 1.2 * MM; // gap between answer row and remords row
-const Q_GAP = 2 * MM; // gap between questions
-const NUM_W = 9 * MM; // width reserved for question number
-const MARK_W = 3 * MM; // optical mark square on left
+const SMALL_BOX_W = 4.5 * MM; // width of each small square
+const SMALL_BOX_H = 4 * MM; // height of each small square
+const SMALL_BOX_GAP = 0.4 * MM; // gap between the 3 small squares in a group
+const GROUP_GAP = 3 * MM; // gap between letter groups (A, B, C...)
+const ROW_GAP = 0.8 * MM; // gap between answer row and remords row
+const Q_GAP = 1.5 * MM; // gap between questions
+const NUM_W = 10 * MM; // width reserved for question number
+const MARK_W = 3.5 * MM; // optical mark square on left
 const MARK_GAP = 1.5 * MM;
 const LETTER_H = 3.5 * MM; // height for letter labels above grid
 const COL_GAP = 4 * MM; // gap between columns
