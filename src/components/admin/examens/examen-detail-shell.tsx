@@ -19,6 +19,9 @@ import { createClient } from "@/lib/supabase/client";
 import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
 import { buildFiliereCoefficientMap, resolveSerieCoefficient, type FiliereMatiereCoefficient } from "@/lib/examens/filiere-coefficients";
 import { SemesterIcon, SubjectIcon } from "@/components/admin/pedagogie/dossier-icons";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 type ExamenSerieWithCoeff = {
   series_id: string;
@@ -90,7 +93,29 @@ export function ExamenDetailShell({
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper: import QCM from uploaded PDFs via Claude Vision (images rendered server-side)
+  // Helper: render a specific PDF page to JPEG using pdfjs-dist (same pattern as acc-fabricator)
+  const renderPdfPageToJpeg = async (pdfUrl: string, pageNum: number): Promise<Blob | null> => {
+    try {
+      const pdfBytes = await fetch(pdfUrl).then(r => r.arrayBuffer());
+      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
+      if (pageNum > doc.numPages) return null;
+      const page = await doc.getPage(pageNum);
+      const vp = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement("canvas");
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, vp.width, vp.height);
+      await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
+      return await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.8));
+    } catch (e) {
+      console.error("[renderPdfPageToJpeg] page", pageNum, e);
+      return null;
+    }
+  };
+
+  // Helper: import QCM from uploaded PDFs via Claude Vision + client-side image rendering
   const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
     setImportingSerieId(serieId);
     try {
@@ -103,6 +128,37 @@ export function ExamenDetailShell({
       if (res.ok && json.success) {
         showToast(json.message, "success");
         setImportedSerieIds(prev => new Set(prev).add(serieId));
+
+        // Client-side: render PDF pages and upload images for questions that have them
+        const qWithImages: { questionId: string; page: number }[] = json.questionsWithImages ?? [];
+        if (qWithImages.length > 0) {
+          showToast(`Upload des images (${qWithImages.length} questions)…`, "success");
+          const supabase = createClient();
+          // Deduplicate pages to avoid rendering the same page multiple times
+          const uniquePages = [...new Set(qWithImages.map(q => q.page))];
+          const renderedPages: Record<number, Blob> = {};
+          for (const p of uniquePages) {
+            const blob = await renderPdfPageToJpeg(sujetUrl, p);
+            if (blob) renderedPages[p] = blob;
+          }
+          // Upload each image and update the question
+          let uploaded = 0;
+          for (const { questionId, page } of qWithImages) {
+            const blob = renderedPages[page];
+            if (!blob) continue;
+            const file = new File([blob], `page_${page}.jpg`, { type: "image/jpeg" });
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("path", `questions/${questionId}/pdf_page.jpg`);
+            const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
+            const uploadJson = await uploadRes.json();
+            if (uploadJson.url) {
+              await supabase.from("questions").update({ image_url: uploadJson.url }).eq("id", questionId);
+              uploaded++;
+            }
+          }
+          if (uploaded > 0) showToast(`${uploaded} image${uploaded > 1 ? "s" : ""} importée${uploaded > 1 ? "s" : ""}`, "success");
+        }
       } else {
         showToast(json.error ?? "Erreur import PDF", "error");
       }
