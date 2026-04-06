@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 // @ts-ignore — mammoth has no types bundled
 import mammoth from "mammoth";
+import JSZip from "jszip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -165,12 +166,89 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
 }
 
 /**
- * Try both formats, return whichever finds more questions
+ * Format 3 : "Question" bold + list items with green highlight for correct answers
+ * Parses raw DOCX XML to detect w:highlight val="green"
  */
-function parseDocx(html: string): ParsedQuestion[] {
+function parseXmlHighlightFormat(docXml: string): ParsedQuestion[] {
+  const questions: ParsedQuestion[] = [];
+  const LABELS = ["A", "B", "C", "D", "E"];
+
+  // Extract paragraphs with text, bold, and highlight info
+  type Para = { text: string; bold: boolean; highlighted: string | null };
+  const paras: Para[] = [];
+  const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+  let m: RegExpExecArray | null;
+  while ((m = pRegex.exec(docXml)) !== null) {
+    const content = m[1];
+    const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
+    const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
+    const texts: string[] = [];
+    const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    let t: RegExpExecArray | null;
+    while ((t = tRegex.exec(content)) !== null) texts.push(t[1]);
+    const text = texts.join("").trim();
+    if (text.length > 0) {
+      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null });
+    }
+  }
+
+  // Parse: "Question" (bold) → question text → options (list items)
+  let i = 0;
+  while (i < paras.length) {
+    // Find next "Question" marker
+    if (paras[i].bold && /^question$/i.test(paras[i].text.trim())) {
+      i++;
+      // Next non-empty paragraph = question text (may span multiple paragraphs until first option)
+      let questionText = "";
+      while (i < paras.length && !paras[i].bold && !/^question$/i.test(paras[i].text.trim())) {
+        // Check if this looks like an option (comes after question text and has siblings with highlights)
+        // Heuristic: if we already have question text and there are 4+ more paragraphs that could be options, break
+        const remaining = paras.slice(i, i + 6);
+        const hasHighlights = remaining.some(p => p.highlighted === "green");
+        if (questionText && remaining.length >= 4 && (hasHighlights || remaining.length >= 5)) break;
+        questionText += (questionText ? " " : "") + paras[i].text;
+        i++;
+      }
+
+      if (!questionText) continue;
+
+      // Collect options (next 5 items or until next "Question")
+      const options: ParsedOption[] = [];
+      let optIdx = 0;
+      while (i < paras.length && optIdx < 5) {
+        if (paras[i].bold && /^question$/i.test(paras[i].text.trim())) break;
+        const optText = paras[i].text.trim();
+        if (optText.length > 2 && optIdx < LABELS.length) {
+          options.push({
+            label: LABELS[optIdx],
+            text: optText,
+            is_correct: paras[i].highlighted === "green",
+          });
+          optIdx++;
+        }
+        i++;
+      }
+
+      if (options.length >= 2) {
+        questions.push({ text: questionText, options, images: [] });
+      }
+    } else {
+      i++;
+    }
+  }
+
+  return questions;
+}
+
+/**
+ * Try all formats, return whichever finds more questions
+ */
+function parseDocx(html: string, docXml?: string): ParsedQuestion[] {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  return fromTables.length >= fromParagraphs.length ? fromTables : fromParagraphs;
+  const fromXml = docXml ? parseXmlHighlightFormat(docXml) : [];
+  const results = [fromTables, fromParagraphs, fromXml];
+  return results.reduce((best, cur) => cur.length > best.length ? cur : best, []);
 }
 
 // ─── Image upload helper ──────────────────────────────────────────────────────
@@ -231,8 +309,16 @@ export async function POST(req: NextRequest) {
     // Convertir DOCX → HTML via mammoth
     const { value: html } = await mammoth.convertToHtml({ buffer });
 
-    // Parser (essaie les deux formats)
-    const parsed = parseDocx(html);
+    // Extract raw XML from DOCX for highlight detection
+    let docXml: string | undefined;
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      const xmlFile = zip.file("word/document.xml");
+      if (xmlFile) docXml = await xmlFile.async("string");
+    } catch { /* ignore zip errors */ }
+
+    // Parser (essaie les trois formats)
+    const parsed = parseDocx(html, docXml);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
