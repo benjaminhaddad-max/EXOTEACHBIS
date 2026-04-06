@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import mammoth from "mammoth";
+import JSZip from "jszip";
+import { extractAllParagraphTexts } from "@/lib/omml-to-latex";
 
 // ─── HTML → Clean text (with Unicode sub/sup) ────────────────────────────
 
@@ -172,6 +174,55 @@ export async function POST(req: NextRequest) {
 
     if (questions.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le document" }, { status: 400 });
+    }
+
+    // ── Enrich with MathML → LaTeX from raw XML ──────────────────────────────
+    // Mammoth drops all OMML math. Extract paragraph texts from XML with LaTeX
+    // and use them to fix question/option texts that lost their math formulas.
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      const xmlFile = zip.file("word/document.xml");
+      if (xmlFile) {
+        const docXml = await xmlFile.async("string");
+        const xmlTexts = extractAllParagraphTexts(docXml);
+        // Build a lookup of "stripped text" → "text with LaTeX" for paragraphs containing $
+        const mathLookup = new Map<string, string>();
+        for (const t of xmlTexts) {
+          if (t.includes("$")) {
+            // Create a stripped version (without $...$) for matching
+            const stripped = t.replace(/\$[^$]+\$/g, (m) => {
+              // Extract just the raw text content from the LaTeX for matching
+              return m.replace(/\$/g, "").replace(/[\\{}^_]/g, "").replace(/frac|sqrt|overline|hat|vec|sum|prod|int|left|right/g, "");
+            }).trim();
+            if (stripped.length > 3) mathLookup.set(stripped, t);
+          }
+        }
+
+        if (mathLookup.size > 0) {
+          // Try to match and replace question texts
+          for (const q of questions) {
+            // Check if question text matches a stripped XML paragraph
+            for (const [stripped, enriched] of mathLookup) {
+              if (q.text.includes(stripped) || stripped.includes(q.text.slice(0, 30))) {
+                q.text = enriched;
+                break;
+              }
+            }
+            // Also check option texts
+            for (const opt of q.options) {
+              for (const [stripped, enriched] of mathLookup) {
+                if (opt.text === stripped || (opt.text.length > 5 && stripped.includes(opt.text))) {
+                  opt.text = enriched;
+                  break;
+                }
+              }
+            }
+          }
+          console.log("[import-word] Math enrichment: found", mathLookup.size, "paragraphs with LaTeX");
+        }
+      }
+    } catch (e: any) {
+      console.warn("[import-word] Math enrichment failed (non-critical):", e.message);
     }
 
     // Auto-detect year from title

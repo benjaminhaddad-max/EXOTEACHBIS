@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 // @ts-ignore — mammoth has no types bundled
 import mammoth from "mammoth";
 import JSZip from "jszip";
+import { extractParagraphText } from "@/lib/omml-to-latex";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,117 @@ type ParsedSection = {
   intro_text: string;  // Intro paragraphs
   images: string[];    // base64 data URIs for section images
 };
+
+// ─── DrawingML / VML image extraction ────────────────────────────────────────
+
+/**
+ * Extract rId references from DrawingML (<w:drawing>) and VML (<w:pict>/<v:shape>) elements.
+ * Returns an array of relationship IDs (e.g. "rId7") that reference images in word/media/.
+ */
+function extractDrawingImageRids(paragraphXml: string): string[] {
+  const rIds: string[] = [];
+
+  // DrawingML: <a:blip r:embed="rId7" />
+  const blipRegex = /a:blip[^>]*r:embed="([^"]+)"/g;
+  let m;
+  while ((m = blipRegex.exec(paragraphXml)) !== null) {
+    rIds.push(m[1]);
+  }
+
+  // VML: <v:imagedata r:id="rId7" />
+  const vmlRegex = /v:imagedata[^>]*r:id="([^"]+)"/g;
+  while ((m = vmlRegex.exec(paragraphXml)) !== null) {
+    rIds.push(m[1]);
+  }
+
+  // OLE objects: <o:OLEObject ... r:id="rId7" />
+  const oleRegex = /o:OLEObject[^>]*r:id="([^"]+)"/g;
+  while ((m = oleRegex.exec(paragraphXml)) !== null) {
+    rIds.push(m[1]);
+  }
+
+  return [...new Set(rIds)]; // deduplicate
+}
+
+/**
+ * Parse word/_rels/document.xml.rels to build rId → target path mapping.
+ */
+function parseRelationships(relsXml: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  const relRegex = /<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"[^>]*>/g;
+  let m;
+  while ((m = relRegex.exec(relsXml)) !== null) {
+    map[m[1]] = m[2];
+  }
+  return map;
+}
+
+/**
+ * Extract images from DOCX ZIP that are referenced by DrawingML/VML in paragraphs
+ * but missed by mammoth (e.g. vector drawings with embedded raster fallbacks).
+ */
+async function extractDrawingImages(
+  zip: JSZip,
+  docXml: string,
+  relsMap: Record<string, string>,
+): Promise<Map<number, string[]>> {
+  // Map paragraph index → list of base64 data URIs
+  const result = new Map<number, string[]>();
+
+  // mammoth extracts standard <w:drawing><wp:inline><a:graphic><a:blip> images.
+  // But it misses images inside <mc:AlternateContent> (used for vector shapes with image fallbacks),
+  // <w:pict> (VML), and more complex DrawingML structures.
+
+  // Iterate over paragraphs
+  const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+  let pMatch;
+  let pIdx = 0;
+  while ((pMatch = pRegex.exec(docXml)) !== null) {
+    const content = pMatch[1];
+
+    // Check for drawing/pict elements that mammoth might miss
+    const hasMcAlternate = content.includes("<mc:AlternateContent");
+    const hasWPict = content.includes("<w:pict");
+    const hasDrawing = content.includes("<w:drawing");
+
+    if (hasMcAlternate || hasWPict || hasDrawing) {
+      const rIds = extractDrawingImageRids(content);
+      const images: string[] = [];
+
+      for (const rId of rIds) {
+        const target = relsMap[rId];
+        if (!target) continue;
+        // Resolve path relative to word/
+        const imgPath = target.startsWith("/") ? target.slice(1) : `word/${target}`;
+
+        try {
+          const imgFile = zip.file(imgPath);
+          if (!imgFile) continue;
+          const imgBuffer = await imgFile.async("base64");
+          // Detect content type from extension
+          const ext = imgPath.split(".").pop()?.toLowerCase() || "png";
+          const mimeMap: Record<string, string> = {
+            png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+            gif: "image/gif", bmp: "image/bmp", tiff: "image/tiff",
+            emf: "image/x-emf", wmf: "image/x-wmf", svg: "image/svg+xml",
+          };
+          const mime = mimeMap[ext] || "image/png";
+          images.push(`data:${mime};base64,${imgBuffer}`);
+        } catch {
+          // Skip files we can't read
+        }
+      }
+
+      if (images.length > 0) {
+        result.set(pIdx, images);
+      }
+    }
+
+    pIdx++;
+  }
+
+  return result;
+}
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 
@@ -208,31 +320,29 @@ function extractImagesPerQuestion(html: string): string[][] {
  * Parses raw DOCX XML to detect w:highlight val="green"
  * Uses mammoth HTML for image extraction
  */
-function parseXmlHighlightFormat(docXml: string, html?: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const questions: ParsedQuestion[] = [];
   const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
 
   // Extract paragraphs with text, bold, and highlight info
-  type Para = { text: string; bold: boolean; highlighted: string | null };
+  // Now uses extractParagraphText() to convert inline OMML math to $LaTeX$
+  // xmlParaIdx tracks the raw XML paragraph index (for drawingImages mapping)
+  type Para = { text: string; bold: boolean; highlighted: string | null; xmlIdx: number };
   const paras: Para[] = [];
   const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
   let m: RegExpExecArray | null;
+  let xmlParaCounter = 0;
   while ((m = pRegex.exec(docXml)) !== null) {
     const content = m[1];
     const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
     const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
-    const texts: string[] = [];
-    // Only match text inside <w:r> run elements (after </w:rPr> properties)
-    const tRegex = /<(?:w|m):t(?:\s[^>]*)?>([^<]*)<\/(?:w|m):t>/g;
-    let t: RegExpExecArray | null;
-    while ((t = tRegex.exec(content)) !== null) {
-      texts.push(t[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"));
-    }
-    const text = texts.join("").trim();
+    // Use new extractParagraphText to handle OMML → LaTeX conversion
+    const text = extractParagraphText(content);
     if (text.length > 0) {
-      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null });
+      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null, xmlIdx: xmlParaCounter });
     }
+    xmlParaCounter++;
   }
 
   // ── Detect sections ("Partie X" bold markers) and "Question" markers ───────
@@ -346,16 +456,50 @@ function parseXmlHighlightFormat(docXml: string, html?: string): { questions: Pa
     }
   }
 
+  // ── Assign DrawingML/VML images for questions that have no images yet ──────
+  if (drawingImages && drawingImages.size > 0) {
+    // qMarkers/sectionMarkers use paras[] indices. drawingImages uses raw XML indices.
+    // Convert paras[] indices to XML indices using the xmlIdx field.
+    for (let qi = 0; qi < qMarkers.length; qi++) {
+      if (questions[qi] && questions[qi].images.length === 0) {
+        const startXml = paras[qMarkers[qi]].xmlIdx;
+        const endXml = qi + 1 < qMarkers.length ? paras[qMarkers[qi + 1]].xmlIdx : Infinity;
+        for (const [xmlParaIdx, imgs] of drawingImages) {
+          if (xmlParaIdx >= startXml && xmlParaIdx < endXml) {
+            questions[qi].images.push(...imgs);
+          }
+        }
+      }
+    }
+
+    // Also assign drawing images to sections that have no images
+    for (let si = 0; si < sectionMarkers.length; si++) {
+      if (sections[si] && sections[si].images.length === 0) {
+        const smXml = paras[sectionMarkers[si].idx].xmlIdx;
+        const firstQAfter = qMarkers.find(q => q > sectionMarkers[si].idx);
+        const endXml = firstQAfter != null ? paras[firstQAfter].xmlIdx : Infinity;
+        for (const [xmlParaIdx, imgs] of drawingImages) {
+          if (xmlParaIdx > smXml && xmlParaIdx < endXml) {
+            sections[si].images.push(...imgs);
+          }
+        }
+      }
+    }
+
+    console.log("[import-serie] DrawingML images assigned:",
+      questions.filter(q => q.images.length > 0).length, "questions with images");
+  }
+
   return { questions, sections };
 }
 
 /**
  * Try all formats, return whichever finds more questions
  */
-function parseDocx(html: string, docXml?: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const xmlResult = docXml ? parseXmlHighlightFormat(docXml, html) : { questions: [], sections: [] };
+  const xmlResult = docXml ? parseXmlHighlightFormat(docXml, html, drawingImages) : { questions: [], sections: [] };
   console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
 
   // Pick whichever format found the most questions
@@ -425,19 +569,33 @@ export async function POST(req: NextRequest) {
     // Convertir DOCX → HTML via mammoth
     const { value: html } = await mammoth.convertToHtml({ buffer });
 
-    // Extract raw XML from DOCX for highlight detection
+    // Extract raw XML from DOCX for highlight detection + drawing images
     let docXml: string | undefined;
+    let drawingImages: Map<number, string[]> | undefined;
     try {
       const zip = await JSZip.loadAsync(buffer);
       const xmlFile = zip.file("word/document.xml");
       if (xmlFile) docXml = await xmlFile.async("string");
       console.log("[import-serie] XML extracted:", docXml ? `${docXml.length} chars` : "null");
+
+      // Extract relationships and drawing images from ZIP
+      if (docXml) {
+        const relsFile = zip.file("word/_rels/document.xml.rels");
+        if (relsFile) {
+          const relsXml = await relsFile.async("string");
+          const relsMap = parseRelationships(relsXml);
+          drawingImages = await extractDrawingImages(zip, docXml, relsMap);
+          if (drawingImages.size > 0) {
+            console.log("[import-serie] DrawingML/VML images found:", drawingImages.size, "paragraphs with images");
+          }
+        }
+      }
     } catch (e: any) {
       console.error("[import-serie] JSZip error:", e.message);
     }
 
     // Parser (essaie les trois formats)
-    const { questions: parsed, sections: parsedSections } = parseDocx(html, docXml);
+    const { questions: parsed, sections: parsedSections } = parseDocx(html, docXml, drawingImages);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
