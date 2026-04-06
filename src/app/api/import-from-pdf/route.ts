@@ -76,10 +76,13 @@ RÈGLES ABSOLUES — NE PAS RÉSUMER :
 - Retire le numéro de question au début (ex: "1." ou "Q1.") et le "A."/"B." au début des options.
 - Formules chimiques et mathématiques : garde-les telles quelles (ex: CH₃⁺, sp², etc.)
 
-IMAGES :
-- "has_image": true si un schéma/structure/molécule/graphique accompagne la question
-- "image_y_start": coordonnée Y en points PDF (0=haut, ~842=bas de page A4) où l'image COMMENCE
-- "image_y_end": coordonnée Y où l'image SE TERMINE
+IMAGES — TRÈS IMPORTANT :
+- "has_image": true UNIQUEMENT si un schéma, structure chimique, molécule, graphique ou figure DESSINÉE accompagne la question
+- "has_image" est FALSE pour du texte pur, des formules textuelles, ou des tableaux de texte
+- "image_y_start": coordonnée Y en points PDF (0=haut, ~842=bas de page A4) où le DESSIN/SCHÉMA commence
+- "image_y_end": coordonnée Y où le DESSIN/SCHÉMA se termine
+- ATTENTION : les coordonnées doivent couvrir UNIQUEMENT le schéma/dessin/molécule, PAS le texte de l'énoncé ni les propositions A-E. On veut cropper SEULEMENT l'image graphique.
+- Exemple : si la question a un texte "Soit les 4 molécules suivantes" puis 4 molécules dessinées, puis "Classer par électrophilie croissante" puis A/B/C/D/E → image_y_start = début des dessins de molécules, image_y_end = fin des dessins de molécules (AVANT le texte "Classer...")
 - Si pas d'image : has_image=false, pas de image_y_start/image_y_end
 
 Réponds UNIQUEMENT en JSON strict, un array :
