@@ -184,8 +184,9 @@ async function extractDrawingImages(
     const hasMcAlternate = content.includes("<mc:AlternateContent");
     const hasWPict = content.includes("<w:pict");
     const hasDrawing = content.includes("<w:drawing");
+    const hasObject = content.includes("<w:object");
 
-    if (hasMcAlternate || hasWPict || hasDrawing) {
+    if (hasMcAlternate || hasWPict || hasDrawing || hasObject) {
       const rIds = extractDrawingImageRids(content);
       const images: string[] = [];
       const seenBases = new Set<string>(); // avoid duplicates from Choice+Fallback
