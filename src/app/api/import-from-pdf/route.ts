@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type ParsedOption = { label: string; text: string; is_correct: boolean };
 type ParsedQuestion = { text: string; options: ParsedOption[]; has_image?: boolean; image_page?: number | null };
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (!sujetRes.ok || !correctionRes.ok) {
-      return NextResponse.json({ error: "Impossible de télécharger les PDFs" }, { status: 500 });
+      return NextResponse.json({ error: `Impossible de télécharger les PDFs (sujet: ${sujetRes.status}, correction: ${correctionRes.status})` }, { status: 500 });
     }
 
     const [sujetBuf, correctionBuf] = await Promise.all([

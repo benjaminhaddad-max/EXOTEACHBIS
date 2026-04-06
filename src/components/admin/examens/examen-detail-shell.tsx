@@ -168,8 +168,9 @@ export function ExamenDetailShell({
       } else {
         showToast(json.error ?? "Erreur import PDF", "error");
       }
-    } catch {
-      showToast("Erreur lors de l'import depuis les PDFs", "error");
+    } catch (err: any) {
+      showToast(err?.message ?? "Erreur lors de l'import depuis les PDFs", "error");
+      console.error("[triggerPdfImport]", err);
     } finally {
       setImportingSerieId(null);
     }
