@@ -31,7 +31,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type QOption = { label: string; text: string; is_correct: boolean; justification: string; image_url?: string | null };
 
-type QuestionFull = {
+export type QuestionFull = {
   id: string; text: string; type: string; difficulty: number;
   explanation: string | null; cours_id: string | null;
   options: (QOption & { id: string; order_index: number })[];
@@ -67,7 +67,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 // ─── Image upload helper ──────────────────────────────────────────────────
 
-function ImageUploadBtn({
+export function ImageUploadBtn({
   current, onUploaded, folder, label,
 }: { current?: string | null; onUploaded: (url: string | null) => void; folder: string; label: string }) {
   const [uploading, setUploading] = useState(false);
@@ -102,7 +102,7 @@ function ImageUploadBtn({
 
 // ─── Click-to-edit field: renders MathText, clicks switches to textarea ───
 
-function ClickToEditField({
+export function ClickToEditField({
   value, onChange, placeholder, rows, className, mathClassName,
 }: {
   value: string; onChange: (v: string) => void; placeholder?: string; rows?: number;
@@ -139,7 +139,7 @@ function ClickToEditField({
 
 // ─── Inline Question Editor (in-place editing inside serie) ───────────────
 
-function InlineQuestionEditor({
+export function InlineQuestionEditor({
   question: q,
   options: initialOpts,
   coursId,

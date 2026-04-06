@@ -11,6 +11,7 @@ import {
 import { AnnalesIcon, QcmIcon, ConcoursIcon, RevisionIcon, FlashcardIcon } from "./dossier-icons";
 import type { Dossier, Cours } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
+import { InlineQuestionEditor } from "./cours-detail-panel";
 import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie, updateQuestionCoursId } from "@/app/(admin)/admin/pedagogie/actions";
 import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
@@ -576,34 +577,12 @@ export function FullSerieEditor({
                       </div>
                     </div>
                     {isOpen && (
-                      <div className="px-3 pb-3 pt-2 border-t border-white/8 space-y-1.5 bg-white/95 rounded-b-xl">
-                        {q.image_url && (
-                          <div className="flex justify-center py-3 px-4 mb-2 bg-white rounded-xl border border-gray-100">
-                            <img src={q.image_url} alt="" className="max-h-52 object-contain" />
-                          </div>
-                        )}
-                        {opts.map((opt: any) => (
-                          <div key={opt.label} className={`text-xs px-3 py-2.5 rounded-lg flex items-start gap-2.5 ${opt.is_correct ? "bg-green-500 text-white" : "bg-red-50 text-gray-700 border border-red-100"}`}>
-                            <span className={`font-bold shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${opt.is_correct ? "bg-white/20 text-white" : "bg-red-100 text-red-600"}`}>{opt.label}</span>
-                            <div className="flex-1 min-w-0">
-                              <MathText text={opt.text} className="font-medium" />
-                              {opt.justification && (
-                                <p className={`text-[11px] mt-1 leading-snug ${opt.is_correct ? "text-white/80" : "text-gray-500"}`}>
-                                  💡 {opt.justification}
-                                </p>
-                              )}
-                            </div>
-                            <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${opt.is_correct ? "bg-white/20 text-white" : "bg-red-100 text-red-600"}`}>
-                              {opt.is_correct ? "VRAI" : "FAUX"}
-                            </span>
-                          </div>
-                        ))}
-                        {q.explanation && (
-                          <p className="text-[11px] text-gray-500 italic pt-2 border-t border-gray-200 flex gap-1.5 items-start">
-                            <span className="text-amber-500">💡</span>{q.explanation}
-                          </p>
-                        )}
-                      </div>
+                      <InlineQuestionEditor
+                        question={{ ...q, options: opts }}
+                        options={opts}
+                        coursId={q.cours_id ?? serie.cours_id ?? ""}
+                        onSaved={() => loadAll()}
+                      />
                     )}
                   </div>
                 );

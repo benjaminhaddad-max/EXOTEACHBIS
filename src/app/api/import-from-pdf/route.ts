@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 60;
 
 type ParsedOption = { label: string; text: string; is_correct: boolean };
-type ParsedQuestion = { text: string; options: ParsedOption[] };
+type ParsedQuestion = { text: string; options: ParsedOption[]; has_image?: boolean; image_page?: number | null };
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     const msg = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 16000,
+      max_tokens: 32000,
       messages: [
         {
           role: "user",
@@ -73,29 +73,35 @@ export async function POST(req: NextRequest) {
 Ta tâche :
 - Extrais TOUTES les questions du sujet avec leurs propositions (A à E).
 - Pour chaque proposition, détermine si elle est correcte en regardant la correction (surlignée en vert = correcte).
-- Le texte de chaque question doit être le texte complet de l'énoncé.
-- Le texte de chaque option doit être le texte complet de la proposition.
-- Nettoie le texte : pas de numéro de question au début, pas de "A." au début des options.
+
+RÈGLES ABSOLUES — NE PAS RÉSUMER :
+- COPIE EXACTEMENT le texte tel qu'il apparaît dans le PDF. Ne résume JAMAIS. Ne reformule JAMAIS.
+- Si la question dit "Concernant la molécule X ci-dessous, cochez la(les) proposition(s) exacte(s) :", tu dois écrire EXACTEMENT ce texte.
+- NE PAS écrire "Question sur X" ou "À propos de X". Copie le texte VERBATIM.
+- Retire seulement le numéro de la question au début (ex: "1." ou "Q1.") et le "A." / "B." au début des options.
+- Si une question fait référence à une image/schéma/structure ("ci-dessous", "ci-contre", "représentée"), garde cette référence dans le texte et ajoute "has_image": true.
+- Formules chimiques et mathématiques : garde-les telles quelles (ex: CH₃⁺, sp², etc.)
 
 Réponds UNIQUEMENT en JSON strict, un array :
 [
   {
-    "text": "Texte complet de la question",
+    "text": "Texte EXACT copié du PDF",
+    "has_image": false,
+    "image_page": null,
     "options": [
-      {"label": "A", "text": "Texte de la proposition A", "is_correct": true},
-      {"label": "B", "text": "Texte de la proposition B", "is_correct": false},
-      {"label": "C", "text": "Texte de la proposition C", "is_correct": true},
-      {"label": "D", "text": "Texte de la proposition D", "is_correct": false},
-      {"label": "E", "text": "Texte de la proposition E", "is_correct": false}
+      {"label": "A", "text": "Texte EXACT de la proposition A", "is_correct": true},
+      {"label": "B", "text": "Texte EXACT de la proposition B", "is_correct": false},
+      {"label": "C", "text": "Texte EXACT de la proposition C", "is_correct": true},
+      {"label": "D", "text": "Texte EXACT de la proposition D", "is_correct": false},
+      {"label": "E", "text": "Texte EXACT de la proposition E", "is_correct": false}
     ]
   }
 ]
 
-IMPORTANT :
+- "has_image": true si la question contient ou fait référence à une image/schéma/structure moléculaire.
+- "image_page": numéro de la page du SUJET (1-indexed) où se trouve l'image. null si pas d'image.
 - Chaque question DOIT avoir exactement 5 options (A à E), sauf si le QCM en a moins.
-- Respecte l'ordre des questions.
-- Ne modifie PAS le texte des questions ou propositions, recopie-les fidèlement.
-- Si une formule mathématique est présente, garde-la telle quelle.`,
+- Respecte l'ordre des questions tel qu'il apparaît dans le PDF.`,
             },
           ],
         },
@@ -122,6 +128,8 @@ IMPORTANT :
 
     // Insert questions in DB (same pattern as import-serie Mode 1)
     let created = 0;
+    const questionsWithImages: { questionId: string; page: number }[] = [];
+
     for (let i = 0; i < parsed.length; i++) {
       const q = parsed[i];
 
@@ -154,6 +162,10 @@ IMPORTANT :
         order_index: i,
       });
 
+      if (q.has_image && q.image_page) {
+        questionsWithImages.push({ questionId: newQ.id, page: q.image_page });
+      }
+
       created++;
     }
 
@@ -161,6 +173,7 @@ IMPORTANT :
       success: true,
       message: `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""} depuis les PDFs.`,
       count: created,
+      questionsWithImages,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erreur serveur.";
