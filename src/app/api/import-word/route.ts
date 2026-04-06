@@ -8,17 +8,10 @@ import { extractAllParagraphTexts } from "@/lib/omml-to-latex";
 // Formats that browsers cannot display
 const NON_WEB_FORMATS = /^data:image\/(x-emf|x-wmf|emf|wmf|tiff|x-bmp);/i;
 
-/** Convert non-web image data URIs to PNG, return null if unconvertible */
+/** Keep EMF/WMF as-is — the browser will convert them client-side via emf-converter */
 async function ensureWebFormat(dataUri: string): Promise<string | null> {
-  if (!NON_WEB_FORMATS.test(dataUri)) return dataUri; // already web-compatible
-  try {
-    const match = dataUri.match(/^data:image\/[\w+\-]+;base64,(.+)$/);
-    if (!match) return null;
-    const pngBuffer = await sharp(Buffer.from(match[1], "base64")).png().toBuffer();
-    return `data:image/png;base64,${pngBuffer.toString("base64")}`;
-  } catch {
-    return null; // skip if conversion fails
-  }
+  // Always return the data URI, even for EMF/WMF — browser handles conversion
+  return dataUri;
 }
 
 // ─── HTML → Clean text (with Unicode sub/sup) ────────────────────────────

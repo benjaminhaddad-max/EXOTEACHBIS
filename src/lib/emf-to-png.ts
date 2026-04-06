@@ -1,54 +1,107 @@
 /**
  * Server-side EMF/WMF → PNG conversion using emf-converter + @napi-rs/canvas.
  *
- * emf-converter expects OffscreenCanvas or document.createElement('canvas').
- * We polyfill OffscreenCanvas with @napi-rs/canvas so it works in Node.js/Vercel.
+ * emf-converter expects browser APIs (OffscreenCanvas, FileReader, createImageBitmap).
+ * We polyfill them with @napi-rs/canvas and Node.js built-ins.
  */
-import { createCanvas, type Canvas } from "@napi-rs/canvas";
+import { createCanvas, type Canvas, loadImage } from "@napi-rs/canvas";
+
+let polyfillInstalled = false;
 
 /**
- * Polyfill OffscreenCanvas for emf-converter using @napi-rs/canvas.
- * Must be called before importing emf-converter.
+ * Install all browser API polyfills needed by emf-converter.
  */
-function installCanvasPolyfill() {
-  if (typeof globalThis.OffscreenCanvas !== "undefined") return; // already available
+function installPolyfills() {
+  if (polyfillInstalled) return;
+  polyfillInstalled = true;
 
-  // Create a minimal OffscreenCanvas-compatible class using @napi-rs/canvas
-  class NodeOffscreenCanvas {
-    private _canvas: Canvas;
-    width: number;
-    height: number;
+  // ─── OffscreenCanvas polyfill ────────────────────────────────────────────
+  if (typeof globalThis.OffscreenCanvas === "undefined") {
+    class NodeOffscreenCanvas {
+      private _canvas: Canvas;
+      width: number;
+      height: number;
 
-    constructor(width: number, height: number) {
-      this.width = width;
-      this.height = height;
-      this._canvas = createCanvas(width, height);
+      constructor(width: number, height: number) {
+        this.width = width;
+        this.height = height;
+        this._canvas = createCanvas(width, height);
+      }
+
+      getContext(type: string) {
+        if (type !== "2d") return null;
+        return this._canvas.getContext("2d");
+      }
+
+      toDataURL(mimeType?: string) {
+        return this._canvas.toDataURL(mimeType as any || "image/png");
+      }
+
+      convertToBlob() {
+        const dataUrl = this.toDataURL("image/png");
+        const base64 = dataUrl.split(",")[1];
+        const buf = Buffer.from(base64, "base64");
+        return Promise.resolve(new Blob([buf], { type: "image/png" }));
+      }
     }
-
-    getContext(type: string) {
-      if (type !== "2d") return null;
-      return this._canvas.getContext("2d");
-    }
-
-    toDataURL(mimeType?: string) {
-      return this._canvas.toDataURL(mimeType as any || "image/png");
-    }
-
-    convertToBlob() {
-      const dataUrl = this.toDataURL("image/png");
-      const base64 = dataUrl.split(",")[1];
-      const buffer = Buffer.from(base64, "base64");
-      return Promise.resolve(new Blob([buffer], { type: "image/png" }));
-    }
+    (globalThis as any).OffscreenCanvas = NodeOffscreenCanvas;
   }
 
-  // Install polyfill
-  (globalThis as any).OffscreenCanvas = NodeOffscreenCanvas;
+  // ─── FileReader polyfill ─────────────────────────────────────────────────
+  if (typeof globalThis.FileReader === "undefined") {
+    class NodeFileReader {
+      result: string | ArrayBuffer | null = null;
+      onload: ((ev: any) => void) | null = null;
+      onerror: ((ev: any) => void) | null = null;
+
+      readAsDataURL(blob: Blob) {
+        blob.arrayBuffer().then((ab) => {
+          const buf = Buffer.from(ab);
+          const base64 = buf.toString("base64");
+          // Detect mime from blob type or default to png
+          const mime = (blob as any).type || "image/png";
+          this.result = `data:${mime};base64,${base64}`;
+          if (this.onload) this.onload({ target: this });
+        }).catch((err) => {
+          if (this.onerror) this.onerror(err);
+        });
+      }
+    }
+    (globalThis as any).FileReader = NodeFileReader;
+  }
+
+  // ─── createImageBitmap polyfill ──────────────────────────────────────────
+  if (typeof globalThis.createImageBitmap === "undefined") {
+    (globalThis as any).createImageBitmap = async (source: Blob | ArrayBuffer) => {
+      try {
+        let buffer: Buffer;
+        if (source instanceof Blob) {
+          const ab = await source.arrayBuffer();
+          buffer = Buffer.from(ab);
+        } else if (source instanceof ArrayBuffer) {
+          buffer = Buffer.from(source);
+        } else {
+          buffer = Buffer.from(source as any);
+        }
+
+        const image = await loadImage(buffer);
+        return {
+          width: image.width,
+          height: image.height,
+          close: () => {},
+          // Provide a way for canvas to draw this
+          _image: image,
+        };
+      } catch {
+        // Return a minimal placeholder if image loading fails
+        return { width: 1, height: 1, close: () => {} };
+      }
+    };
+  }
 }
 
 /**
  * Convert an EMF or WMF buffer to a PNG data URL on the server.
- * Returns the PNG data URL, or null if conversion fails.
  */
 export async function convertEmfToPng(
   buffer: ArrayBuffer,
@@ -57,11 +110,8 @@ export async function convertEmfToPng(
   maxHeight = 1800,
 ): Promise<string | null> {
   try {
-    installCanvasPolyfill();
-
-    // Dynamic import after polyfill is installed
+    installPolyfills();
     const { convertEmfToDataUrl, convertWmfToDataUrl } = await import("emf-converter");
-
     const converter = isWmf ? convertWmfToDataUrl : convertEmfToDataUrl;
     const result = await converter(buffer, maxWidth, maxHeight);
     return result || null;

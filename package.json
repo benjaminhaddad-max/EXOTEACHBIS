@@ -21,6 +21,7 @@
     "clsx": "^2.1.1",
     "docx": "^9.6.1",
     "emf-converter": "^1.0.10",
+    "jsdom": "^24.1.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.40",
     "lucide-react": "^0.577.0",
@@ -32,6 +33,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-pdf": "^10.4.1",
+    "rtf.js": "^3.0.9",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.5.0"
   },
