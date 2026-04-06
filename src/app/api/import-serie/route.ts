@@ -166,10 +166,29 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
 }
 
 /**
+ * Extract images per question from mammoth HTML by splitting at "Question" markers
+ */
+function extractImagesPerQuestion(html: string): string[][] {
+  const parts = html.split(/<(?:li>)?<strong>Question<\/strong>(?:<\/li>)?/i);
+  const result: string[][] = [];
+  // Skip part[0] (content before first Question)
+  for (let i = 1; i < parts.length; i++) {
+    const imgMatches = parts[i].match(/<img\s+[^>]*src="(data:image\/[^"]+)"[^>]*>/gi) || [];
+    const imgs = imgMatches.map(m => {
+      const srcMatch = m.match(/src="(data:image\/[^"]+)"/);
+      return srcMatch ? srcMatch[1] : "";
+    }).filter(Boolean);
+    result.push(imgs);
+  }
+  return result;
+}
+
+/**
  * Format 3 : "Question" bold + list items with green highlight for correct answers
  * Parses raw DOCX XML to detect w:highlight val="green"
+ * Uses mammoth HTML for image extraction
  */
-function parseXmlHighlightFormat(docXml: string): ParsedQuestion[] {
+function parseXmlHighlightFormat(docXml: string, html?: string): ParsedQuestion[] {
   const questions: ParsedQuestion[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
 
@@ -243,8 +262,13 @@ function parseXmlHighlightFormat(docXml: string): ParsedQuestion[] {
     if (options.length >= 2) {
       questions.push({ text: questionText, options, images: [] });
     }
-    } else {
-      i++;
+  }
+
+  // Assign images from mammoth HTML to questions
+  if (html) {
+    const imagesPerQ = extractImagesPerQuestion(html);
+    for (let qi = 0; qi < Math.min(questions.length, imagesPerQ.length); qi++) {
+      questions[qi].images = imagesPerQ[qi];
     }
   }
 
@@ -257,7 +281,7 @@ function parseXmlHighlightFormat(docXml: string): ParsedQuestion[] {
 function parseDocx(html: string, docXml?: string): ParsedQuestion[] {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const fromXml = docXml ? parseXmlHighlightFormat(docXml) : [];
+  const fromXml = docXml ? parseXmlHighlightFormat(docXml, html) : [];
   const results = [fromTables, fromParagraphs, fromXml];
   return results.reduce((best, cur) => cur.length > best.length ? cur : best, []);
 }
