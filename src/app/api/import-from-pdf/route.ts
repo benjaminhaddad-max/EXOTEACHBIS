@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 300;
 
 type ParsedOption = { label: string; text: string; is_correct: boolean };
-type ParsedQuestion = { text: string; options: ParsedOption[]; has_image?: boolean; image_page?: number | null };
+type ParsedQuestion = { text: string; options: ParsedOption[]; page?: number };
 
 export async function POST(req: NextRequest) {
   try {
@@ -94,18 +94,15 @@ RÈGLES ABSOLUES — NE PAS RÉSUMER :
 - Retire seulement le numéro de la question au début (ex: "1." ou "Q1.") et le "A." / "B." au début des options.
 - Formules chimiques et mathématiques : garde-les telles quelles (ex: CH₃⁺, sp², etc.)
 
-IMAGES — TRÈS IMPORTANT :
-- Si la question contient une image, un schéma, une structure moléculaire, un graphique, ou TOUT élément visuel non-texte, mets "has_image": true.
-- Si le texte fait référence à un visuel ("ci-dessous", "ci-contre", "représentée", "suivante", "schéma", "figure"), c'est qu'il y a une image : "has_image": true.
-- "image_page" = numéro de la page du SUJET (1-indexed) où se trouve l'image/schéma.
-- En cas de doute, préfère mettre has_image: true.
+PAGE — OBLIGATOIRE :
+- Pour CHAQUE question, indique "page" = le numéro de la page du SUJET (1-indexed) où se trouve cette question.
+- C'est OBLIGATOIRE pour toutes les questions, pas seulement celles avec des images.
 
 Réponds UNIQUEMENT en JSON strict, un array :
 [
   {
     "text": "Texte EXACT copié du PDF",
-    "has_image": false,
-    "image_page": null,
+    "page": 1,
     "options": [
       {"label": "A", "text": "Texte EXACT de la proposition A", "is_correct": true},
       {"label": "B", "text": "Texte EXACT de la proposition B", "is_correct": false}
@@ -115,7 +112,8 @@ Réponds UNIQUEMENT en JSON strict, un array :
 
 - Chaque question DOIT avoir exactement 5 options (A à E), sauf si le QCM en a moins.
 - NE DUPLIQUE PAS les questions. Chaque question numérotée dans le PDF = 1 seule entrée dans le JSON.
-- Respecte l'ordre des questions tel qu'il apparaît dans le PDF.`,
+- Respecte l'ordre des questions tel qu'il apparaît dans le PDF.
+- "page" est TOUJOURS un nombre entier ≥ 1, JAMAIS null.`,
             },
           ],
         },
@@ -177,8 +175,8 @@ Réponds UNIQUEMENT en JSON strict, un array :
         order_index: i,
       });
 
-      if (q.has_image && q.image_page) {
-        questionsWithImages.push({ questionId: newQ.id, page: q.image_page });
+      if (q.page) {
+        questionsWithImages.push({ questionId: newQ.id, page: q.page });
       }
 
       created++;
