@@ -581,17 +581,32 @@ export function ExamenDetailShell({
                       <Upload size={10} /> Sujet
                       <input type="file" accept=".pdf,.docx" className="hidden" onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
-                        const res = await uploadPdf(file, `examens/${initialExamen.id}`);
-                        if ("error" in res) { showToast(res.error, "error"); return; }
-                        const sujUrl = res.url;
-                        await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", sujUrl);
-                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: sujUrl } : s));
-                        showToast("Sujet uploadé", "success");
-                        e.target.value = "";
-                        // Auto-import QCM if correction also exists
-                        if (es.correction_url) {
-                          triggerPdfImport(es.series_id, sujUrl, es.correction_url, (es.series as any)?.cours_id ?? null);
+                        const isDocx = file.name.endsWith(".docx");
+
+                        if (isDocx) {
+                          // Word sujet → import questions directly
+                          showToast("Import du sujet Word…", "success");
+                          const fd = new FormData();
+                          fd.append("serieId", es.series_id);
+                          fd.append("file", file);
+                          const importRes = await fetch("/api/import-serie", { method: "POST", body: fd });
+                          const importJson = await importRes.json();
+                          if (importJson.success) {
+                            showToast(importJson.message, "success");
+                            setImportedSerieIds(prev => new Set(prev).add(es.series_id));
+                          } else {
+                            showToast(importJson.error ?? "Erreur import Word", "error");
+                          }
+                        } else {
+                          // PDF sujet → upload as file
+                          const res = await uploadPdf(file, `examens/${initialExamen.id}`);
+                          if ("error" in res) { showToast(res.error, "error"); return; }
+                          const sujUrl = res.url;
+                          await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", sujUrl);
+                          setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: sujUrl } : s));
+                          showToast("Sujet uploadé", "success");
                         }
+                        e.target.value = "";
                       }} />
                     </label>
                   )}

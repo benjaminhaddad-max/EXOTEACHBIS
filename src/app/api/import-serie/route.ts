@@ -192,46 +192,57 @@ function parseXmlHighlightFormat(docXml: string): ParsedQuestion[] {
     }
   }
 
-  // Parse: "Question" (bold) → question text → options (list items)
-  let i = 0;
-  while (i < paras.length) {
-    // Find next "Question" marker
-    if (paras[i].bold && /^question$/i.test(paras[i].text.trim())) {
-      i++;
-      // Next non-empty paragraph = question text (may span multiple paragraphs until first option)
-      let questionText = "";
-      while (i < paras.length && !paras[i].bold && !/^question$/i.test(paras[i].text.trim())) {
-        // Check if this looks like an option (comes after question text and has siblings with highlights)
-        // Heuristic: if we already have question text and there are 4+ more paragraphs that could be options, break
-        const remaining = paras.slice(i, i + 6);
-        const hasHighlights = remaining.some(p => p.highlighted === "green");
-        if (questionText && remaining.length >= 4 && (hasHighlights || remaining.length >= 5)) break;
-        questionText += (questionText ? " " : "") + paras[i].text;
-        i++;
-      }
+  // Find all "Question" marker positions
+  const qMarkers: number[] = [];
+  for (let j = 0; j < paras.length; j++) {
+    if (paras[j].bold && /^question$/i.test(paras[j].text.trim())) {
+      qMarkers.push(j);
+    }
+  }
 
-      if (!questionText) continue;
+  // For each question marker, extract text + 5 options from the paragraphs between this and the next marker
+  for (let qi = 0; qi < qMarkers.length; qi++) {
+    const start = qMarkers[qi] + 1; // skip the "Question" marker
+    const end = qi + 1 < qMarkers.length ? qMarkers[qi + 1] : paras.length;
 
-      // Collect options (next 5 items or until next "Question")
-      const options: ParsedOption[] = [];
-      let optIdx = 0;
-      while (i < paras.length && optIdx < 5) {
-        if (paras[i].bold && /^question$/i.test(paras[i].text.trim())) break;
-        const optText = paras[i].text.trim();
-        if (optText.length > 2 && optIdx < LABELS.length) {
-          options.push({
-            label: LABELS[optIdx],
-            text: optText,
-            is_correct: paras[i].highlighted === "green",
-          });
-          optIdx++;
-        }
-        i++;
-      }
+    // Collect all non-bold paragraphs between markers (skip section headers like "Partie B")
+    const items: Para[] = [];
+    for (let j = start; j < end; j++) {
+      if (paras[j].bold) continue; // skip bold section headers
+      if (paras[j].text.trim().length < 2) continue;
+      items.push(paras[j]);
+    }
 
-      if (options.length >= 2) {
-        questions.push({ text: questionText, options, images: [] });
-      }
+    if (items.length < 2) continue;
+
+    // If there are exactly 5 items → no separate question text, first item is option A
+    // If there are 6+ items → first item(s) are question text, last 5 are options
+    let questionText: string;
+    let optionItems: Para[];
+
+    if (items.length <= 5) {
+      // No separate question text — use a generic text or the question number
+      questionText = `Question ${questions.length + 1}`;
+      optionItems = items;
+    } else if (items.length === 6) {
+      questionText = items[0].text;
+      optionItems = items.slice(1, 6);
+    } else {
+      // Multiple paragraphs of question text + 5 options
+      const numTextParas = items.length - 5;
+      questionText = items.slice(0, numTextParas).map(p => p.text).join(" ");
+      optionItems = items.slice(numTextParas, numTextParas + 5);
+    }
+
+    const options: ParsedOption[] = optionItems.slice(0, 5).map((p, idx) => ({
+      label: LABELS[idx],
+      text: p.text.trim(),
+      is_correct: p.highlighted === "green",
+    }));
+
+    if (options.length >= 2) {
+      questions.push({ text: questionText, options, images: [] });
+    }
     } else {
       i++;
     }
