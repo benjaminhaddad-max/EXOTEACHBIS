@@ -305,9 +305,12 @@ export async function convertEmfBatchViaDocx(
         }
       } catch { /* use defaults */ }
 
+      // Scale up 3x for high-resolution rendering (EMF is vector, stays sharp)
+      widthEmu *= 3;
+      heightEmu *= 3;
       // Clamp to reasonable sizes
-      widthEmu = Math.min(widthEmu, 8000000);
-      heightEmu = Math.min(heightEmu, 6000000);
+      widthEmu = Math.min(widthEmu, 20000000);
+      heightEmu = Math.min(heightEmu, 15000000);
 
       bodyParagraphs.push(`<w:p><w:r><w:drawing><wp:inline>
 <wp:extent cx="${widthEmu}" cy="${heightEmu}"/>
