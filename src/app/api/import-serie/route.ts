@@ -194,6 +194,8 @@ async function extractDrawingImages(
       for (const rId of rIds) {
         const target = relsMap[rId];
         if (!target) continue;
+        // Skip non-image targets (OLE binaries in embeddings/, etc.)
+        if (!target.includes("media/")) continue;
         const baseName = target.replace(/.*\//, "").replace(/\.[^.]+$/, "");
         if (seenBases.has(baseName)) continue; // skip duplicate references to same image
         seenBases.add(baseName);
