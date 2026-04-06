@@ -588,7 +588,7 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
   {
     let converted = 0;
 
-    async function convertEmfImage(img: string, label: string, pageIdx?: number): Promise<string | null> {
+    async function convertEmfImage(img: string, label: string, pageIdx?: number, questionNum?: number): Promise<string | null> {
       // Try individual conversion via CloudConvert
       try {
         const pngDataUri = await convertDataUriToPng(img);
@@ -611,7 +611,7 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 
       // Fallback: convert DOCX→PDF, then crop just the graphic region from the page
       if (pdfBuffer && pageIdx != null && pageIdx >= 0) {
-        const croppedPng = await cropGraphicFromPdfPage(pdfBuffer, pageIdx + 1); // pageIdx is 0-based, cropGraphic expects 1-based
+        const croppedPng = await cropGraphicFromPdfPage(pdfBuffer, pageIdx + 1, questionNum);
         if (croppedPng) {
           const croppedDataUri = `data:image/png;base64,${croppedPng.toString("base64")}`;
           console.log(`[import-serie] ${label}: cropped from PDF page ${pageIdx + 1} (${Math.round(croppedPng.length / 1024)}KB)`);
@@ -638,7 +638,7 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
       const newImages: string[] = [];
       for (const img of q.images) {
         if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
-          const result = await convertEmfImage(img, `Q${qi + 1}`, q.pageIndex);
+          const result = await convertEmfImage(img, `Q${qi + 1}`, q.pageIndex, qi + 1);
           if (result) newImages.push(result);
         } else {
           newImages.push(img);

@@ -233,11 +233,18 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer | nul
 }
 
 /**
- * Crop the graphic region from a specific PDF page using mupdf text analysis.
- * Finds the area between intro text and options (A-E), crops just the drawings.
- * Returns a PNG buffer of the cropped region, or null if no graphic found.
+ * Crop the graphic region for a SPECIFIC question from a PDF page.
+ * A page can have multiple questions — this finds the gap (drawing area)
+ * that belongs to the question at the given questionNumber (e.g. "13").
+ *
+ * Strategy: find "N. Question" markers on the page, then for each question
+ * find the gap between its text lines where drawings are located.
  */
-export async function cropGraphicFromPdfPage(pdfBuffer: Buffer, pageNum: number): Promise<Buffer | null> {
+export async function cropGraphicFromPdfPage(
+  pdfBuffer: Buffer,
+  pageNum: number,
+  questionNumber?: number, // e.g. 13 for "13. Question"
+): Promise<Buffer | null> {
   try {
     const mupdf = await import("mupdf");
     const doc = mupdf.Document.openDocument(pdfBuffer, "application/pdf");
@@ -248,54 +255,89 @@ export async function cropGraphicFromPdfPage(pdfBuffer: Buffer, pageNum: number)
     const pageHeight = pageBounds[3] - pageBounds[1];
     const pageWidth = pageBounds[2] - pageBounds[0];
 
-    // Extract text lines
+    // Extract ALL text lines
     const sText = page.toStructuredText("preserve-whitespace");
     const lines: { y0: number; y1: number; text: string }[] = [];
-    let currentLineText = "";
-    let currentLineBbox: number[] | null = null;
+    let curText = "";
+    let curBbox: number[] | null = null;
 
     sText.walk({
-      beginLine(bbox: number[]) { currentLineBbox = bbox; currentLineText = ""; },
-      onChar(c: string) { currentLineText += c; },
+      beginLine(bbox: number[]) { curBbox = bbox; curText = ""; },
+      onChar(c: string) { curText += c; },
       endLine() {
-        const trimmed = currentLineText.trim();
-        if (currentLineBbox && trimmed.length > 0) {
-          lines.push({ y0: currentLineBbox[1], y1: currentLineBbox[3], text: trimmed });
+        const trimmed = curText.trim();
+        if (curBbox && trimmed.length > 0) {
+          lines.push({ y0: curBbox[1], y1: curBbox[3], text: trimmed });
         }
-        currentLineBbox = null; currentLineText = "";
+        curBbox = null; curText = "";
       },
     });
 
+    // Sort by Y position
+    lines.sort((a, b) => a.y0 - b.y0);
+
     if (lines.length < 3) return null;
 
-    // Find options block (A., B., C., D., E.)
-    const optionPattern = /^[A-E][\.\)\s]/;
-    const firstOptionIdx = lines.findIndex(l => optionPattern.test(l.text));
-    if (firstOptionIdx <= 1) return null;
-
-    const SENTENCE_MIN = 18;
-
-    // Intro end: skip question number, extend through sentence lines
-    let introEndY1 = lines[0].y1;
-    for (let i = 1; i < firstOptionIdx; i++) {
-      if (lines[i].text.length >= SENTENCE_MIN) introEndY1 = lines[i].y1;
-      else break;
+    // Find ALL gaps > 40pt between consecutive text lines — these are drawing areas
+    const MIN_GAP = 40; // points
+    const gaps: { y0: number; y1: number; size: number }[] = [];
+    for (let i = 0; i < lines.length - 1; i++) {
+      const gapStart = lines[i].y1;
+      const gapEnd = lines[i + 1].y0;
+      const gapSize = gapEnd - gapStart;
+      if (gapSize >= MIN_GAP) {
+        gaps.push({ y0: gapStart, y1: gapEnd, size: gapSize });
+      }
     }
 
-    // Question text: last sentence before options
-    let questionTextY0 = lines[firstOptionIdx].y0;
-    for (let i = firstOptionIdx - 1; i >= 0; i--) {
-      if (lines[i].text.length >= SENTENCE_MIN) { questionTextY0 = lines[i].y0; break; }
+    console.log(`[cropGraphic] Page ${pageNum}: ${lines.length} lines, ${gaps.length} gaps (>40pt)`);
+    for (const g of gaps) {
+      console.log(`  gap: y0=${g.y0.toFixed(0)} y1=${g.y1.toFixed(0)} size=${g.size.toFixed(0)}`);
     }
 
-    const graphicHeight = questionTextY0 - introEndY1;
-    if (graphicHeight < 30) return null;
+    if (gaps.length === 0) return null;
+
+    // If questionNumber given, find the gap closest to that question's marker
+    let targetGap = gaps[0]; // default: largest gap
+    if (questionNumber != null) {
+      // Find the "N. Question" marker line
+      const markerRegex = new RegExp(`^${questionNumber}\\.\\s*(Question|$)`, "i");
+      const markerLine = lines.find(l => markerRegex.test(l.text));
+
+      if (markerLine) {
+        // Find the gap that comes right AFTER this question marker
+        // (between the marker's text and the next question or end of page)
+        const gapsAfterMarker = gaps.filter(g => g.y0 >= markerLine.y0);
+        if (gapsAfterMarker.length > 0) {
+          targetGap = gapsAfterMarker[0]; // first gap after the question marker
+        }
+      } else {
+        // No specific marker found — find the gap closest to the question
+        // Use the question number to estimate which gap (1st question = 1st gap, etc.)
+        const qMarkers = lines.filter(l => /^\d+\.\s*Question/i.test(l.text));
+        const qIdx = qMarkers.findIndex(l => {
+          const num = parseInt(l.text);
+          return num === questionNumber;
+        });
+        if (qIdx >= 0 && qIdx < gaps.length) {
+          targetGap = gaps[qIdx];
+        } else {
+          // Fallback: largest gap
+          targetGap = gaps.reduce((best, g) => g.size > best.size ? g : best, gaps[0]);
+        }
+      }
+    } else {
+      // No question number — use the largest gap
+      targetGap = gaps.reduce((best, g) => g.size > best.size ? g : best, gaps[0]);
+    }
+
+    console.log(`[cropGraphic] Target gap: y0=${targetGap.y0.toFixed(0)} y1=${targetGap.y1.toFixed(0)} size=${targetGap.size.toFixed(0)}`);
 
     // Render and crop
     const scale = 2;
-    const PADDING = 5;
-    const y0 = Math.max(pageBounds[1], introEndY1 - PADDING);
-    const y1 = Math.min(pageBounds[3], questionTextY0 + PADDING);
+    const PADDING = 3;
+    const y0 = Math.max(pageBounds[1], targetGap.y0 - PADDING);
+    const y1 = Math.min(pageBounds[3], targetGap.y1 + PADDING);
     const matrix: [number, number, number, number, number, number] = [scale, 0, 0, scale, 0, 0];
     const fullPixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
     const fullWidth = fullPixmap.getWidth();
@@ -322,7 +364,7 @@ export async function cropGraphicFromPdfPage(pdfBuffer: Buffer, pageNum: number)
     }
 
     const pngBuf = Buffer.from(croppedPixmap.asPNG());
-    console.log(`[cropGraphic] Page ${pageNum}: cropped ${fullWidth}x${cropHeight}px (${Math.round(pngBuf.length / 1024)}KB)`);
+    console.log(`[cropGraphic] Page ${pageNum} Q${questionNumber ?? "?"}: ${fullWidth}x${cropHeight}px (${Math.round(pngBuf.length / 1024)}KB)`);
     return pngBuf;
   } catch (e: any) {
     console.error(`[cropGraphic] Page ${pageNum} failed:`, e.message);
