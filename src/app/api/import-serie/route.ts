@@ -399,9 +399,12 @@ export async function POST(req: NextRequest) {
 
         if (qErr || !newQ) continue;
 
-        // Stocker l'image principale si présente (data URI directement)
+        // Upload image to Supabase Storage if present
         if (p.images.length > 0) {
-          await supabase.from("questions").update({ image_url: p.images[0] }).eq("id", newQ.id);
+          const imgUrl = await uploadBase64Image(supabase, p.images[0], newQ.id, 0);
+          if (imgUrl) {
+            await supabase.from("questions").update({ image_url: imgUrl }).eq("id", newQ.id);
+          }
         }
 
         // Créer les options
