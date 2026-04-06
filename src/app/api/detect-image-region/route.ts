@@ -156,28 +156,51 @@ function cropAndReturn(
   const y0 = Math.max(pageBounds[1], cropY0 - PADDING);
   const y1 = Math.min(pageBounds[3], cropY1 + PADDING);
 
+  // Render full page
   const matrix: [number, number, number, number, number, number] = [scale, 0, 0, scale, 0, 0];
-  const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
+  const fullPixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
+  const fullWidth = fullPixmap.getWidth();
+  const fullHeight = fullPixmap.getHeight();
+  const fullPixels = fullPixmap.getPixels(); // Uint8ClampedArray, RGB (3 bytes per pixel)
+  const numComponents = fullPixmap.getNumberOfComponents(); // 3 for RGB
+  const stride = fullPixmap.getStride();
 
+  // Compute pixel crop coordinates
   const pixY0 = Math.max(0, Math.round((y0 - pageBounds[1]) * scale));
-  const pixY1 = Math.min(Math.round(pageHeight * scale), Math.round((y1 - pageBounds[1]) * scale));
-  const pixWidth = Math.round(pageWidth * scale);
+  const pixY1 = Math.min(fullHeight, Math.round((y1 - pageBounds[1]) * scale));
+  const cropHeight = pixY1 - pixY0;
 
-  if (pixY1 <= pixY0) {
+  if (cropHeight <= 0) {
     return NextResponse.json({ found: false });
   }
 
-  const croppedPixmap = pixmap.clone([0, pixY0, pixWidth, pixY1]);
+  // Create cropped pixmap manually
+  const cropRect: [number, number, number, number] = [0, 0, fullWidth, cropHeight];
+  const croppedPixmap = new mupdf.Pixmap(mupdf.ColorSpace.DeviceRGB, cropRect, false);
+  croppedPixmap.clear(255); // white background
+  const croppedPixels = croppedPixmap.getPixels();
+
+  // Copy pixel rows from full pixmap to cropped pixmap
+  const croppedStride = croppedPixmap.getStride();
+  for (let row = 0; row < cropHeight; row++) {
+    const srcOffset = (pixY0 + row) * stride;
+    const dstOffset = row * croppedStride;
+    const bytesToCopy = Math.min(stride, croppedStride);
+    for (let b = 0; b < bytesToCopy; b++) {
+      croppedPixels[dstOffset + b] = fullPixels[srcOffset + b];
+    }
+  }
+
   const croppedPng = Buffer.from(croppedPixmap.asPNG());
 
-  console.log(`[detect-image-region] Cropped: ${pixWidth}x${pixY1 - pixY0}px (y: ${pixY0}-${pixY1})`);
+  console.log(`[detect-image-region] Cropped: ${fullWidth}x${cropHeight}px (y: ${pixY0}-${pixY1})`);
 
   return NextResponse.json({
     found: true,
     y_start: pixY0,
     y_end: pixY1,
-    width: pixWidth,
-    height: pixY1 - pixY0,
+    width: fullWidth,
+    height: cropHeight,
     imageBase64: croppedPng.toString("base64"),
   });
 }
