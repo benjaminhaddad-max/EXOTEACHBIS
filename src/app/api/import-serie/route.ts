@@ -537,17 +537,26 @@ function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: 
     }
   }
 
-  // ── Assign DrawingML/VML images for questions that have no images yet ──────
+  // ── Assign DrawingML/VML images to questions (supplement mammoth images) ──
   if (drawingImages && drawingImages.size > 0) {
     // qMarkers/sectionMarkers use paras[] indices. drawingImages uses raw XML indices.
     // Convert paras[] indices to XML indices using the xmlIdx field.
     for (let qi = 0; qi < qMarkers.length; qi++) {
-      if (questions[qi] && questions[qi].images.length === 0) {
-        const startXml = paras[qMarkers[qi]].xmlIdx;
-        const endXml = qi + 1 < qMarkers.length ? paras[qMarkers[qi + 1]].xmlIdx : Infinity;
-        for (const [xmlParaIdx, imgs] of drawingImages) {
-          if (xmlParaIdx >= startXml && xmlParaIdx < endXml) {
-            questions[qi].images.push(...imgs);
+      if (!questions[qi]) continue;
+      const startXml = paras[qMarkers[qi]].xmlIdx;
+      const endXml = qi + 1 < qMarkers.length ? paras[qMarkers[qi + 1]].xmlIdx : Infinity;
+      const drawingImgs: string[] = [];
+      for (const [xmlParaIdx, imgs] of drawingImages) {
+        if (xmlParaIdx >= startXml && xmlParaIdx < endXml) {
+          drawingImgs.push(...imgs);
+        }
+      }
+      if (drawingImgs.length > 0) {
+        // Merge: add DrawingML images not already present from mammoth
+        const existing = new Set(questions[qi].images);
+        for (const img of drawingImgs) {
+          if (!existing.has(img)) {
+            questions[qi].images.push(img);
           }
         }
       }

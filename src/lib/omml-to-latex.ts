@@ -293,6 +293,14 @@ export function extractParagraphText(paragraphContent: string): string {
     const latex = ommlToLatex(mathXml).trim();
     if (latex) {
       parts.push(`$${latex}$`);
+    } else {
+      // Fallback: extract plain text from <m:t> elements when LaTeX conversion fails
+      const mtRegex = /<m:t(?:\s[^>]*)?>([^<]*)<\/m:t>/g;
+      let mt;
+      while ((mt = mtRegex.exec(mathXml)) !== null) {
+        const decoded = mt[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+        if (decoded.trim()) parts.push(decoded);
+      }
     }
 
     pos = mPos;
