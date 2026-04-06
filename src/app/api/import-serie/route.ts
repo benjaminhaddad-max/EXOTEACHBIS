@@ -5,6 +5,7 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { extractParagraphText } from "@/lib/omml-to-latex";
+import { convertDataUriToPng } from "@/lib/emf-to-png";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -603,16 +604,24 @@ async function uploadBase64Image(
     let base64 = match[2];
     let buffer = Buffer.from(base64, "base64");
 
-    // Convert non-web-compatible formats (EMF, WMF, TIFF, BMP) to PNG via sharp
+    // Convert non-web-compatible formats (EMF, WMF) to PNG via emf-converter + @napi-rs/canvas
     if (NON_WEB_FORMATS.has(format)) {
       try {
         console.log(`[upload-img] Converting ${format} → PNG for Q ${questionId}`);
-        const pngBuf = await sharp(buffer).png().toBuffer();
-        buffer = Buffer.from(pngBuf);
+        const converted = await convertDataUriToPng(dataUri);
+        if (!converted) {
+          console.warn(`[upload-img] EMF/WMF conversion returned null for Q ${questionId}`);
+          return null;
+        }
+        // Parse the converted PNG data URI
+        const pngMatch = converted.match(/^data:image\/png;base64,(.+)$/);
+        if (!pngMatch) return null;
+        buffer = Buffer.from(pngMatch[1], "base64");
         format = "png";
+        base64 = pngMatch[1];
       } catch (convErr: any) {
         console.warn(`[upload-img] Cannot convert ${format} to PNG:`, convErr.message);
-        return null; // Skip non-displayable images
+        return null;
       }
     }
 
