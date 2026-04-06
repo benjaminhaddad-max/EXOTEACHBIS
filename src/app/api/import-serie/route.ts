@@ -395,7 +395,7 @@ function extractImagesPerQuestion(html: string): string[][] {
  * Parses raw DOCX XML to detect w:highlight val="green"
  * Uses mammoth HTML for image extraction
  */
-function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+async function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const questions: ParsedQuestion[] = [];
   const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
@@ -580,24 +580,60 @@ function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: 
       questions.filter(q => q.images.length > 0).length, "questions with images");
   }
 
-  // ── Replace EMF/WMF images with page PNGs from CloudConvert ───────────────
-  if (pageImages && pageImages.length > 0) {
-    let replaced = 0;
+  // ── Convert EMF/WMF images to PNG individually via CloudConvert ───────────
+  {
+    let converted = 0;
     for (let qi = 0; qi < questions.length; qi++) {
       const q = questions[qi];
-      // Check if this question has EMF/WMF images that need replacing
-      const hasEmfWmf = q.images.some(img => /^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img));
-      if (hasEmfWmf && q.pageIndex != null && q.pageIndex < pageImages.length) {
-        // Replace EMF/WMF images with the corresponding page PNG
-        const pagePng = pageImages[q.pageIndex];
-        const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
-        q.images = [pageDataUri];
-        replaced++;
-        console.log(`[import-serie] Q${qi + 1}: replaced EMF/WMF with page ${q.pageIndex + 1} PNG (${Math.round(pagePng.length / 1024)}KB)`);
+      const newImages: string[] = [];
+      for (const img of q.images) {
+        if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
+          // Convert individual EMF/WMF to PNG (not full page!)
+          try {
+            const pngDataUri = await convertDataUriToPng(img);
+            if (pngDataUri) {
+              newImages.push(pngDataUri);
+              converted++;
+            } else {
+              newImages.push(img); // Keep original if conversion fails
+            }
+          } catch (e) {
+            console.warn(`[import-serie] Q${qi + 1}: EMF/WMF conversion failed`, e);
+            newImages.push(img); // Keep original
+          }
+        } else {
+          newImages.push(img); // Keep non-EMF/WMF images as-is
+        }
       }
+      q.images = newImages;
     }
-    if (replaced > 0) {
-      console.log(`[import-serie] Replaced ${replaced} EMF/WMF images with page PNGs`);
+
+    // Also convert section EMF/WMF images
+    for (let si = 0; si < sections.length; si++) {
+      const s = sections[si];
+      const newImages: string[] = [];
+      for (const img of s.images) {
+        if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
+          try {
+            const pngDataUri = await convertDataUriToPng(img);
+            if (pngDataUri) {
+              newImages.push(pngDataUri);
+              converted++;
+            } else {
+              newImages.push(img);
+            }
+          } catch (e) {
+            newImages.push(img);
+          }
+        } else {
+          newImages.push(img);
+        }
+      }
+      s.images = newImages;
+    }
+
+    if (converted > 0) {
+      console.log(`[import-serie] Converted ${converted} EMF/WMF images to PNG individually`);
     }
   }
 
@@ -607,10 +643,10 @@ function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: 
 /**
  * Try all formats, return whichever finds more questions
  */
-function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const xmlResult = docXml ? parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
+  const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
   console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
 
   // Pick whichever format found the most questions
@@ -776,7 +812,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Parser (essaie les trois formats)
-    const { questions: parsed, sections: parsedSections } = parseDocx(html, docXml, drawingImages, pageImages);
+    const { questions: parsed, sections: parsedSections } = await parseDocx(html, docXml, drawingImages, pageImages);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
