@@ -109,3 +109,80 @@ export async function convertDataUriToPng(dataUri: string): Promise<string | nul
 
   return `data:image/png;base64,${pngBuffer.toString("base64")}`;
 }
+
+/**
+ * Convert an entire DOCX file to PNG page images via CloudConvert.
+ * Uses LibreOffice engine for perfect 1:1 rendering (identical to Word).
+ * Returns an array of PNG Buffers, one per page.
+ */
+export async function convertDocxToPages(docxBuffer: Buffer): Promise<Buffer[]> {
+  const cc = getClient();
+  if (!cc) {
+    console.warn("[convert-docx] No CloudConvert API key — skipping DOCX→PNG conversion");
+    return [];
+  }
+
+  try {
+    console.log(`[convert-docx] Converting DOCX (${Math.round(docxBuffer.length / 1024)}KB) to PNG pages...`);
+
+    let job = await cc.jobs.create({
+      tasks: {
+        "upload": {
+          operation: "import/upload",
+        },
+        "convert": {
+          operation: "convert",
+          input: ["upload"],
+          output_format: "png",
+          input_format: "docx",
+          engine: "libreoffice",
+        },
+        "export": {
+          operation: "export/url",
+          input: ["convert"],
+        },
+      },
+    });
+
+    const uploadTask = job.tasks.find((t: any) => t.name === "upload");
+    if (!uploadTask) throw new Error("No upload task found");
+
+    await cc.tasks.upload(uploadTask, docxBuffer, "document.docx");
+
+    job = await cc.jobs.wait(job.id);
+
+    // Check for errors
+    for (const task of job.tasks) {
+      if (task.status === "error") {
+        console.error(`[convert-docx] Task "${task.name}" error:`, (task as any).message);
+        throw new Error(`CloudConvert task "${task.name}" failed`);
+      }
+    }
+
+    const exportTask = job.tasks.find(
+      (t: any) => t.name === "export" && t.status === "finished",
+    );
+    if (!exportTask?.result?.files?.length) {
+      throw new Error("No pages in export result");
+    }
+
+    // Download all page PNGs (they come in order: document-1.png, document-2.png, ...)
+    const files = exportTask.result.files.sort((a: any, b: any) =>
+      (a.filename || "").localeCompare(b.filename || "", undefined, { numeric: true }),
+    );
+
+    const pages: Buffer[] = [];
+    for (const file of files) {
+      const resp = await fetch(file.url as string);
+      if (!resp.ok) throw new Error(`Download failed for ${file.filename}: ${resp.status}`);
+      const ab = await resp.arrayBuffer();
+      pages.push(Buffer.from(ab));
+    }
+
+    console.log(`[convert-docx] Got ${pages.length} pages (${pages.map(p => Math.round(p.length / 1024) + "KB").join(", ")})`);
+    return pages;
+  } catch (e: any) {
+    console.error("[convert-docx] Conversion failed:", e.message);
+    return [];
+  }
+}

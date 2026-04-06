@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { extractParagraphText } from "@/lib/omml-to-latex";
-import { convertDataUriToPng } from "@/lib/convert-emf";
+import { convertDataUriToPng, convertDocxToPages } from "@/lib/convert-emf";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ type ParsedQuestion = {
   options: ParsedOption[];
   images: string[]; // base64 data URIs for images associated with the question
   sectionIndex?: number; // index into ParsedSection array (for section grouping)
+  pageIndex?: number; // 0-indexed page number in the DOCX (for page PNG mapping)
 };
 
 type ParsedSection = {
@@ -394,27 +395,30 @@ function extractImagesPerQuestion(html: string): string[][] {
  * Parses raw DOCX XML to detect w:highlight val="green"
  * Uses mammoth HTML for image extraction
  */
-function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const questions: ParsedQuestion[] = [];
   const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
 
-  // Extract paragraphs with text, bold, and highlight info
-  // Now uses extractParagraphText() to convert inline OMML math to $LaTeX$
-  // xmlParaIdx tracks the raw XML paragraph index (for drawingImages mapping)
-  type Para = { text: string; bold: boolean; highlighted: string | null; xmlIdx: number };
+  // Extract paragraphs with text, bold, highlight, and PAGE NUMBER info
+  // Page breaks: <w:br w:type="page"/> or <w:lastRenderedPageBreak/>
+  type Para = { text: string; bold: boolean; highlighted: string | null; xmlIdx: number; page: number };
   const paras: Para[] = [];
   const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
   let m: RegExpExecArray | null;
   let xmlParaCounter = 0;
+  let currentPage = 0; // 0-indexed page number
   while ((m = pRegex.exec(docXml)) !== null) {
     const content = m[1];
+    // Detect page breaks BEFORE processing this paragraph
+    if (content.includes('w:type="page"') || content.includes("lastRenderedPageBreak")) {
+      currentPage++;
+    }
     const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
     const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
-    // Use new extractParagraphText to handle OMML → LaTeX conversion
     const text = extractParagraphText(content);
     if (text.length > 0) {
-      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null, xmlIdx: xmlParaCounter });
+      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null, xmlIdx: xmlParaCounter, page: currentPage });
     }
     xmlParaCounter++;
   }
@@ -501,11 +505,14 @@ function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: 
     }));
 
     if (options.length >= 2) {
+      // Get the page number from the "Question" marker paragraph
+      const questionPage = paras[qMarkers[qi]].page;
       questions.push({
         text: questionText,
         options,
         images: [],
         sectionIndex: getSectionIndex(qMarkers[qi]),
+        pageIndex: questionPage,
       });
     }
   }
@@ -564,16 +571,37 @@ function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: 
       questions.filter(q => q.images.length > 0).length, "questions with images");
   }
 
+  // ── Replace EMF/WMF images with page PNGs from CloudConvert ───────────────
+  if (pageImages && pageImages.length > 0) {
+    let replaced = 0;
+    for (let qi = 0; qi < questions.length; qi++) {
+      const q = questions[qi];
+      // Check if this question has EMF/WMF images that need replacing
+      const hasEmfWmf = q.images.some(img => /^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img));
+      if (hasEmfWmf && q.pageIndex != null && q.pageIndex < pageImages.length) {
+        // Replace EMF/WMF images with the corresponding page PNG
+        const pagePng = pageImages[q.pageIndex];
+        const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
+        q.images = [pageDataUri];
+        replaced++;
+        console.log(`[import-serie] Q${qi + 1}: replaced EMF/WMF with page ${q.pageIndex + 1} PNG (${Math.round(pagePng.length / 1024)}KB)`);
+      }
+    }
+    if (replaced > 0) {
+      console.log(`[import-serie] Replaced ${replaced} EMF/WMF images with page PNGs`);
+    }
+  }
+
   return { questions, sections };
 }
 
 /**
  * Try all formats, return whichever finds more questions
  */
-function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const xmlResult = docXml ? parseXmlHighlightFormat(docXml, html, drawingImages) : { questions: [], sections: [] };
+  const xmlResult = docXml ? parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
   console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
 
   // Pick whichever format found the most questions
@@ -730,8 +758,16 @@ export async function POST(req: NextRequest) {
       console.error("[import-serie] JSZip error:", e.message);
     }
 
+    // Convert DOCX to PNG pages via CloudConvert (for perfect EMF/WMF rendering)
+    let pageImages: Buffer[] = [];
+    try {
+      pageImages = await convertDocxToPages(buffer);
+    } catch (e: any) {
+      console.warn("[import-serie] DOCX→PNG conversion failed (non-critical):", e.message);
+    }
+
     // Parser (essaie les trois formats)
-    const { questions: parsed, sections: parsedSections } = parseDocx(html, docXml, drawingImages);
+    const { questions: parsed, sections: parsedSections } = parseDocx(html, docXml, drawingImages, pageImages);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
