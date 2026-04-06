@@ -80,6 +80,7 @@ export function ExamenDetailShell({
   const [resultsVisible, setResultsVisible] = useState(initialExamen.results_visible);
   const [editingSerie, setEditingSerie] = useState<SerieSummary | null>(null);
   const [importingSerieId, setImportingSerieId] = useState<string | null>(null);
+  const [importedSerieIds, setImportedSerieIds] = useState<Set<string>>(new Set());
 
   // Editable header fields
   const [examenName, setExamenName] = useState(initialExamen.name);
@@ -101,6 +102,7 @@ export function ExamenDetailShell({
       const json = await res.json();
       if (res.ok && json.success) {
         showToast(json.message, "success");
+        setImportedSerieIds(prev => new Set(prev).add(serieId));
       } else {
         showToast(json.error ?? "Erreur import PDF", "error");
       }
@@ -560,17 +562,23 @@ export function ExamenDetailShell({
                   )}
                   {/* Import from PDF button — visible when both PDFs uploaded */}
                   {es.sujet_url && es.correction_url && (
-                    <button
-                      disabled={importingSerieId === es.series_id}
-                      onClick={() => triggerPdfImport(es.series_id, es.sujet_url!, es.correction_url!, (es.series as any)?.cours_id ?? null)}
-                      className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                    >
-                      {importingSerieId === es.series_id ? (
-                        <><Loader2 size={10} className="animate-spin" /> Import IA en cours…</>
-                      ) : (
-                        <><Layers size={10} /> Importer QCM (IA)</>
-                      )}
-                    </button>
+                    importedSerieIds.has(es.series_id) ? (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg text-[10px] text-green-400">
+                        <Check size={10} /> QCM importés
+                      </span>
+                    ) : (
+                      <button
+                        disabled={importingSerieId === es.series_id}
+                        onClick={() => triggerPdfImport(es.series_id, es.sujet_url!, es.correction_url!, (es.series as any)?.cours_id ?? null)}
+                        className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        {importingSerieId === es.series_id ? (
+                          <><Loader2 size={10} className="animate-spin" /> Import IA en cours…</>
+                        ) : (
+                          <><Layers size={10} /> Importer QCM (IA)</>
+                        )}
+                      </button>
+                    )
                   )}
                   <button
                     onClick={() => {
