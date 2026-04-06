@@ -93,26 +93,29 @@ export function ExamenDetailShell({
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper: render a specific PDF page to JPEG using pdfjs-dist (same pattern as acc-fabricator)
-  const renderPdfPageToJpeg = async (pdfUrl: string, pageNum: number): Promise<Blob | null> => {
+  // Helper: render ALL pages of a PDF to JPEG blobs (same pattern as acc-fabricator)
+  const renderAllPdfPages = async (pdfUrl: string): Promise<Blob[]> => {
+    const blobs: Blob[] = [];
     try {
       const pdfBytes = await fetch(pdfUrl).then(r => r.arrayBuffer());
       const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
-      if (pageNum > doc.numPages) return null;
-      const page = await doc.getPage(pageNum);
-      const vp = page.getViewport({ scale: 2.0 });
       const canvas = document.createElement("canvas");
-      canvas.width = vp.width;
-      canvas.height = vp.height;
       const ctx = canvas.getContext("2d")!;
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, vp.width, vp.height);
-      await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
-      return await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.8));
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const vp = page.getViewport({ scale: 2.0 });
+        canvas.width = vp.width;
+        canvas.height = vp.height;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, vp.width, vp.height);
+        await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.8));
+        if (blob) blobs.push(blob);
+      }
     } catch (e) {
-      console.error("[renderPdfPageToJpeg] page", pageNum, e);
-      return null;
+      console.error("[renderAllPdfPages]", e);
     }
+    return blobs;
   };
 
   // Helper: import QCM from uploaded PDFs via Claude Vision + client-side image rendering
@@ -129,35 +132,43 @@ export function ExamenDetailShell({
         showToast(json.message, "success");
         setImportedSerieIds(prev => new Set(prev).add(serieId));
 
-        // Client-side: render PDF pages and upload images for questions that have them
-        const qWithImages: { questionId: string; page: number }[] = json.questionsWithImages ?? [];
-        if (qWithImages.length > 0) {
-          showToast(`Upload des images (${qWithImages.length} questions)…`, "success");
-          const supabase = createClient();
-          // Deduplicate pages to avoid rendering the same page multiple times
-          const uniquePages = [...new Set(qWithImages.map(q => q.page))];
-          const renderedPages: Record<number, Blob> = {};
-          for (const p of uniquePages) {
-            const blob = await renderPdfPageToJpeg(sujetUrl, p);
-            if (blob) renderedPages[p] = blob;
-          }
-          // Upload each image and update the question
-          let uploaded = 0;
-          for (const { questionId, page } of qWithImages) {
-            const blob = renderedPages[page];
-            if (!blob) continue;
-            const file = new File([blob], `page_${page}.jpg`, { type: "image/jpeg" });
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("path", `questions/${questionId}/pdf_page.jpg`);
-            const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
-            const uploadJson = await uploadRes.json();
-            if (uploadJson.url) {
-              await supabase.from("questions").update({ image_url: uploadJson.url }).eq("id", questionId);
-              uploaded++;
+        // Render ALL sujet PDF pages and assign to questions
+        const createdIds: string[] = json.createdIds ?? [];
+        if (createdIds.length > 0) {
+          showToast("Extraction des images du PDF…", "success");
+          try {
+            const pageBlobs = await renderAllPdfPages(sujetUrl);
+            if (pageBlobs.length > 0) {
+              const supabase = createClient();
+              const questionsPerPage = Math.ceil(createdIds.length / pageBlobs.length);
+              // Upload unique page images first
+              const pageUrls: string[] = [];
+              for (let p = 0; p < pageBlobs.length; p++) {
+                const file = new File([pageBlobs[p]], `page_${p + 1}.jpg`, { type: "image/jpeg" });
+                const fd = new FormData();
+                fd.append("file", file);
+                fd.append("path", `questions/_pdf_pages/${serieId}/page_${p + 1}.jpg`);
+                const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
+                const uploadJson = await uploadRes.json();
+                pageUrls.push(uploadJson.url ?? "");
+              }
+              // Assign each question its page image
+              let uploaded = 0;
+              for (let i = 0; i < createdIds.length; i++) {
+                const pageIdx = Math.min(Math.floor(i / questionsPerPage), pageBlobs.length - 1);
+                const url = pageUrls[pageIdx];
+                if (!url) continue;
+                await supabase.from("questions").update({ image_url: url }).eq("id", createdIds[i]);
+                uploaded++;
+              }
+              showToast(`${uploaded} images importées`, "success");
+            } else {
+              showToast("Impossible de rendre les pages du PDF", "error");
             }
+          } catch (imgErr: any) {
+            console.error("[triggerPdfImport:images]", imgErr);
+            showToast("Erreur upload images: " + (imgErr?.message ?? ""), "error");
           }
-          if (uploaded > 0) showToast(`${uploaded} image${uploaded > 1 ? "s" : ""} importée${uploaded > 1 ? "s" : ""}`, "success");
         }
       } else {
         showToast(json.error ?? "Erreur import PDF", "error");

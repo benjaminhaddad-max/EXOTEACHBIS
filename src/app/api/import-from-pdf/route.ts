@@ -141,7 +141,7 @@ Réponds UNIQUEMENT en JSON strict, un array :
 
     // ── Insert questions in DB ───────────────────────────────────────────────
     let created = 0;
-    const questionsWithImages: { questionId: string; page: number }[] = [];
+    const createdIds: string[] = [];
 
     for (let i = 0; i < parsed.length; i++) {
       const q = parsed[i];
@@ -175,10 +175,7 @@ Réponds UNIQUEMENT en JSON strict, un array :
         order_index: i,
       });
 
-      if (q.page) {
-        questionsWithImages.push({ questionId: newQ.id, page: q.page });
-      }
-
+      createdIds.push(newQ.id);
       created++;
     }
 
@@ -186,7 +183,7 @@ Réponds UNIQUEMENT en JSON strict, un array :
       success: true,
       message: `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""} depuis les PDFs.`,
       count: created,
-      questionsWithImages,
+      createdIds,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erreur serveur.";
