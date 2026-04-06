@@ -13,7 +13,7 @@ import type { Dossier, Cours } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
 import { InlineQuestionEditor } from "./cours-detail-panel";
 import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie, updateQuestionCoursId } from "@/app/(admin)/admin/pedagogie/actions";
-import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, removeAllQuestionsFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
+import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, removeAllQuestionsFromSerie, createQuestion, updateQuestion, getSeriesSections } from "@/app/(admin)/admin/exercices/actions";
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
 import { FlashcardsSection } from "./flashcards-section";
 import { ImportExoteachModal } from "./import-exoteach-modal";
@@ -340,9 +340,10 @@ export function FullSerieEditor({
   const [savingSettings, setSavingSettings] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
 
-  // Questions
+  // Questions + Sections
   const [serieQuestions, setSerieQuestions] = useState<any[]>([]);
   const [bankQuestions, setBankQuestions] = useState<any[]>([]);
+  const [sections, setSections] = useState<any[]>([]);
   const [loadingQ, setLoadingQ] = useState(true);
   const [expandedQ, setExpandedQ] = useState<Set<string>>(new Set());
   const [removing, setRemoving] = useState<string | null>(null);
@@ -363,12 +364,14 @@ export function FullSerieEditor({
   const loadAll = useCallback(async () => {
     setLoadingQ(true);
     try {
-      const [qs, bank] = await Promise.all([
+      const [qs, bank, secs] = await Promise.all([
         getSerieQuestions(serie.id),
         coursId ? getBankQuestionsForSerie(coursId, serie.id) : Promise.resolve([]),
+        getSeriesSections(serie.id),
       ]);
       setSerieQuestions(qs as any);
       setBankQuestions(bank as any);
+      setSections(secs as any);
     } catch (e) { console.error("[FullSerieEditor]", e); }
     finally { setLoadingQ(false); }
   }, [serie.id, coursId]);
@@ -555,8 +558,21 @@ export function FullSerieEditor({
               serieQuestions.map((q: any, idx: number) => {
                 const isOpen = expandedQ.has(q.id);
                 const opts = (q.options ?? []).sort((a: any, b: any) => a.order_index - b.order_index);
+                // Section header: show when section changes
+                const prevSectionId = idx > 0 ? serieQuestions[idx - 1]?.section_id : null;
+                const curSection = q.section_id && q.section_id !== prevSectionId
+                  ? sections.find((s: any) => s.id === q.section_id)
+                  : null;
                 return (
-                  <div key={q.id} className="rounded-xl border border-white/8 bg-white/4 overflow-hidden">
+                  <React.Fragment key={q.id}>
+                  {curSection && (
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 mt-2 mb-1">
+                      <p className="text-xs font-bold text-blue-400">{curSection.title}</p>
+                      {curSection.intro_text && <p className="text-[10px] text-blue-300/70 mt-1 line-clamp-2">{curSection.intro_text}</p>}
+                      {curSection.image_url && <img src={curSection.image_url} alt="" className="mt-2 max-h-24 rounded-lg border border-blue-500/20" />}
+                    </div>
+                  )}
+                  <div className="rounded-xl border border-white/8 bg-white/4 overflow-hidden">
                     <div className="flex items-start gap-2.5 p-3 cursor-pointer hover:bg-white/4" onClick={() => toggleQ(q.id)}>
                       <span className="text-[10px] font-bold text-white/25 mt-0.5 shrink-0 w-4 text-center">{idx + 1}</span>
                       <ChevronRight size={13} className={`mt-0.5 text-white/40 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`} />
@@ -601,6 +617,7 @@ export function FullSerieEditor({
                       />
                     )}
                   </div>
+                  </React.Fragment>
                 );
               })
             )}

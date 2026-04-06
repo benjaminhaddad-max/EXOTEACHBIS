@@ -113,10 +113,19 @@ interface QuestionWithOptions extends Omit<Question, "options"> {
   image_url?: string | null;
 }
 
+interface SectionInfo {
+  id: string;
+  title: string;
+  intro_text: string | null;
+  image_url: string | null;
+}
+
 interface QcmPlayerProps {
   serie: Serie;
   questions: QuestionWithOptions[];
   userId: string;
+  sections?: SectionInfo[];
+  questionSectionMap?: Record<string, string>; // questionId → sectionId
 }
 
 type PlayerState = "setup" | "playing" | "results";
@@ -346,6 +355,8 @@ function PlayingScreen({
   onTextAnswer,
   onNavigate,
   onSubmit,
+  sections,
+  questionSectionMap,
 }: {
   questions: QuestionWithOptions[];
   serie: Serie;
@@ -359,6 +370,8 @@ function PlayingScreen({
   onTextAnswer: (questionId: string, text: string) => void;
   onNavigate: (idx: number) => void;
   onSubmit: () => void;
+  sections?: SectionInfo[];
+  questionSectionMap?: Record<string, string>;
 }) {
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -496,9 +509,28 @@ function PlayingScreen({
               const qA = answers[q.id] ?? {};
               const status = getStatus(q);
 
+              // Check if this question starts a new section
+              const qSectionId = questionSectionMap?.[q.id];
+              const prevSectionId = i > 0 ? questionSectionMap?.[questions[i - 1].id] : undefined;
+              const isNewSection = qSectionId && qSectionId !== prevSectionId;
+              const sectionInfo = isNewSection ? sections?.find(s => s.id === qSectionId) : null;
+
               return (
+                <React.Fragment key={q.id}>
+                  {sectionInfo && (
+                    <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm">
+                      <h3 className="text-sm font-bold text-blue-900 mb-2">{sectionInfo.title}</h3>
+                      {sectionInfo.intro_text && (
+                        <p className="text-xs text-blue-800/80 leading-relaxed mb-3">
+                          <MathText text={sectionInfo.intro_text} className="text-xs" />
+                        </p>
+                      )}
+                      {sectionInfo.image_url && (
+                        <QuestionImages imageUrl={sectionInfo.image_url} />
+                      )}
+                    </div>
+                  )}
                 <div
-                  key={q.id}
                   ref={(el) => { questionRefs.current[i] = el; }}
                   className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
                 >
@@ -592,6 +624,7 @@ function PlayingScreen({
                     )}
                   </div>
                 </div>
+                </React.Fragment>
               );
             })}
 
@@ -884,7 +917,7 @@ function ResultsScreen({
 
 // ─── Main QcmPlayer ───────────────────────────────────────────────────────
 
-export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
+export function QcmPlayer({ serie, questions, userId, sections, questionSectionMap }: QcmPlayerProps) {
   const [playerState, setPlayerState] = useState<PlayerState>("setup");
   const [timed, setTimed] = useState(false);
   const [timeLeft, setTimeLeft] = useState((serie.duration_minutes ?? 20) * 60);
@@ -1078,6 +1111,8 @@ export function QcmPlayer({ serie, questions, userId }: QcmPlayerProps) {
         onTextAnswer={handleTextAnswer}
         onNavigate={setCurrentIndex}
         onSubmit={handleSubmit}
+        sections={sections}
+        questionSectionMap={questionSectionMap}
       />
     );
   }

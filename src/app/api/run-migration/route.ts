@@ -15,14 +15,22 @@ async function columnExists(supabase: any, table: string, column: string): Promi
 }
 
 export async function GET() {
-  // This route checks migration status — actual DDL must be run in Supabase SQL Editor
-  const status = {
-    instruction: "Run the following SQL in Supabase Dashboard > SQL Editor",
-    sql_006: `
-ALTER TABLE public.cours ADD COLUMN IF NOT EXISTS dossier_id uuid REFERENCES public.dossiers(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_cours_dossier ON public.cours(dossier_id);
+  return NextResponse.json({
+    instruction: "Run migration 052 in Supabase Dashboard > SQL Editor",
+    sql: `
+CREATE TABLE IF NOT EXISTS public.series_sections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  series_id UUID NOT NULL REFERENCES public.series(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  intro_text TEXT,
+  image_url TEXT,
+  order_index INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.series_sections ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN CREATE POLICY "Authenticated can read series_sections" ON public.series_sections FOR SELECT USING (auth.uid() IS NOT NULL); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Admins can manage series_sections" ON public.series_sections FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin','superadmin','prof'))); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE public.series_questions ADD COLUMN IF NOT EXISTS section_id UUID REFERENCES public.series_sections(id) ON DELETE SET NULL;
     `.trim(),
-  };
-
-  return NextResponse.json(status);
+  });
 }

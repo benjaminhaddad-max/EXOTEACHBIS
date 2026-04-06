@@ -476,6 +476,73 @@ export async function removeAllQuestionsFromSerie(series_id: string) {
   return { success: true };
 }
 
+// =============================================
+// SECTIONS (Parties)
+// =============================================
+
+export async function createSection(
+  series_id: string,
+  title: string,
+  intro_text?: string | null,
+  image_url?: string | null,
+  order_index?: number,
+) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("series_sections")
+    .insert({ series_id, title, intro_text: intro_text ?? null, image_url: image_url ?? null, order_index: order_index ?? 0 })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true, id: data.id };
+}
+
+export async function updateSection(
+  section_id: string,
+  updates: { title?: string; intro_text?: string | null; image_url?: string | null; order_index?: number },
+) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("series_sections").update(updates).eq("id", section_id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function deleteSection(section_id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("series_sections").delete().eq("id", section_id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function assignQuestionToSection(
+  series_id: string,
+  question_id: string,
+  section_id: string | null,
+) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("series_questions")
+    .update({ section_id })
+    .eq("series_id", series_id)
+    .eq("question_id", question_id);
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
+export async function getSeriesSections(series_id: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("series_sections")
+    .select("*")
+    .eq("series_id", series_id)
+    .order("order_index");
+  return data ?? [];
+}
+
 export async function reorderSerieQuestions(
   series_id: string,
   question_ids: string[]

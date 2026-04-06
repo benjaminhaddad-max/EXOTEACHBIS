@@ -16,6 +16,13 @@ type ParsedQuestion = {
   text: string;
   options: ParsedOption[];
   images: string[]; // base64 data URIs for images associated with the question
+  sectionIndex?: number; // index into ParsedSection array (for section grouping)
+};
+
+type ParsedSection = {
+  title: string;       // "Partie A — Etude de l'ésoméprazole"
+  intro_text: string;  // Intro paragraphs
+  images: string[];    // base64 data URIs for section images
 };
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
@@ -201,8 +208,9 @@ function extractImagesPerQuestion(html: string): string[][] {
  * Parses raw DOCX XML to detect w:highlight val="green"
  * Uses mammoth HTML for image extraction
  */
-function parseXmlHighlightFormat(docXml: string, html?: string): ParsedQuestion[] {
+function parseXmlHighlightFormat(docXml: string, html?: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const questions: ParsedQuestion[] = [];
+  const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
 
   // Extract paragraphs with text, bold, and highlight info
@@ -215,11 +223,10 @@ function parseXmlHighlightFormat(docXml: string, html?: string): ParsedQuestion[
     const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
     const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
     const texts: string[] = [];
-    // Match both regular text <w:t> and math text <m:t>
-    const tRegex = /<(?:w|m):t[^>]*>([\s\S]*?)<\/(?:w|m):t>/g;
+    // Only match text inside <w:r> run elements (after </w:rPr> properties)
+    const tRegex = /<(?:w|m):t(?:\s[^>]*)?>([^<]*)<\/(?:w|m):t>/g;
     let t: RegExpExecArray | null;
     while ((t = tRegex.exec(content)) !== null) {
-      // Decode XML entities
       texts.push(t[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"));
     }
     const text = texts.join("").trim();
@@ -228,43 +235,76 @@ function parseXmlHighlightFormat(docXml: string, html?: string): ParsedQuestion[
     }
   }
 
-  // Find all "Question" marker positions
+  // ── Detect sections ("Partie X" bold markers) and "Question" markers ───────
   const qMarkers: number[] = [];
+  const sectionMarkers: { idx: number; title: string }[] = [];
+
   for (let j = 0; j < paras.length; j++) {
     if (paras[j].bold && /^question$/i.test(paras[j].text.trim())) {
       qMarkers.push(j);
     }
+    if (paras[j].bold && /^partie\s/i.test(paras[j].text.trim())) {
+      // Collect title: this paragraph + next bold paragraph (subtitle)
+      let title = paras[j].text;
+      if (j + 1 < paras.length && paras[j + 1].bold && !/^question$/i.test(paras[j + 1].text.trim()) && !/^partie\s/i.test(paras[j + 1].text.trim())) {
+        title += " — " + paras[j + 1].text;
+      }
+      sectionMarkers.push({ idx: j, title });
+    }
   }
 
-  // For each question marker, extract text + 5 options from the paragraphs between this and the next marker
+  // ── Build sections with intro text ─────────────────────────────────────────
+  for (let si = 0; si < sectionMarkers.length; si++) {
+    const sm = sectionMarkers[si];
+    // Collect intro: non-bold paragraphs between this section marker and the first Question after it
+    const firstQAfter = qMarkers.find(q => q > sm.idx);
+    const introEnd = firstQAfter ?? paras.length;
+    const introTexts: string[] = [];
+    for (let j = sm.idx + 1; j < introEnd; j++) {
+      if (paras[j].bold) continue;
+      if (paras[j].text.trim().length < 3) continue;
+      introTexts.push(paras[j].text);
+    }
+    sections.push({
+      title: sm.title,
+      intro_text: introTexts.join(" "),
+      images: [],
+    });
+  }
+
+  // ── Map each question to its section ───────────────────────────────────────
+  function getSectionIndex(qParaIdx: number): number | undefined {
+    // Find the last section marker before this question
+    for (let si = sectionMarkers.length - 1; si >= 0; si--) {
+      if (sectionMarkers[si].idx < qParaIdx) return si;
+    }
+    return undefined;
+  }
+
+  // ── Parse questions ────────────────────────────────────────────────────────
   for (let qi = 0; qi < qMarkers.length; qi++) {
-    const start = qMarkers[qi] + 1; // skip the "Question" marker
+    const start = qMarkers[qi] + 1;
     const end = qi + 1 < qMarkers.length ? qMarkers[qi + 1] : paras.length;
 
-    // Collect all non-bold paragraphs between markers (skip section headers like "Partie B")
     const items: Para[] = [];
     for (let j = start; j < end; j++) {
-      if (paras[j].bold) continue; // skip bold section headers
+      if (paras[j].bold) continue;
       if (paras[j].text.trim().length < 2) continue;
       items.push(paras[j]);
     }
 
     if (items.length < 2) continue;
 
-    // If there are exactly 5 items → no separate question text, first item is option A
-    // If there are 6+ items → first item(s) are question text, last 5 are options
     let questionText: string;
     let optionItems: Para[];
 
     if (items.length <= 5) {
-      // No separate question text — use a generic text or the question number
       questionText = `Question ${questions.length + 1}`;
       optionItems = items;
     } else if (items.length === 6) {
       questionText = items[0].text;
       optionItems = items.slice(1, 6);
     } else {
-      // Multiple paragraphs of question text + 5 options
       const numTextParas = items.length - 5;
       questionText = items.slice(0, numTextParas).map(p => p.text).join(" ");
       optionItems = items.slice(numTextParas, numTextParas + 5);
@@ -277,31 +317,54 @@ function parseXmlHighlightFormat(docXml: string, html?: string): ParsedQuestion[
     }));
 
     if (options.length >= 2) {
-      questions.push({ text: questionText, options, images: [] });
+      questions.push({
+        text: questionText,
+        options,
+        images: [],
+        sectionIndex: getSectionIndex(qMarkers[qi]),
+      });
     }
   }
 
-  // Assign images from mammoth HTML to questions
+  // ── Assign images from mammoth HTML ────────────────────────────────────────
   if (html) {
+    // Images per question
     const imagesPerQ = extractImagesPerQuestion(html);
     for (let qi = 0; qi < Math.min(questions.length, imagesPerQ.length); qi++) {
       questions[qi].images = imagesPerQ[qi];
     }
+
+    // Images per section (between "Partie" and first "Question" in HTML)
+    const sectionParts = html.split(/<(?:li>)?<strong>(?:Partie\s[^<]*)<\/strong>(?:<\/li>)?/i);
+    for (let si = 0; si < sections.length && si + 1 < sectionParts.length; si++) {
+      const part = sectionParts[si + 1];
+      const beforeQ = part.split(/<(?:li>)?<strong>Question<\/strong>/i)[0] ?? "";
+      const imgs = (beforeQ.match(/<img\s+[^>]*src="(data:image\/[^"]+)"[^>]*>/gi) || [])
+        .map(m => m.match(/src="(data:image\/[^"]+)"/)?.[1] ?? "")
+        .filter(Boolean);
+      sections[si].images = imgs;
+    }
   }
 
-  return questions;
+  return { questions, sections };
 }
 
 /**
  * Try all formats, return whichever finds more questions
  */
-function parseDocx(html: string, docXml?: string): ParsedQuestion[] {
+function parseDocx(html: string, docXml?: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const fromXml = docXml ? parseXmlHighlightFormat(docXml, html) : [];
-  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${fromXml.length} docXml=${docXml ? "yes" : "no"}`);
-  const results = [fromTables, fromParagraphs, fromXml];
-  return results.reduce((best, cur) => cur.length > best.length ? cur : best, []);
+  const xmlResult = docXml ? parseXmlHighlightFormat(docXml, html) : { questions: [], sections: [] };
+  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
+
+  // Pick whichever format found the most questions
+  const allFormats = [fromTables, fromParagraphs, xmlResult.questions];
+  const best = allFormats.reduce((b, cur) => cur.length > b.length ? cur : b, [] as ParsedQuestion[]);
+
+  // Return sections only if the XML format won
+  const sections = best === xmlResult.questions ? xmlResult.sections : [];
+  return { questions: best, sections };
 }
 
 // ─── Image upload helper ──────────────────────────────────────────────────────
@@ -374,7 +437,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Parser (essaie les trois formats)
-    const parsed = parseDocx(html, docXml);
+    const { questions: parsed, sections: parsedSections } = parseDocx(html, docXml);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
@@ -394,6 +457,36 @@ export async function POST(req: NextRequest) {
       .order("order_index");
 
     const existingIds: string[] = (sqData ?? []).map((r: any) => r.question_id).filter(Boolean);
+
+    // ─── Create sections if any ──────────────────────────────────────────────
+    const sectionIdMap: Record<number, string> = {}; // sectionIndex -> DB id
+    if (parsedSections.length > 0 && existingIds.length === 0) {
+      for (let si = 0; si < parsedSections.length; si++) {
+        const s = parsedSections[si];
+        // Upload section image if present
+        let sectionImageUrl: string | null = null;
+        if (s.images.length > 0) {
+          const tmpId = `section_${si}_${Date.now()}`;
+          sectionImageUrl = await uploadBase64Image(supabase, s.images[0], tmpId, 0);
+          if (!sectionImageUrl) sectionImageUrl = s.images[0]; // fallback to data URI
+        }
+
+        const { data: secData } = await supabase
+          .from("series_sections")
+          .insert({
+            series_id: serieId,
+            title: s.title,
+            intro_text: s.intro_text || null,
+            image_url: sectionImageUrl,
+            order_index: si,
+          })
+          .select("id")
+          .single();
+
+        if (secData) sectionIdMap[si] = secData.id;
+      }
+      console.log("[import-serie] Created sections:", Object.keys(sectionIdMap).length);
+    }
 
     // ─── MODE 1 : Série vide → CRÉER les questions ────────────────────────────
     if (existingIds.length === 0) {
@@ -437,11 +530,13 @@ export async function POST(req: NextRequest) {
         }));
         await supabase.from("options").insert(optionsToInsert);
 
-        // Lier à la série
+        // Lier à la série (with section if available)
+        const sectionId = p.sectionIndex != null ? sectionIdMap[p.sectionIndex] ?? null : null;
         await supabase.from("series_questions").insert({
           series_id: serieId,
           question_id: newQ.id,
           order_index: i,
+          ...(sectionId ? { section_id: sectionId } : {}),
         });
 
         created++;

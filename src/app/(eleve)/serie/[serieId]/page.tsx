@@ -40,6 +40,7 @@ export default async function SeriePage({ params }: Props) {
     .from("series_questions")
     .select(`
       order_index,
+      section_id,
       question:questions (
         id, text, type, explanation, tags, image_url,
         options (id, label, text, is_correct, order_index, justification, image_url)
@@ -47,6 +48,21 @@ export default async function SeriePage({ params }: Props) {
     `)
     .eq("series_id", serieId)
     .order("order_index");
+
+  // Fetch sections for this serie
+  const { data: sectionsData } = await supabase
+    .from("series_sections")
+    .select("id, title, intro_text, image_url, order_index")
+    .eq("series_id", serieId)
+    .order("order_index");
+
+  // Build question→section map
+  const questionSectionMap: Record<string, string> = {};
+  for (const sq of (serieQuestions ?? [])) {
+    if (sq.section_id && (sq as any).question?.id) {
+      questionSectionMap[(sq as any).question.id] = sq.section_id;
+    }
+  }
 
   const questions = (serieQuestions ?? [])
     .map((sq: any) => sq.question)
@@ -79,6 +95,8 @@ export default async function SeriePage({ params }: Props) {
           serie={serie}
           questions={questions}
           userId={user.id}
+          sections={sectionsData ?? undefined}
+          questionSectionMap={Object.keys(questionSectionMap).length > 0 ? questionSectionMap : undefined}
         />
       </div>
     </>

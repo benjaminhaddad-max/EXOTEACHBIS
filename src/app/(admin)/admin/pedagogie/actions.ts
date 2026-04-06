@@ -1097,7 +1097,7 @@ export async function getSerieQuestions(serieId: string) {
   // Étape 1 : question_ids dans l'ordre
   const { data: sqData, error: sqErr } = await supabase
     .from("series_questions")
-    .select("question_id, order_index")
+    .select("question_id, order_index, section_id")
     .eq("series_id", serieId)
     .order("order_index");
   if (sqErr) { console.error("[getSerieQuestions] sq error:", sqErr.message); return []; }
@@ -1110,7 +1110,13 @@ export async function getSerieQuestions(serieId: string) {
     .in("id", questionIds);
   if (qErr) { console.error("[getSerieQuestions] q error:", qErr.message); return []; }
   const qMap = new Map((qData ?? []).map((q: any) => [q.id, q]));
-  return questionIds.map((id: string) => qMap.get(id)).filter(Boolean);
+  // Build section_id map
+  const sectionMap = new Map((sqData ?? []).map((r: any) => [r.question_id, r.section_id]));
+  return questionIds.map((id: string) => {
+    const q = qMap.get(id);
+    if (!q) return null;
+    return { ...q, section_id: sectionMap.get(id) ?? null };
+  }).filter(Boolean);
 }
 
 export async function getQuestionsForCours(coursId: string) {
