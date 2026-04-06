@@ -71,21 +71,107 @@ function parseRelationships(relsXml: string): Record<string, string> {
   return map;
 }
 
+// Web-displayable image formats (browsers can render these natively)
+const WEB_IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "svg", "webp"]);
+// Non-web vector formats that need conversion
+const VECTOR_IMAGE_EXTS = new Set(["emf", "wmf"]);
+
 /**
- * Extract images from DOCX ZIP that are referenced by DrawingML/VML in paragraphs
- * but missed by mammoth (e.g. vector drawings with embedded raster fallbacks).
+ * Build a map of base filename → available formats in word/media/.
+ * e.g. { "image1": ["emf", "png"], "image2": ["emf"] }
+ */
+function catalogMediaFiles(zip: JSZip): Map<string, string[]> {
+  const catalog = new Map<string, string[]>();
+  zip.forEach((relativePath) => {
+    if (!relativePath.startsWith("word/media/")) return;
+    const filename = relativePath.replace("word/media/", "");
+    const dotIdx = filename.lastIndexOf(".");
+    if (dotIdx < 0) return;
+    const baseName = filename.slice(0, dotIdx);
+    const ext = filename.slice(dotIdx + 1).toLowerCase();
+    if (!catalog.has(baseName)) catalog.set(baseName, []);
+    catalog.get(baseName)!.push(ext);
+  });
+  return catalog;
+}
+
+/**
+ * Extract images from DOCX ZIP that are referenced by DrawingML/VML in paragraphs.
+ * PREFERS PNG/JPEG over EMF/WMF — if both exist for same image, uses the web format.
  */
 async function extractDrawingImages(
   zip: JSZip,
   docXml: string,
   relsMap: Record<string, string>,
 ): Promise<Map<number, string[]>> {
-  // Map paragraph index → list of base64 data URIs
   const result = new Map<number, string[]>();
+  const mediaCatalog = catalogMediaFiles(zip);
 
-  // mammoth extracts standard <w:drawing><wp:inline><a:graphic><a:blip> images.
-  // But it misses images inside <mc:AlternateContent> (used for vector shapes with image fallbacks),
-  // <w:pict> (VML), and more complex DrawingML structures.
+  // Log available media for debugging
+  for (const [base, exts] of mediaCatalog) {
+    console.log(`[media] ${base}: ${exts.join(", ")}`);
+  }
+
+  const mimeMap: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+    gif: "image/gif", bmp: "image/bmp", tiff: "image/tiff",
+    emf: "image/x-emf", wmf: "image/x-wmf", svg: "image/svg+xml",
+    webp: "image/webp",
+  };
+
+  /**
+   * For a given rId, resolve the best available image format.
+   * If the relationship points to an EMF but a PNG exists with the same base name, use PNG.
+   */
+  async function resolveImage(rId: string): Promise<string | null> {
+    const target = relsMap[rId];
+    if (!target) return null;
+
+    const imgPath = target.startsWith("/") ? target.slice(1) : `word/${target}`;
+    const filename = imgPath.replace("word/media/", "");
+    const dotIdx = filename.lastIndexOf(".");
+    if (dotIdx < 0) return null;
+    const baseName = filename.slice(0, dotIdx);
+    const originalExt = filename.slice(dotIdx + 1).toLowerCase();
+
+    // Check if there's a web-compatible alternative with the same base name
+    const availableExts = mediaCatalog.get(baseName) || [originalExt];
+
+    // Priority: PNG > JPEG > GIF > WEBP > SVG > original (EMF/WMF)
+    const priority = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
+    let bestExt = originalExt;
+    for (const ext of priority) {
+      if (availableExts.includes(ext)) {
+        bestExt = ext;
+        break;
+      }
+    }
+
+    const bestPath = `word/media/${baseName}.${bestExt}`;
+    try {
+      const imgFile = zip.file(bestPath);
+      if (!imgFile) {
+        // Fallback to original path
+        const fallback = zip.file(imgPath);
+        if (!fallback) return null;
+        const buf = await fallback.async("base64");
+        const mime = mimeMap[originalExt] || "image/png";
+        if (VECTOR_IMAGE_EXTS.has(originalExt)) {
+          console.log(`[media] Using ${originalExt} for ${baseName} (no web alternative found)`);
+        }
+        return `data:${mime};base64,${buf}`;
+      }
+
+      const buf = await imgFile.async("base64");
+      const mime = mimeMap[bestExt] || "image/png";
+      if (bestExt !== originalExt) {
+        console.log(`[media] Upgraded ${baseName}: ${originalExt} → ${bestExt}`);
+      }
+      return `data:${mime};base64,${buf}`;
+    } catch {
+      return null;
+    }
+  }
 
   // Iterate over paragraphs
   const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
@@ -93,8 +179,6 @@ async function extractDrawingImages(
   let pIdx = 0;
   while ((pMatch = pRegex.exec(docXml)) !== null) {
     const content = pMatch[1];
-
-    // Check for drawing/pict elements that mammoth might miss
     const hasMcAlternate = content.includes("<mc:AlternateContent");
     const hasWPict = content.includes("<w:pict");
     const hasDrawing = content.includes("<w:drawing");
@@ -102,29 +186,17 @@ async function extractDrawingImages(
     if (hasMcAlternate || hasWPict || hasDrawing) {
       const rIds = extractDrawingImageRids(content);
       const images: string[] = [];
+      const seenBases = new Set<string>(); // avoid duplicates from Choice+Fallback
 
       for (const rId of rIds) {
         const target = relsMap[rId];
         if (!target) continue;
-        // Resolve path relative to word/
-        const imgPath = target.startsWith("/") ? target.slice(1) : `word/${target}`;
+        const baseName = target.replace(/.*\//, "").replace(/\.[^.]+$/, "");
+        if (seenBases.has(baseName)) continue; // skip duplicate references to same image
+        seenBases.add(baseName);
 
-        try {
-          const imgFile = zip.file(imgPath);
-          if (!imgFile) continue;
-          const imgBuffer = await imgFile.async("base64");
-          // Detect content type from extension
-          const ext = imgPath.split(".").pop()?.toLowerCase() || "png";
-          const mimeMap: Record<string, string> = {
-            png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-            gif: "image/gif", bmp: "image/bmp", tiff: "image/tiff",
-            emf: "image/x-emf", wmf: "image/x-wmf", svg: "image/svg+xml",
-          };
-          const mime = mimeMap[ext] || "image/png";
-          images.push(`data:${mime};base64,${imgBuffer}`);
-        } catch {
-          // Skip files we can't read
-        }
+        const dataUri = await resolveImage(rId);
+        if (dataUri) images.push(dataUri);
       }
 
       if (images.length > 0) {
@@ -585,14 +657,53 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Convertir DOCX → HTML via mammoth
-    const { value: html } = await mammoth.convertToHtml({ buffer });
+    // Extract ZIP first (needed for both mammoth image upgrade and XML parsing)
+    const zip = await JSZip.loadAsync(buffer);
+    const mediaCatalog = catalogMediaFiles(zip);
+
+    // Build a lookup: for EMF/WMF files, find if a PNG/JPEG alternative exists
+    const imageUpgradeMap = new Map<string, { path: string; mime: string }>();
+    for (const [baseName, exts] of mediaCatalog) {
+      const hasVector = exts.some(e => VECTOR_IMAGE_EXTS.has(e));
+      if (!hasVector) continue;
+      const webExt = ["png", "jpg", "jpeg", "gif", "webp"].find(e => exts.includes(e));
+      if (webExt) {
+        const mimeMap: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+        imageUpgradeMap.set(baseName, { path: `word/media/${baseName}.${webExt}`, mime: mimeMap[webExt] || "image/png" });
+      }
+    }
+    console.log("[import-serie] Media catalog:", mediaCatalog.size, "files,", imageUpgradeMap.size, "upgradable EMF→web");
+
+    // Convertir DOCX → HTML via mammoth (with custom image handler to prefer PNG over EMF)
+    const mammothOptions: any = {};
+    if (imageUpgradeMap.size > 0) {
+      mammothOptions.convertImage = mammoth.images.imgElement((image: any) => {
+        return image.read("base64").then(async (base64: string) => {
+          const contentType: string = image.contentType || "";
+          // If it's an EMF/WMF, check if we have a web alternative
+          if (contentType.includes("emf") || contentType.includes("wmf")) {
+            // Try to find the corresponding web image in the ZIP
+            for (const [baseName, info] of imageUpgradeMap) {
+              try {
+                const webFile = zip.file(info.path);
+                if (webFile) {
+                  const webBase64 = await webFile.async("base64");
+                  console.log(`[mammoth] Upgraded image: ${baseName} EMF → ${info.mime}`);
+                  return { src: `data:${info.mime};base64,${webBase64}` };
+                }
+              } catch {}
+            }
+          }
+          return { src: `data:${contentType};base64,${base64}` };
+        });
+      });
+    }
+    const { value: html } = await mammoth.convertToHtml({ buffer }, mammothOptions);
 
     // Extract raw XML from DOCX for highlight detection + drawing images
     let docXml: string | undefined;
     let drawingImages: Map<number, string[]> | undefined;
     try {
-      const zip = await JSZip.loadAsync(buffer);
       const xmlFile = zip.file("word/document.xml");
       if (xmlFile) docXml = await xmlFile.async("string");
       console.log("[import-serie] XML extracted:", docXml ? `${docXml.length} chars` : "null");
