@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { extractParagraphText } from "@/lib/omml-to-latex";
-import { convertDataUriToPng } from "@/lib/emf-to-png";
+// EMF/WMF images are kept as-is — the browser converts them client-side via emf-converter
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -604,25 +604,9 @@ async function uploadBase64Image(
     let base64 = match[2];
     let buffer = Buffer.from(base64, "base64");
 
-    // For non-web formats (EMF, WMF): try server-side conversion, but if it fails,
-    // KEEP the original format — the browser will convert it client-side via emf-converter.
+    // EMF/WMF: keep as-is, the browser converts client-side via emf-converter
     if (NON_WEB_FORMATS.has(format)) {
-      try {
-        const converted = await convertDataUriToPng(dataUri);
-        if (converted) {
-          const pngMatch = converted.match(/^data:image\/png;base64,(.+)$/);
-          if (pngMatch) {
-            buffer = Buffer.from(pngMatch[1], "base64");
-            format = "png";
-            base64 = pngMatch[1];
-            console.log(`[upload-img] Converted ${match[1]} → PNG for Q ${questionId}`);
-          }
-        }
-      } catch {
-        // Server conversion failed — keep original EMF/WMF format.
-        // The browser will convert it client-side via emf-converter.
-        console.log(`[upload-img] Keeping original ${format} for Q ${questionId} (browser will convert)`);
-      }
+      console.log(`[upload-img] Keeping ${format} for Q ${questionId} (browser will convert)`);
     }
 
     const ext = format === "jpeg" ? "jpg" : format === "svg+xml" ? "svg" : format;
