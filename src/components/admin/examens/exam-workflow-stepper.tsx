@@ -268,7 +268,7 @@ export default function ExamWorkflowStepper({
     setGridUrl(null);
 
     try {
-      const res = await fetch("/api/generate-exam-grid", {
+      const res = await fetch("/api/gen-grid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -284,7 +284,7 @@ export default function ExamWorkflowStepper({
         setGridError(data.error || "Erreur lors de la génération");
         return;
       }
-      setGridUrl(data.url);
+      setGridUrl(data.url + "?t=" + Date.now());
       markComplete(4);
     } catch (err: any) {
       setGridError(err.message || "Erreur réseau");
@@ -302,7 +302,7 @@ export default function ExamWorkflowStepper({
     formData.append("serieId", serieId);
 
     try {
-      const res = await fetch("/api/generate-exam-grid", {
+      const res = await fetch("/api/gen-grid", {
         method: "PUT",
         body: formData,
       });
@@ -311,7 +311,7 @@ export default function ExamWorkflowStepper({
         setGridError(data.error || "Erreur lors de l'upload");
         return;
       }
-      setGridUrl(data.url);
+      setGridUrl(data.url + "?t=" + Date.now());
       markComplete(4);
     } catch (err: any) {
       setGridError(err.message || "Erreur réseau");
