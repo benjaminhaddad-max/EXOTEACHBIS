@@ -1,11 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  serverExternalPackages: ["mupdf", "sharp"],
-  outputFileTracingIncludes: {
-    "/api/import-from-pdf": ["./node_modules/mupdf/**/*"],
-    "/api/pdf-page-image": ["./node_modules/mupdf/**/*"],
-  },
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

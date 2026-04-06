@@ -19,6 +19,8 @@ import { createClient } from "@/lib/supabase/client";
 import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
 import { buildFiliereCoefficientMap, resolveSerieCoefficient, type FiliereMatiereCoefficient } from "@/lib/examens/filiere-coefficients";
 import { SemesterIcon, SubjectIcon } from "@/components/admin/pedagogie/dossier-icons";
+import * as pdfjsLib from "pdfjs-dist";
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 type ExamenSerieWithCoeff = {
   series_id: string;
@@ -90,24 +92,100 @@ export function ExamenDetailShell({
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper: import QCM from PDFs — questions + images all done server-side
+  // Helper: import QCM — server extracts text, client renders images from PDF
   const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
     setImportingSerieId(serieId);
     try {
+      // Step 1: Server extracts questions via Claude
       const res = await fetch("/api/import-from-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serieId, sujetUrl, correctionUrl, coursId }),
       });
       const json = await res.json();
-      if (res.ok && json.success) {
-        showToast(json.message, "success");
-        setImportedSerieIds(prev => new Set(prev).add(serieId));
-      } else {
+      if (!res.ok || !json.success) {
         showToast(json.error ?? "Erreur import PDF", "error");
+        return;
       }
+
+      showToast(json.message, "success");
+      setImportedSerieIds(prev => new Set(prev).add(serieId));
+
+      // Step 2: Client renders images from the sujet PDF
+      const questions: { id: string; page: number; hasImage: boolean; yStart: number; yEnd: number }[] = json.createdQuestions ?? [];
+      const withImages = questions.filter(q => q.hasImage && q.yStart > 0 && q.yEnd > q.yStart);
+
+      if (withImages.length === 0) return;
+
+      showToast(`Extraction de ${withImages.length} images…`, "success");
+
+      // Load the sujet PDF through our proxy (avoids CORS)
+      const pdfData = await fetch(`/api/proxy-pdf?url=${encodeURIComponent(sujetUrl)}`).then(r => {
+        if (!r.ok) throw new Error(`Proxy PDF failed: ${r.status}`);
+        return r.arrayBuffer();
+      });
+      const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
+
+      const supabase = createClient();
+      const scale = 3;
+      let uploaded = 0;
+
+      // Cache rendered pages
+      const pageCache: Record<number, HTMLCanvasElement> = {};
+
+      for (const q of withImages) {
+        try {
+          // Render the page if not cached
+          if (!pageCache[q.page]) {
+            const page = await pdfDoc.getPage(q.page);
+            const vp = page.getViewport({ scale });
+            const canvas = document.createElement("canvas");
+            canvas.width = vp.width;
+            canvas.height = vp.height;
+            const ctx = canvas.getContext("2d")!;
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, vp.width, vp.height);
+            await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
+            pageCache[q.page] = canvas;
+          }
+
+          const fullCanvas = pageCache[q.page];
+          // Crop to the image region
+          const top = Math.round(q.yStart * scale);
+          const bottom = Math.round(q.yEnd * scale);
+          const cropH = Math.min(bottom - top, fullCanvas.height - top);
+          if (cropH < 20) continue;
+
+          const cropCanvas = document.createElement("canvas");
+          cropCanvas.width = fullCanvas.width;
+          cropCanvas.height = cropH;
+          const cropCtx = cropCanvas.getContext("2d")!;
+          cropCtx.drawImage(fullCanvas, 0, top, fullCanvas.width, cropH, 0, 0, fullCanvas.width, cropH);
+
+          // Convert to blob and upload
+          const blob = await new Promise<Blob | null>(r => cropCanvas.toBlob(r, "image/png"));
+          if (!blob) continue;
+
+          const fd = new FormData();
+          fd.append("file", new File([blob], `q_${q.id}.png`, { type: "image/png" }));
+          fd.append("path", `questions/${q.id}/pdf_image.png`);
+          const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
+          const uploadJson = await uploadRes.json();
+
+          if (uploadJson.url) {
+            await supabase.from("questions").update({ image_url: uploadJson.url }).eq("id", q.id);
+            uploaded++;
+          }
+        } catch (e) {
+          console.error(`[image Q${q.id}]`, e);
+        }
+      }
+
+      if (uploaded > 0) showToast(`${uploaded} images extraites du PDF`, "success");
+      else showToast("Aucune image n'a pu être extraite", "error");
+
     } catch (err: any) {
-      showToast(err?.message ?? "Erreur lors de l'import depuis les PDFs", "error");
+      showToast(err?.message ?? "Erreur import", "error");
       console.error("[triggerPdfImport]", err);
     } finally {
       setImportingSerieId(null);
