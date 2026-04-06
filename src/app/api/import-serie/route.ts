@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { extractParagraphText } from "@/lib/omml-to-latex";
-import { convertDataUriToPng, convertDocxToPages, convertDocxToPdf, cropGraphicFromPdfPage } from "@/lib/convert-emf";
+import { convertDataUriToPng, convertDocxToPages, convertEmfBatchViaDocx } from "@/lib/convert-emf";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -398,7 +398,7 @@ function extractImagesPerQuestion(html: string): string[][] {
  * Parses raw DOCX XML to detect w:highlight val="green"
  * Uses mammoth HTML for image extraction
  */
-async function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[], pdfBuffer?: Buffer | null): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
+async function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const questions: ParsedQuestion[] = [];
   const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
@@ -583,89 +583,72 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
       questions.filter(q => q.images.length > 0).length, "questions with images");
   }
 
-  // ── Convert EMF/WMF images to PNG ───────────────────────────────────────
-  // Strategy: try individual CloudConvert first, then fallback to page PNG
+  // ── Convert ALL EMF/WMF images to PNG via batch DOCX wrapper ────────────
+  // Creates a mini DOCX with one EMF per page, converts via LibreOffice,
+  // then trims whitespace with sharp. One API call for all images.
   {
-    let converted = 0;
-
-    async function convertEmfImage(img: string, label: string, pageIdx?: number, questionNum?: number): Promise<string | null> {
-      // Try individual conversion via CloudConvert
-      try {
-        const pngDataUri = await convertDataUriToPng(img);
-        if (pngDataUri) {
-          // Verify the PNG is not empty/blank (CloudConvert sometimes returns empty PNGs for ChemSketch EMFs)
-          const b64Data = pngDataUri.split(",")[1] || "";
-          const pngSize = Math.round(b64Data.length * 0.75); // approximate byte size
-          if (pngSize > 2000) {
-            // Valid PNG (>2KB = has actual content)
-            converted++;
-            console.log(`[import-serie] ${label}: EMF/WMF → PNG via CloudConvert (${Math.round(pngSize / 1024)}KB)`);
-            return pngDataUri;
-          } else {
-            console.warn(`[import-serie] ${label}: CloudConvert returned empty PNG (${pngSize}B), trying page fallback`);
-          }
-        }
-      } catch (e: any) {
-        console.warn(`[import-serie] ${label}: CloudConvert individual conversion failed: ${e.message}`);
-      }
-
-      // Fallback: convert DOCX→PDF, then crop just the graphic region from the page
-      if (pdfBuffer && pageIdx != null && pageIdx >= 0) {
-        const croppedPng = await cropGraphicFromPdfPage(pdfBuffer, pageIdx + 1, questionNum);
-        if (croppedPng) {
-          const croppedDataUri = `data:image/png;base64,${croppedPng.toString("base64")}`;
-          console.log(`[import-serie] ${label}: cropped from PDF page ${pageIdx + 1} (${Math.round(croppedPng.length / 1024)}KB)`);
-          converted++;
-          return croppedDataUri;
-        }
-        // If crop failed (no graphic region detected), use full page as last resort
-        if (pageImages && pageIdx < pageImages.length) {
-          const pagePng = pageImages[pageIdx];
-          const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
-          console.log(`[import-serie] ${label}: crop failed, using full page ${pageIdx + 1} as last resort`);
-          converted++;
-          return pageDataUri;
-        }
-      }
-
-      // No fallback available — drop the image (EMF can't be displayed by browsers)
-      console.warn(`[import-serie] ${label}: EMF/WMF dropped (no conversion possible)`);
-      return null;
-    }
+    // Collect all EMF/WMF data URIs from questions + sections
+    const emfEntries: { source: "question" | "section"; idx: number; imgIdx: number; dataUri: string }[] = [];
 
     for (let qi = 0; qi < questions.length; qi++) {
-      const q = questions[qi];
-      const newImages: string[] = [];
-      for (const img of q.images) {
+      for (let ii = 0; ii < questions[qi].images.length; ii++) {
+        const img = questions[qi].images[ii];
         if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
-          const result = await convertEmfImage(img, `Q${qi + 1}`, q.pageIndex, qi + 1);
-          if (result) newImages.push(result);
-        } else {
-          newImages.push(img);
+          emfEntries.push({ source: "question", idx: qi, imgIdx: ii, dataUri: img });
         }
       }
-      q.images = newImages;
     }
-
-    // Also convert section EMF/WMF images
     for (let si = 0; si < sections.length; si++) {
-      const s = sections[si];
-      const newImages: string[] = [];
-      for (const img of s.images) {
+      for (let ii = 0; ii < sections[si].images.length; ii++) {
+        const img = sections[si].images[ii];
         if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
-          // For sections, use the page of the first question in that section
-          const firstQInSection = questions.find(q => q.sectionIndex === si);
-          const result = await convertEmfImage(img, `Section ${si + 1}`, firstQInSection?.pageIndex);
-          if (result) newImages.push(result);
-        } else {
-          newImages.push(img);
+          emfEntries.push({ source: "section", idx: si, imgIdx: ii, dataUri: img });
         }
       }
-      s.images = newImages;
     }
 
-    if (converted > 0) {
-      console.log(`[import-serie] Converted ${converted} EMF/WMF images to PNG individually`);
+    if (emfEntries.length > 0) {
+      console.log(`[import-serie] Found ${emfEntries.length} EMF/WMF images to convert`);
+
+      // Parse data URIs to buffers
+      const imagesToConvert = emfEntries.map(e => {
+        const match = e.dataUri.match(/^data:image\/(x-emf|emf|x-wmf|wmf);base64,(.+)$/i);
+        if (!match) return { buffer: Buffer.alloc(0), format: "emf" as const };
+        const fmt = match[1].replace("x-", "") as "emf" | "wmf";
+        return { buffer: Buffer.from(match[2], "base64"), format: fmt };
+      });
+
+      // Batch convert: wrap all in one DOCX, convert once, get all PNGs
+      const pngBuffers = await convertEmfBatchViaDocx(imagesToConvert);
+
+      // Replace EMF data URIs with PNG data URIs
+      let converted = 0;
+      for (let i = 0; i < emfEntries.length; i++) {
+        const entry = emfEntries[i];
+        const pngBuf = pngBuffers[i];
+        if (pngBuf && pngBuf.length > 2000) {
+          const pngDataUri = `data:image/png;base64,${pngBuf.toString("base64")}`;
+          if (entry.source === "question") {
+            questions[entry.idx].images[entry.imgIdx] = pngDataUri;
+          } else {
+            sections[entry.idx].images[entry.imgIdx] = pngDataUri;
+          }
+          converted++;
+        } else {
+          // Remove the broken EMF (browsers can't display it)
+          if (entry.source === "question") {
+            questions[entry.idx].images[entry.imgIdx] = "";
+          } else {
+            sections[entry.idx].images[entry.imgIdx] = "";
+          }
+        }
+      }
+
+      // Clean up empty entries
+      for (const q of questions) q.images = q.images.filter(Boolean);
+      for (const s of sections) s.images = s.images.filter(Boolean);
+
+      console.log(`[import-serie] Converted ${converted}/${emfEntries.length} EMF/WMF → PNG`);
     }
   }
 
@@ -675,10 +658,10 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 /**
  * Try all formats, return whichever finds more questions
  */
-async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[], pdfBuffer?: Buffer | null): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
+async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages, pdfBuffer) : { questions: [], sections: [] };
+  const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
   console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
 
   // Pick whichever format found the most questions
@@ -835,23 +818,16 @@ export async function POST(req: NextRequest) {
       console.error("[import-serie] JSZip error:", e.message);
     }
 
-    // Convert DOCX to PDF + PNG pages via CloudConvert (for perfect EMF/WMF rendering)
+    // Convert DOCX to PNG pages via CloudConvert (used for page-level fallback only)
     let pageImages: Buffer[] = [];
-    let pdfBuffer: Buffer | null = null;
     try {
-      // PDF for mupdf crop, PNG pages as last resort fallback
-      const [pdf, pages] = await Promise.all([
-        convertDocxToPdf(buffer),
-        convertDocxToPages(buffer),
-      ]);
-      pdfBuffer = pdf;
-      pageImages = pages;
+      pageImages = await convertDocxToPages(buffer);
     } catch (e: any) {
       console.warn("[import-serie] DOCX→PNG conversion failed (non-critical):", e.message);
     }
 
     // Parser (essaie les trois formats)
-    const { questions: parsed, sections: parsedSections } = await parseDocx(html, docXml, drawingImages, pageImages, pdfBuffer);
+    const { questions: parsed, sections: parsedSections } = await parseDocx(html, docXml, drawingImages, pageImages);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }

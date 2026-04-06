@@ -233,6 +233,145 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer | nul
 }
 
 /**
+ * Convert multiple EMF/WMF buffers to PNG by wrapping them in a single DOCX
+ * (one image per page) and converting via CloudConvert/LibreOffice.
+ * LibreOffice renders ChemSketch EMF objects perfectly.
+ *
+ * Returns an array of PNG buffers (same order as input).
+ */
+export async function convertEmfBatchViaDocx(
+  images: { buffer: Buffer; format: "emf" | "wmf" }[],
+): Promise<(Buffer | null)[]> {
+  if (images.length === 0) return [];
+  const cc = getClient();
+  if (!cc) return images.map(() => null);
+
+  try {
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+
+    // Build content types
+    const defaultExts = new Set<string>();
+    for (const img of images) defaultExts.add(img.format);
+    const defaultEntries = [...defaultExts]
+      .map(ext => `<Default Extension="${ext}" ContentType="image/x-${ext}"/>`)
+      .join("\n  ");
+
+    zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  ${defaultEntries}
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+
+    zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+
+    // Build relationships and document body
+    const rels: string[] = [];
+    const bodyParagraphs: string[] = [];
+
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      const rId = `rId${i + 1}`;
+      const filename = `image${i + 1}.${img.format}`;
+
+      rels.push(`<Relationship Id="${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${filename}"/>`);
+      zip.file(`word/media/${filename}`, img.buffer);
+
+      // Read EMF/WMF dimensions from header
+      let widthEmu = 5000000; // default ~13cm
+      let heightEmu = 3500000; // default ~9cm
+      try {
+        if (img.format === "emf" && img.buffer.length >= 40) {
+          // EMF header: frame rectangle at bytes 24-39 in 0.01mm units
+          const fL = img.buffer.readInt32LE(24);
+          const fT = img.buffer.readInt32LE(28);
+          const fR = img.buffer.readInt32LE(32);
+          const fB = img.buffer.readInt32LE(36);
+          widthEmu = Math.round(((fR - fL) / 100) * 36000) || widthEmu;
+          heightEmu = Math.round(((fB - fT) / 100) * 36000) || heightEmu;
+        } else if (img.format === "wmf" && img.buffer.length >= 18) {
+          // WMF placeable header: bounding box at bytes 6-13 in twips
+          const left = img.buffer.readInt16LE(6);
+          const top = img.buffer.readInt16LE(8);
+          const right = img.buffer.readInt16LE(10);
+          const bottom = img.buffer.readInt16LE(12);
+          widthEmu = Math.round((right - left) * 914400 / 1440) || widthEmu;
+          heightEmu = Math.round((bottom - top) * 914400 / 1440) || heightEmu;
+        }
+      } catch { /* use defaults */ }
+
+      // Clamp to reasonable sizes
+      widthEmu = Math.min(widthEmu, 8000000);
+      heightEmu = Math.min(heightEmu, 6000000);
+
+      bodyParagraphs.push(`<w:p><w:r><w:drawing><wp:inline>
+<wp:extent cx="${widthEmu}" cy="${heightEmu}"/>
+<wp:docPr id="${i + 1}" name="Image${i + 1}"/>
+<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+<pic:pic><pic:nvPicPr><pic:cNvPr id="${i + 1}" name="${filename}"/><pic:cNvPicPr/></pic:nvPicPr>
+<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm>
+<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`);
+
+      // Page break after each image (except last)
+      if (i < images.length - 1) {
+        bodyParagraphs.push(`<w:p><w:r><w:br w:type="page"/></w:r></w:p>`);
+      }
+    }
+
+    zip.file("word/_rels/document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${rels.join("\n  ")}
+</Relationships>`);
+
+    zip.file("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<w:body>${bodyParagraphs.join("")}
+<w:sectPr><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/></w:sectPr>
+</w:body></w:document>`);
+
+    const docxBuffer = Buffer.from(await zip.generateAsync({ type: "arraybuffer" }));
+    console.log(`[emf-batch] Created wrapper DOCX with ${images.length} images (${Math.round(docxBuffer.length / 1024)}KB)`);
+
+    // Convert via CloudConvert (DOCX→PNG pages, one page per image)
+    const pages = await convertDocxToPages(docxBuffer);
+    console.log(`[emf-batch] Got ${pages.length} PNG pages back`);
+
+    // Map pages back to images (trim whitespace with sharp)
+    const sharp = (await import("sharp")).default;
+    const results: (Buffer | null)[] = [];
+    for (let i = 0; i < images.length; i++) {
+      if (i < pages.length) {
+        try {
+          // Trim white borders
+          const trimmed = await sharp(pages[i]).trim({ threshold: 20 }).png().toBuffer();
+          results.push(trimmed);
+          console.log(`[emf-batch] Image ${i + 1}: ${Math.round(trimmed.length / 1024)}KB`);
+        } catch {
+          results.push(pages[i]); // Keep untrimmed if trim fails
+        }
+      } else {
+        results.push(null);
+      }
+    }
+    return results;
+  } catch (e: any) {
+    console.error("[emf-batch] Failed:", e.message);
+    return images.map(() => null);
+  }
+}
+
+/**
  * Crop the graphic region for a SPECIFIC question from a PDF page.
  * A page can have multiple questions — this finds the gap (drawing area)
  * that belongs to the question at the given questionNumber (e.g. "13").
