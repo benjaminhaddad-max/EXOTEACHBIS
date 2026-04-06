@@ -92,7 +92,7 @@ export function ExamenDetailShell({
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper: import QCM — server extracts text, client renders images from PDF
+  // Helper: import QCM — server extracts text, client renders page images from PDF
   const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
     setImportingSerieId(serieId);
     try {
@@ -111,78 +111,64 @@ export function ExamenDetailShell({
       showToast(json.message, "success");
       setImportedSerieIds(prev => new Set(prev).add(serieId));
 
-      // Step 2: Client renders images from the sujet PDF
-      const questions: { id: string; page: number; hasImage: boolean; yStart: number; yEnd: number }[] = json.createdQuestions ?? [];
-      const withImages = questions.filter(q => q.hasImage && q.yStart > 0 && q.yEnd > q.yStart);
+      // Step 2: Client renders ALL pages of sujet PDF as images
+      const questions: { id: string; page: number }[] = (json.createdQuestions ?? []).map((q: any) => ({ id: q.id, page: q.page }));
+      if (questions.length === 0) return;
 
-      if (withImages.length === 0) return;
+      showToast("Rendu des pages du PDF…", "success");
 
-      showToast(`Extraction de ${withImages.length} images…`, "success");
+      try {
+        // Load sujet PDF via proxy (CORS bypass)
+        const proxyUrl = `/api/proxy-pdf?url=${encodeURIComponent(sujetUrl)}`;
+        const pdfData = await fetch(proxyUrl).then(r => {
+          if (!r.ok) throw new Error(`Proxy: ${r.status}`);
+          return r.arrayBuffer();
+        });
 
-      // Load the sujet PDF through our proxy (avoids CORS)
-      const pdfData = await fetch(`/api/proxy-pdf?url=${encodeURIComponent(sujetUrl)}`).then(r => {
-        if (!r.ok) throw new Error(`Proxy PDF failed: ${r.status}`);
-        return r.arrayBuffer();
-      });
-      const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
+        const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
+        const supabase = createClient();
+        const scale = 2;
 
-      const supabase = createClient();
-      const scale = 3;
-      let uploaded = 0;
+        // Render each unique page and upload
+        const uniquePages = [...new Set(questions.map(q => q.page))].sort((a, b) => a - b);
+        const pageUrls: Record<number, string> = {};
 
-      // Cache rendered pages
-      const pageCache: Record<number, HTMLCanvasElement> = {};
+        for (const pageNum of uniquePages) {
+          const page = await pdfDoc.getPage(pageNum);
+          const vp = page.getViewport({ scale });
+          const canvas = document.createElement("canvas");
+          canvas.width = vp.width;
+          canvas.height = vp.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, vp.width, vp.height);
+          await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
 
-      for (const q of withImages) {
-        try {
-          // Render the page if not cached
-          if (!pageCache[q.page]) {
-            const page = await pdfDoc.getPage(q.page);
-            const vp = page.getViewport({ scale });
-            const canvas = document.createElement("canvas");
-            canvas.width = vp.width;
-            canvas.height = vp.height;
-            const ctx = canvas.getContext("2d")!;
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, vp.width, vp.height);
-            await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
-            pageCache[q.page] = canvas;
-          }
-
-          const fullCanvas = pageCache[q.page];
-          // Crop to the image region
-          const top = Math.round(q.yStart * scale);
-          const bottom = Math.round(q.yEnd * scale);
-          const cropH = Math.min(bottom - top, fullCanvas.height - top);
-          if (cropH < 20) continue;
-
-          const cropCanvas = document.createElement("canvas");
-          cropCanvas.width = fullCanvas.width;
-          cropCanvas.height = cropH;
-          const cropCtx = cropCanvas.getContext("2d")!;
-          cropCtx.drawImage(fullCanvas, 0, top, fullCanvas.width, cropH, 0, 0, fullCanvas.width, cropH);
-
-          // Convert to blob and upload
-          const blob = await new Promise<Blob | null>(r => cropCanvas.toBlob(r, "image/png"));
+          const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, "image/jpeg", 0.85));
           if (!blob) continue;
 
           const fd = new FormData();
-          fd.append("file", new File([blob], `q_${q.id}.png`, { type: "image/png" }));
-          fd.append("path", `questions/${q.id}/pdf_image.png`);
+          fd.append("file", new File([blob], `page_${pageNum}.jpg`, { type: "image/jpeg" }));
+          fd.append("path", `questions/_pdf_pages/${serieId}/page_${pageNum}.jpg`);
           const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
           const uploadJson = await uploadRes.json();
-
-          if (uploadJson.url) {
-            await supabase.from("questions").update({ image_url: uploadJson.url }).eq("id", q.id);
-            uploaded++;
-          }
-        } catch (e) {
-          console.error(`[image Q${q.id}]`, e);
+          if (uploadJson.url) pageUrls[pageNum] = uploadJson.url;
         }
-      }
 
-      if (uploaded > 0) showToast(`${uploaded} images extraites du PDF`, "success");
-      else showToast("Aucune image n'a pu être extraite", "error");
+        // Assign page image to each question
+        let assigned = 0;
+        for (const q of questions) {
+          const url = pageUrls[q.page];
+          if (!url) continue;
+          await supabase.from("questions").update({ image_url: url }).eq("id", q.id);
+          assigned++;
+        }
+
+        showToast(`${assigned} images de pages assignées`, "success");
+      } catch (imgErr: any) {
+        console.error("[PDF images]", imgErr);
+        showToast(`Erreur images: ${imgErr.message}`, "error");
+      }
 
     } catch (err: any) {
       showToast(err?.message ?? "Erreur import", "error");
@@ -593,7 +579,7 @@ export function ExamenDetailShell({
                   ) : (
                     <label className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors cursor-pointer">
                       <Upload size={10} /> Sujet
-                      <input type="file" accept=".pdf" className="hidden" onChange={async (e) => {
+                      <input type="file" accept=".pdf,.docx" className="hidden" onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
                         const res = await uploadPdf(file, `examens/${initialExamen.id}`);
                         if ("error" in res) { showToast(res.error, "error"); return; }
@@ -623,19 +609,37 @@ export function ExamenDetailShell({
                   ) : (
                     <label className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-green-400/80 hover:bg-green-500/10 transition-colors cursor-pointer">
                       <Upload size={10} /> Correction
-                      <input type="file" accept=".pdf" className="hidden" onChange={async (e) => {
+                      <input type="file" accept=".pdf,.docx" className="hidden" onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
-                        const res = await uploadPdf(file, `examens/${initialExamen.id}`);
-                        if ("error" in res) { showToast(res.error, "error"); return; }
-                        const corrUrl = res.url;
-                        await updateSerieFileUrl(initialExamen.id, es.series_id, "correction_url", corrUrl);
-                        setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: corrUrl } : s));
-                        showToast("Correction uploadée", "success");
-                        e.target.value = "";
-                        // Auto-import QCM if sujet also exists
-                        if (es.sujet_url) {
-                          triggerPdfImport(es.series_id, es.sujet_url, corrUrl, (es.series as any)?.cours_id ?? null);
+                        const isDocx = file.name.endsWith(".docx");
+
+                        if (isDocx) {
+                          // Word file → import directly via import-serie pipeline
+                          showToast("Import Word en cours…", "success");
+                          const fd = new FormData();
+                          fd.append("serieId", es.series_id);
+                          fd.append("file", file);
+                          const importRes = await fetch("/api/import-serie", { method: "POST", body: fd });
+                          const importJson = await importRes.json();
+                          if (importJson.success) {
+                            showToast(importJson.message, "success");
+                            setImportedSerieIds(prev => new Set(prev).add(es.series_id));
+                          } else {
+                            showToast(importJson.error ?? "Erreur import Word", "error");
+                          }
+                        } else {
+                          // PDF → upload as correction file
+                          const res = await uploadPdf(file, `examens/${initialExamen.id}`);
+                          if ("error" in res) { showToast(res.error, "error"); return; }
+                          const corrUrl = res.url;
+                          await updateSerieFileUrl(initialExamen.id, es.series_id, "correction_url", corrUrl);
+                          setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: corrUrl } : s));
+                          showToast("Correction uploadée", "success");
+                          if (es.sujet_url) {
+                            triggerPdfImport(es.series_id, es.sujet_url, corrUrl, (es.series as any)?.cours_id ?? null);
+                          }
                         }
+                        e.target.value = "";
                       }} />
                     </label>
                   )}
