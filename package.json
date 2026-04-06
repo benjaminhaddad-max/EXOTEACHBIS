@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2.99.0",
     "@types/react-pdf": "^6.2.0",
     "clsx": "^2.1.1",
+    "convertapi": "^1.15.0",
     "docx": "^9.6.1",
     "emf-converter": "^1.0.10",
     "jszip": "^3.10.1",
