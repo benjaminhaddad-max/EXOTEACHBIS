@@ -97,7 +97,8 @@ export function ExamenDetailShell({
   const renderAllPdfPages = async (pdfUrl: string): Promise<Blob[]> => {
     const blobs: Blob[] = [];
     try {
-      const pdfBytes = await fetch(pdfUrl).then(r => r.arrayBuffer());
+      // Use proxy to avoid CORS issues with Supabase Storage
+      const pdfBytes = await fetch(`/api/proxy-pdf?url=${encodeURIComponent(pdfUrl)}`).then(r => r.arrayBuffer());
       const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d")!;
