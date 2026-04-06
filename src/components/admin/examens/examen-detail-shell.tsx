@@ -586,16 +586,21 @@ export function ExamenDetailShell({
                         if (isDocx) {
                           // Word sujet → import questions directly
                           showToast("Import du sujet Word…", "success");
-                          const fd = new FormData();
-                          fd.append("serieId", es.series_id);
-                          fd.append("file", file);
-                          const importRes = await fetch("/api/import-serie", { method: "POST", body: fd });
-                          const importJson = await importRes.json();
-                          if (importJson.success) {
-                            showToast(importJson.message, "success");
-                            setImportedSerieIds(prev => new Set(prev).add(es.series_id));
-                          } else {
-                            showToast(importJson.error ?? "Erreur import Word", "error");
+                          try {
+                            const fd = new FormData();
+                            fd.append("serieId", es.series_id);
+                            fd.append("file", file);
+                            const importRes = await fetch("/api/import-serie", { method: "POST", body: fd });
+                            const importJson = await importRes.json();
+                            if (importJson.success) {
+                              showToast(importJson.message, "success");
+                              setImportedSerieIds(prev => new Set(prev).add(es.series_id));
+                            } else {
+                              showToast(importJson.error ?? "Erreur import Word", "error");
+                            }
+                          } catch (err: any) {
+                            console.error("[import sujet word]", err);
+                            showToast("Erreur: " + (err?.message ?? "import échoué"), "error");
                           }
                         } else {
                           // PDF sujet → upload as file
@@ -629,18 +634,22 @@ export function ExamenDetailShell({
                         const isDocx = file.name.endsWith(".docx");
 
                         if (isDocx) {
-                          // Word file → import directly via import-serie pipeline
-                          showToast("Import Word en cours…", "success");
-                          const fd = new FormData();
-                          fd.append("serieId", es.series_id);
-                          fd.append("file", file);
-                          const importRes = await fetch("/api/import-serie", { method: "POST", body: fd });
-                          const importJson = await importRes.json();
-                          if (importJson.success) {
-                            showToast(importJson.message, "success");
-                            setImportedSerieIds(prev => new Set(prev).add(es.series_id));
-                          } else {
-                            showToast(importJson.error ?? "Erreur import Word", "error");
+                          // Word correction → update correct answers via import-serie
+                          showToast("Import correction Word…", "success");
+                          try {
+                            const fd = new FormData();
+                            fd.append("serieId", es.series_id);
+                            fd.append("file", file);
+                            const importRes = await fetch("/api/import-serie", { method: "POST", body: fd });
+                            const importJson = await importRes.json();
+                            if (importJson.success) {
+                              showToast(importJson.message, "success");
+                            } else {
+                              showToast(importJson.error ?? "Erreur import Word", "error");
+                            }
+                          } catch (err: any) {
+                            console.error("[import correction word]", err);
+                            showToast("Erreur: " + (err?.message ?? "import échoué"), "error");
                           }
                         } else {
                           // PDF → upload as correction file
