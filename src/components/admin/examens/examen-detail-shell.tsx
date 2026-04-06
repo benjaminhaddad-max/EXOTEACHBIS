@@ -19,9 +19,6 @@ import { createClient } from "@/lib/supabase/client";
 import { FullSerieEditor, type SerieSummary } from "@/components/admin/pedagogie/dossier-exercices-view";
 import { buildFiliereCoefficientMap, resolveSerieCoefficient, type FiliereMatiereCoefficient } from "@/lib/examens/filiere-coefficients";
 import { SemesterIcon, SubjectIcon } from "@/components/admin/pedagogie/dossier-icons";
-import * as pdfjsLib from "pdfjs-dist";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 type ExamenSerieWithCoeff = {
   series_id: string;
@@ -93,33 +90,7 @@ export function ExamenDetailShell({
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper: render ALL pages of a PDF to JPEG blobs (same pattern as acc-fabricator)
-  const renderAllPdfPages = async (pdfUrl: string): Promise<Blob[]> => {
-    const blobs: Blob[] = [];
-    try {
-      // Use proxy to avoid CORS issues with Supabase Storage
-      const pdfBytes = await fetch(`/api/proxy-pdf?url=${encodeURIComponent(pdfUrl)}`).then(r => r.arrayBuffer());
-      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d")!;
-      for (let i = 1; i <= doc.numPages; i++) {
-        const page = await doc.getPage(i);
-        const vp = page.getViewport({ scale: 2.0 });
-        canvas.width = vp.width;
-        canvas.height = vp.height;
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, vp.width, vp.height);
-        await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
-        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.8));
-        if (blob) blobs.push(blob);
-      }
-    } catch (e) {
-      console.error("[renderAllPdfPages]", e);
-    }
-    return blobs;
-  };
-
-  // Helper: import QCM from uploaded PDFs via Claude Vision + client-side image rendering
+  // Helper: import QCM from PDFs — questions + images all done server-side
   const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
     setImportingSerieId(serieId);
     try {
@@ -132,45 +103,6 @@ export function ExamenDetailShell({
       if (res.ok && json.success) {
         showToast(json.message, "success");
         setImportedSerieIds(prev => new Set(prev).add(serieId));
-
-        // Render ALL sujet PDF pages and assign to questions
-        const createdIds: string[] = json.createdIds ?? [];
-        if (createdIds.length > 0) {
-          showToast("Extraction des images du PDF…", "success");
-          try {
-            const pageBlobs = await renderAllPdfPages(sujetUrl);
-            if (pageBlobs.length > 0) {
-              const supabase = createClient();
-              const questionsPerPage = Math.ceil(createdIds.length / pageBlobs.length);
-              // Upload unique page images first
-              const pageUrls: string[] = [];
-              for (let p = 0; p < pageBlobs.length; p++) {
-                const file = new File([pageBlobs[p]], `page_${p + 1}.jpg`, { type: "image/jpeg" });
-                const fd = new FormData();
-                fd.append("file", file);
-                fd.append("path", `questions/_pdf_pages/${serieId}/page_${p + 1}.jpg`);
-                const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
-                const uploadJson = await uploadRes.json();
-                pageUrls.push(uploadJson.url ?? "");
-              }
-              // Assign each question its page image
-              let uploaded = 0;
-              for (let i = 0; i < createdIds.length; i++) {
-                const pageIdx = Math.min(Math.floor(i / questionsPerPage), pageBlobs.length - 1);
-                const url = pageUrls[pageIdx];
-                if (!url) continue;
-                await supabase.from("questions").update({ image_url: url }).eq("id", createdIds[i]);
-                uploaded++;
-              }
-              showToast(`${uploaded} images importées`, "success");
-            } else {
-              showToast("Impossible de rendre les pages du PDF", "error");
-            }
-          } catch (imgErr: any) {
-            console.error("[triggerPdfImport:images]", imgErr);
-            showToast("Erreur upload images: " + (imgErr?.message ?? ""), "error");
-          }
-        }
       } else {
         showToast(json.error ?? "Erreur import PDF", "error");
       }
