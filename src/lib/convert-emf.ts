@@ -42,8 +42,9 @@ export async function convertMetafileToPng(
           input: ["upload"],
           output_format: "png",
           input_format: format,
-          // High quality settings
-          pixel_density: 300,
+          density: 300,
+          width: 2000,
+          fit: "max",
         },
         "export": {
           operation: "export/url",

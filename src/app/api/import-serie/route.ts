@@ -630,7 +630,8 @@ async function uploadBase64Image(
 
     if (error) {
       console.error("[upload-img]", error.message);
-      return null;
+      // Fallback: return data URI directly (stored in DB instead of Storage)
+      return `data:image/${format};base64,${base64}`;
     }
 
     const { data: urlData } = supabase.storage.from("question-images").getPublicUrl(path);
