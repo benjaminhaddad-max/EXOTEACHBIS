@@ -28,10 +28,10 @@ const MAX_COLS = 4;
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 // Per-question box sizes
-const SMALL_BOX_W = 8 * MM; // width of each answer box
-const SMALL_BOX_H = 4.5 * MM; // height of each answer box
+const SMALL_BOX_W = 5.5 * MM; // width of each answer box
+const SMALL_BOX_H = 5 * MM; // height of each answer box
 const SMALL_BOX_GAP = 0; // not used for single boxes
-const GROUP_GAP = 3 * MM; // gap between letter groups (A, B, C...)
+const GROUP_GAP = 4.5 * MM; // gap between letter groups (A, B, C...)
 const ROW_GAP = 0.8 * MM; // gap between answer row and remords row
 const Q_GAP = 1.5 * MM; // gap between questions
 const NUM_W = 10 * MM; // width reserved for question number
