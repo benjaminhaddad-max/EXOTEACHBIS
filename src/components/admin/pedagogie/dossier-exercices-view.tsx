@@ -572,8 +572,8 @@ export function FullSerieEditor({
                 questionCount={serieQuestions.length}
                 examDebutAt={examDebutAt}
                 examFinAt={examFinAt}
-                ueCode={(() => { const m = (examName || name).match(/UE\s*\d+/i); return m ? m[0] : ""; })()}
-                subjectName={(() => { const m = (examName || name).match(/[-–—]\s*(.+?)$/); return m ? m[1].trim() : ""; })()}
+                ueCode={(() => { const m = (examName || name).match(/(UE\s*\d+)/i); return m ? m[1] : ""; })()}
+                subjectName={(() => { const m = (examName || name).match(/UE\s*\d+\s*[-–—]\s*(.+?)$/i); return m ? m[1].trim() : ""; })()}
                 onQuestionsChanged={loadAll}
               />
             ) : (
