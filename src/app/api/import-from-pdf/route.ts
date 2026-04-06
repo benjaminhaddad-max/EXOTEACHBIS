@@ -1,33 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-// mupdf is ESM-only, loaded dynamically
-let _mupdf: typeof import("mupdf") | null = null;
-async function getMupdf() {
-  if (!_mupdf) _mupdf = await import("mupdf");
-  return _mupdf;
-}
-
 export const maxDuration = 300;
 
 type ParsedOption = { label: string; text: string; is_correct: boolean };
 type ParsedQuestion = { text: string; options: ParsedOption[]; page?: number };
 
-// ─── PDF page → PNG using MuPDF (WASM, no native deps) ──────────────────────
-
-async function renderPdfPageToPng(pdfBytes: Buffer, pageNum: number): Promise<Buffer | null> {
-  const m = await getMupdf();
-  const doc = m.Document.openDocument(pdfBytes, "application/pdf");
-  const page = doc.loadPage(pageNum - 1); // 0-indexed
-  const pixmap = page.toPixmap([2, 0, 0, 2, 0, 0], m.ColorSpace.DeviceRGB, false, true);
-  const pngBytes = pixmap.asPNG();
-  return Buffer.from(pngBytes);
-}
-
 async function getPdfPageCount(pdfBytes: Buffer): Promise<number> {
-  const m = await getMupdf();
-  const doc = m.Document.openDocument(pdfBytes, "application/pdf");
-  return doc.countPages();
+  try {
+    const m = await import("mupdf");
+    const doc = m.Document.openDocument(pdfBytes, "application/pdf");
+    return doc.countPages();
+  } catch { return 0; }
 }
 
 // ─── Route POST ──────────────────────────────────────────────────────────────
@@ -143,38 +127,18 @@ Réponds UNIQUEMENT en JSON strict :
       return NextResponse.json({ error: "Aucune question trouvée." }, { status: 422 });
     }
 
-    // ── Render ALL PDF pages to PNG and upload ───────────────────────────────
+    // ── Build on-demand image URLs (rendered by /api/pdf-page-image) ────────
     const totalPages = await getPdfPageCount(sujetBuffer);
-    const pageUrls: Record<number, string> = {};
-    const renderErrors: string[] = [];
-
-    for (let p = 1; p <= totalPages; p++) {
-      try {
-        const pngBuf = await renderPdfPageToPng(sujetBuffer, p);
-        if (!pngBuf) { renderErrors.push(`page ${p}: null`); continue; }
-
-        const path = `questions/_pdf_pages/${serieId}/page_${p}.png`;
-        const { error: uploadErr } = await supabase.storage
-          .from("question-images")
-          .upload(path, pngBuf, { contentType: "image/png", upsert: true });
-
-        if (uploadErr) { renderErrors.push(`page ${p} upload: ${uploadErr.message}`); continue; }
-
-        const { data: urlData } = supabase.storage.from("question-images").getPublicUrl(path);
-        if (urlData?.publicUrl) pageUrls[p] = urlData.publicUrl;
-      } catch (e: any) {
-        renderErrors.push(`page ${p}: ${e.message}`);
-      }
-    }
+    const questionsPerPage = totalPages > 0 ? Math.ceil(parsed.length / totalPages) : 1;
 
     // ── Insert questions in DB ───────────────────────────────────────────────
     let created = 0;
-    const questionsPerPage = totalPages > 0 ? Math.ceil(parsed.length / totalPages) : 1;
 
     for (let i = 0; i < parsed.length; i++) {
       const q = parsed[i];
       const pageNum = q.page ?? Math.min(Math.floor(i / questionsPerPage) + 1, totalPages || 1);
-      const imageUrl = pageUrls[pageNum] ?? null;
+      // On-demand image: rendered by /api/pdf-page-image when <img> loads
+      const imageUrl = `/api/pdf-page-image?url=${encodeURIComponent(sujetUrl)}&page=${pageNum}`;
 
       const { data: newQ, error: qErr } = await supabase
         .from("questions")
@@ -209,18 +173,10 @@ Réponds UNIQUEMENT en JSON strict :
       created++;
     }
 
-    const imagesCount = Object.keys(pageUrls).length;
-    let message = `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""}`;
-    if (imagesCount > 0) message += ` avec ${imagesCount} pages d'images`;
-    if (renderErrors.length > 0) message += ` (${renderErrors.length} erreurs de rendu)`;
-    message += ".";
-
     return NextResponse.json({
       success: true,
-      message,
+      message: `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""} avec images (${totalPages} pages).`,
       count: created,
-      pagesRendered: imagesCount,
-      renderErrors: renderErrors.length > 0 ? renderErrors : undefined,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erreur serveur.";
