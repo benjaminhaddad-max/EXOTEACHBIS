@@ -186,3 +186,146 @@ export async function convertDocxToPages(docxBuffer: Buffer): Promise<Buffer[]> 
     return [];
   }
 }
+
+/**
+ * Convert a DOCX to PDF via CloudConvert/LibreOffice.
+ * Returns the PDF buffer for use with mupdf to render+crop individual images.
+ */
+export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer | null> {
+  const cc = getClient();
+  if (!cc) return null;
+
+  try {
+    console.log(`[convert-docx-pdf] Converting DOCX (${Math.round(docxBuffer.length / 1024)}KB) to PDF...`);
+
+    let job = await cc.jobs.create({
+      tasks: {
+        "upload": { operation: "import/upload" },
+        "convert": {
+          operation: "convert",
+          input: ["upload"],
+          output_format: "pdf",
+          input_format: "docx",
+          engine: "libreoffice",
+        },
+        "export": { operation: "export/url", input: ["convert"] },
+      },
+    });
+
+    const uploadTask = job.tasks.find((t: any) => t.name === "upload");
+    if (!uploadTask) throw new Error("No upload task found");
+    await cc.tasks.upload(uploadTask, docxBuffer, "document.docx");
+
+    job = await cc.jobs.wait(job.id);
+
+    const exportTask = job.tasks.find((t: any) => t.name === "export" && t.status === "finished");
+    if (!exportTask?.result?.files?.[0]?.url) throw new Error("No export URL");
+
+    const resp = await fetch(exportTask.result.files[0].url as string);
+    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+    const pdfBuf = Buffer.from(await resp.arrayBuffer());
+    console.log(`[convert-docx-pdf] PDF: ${Math.round(pdfBuf.length / 1024)}KB`);
+    return pdfBuf;
+  } catch (e: any) {
+    console.error("[convert-docx-pdf] Failed:", e.message);
+    return null;
+  }
+}
+
+/**
+ * Crop the graphic region from a specific PDF page using mupdf text analysis.
+ * Finds the area between intro text and options (A-E), crops just the drawings.
+ * Returns a PNG buffer of the cropped region, or null if no graphic found.
+ */
+export async function cropGraphicFromPdfPage(pdfBuffer: Buffer, pageNum: number): Promise<Buffer | null> {
+  try {
+    const mupdf = await import("mupdf");
+    const doc = mupdf.Document.openDocument(pdfBuffer, "application/pdf");
+    if (pageNum < 1 || pageNum > doc.countPages()) return null;
+
+    const page = doc.loadPage(pageNum - 1);
+    const pageBounds = page.getBounds();
+    const pageHeight = pageBounds[3] - pageBounds[1];
+    const pageWidth = pageBounds[2] - pageBounds[0];
+
+    // Extract text lines
+    const sText = page.toStructuredText("preserve-whitespace");
+    const lines: { y0: number; y1: number; text: string }[] = [];
+    let currentLineText = "";
+    let currentLineBbox: number[] | null = null;
+
+    sText.walk({
+      beginLine(bbox: number[]) { currentLineBbox = bbox; currentLineText = ""; },
+      onChar(c: string) { currentLineText += c; },
+      endLine() {
+        const trimmed = currentLineText.trim();
+        if (currentLineBbox && trimmed.length > 0) {
+          lines.push({ y0: currentLineBbox[1], y1: currentLineBbox[3], text: trimmed });
+        }
+        currentLineBbox = null; currentLineText = "";
+      },
+    });
+
+    if (lines.length < 3) return null;
+
+    // Find options block (A., B., C., D., E.)
+    const optionPattern = /^[A-E][\.\)\s]/;
+    const firstOptionIdx = lines.findIndex(l => optionPattern.test(l.text));
+    if (firstOptionIdx <= 1) return null;
+
+    const SENTENCE_MIN = 18;
+
+    // Intro end: skip question number, extend through sentence lines
+    let introEndY1 = lines[0].y1;
+    for (let i = 1; i < firstOptionIdx; i++) {
+      if (lines[i].text.length >= SENTENCE_MIN) introEndY1 = lines[i].y1;
+      else break;
+    }
+
+    // Question text: last sentence before options
+    let questionTextY0 = lines[firstOptionIdx].y0;
+    for (let i = firstOptionIdx - 1; i >= 0; i--) {
+      if (lines[i].text.length >= SENTENCE_MIN) { questionTextY0 = lines[i].y0; break; }
+    }
+
+    const graphicHeight = questionTextY0 - introEndY1;
+    if (graphicHeight < 30) return null;
+
+    // Render and crop
+    const scale = 2;
+    const PADDING = 5;
+    const y0 = Math.max(pageBounds[1], introEndY1 - PADDING);
+    const y1 = Math.min(pageBounds[3], questionTextY0 + PADDING);
+    const matrix: [number, number, number, number, number, number] = [scale, 0, 0, scale, 0, 0];
+    const fullPixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
+    const fullWidth = fullPixmap.getWidth();
+    const fullHeight = fullPixmap.getHeight();
+    const fullPixels = fullPixmap.getPixels();
+    const stride = fullPixmap.getStride();
+
+    const pixY0 = Math.max(0, Math.round((y0 - pageBounds[1]) * scale));
+    const pixY1 = Math.min(fullHeight, Math.round((y1 - pageBounds[1]) * scale));
+    const cropHeight = pixY1 - pixY0;
+    if (cropHeight <= 0) return null;
+
+    const cropRect: [number, number, number, number] = [0, 0, fullWidth, cropHeight];
+    const croppedPixmap = new mupdf.Pixmap(mupdf.ColorSpace.DeviceRGB, cropRect, false);
+    croppedPixmap.clear(255);
+    const croppedPixels = croppedPixmap.getPixels();
+    const croppedStride = croppedPixmap.getStride();
+
+    for (let row = 0; row < cropHeight; row++) {
+      const srcOff = (pixY0 + row) * stride;
+      const dstOff = row * croppedStride;
+      const bytes = Math.min(stride, croppedStride);
+      for (let b = 0; b < bytes; b++) croppedPixels[dstOff + b] = fullPixels[srcOff + b];
+    }
+
+    const pngBuf = Buffer.from(croppedPixmap.asPNG());
+    console.log(`[cropGraphic] Page ${pageNum}: cropped ${fullWidth}x${cropHeight}px (${Math.round(pngBuf.length / 1024)}KB)`);
+    return pngBuf;
+  } catch (e: any) {
+    console.error(`[cropGraphic] Page ${pageNum} failed:`, e.message);
+    return null;
+  }
+}

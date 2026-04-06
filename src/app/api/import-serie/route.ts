@@ -5,7 +5,7 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { extractParagraphText } from "@/lib/omml-to-latex";
-import { convertDataUriToPng, convertDocxToPages } from "@/lib/convert-emf";
+import { convertDataUriToPng, convertDocxToPages, convertDocxToPdf, cropGraphicFromPdfPage } from "@/lib/convert-emf";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -398,7 +398,7 @@ function extractImagesPerQuestion(html: string): string[][] {
  * Parses raw DOCX XML to detect w:highlight val="green"
  * Uses mammoth HTML for image extraction
  */
-async function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
+async function parseXmlHighlightFormat(docXml: string, html?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[], pdfBuffer?: Buffer | null): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const questions: ParsedQuestion[] = [];
   const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
@@ -609,13 +609,23 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
         console.warn(`[import-serie] ${label}: CloudConvert individual conversion failed: ${e.message}`);
       }
 
-      // Fallback: use page PNG from CloudConvert DOCX→pages conversion (rendered perfectly by LibreOffice)
-      if (pageImages && pageIdx != null && pageIdx >= 0 && pageIdx < pageImages.length) {
-        const pagePng = pageImages[pageIdx];
-        const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
-        console.log(`[import-serie] ${label}: using page ${pageIdx + 1} PNG as fallback (${Math.round(pagePng.length / 1024)}KB)`);
-        converted++;
-        return pageDataUri;
+      // Fallback: convert DOCX→PDF, then crop just the graphic region from the page
+      if (pdfBuffer && pageIdx != null && pageIdx >= 0) {
+        const croppedPng = await cropGraphicFromPdfPage(pdfBuffer, pageIdx + 1); // pageIdx is 0-based, cropGraphic expects 1-based
+        if (croppedPng) {
+          const croppedDataUri = `data:image/png;base64,${croppedPng.toString("base64")}`;
+          console.log(`[import-serie] ${label}: cropped from PDF page ${pageIdx + 1} (${Math.round(croppedPng.length / 1024)}KB)`);
+          converted++;
+          return croppedDataUri;
+        }
+        // If crop failed (no graphic region detected), use full page as last resort
+        if (pageImages && pageIdx < pageImages.length) {
+          const pagePng = pageImages[pageIdx];
+          const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
+          console.log(`[import-serie] ${label}: crop failed, using full page ${pageIdx + 1} as last resort`);
+          converted++;
+          return pageDataUri;
+        }
       }
 
       // No fallback available — drop the image (EMF can't be displayed by browsers)
@@ -665,10 +675,10 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 /**
  * Try all formats, return whichever finds more questions
  */
-async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
+async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[], pdfBuffer?: Buffer | null): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
+  const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages, pdfBuffer) : { questions: [], sections: [] };
   console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
 
   // Pick whichever format found the most questions
@@ -825,16 +835,23 @@ export async function POST(req: NextRequest) {
       console.error("[import-serie] JSZip error:", e.message);
     }
 
-    // Convert DOCX to PNG pages via CloudConvert (for perfect EMF/WMF rendering)
+    // Convert DOCX to PDF + PNG pages via CloudConvert (for perfect EMF/WMF rendering)
     let pageImages: Buffer[] = [];
+    let pdfBuffer: Buffer | null = null;
     try {
-      pageImages = await convertDocxToPages(buffer);
+      // PDF for mupdf crop, PNG pages as last resort fallback
+      const [pdf, pages] = await Promise.all([
+        convertDocxToPdf(buffer),
+        convertDocxToPages(buffer),
+      ]);
+      pdfBuffer = pdf;
+      pageImages = pages;
     } catch (e: any) {
       console.warn("[import-serie] DOCX→PNG conversion failed (non-critical):", e.message);
     }
 
     // Parser (essaie les trois formats)
-    const { questions: parsed, sections: parsedSections } = await parseDocx(html, docXml, drawingImages, pageImages);
+    const { questions: parsed, sections: parsedSections } = await parseDocx(html, docXml, drawingImages, pageImages, pdfBuffer);
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
