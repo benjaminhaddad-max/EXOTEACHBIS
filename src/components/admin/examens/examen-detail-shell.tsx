@@ -566,27 +566,42 @@ export function ExamenDetailShell({
                 {/* Actions — Sujet & Correction upload */}
                 <div className="flex items-center gap-1.5">
                   {/* Sujet */}
-                  {es.sujet_url ? (
+                  {es.sujet_url || importedSerieIds.has(es.series_id) ? (
                     <div className="flex items-center gap-0.5">
-                      <a href={es.sujet_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg text-[10px] text-green-400 hover:bg-green-500/20 transition-colors">
-                        <FileText size={10} /> Sujet ✓
-                      </a>
-                      <button onClick={() => { startTransition(async () => { await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", null); setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: null } : s)); }); }}
-                        className="p-1 rounded text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Supprimer le sujet">
-                        <X size={10} />
-                      </button>
+                      {es.sujet_url ? (
+                        <a href={es.sujet_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg text-[10px] text-green-400 hover:bg-green-500/20 transition-colors">
+                          <FileText size={10} /> Sujet ✓
+                        </a>
+                      ) : (
+                        <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg text-[10px] text-green-400">
+                          <Check size={10} /> Sujet importé
+                        </span>
+                      )}
+                      {es.sujet_url && (
+                        <button onClick={() => { startTransition(async () => { await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", null); setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: null } : s)); }); }}
+                          className="p-1 rounded text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Supprimer le sujet">
+                          <X size={10} />
+                        </button>
+                      )}
                     </div>
                   ) : (
-                    <label className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors cursor-pointer">
-                      <Upload size={10} /> Sujet
-                      <input type="file" accept=".pdf,.docx" className="hidden" onChange={async (e) => {
+                    <label className={`flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 transition-colors ${importingSerieId === es.series_id ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}>
+                      {importingSerieId === es.series_id ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
+                      {importingSerieId === es.series_id ? "Import…" : "Sujet"}
+                      <input type="file" accept=".pdf,.docx" className="hidden" disabled={importingSerieId === es.series_id} onChange={async (e) => {
                         const file = e.target.files?.[0]; if (!file) return;
                         const isDocx = file.name.endsWith(".docx");
 
                         if (isDocx) {
-                          // Word sujet → import questions directly
-                          showToast("Import du sujet Word…", "success");
+                          setImportingSerieId(es.series_id);
                           try {
+                            // Also upload the .docx to storage for reference
+                            const uploadRes = await uploadPdf(file, `examens/${initialExamen.id}`);
+                            if (!("error" in uploadRes)) {
+                              await updateSerieFileUrl(initialExamen.id, es.series_id, "sujet_url", uploadRes.url);
+                              setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: uploadRes.url } : s));
+                            }
+                            // Import questions from Word
                             const fd = new FormData();
                             fd.append("serieId", es.series_id);
                             fd.append("file", file);
@@ -601,9 +616,10 @@ export function ExamenDetailShell({
                           } catch (err: any) {
                             console.error("[import sujet word]", err);
                             showToast("Erreur: " + (err?.message ?? "import échoué"), "error");
+                          } finally {
+                            setImportingSerieId(null);
                           }
                         } else {
-                          // PDF sujet → upload as file
                           const res = await uploadPdf(file, `examens/${initialExamen.id}`);
                           if ("error" in res) { showToast(res.error, "error"); return; }
                           const sujUrl = res.url;
