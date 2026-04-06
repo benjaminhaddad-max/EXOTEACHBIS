@@ -79,6 +79,7 @@ export function ExamenDetailShell({
   const [creating, setCreating] = useState<string | null>(null);
   const [resultsVisible, setResultsVisible] = useState(initialExamen.results_visible);
   const [editingSerie, setEditingSerie] = useState<SerieSummary | null>(null);
+  const [importingSerieId, setImportingSerieId] = useState<string | null>(null);
 
   // Editable header fields
   const [examenName, setExamenName] = useState(initialExamen.name);
@@ -87,6 +88,28 @@ export function ExamenDetailShell({
   const [finAt, setFinAt] = useState(initialExamen.fin_at);
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper: import QCM from uploaded PDFs via Claude Vision
+  const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
+    setImportingSerieId(serieId);
+    try {
+      const res = await fetch("/api/import-from-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serieId, sujetUrl, correctionUrl, coursId }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        showToast(json.message, "success");
+      } else {
+        showToast(json.error ?? "Erreur import PDF", "error");
+      }
+    } catch {
+      showToast("Erreur lors de l'import depuis les PDFs", "error");
+    } finally {
+      setImportingSerieId(null);
+    }
+  };
 
   const SENTINEL = "9999-01-01";
   const isDateSet = (iso: string) => !iso.startsWith(SENTINEL);
@@ -498,31 +521,9 @@ export function ExamenDetailShell({
                         setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, sujet_url: sujUrl } : s));
                         showToast("Sujet uploadé", "success");
                         e.target.value = "";
-
                         // Auto-import QCM if correction also exists
-                        const corrUrl = es.correction_url;
-                        if (corrUrl) {
-                          showToast("Import des QCM depuis les PDFs en cours…", "success");
-                          try {
-                            const importRes = await fetch("/api/import-from-pdf", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                serieId: es.series_id,
-                                sujetUrl: sujUrl,
-                                correctionUrl: corrUrl,
-                                coursId: (es.series as any)?.cours_id ?? null,
-                              }),
-                            });
-                            const importJson = await importRes.json();
-                            if (importRes.ok && importJson.success) {
-                              showToast(importJson.message, "success");
-                            } else {
-                              showToast(importJson.error ?? "Erreur import PDF", "error");
-                            }
-                          } catch {
-                            showToast("Erreur lors de l'import depuis les PDFs", "error");
-                          }
+                        if (es.correction_url) {
+                          triggerPdfImport(es.series_id, sujUrl, es.correction_url, (es.series as any)?.cours_id ?? null);
                         }
                       }} />
                     </label>
@@ -550,34 +551,26 @@ export function ExamenDetailShell({
                         setEpreuves(prev => prev.map(s => s.series_id === es.series_id ? { ...s, correction_url: corrUrl } : s));
                         showToast("Correction uploadée", "success");
                         e.target.value = "";
-
                         // Auto-import QCM if sujet also exists
-                        const sujetUrl = es.sujet_url;
-                        if (sujetUrl) {
-                          showToast("Import des QCM depuis les PDFs en cours…", "success");
-                          try {
-                            const importRes = await fetch("/api/import-from-pdf", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                serieId: es.series_id,
-                                sujetUrl,
-                                correctionUrl: corrUrl,
-                                coursId: (es.series as any)?.cours_id ?? null,
-                              }),
-                            });
-                            const importJson = await importRes.json();
-                            if (importRes.ok && importJson.success) {
-                              showToast(importJson.message, "success");
-                            } else {
-                              showToast(importJson.error ?? "Erreur import PDF", "error");
-                            }
-                          } catch {
-                            showToast("Erreur lors de l'import depuis les PDFs", "error");
-                          }
+                        if (es.sujet_url) {
+                          triggerPdfImport(es.series_id, es.sujet_url, corrUrl, (es.series as any)?.cours_id ?? null);
                         }
                       }} />
                     </label>
+                  )}
+                  {/* Import from PDF button — visible when both PDFs uploaded */}
+                  {es.sujet_url && es.correction_url && (
+                    <button
+                      disabled={importingSerieId === es.series_id}
+                      onClick={() => triggerPdfImport(es.series_id, es.sujet_url!, es.correction_url!, (es.series as any)?.cours_id ?? null)}
+                      className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      {importingSerieId === es.series_id ? (
+                        <><Loader2 size={10} className="animate-spin" /> Import IA en cours…</>
+                      ) : (
+                        <><Layers size={10} /> Importer QCM (IA)</>
+                      )}
+                    </button>
                   )}
                   <button
                     onClick={() => {
