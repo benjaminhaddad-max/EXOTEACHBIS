@@ -215,9 +215,13 @@ function parseXmlHighlightFormat(docXml: string, html?: string): ParsedQuestion[
     const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
     const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
     const texts: string[] = [];
-    const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    // Match both regular text <w:t> and math text <m:t>
+    const tRegex = /<(?:w|m):t[^>]*>([\s\S]*?)<\/(?:w|m):t>/g;
     let t: RegExpExecArray | null;
-    while ((t = tRegex.exec(content)) !== null) texts.push(t[1]);
+    while ((t = tRegex.exec(content)) !== null) {
+      // Decode XML entities
+      texts.push(t[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"));
+    }
     const text = texts.join("").trim();
     if (text.length > 0) {
       paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null });
