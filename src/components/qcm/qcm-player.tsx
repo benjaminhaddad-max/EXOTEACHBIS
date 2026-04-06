@@ -10,34 +10,118 @@ import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 
 // ─── ZoomableImage ────────────────────────────────────────────────────────
 
+/**
+ * Try to convert an EMF/WMF image to a displayable PNG data URL.
+ * Returns the converted URL, or null if not an EMF/WMF or conversion fails.
+ */
+async function tryConvertMetafile(src: string): Promise<string | null> {
+  try {
+    // Determine format from data URI or URL extension
+    const isEmfDataUri = /^data:image\/(x-emf|emf)/i.test(src);
+    const isWmfDataUri = /^data:image\/(x-wmf|wmf)/i.test(src);
+    const isEmfUrl = /\.emf$/i.test(src);
+    const isWmfUrl = /\.wmf$/i.test(src);
+
+    if (!isEmfDataUri && !isWmfDataUri && !isEmfUrl && !isWmfUrl) return null;
+
+    // Get the raw binary data
+    let buffer: ArrayBuffer;
+    if (src.startsWith("data:")) {
+      const base64 = src.split(",")[1];
+      const binary = atob(base64);
+      buffer = new ArrayBuffer(binary.length);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
+    } else {
+      const resp = await fetch(src);
+      buffer = await resp.arrayBuffer();
+    }
+
+    // Dynamic import to avoid bundling if not needed
+    const { convertEmfToDataUrl, convertWmfToDataUrl } = await import("emf-converter");
+    const isWmf = isWmfDataUri || isWmfUrl;
+    const pngDataUrl = await (isWmf ? convertWmfToDataUrl : convertEmfToDataUrl)(buffer, 1200, 900);
+    return pngDataUrl || null;
+  } catch (e) {
+    console.warn("[ZoomableImage] metafile conversion failed:", e);
+    return null;
+  }
+}
+
 function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
   const [fullscreen, setFullscreen] = useState(false);
-  const [broken, setBroken] = useState(false);
+  const [displaySrc, setDisplaySrc] = useState(src);
+  const [status, setStatus] = useState<"loading" | "ok" | "broken">("loading");
 
-  // Don't render anything if image source is clearly invalid
-  if (!src || broken) return null;
+  useEffect(() => {
+    setDisplaySrc(src);
+    setStatus("loading");
+
+    // Pre-check: if it's an EMF/WMF, convert before attempting to display
+    const isMetafile = /\.(emf|wmf)$/i.test(src) || /^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(src);
+    if (isMetafile) {
+      tryConvertMetafile(src).then((converted) => {
+        if (converted) {
+          setDisplaySrc(converted);
+          setStatus("ok");
+        } else {
+          setStatus("broken");
+        }
+      });
+    }
+  }, [src]);
+
+  if (!src) return null;
+
+  // Show placeholder for broken/non-displayable images
+  if (status === "broken") {
+    return (
+      <div className="mt-3 mb-1 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
+        <p className="text-sm text-gray-400">Image non disponible</p>
+        <p className="text-[10px] text-gray-300 mt-1">Format non supporté par le navigateur</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <div className="mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 p-3 cursor-pointer" onClick={() => setFullscreen(true)}>
-        <img src={src} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }}
-          onError={() => setBroken(true)} />
-        <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
-          <ZoomIn size={11} /> Cliquer pour agrandir
-        </p>
+        <img src={displaySrc} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }}
+          onLoad={() => setStatus("ok")}
+          onError={() => {
+            // If normal load fails, try EMF/WMF conversion as fallback
+            if (displaySrc === src) {
+              tryConvertMetafile(src).then((converted) => {
+                if (converted) {
+                  setDisplaySrc(converted);
+                } else {
+                  setStatus("broken");
+                }
+              });
+            } else {
+              setStatus("broken");
+            }
+          }} />
+        {status === "loading" && (
+          <p className="text-center text-[10px] text-gray-400 mt-2">Chargement...</p>
+        )}
+        {status === "ok" && (
+          <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
+            <ZoomIn size={11} /> Cliquer pour agrandir
+          </p>
+        )}
       </div>
 
       {/* Fullscreen overlay */}
-      {fullscreen && (
+      {fullscreen && status === "ok" && (
         <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
           onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>
           <button type="button" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}
             className="absolute top-4 right-4 z-[10000] p-3 rounded-full bg-white/20 text-white hover:bg-white/40">
             <X size={24} />
           </button>
-          <img src={src} alt="" className="max-w-[90vw] max-h-[90vh] object-contain"
-            onClick={(e) => e.stopPropagation()}
-            onError={() => { setBroken(true); setFullscreen(false); }} />
+          <img src={displaySrc} alt="" className="max-w-[90vw] max-h-[90vh] object-contain"
+            onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </>
