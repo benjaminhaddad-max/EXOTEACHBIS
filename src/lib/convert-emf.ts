@@ -42,9 +42,6 @@ export async function convertMetafileToPng(
           input: ["upload"],
           output_format: "png",
           input_format: format,
-          density: 300,
-          width: 2000,
-          fit: "max",
         },
         "export": {
           operation: "export/url",
@@ -62,11 +59,21 @@ export async function convertMetafileToPng(
     // Wait for completion
     job = await cc.jobs.wait(job.id);
 
+    // Log all task statuses for debugging
+    for (const task of job.tasks) {
+      console.log(`[convert-emf] Task "${task.name}": status=${task.status}, engine=${(task as any).engine || "n/a"}`);
+      if (task.status === "error") {
+        console.error(`[convert-emf] Task "${task.name}" error:`, (task as any).message || JSON.stringify(task));
+      }
+    }
+
     // Download the result
     const exportTask = job.tasks.find(
       (t: any) => t.name === "export" && t.status === "finished",
     );
     if (!exportTask?.result?.files?.[0]?.url) {
+      const convertTask = job.tasks.find((t: any) => t.name === "convert");
+      console.error("[convert-emf] No export URL. Convert task:", JSON.stringify(convertTask, null, 2));
       throw new Error("No export URL in result");
     }
 
