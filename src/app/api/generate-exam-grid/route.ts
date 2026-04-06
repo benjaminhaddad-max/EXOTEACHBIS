@@ -28,9 +28,9 @@ const MAX_COLS = 4;
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 // Per-question box sizes
-const SMALL_BOX_W = 4.5 * MM; // width of each small square
-const SMALL_BOX_H = 4 * MM; // height of each small square
-const SMALL_BOX_GAP = 0.4 * MM; // gap between the 3 small squares in a group
+const SMALL_BOX_W = 8 * MM; // width of each answer box
+const SMALL_BOX_H = 4.5 * MM; // height of each answer box
+const SMALL_BOX_GAP = 0; // not used for single boxes
 const GROUP_GAP = 3 * MM; // gap between letter groups (A, B, C...)
 const ROW_GAP = 0.8 * MM; // gap between answer row and remords row
 const Q_GAP = 1.5 * MM; // gap between questions
@@ -58,30 +58,27 @@ interface Fonts {
 
 // ─── Drawing helpers ─────────────────────────────────────────────────────────
 
-/** Draw a group of 3 small rectangles side by side (one answer choice) */
-function drawTripleBox(
+/** Draw a single answer box (one rectangle per choice) */
+function drawSingleBox(
   page: PDFPage,
   x: number,
   y: number,
   opts: { fill: boolean } = { fill: true }
 ) {
-  for (let i = 0; i < 3; i++) {
-    const bx = x + i * (SMALL_BOX_W + SMALL_BOX_GAP);
-    page.drawRectangle({
-      x: bx,
-      y: y - SMALL_BOX_H,
-      width: SMALL_BOX_W,
-      height: SMALL_BOX_H,
-      borderWidth: 0.6,
-      borderColor: SALMON_BORDER,
-      color: opts.fill ? SALMON_FILL : WHITE,
-    });
-  }
+  page.drawRectangle({
+    x,
+    y: y - SMALL_BOX_H,
+    width: SMALL_BOX_W,
+    height: SMALL_BOX_H,
+    borderWidth: 0.6,
+    borderColor: SALMON_BORDER,
+    color: opts.fill ? SALMON_FILL : WHITE,
+  });
 }
 
-/** Width of one triple-box group */
-function tripleBoxWidth(): number {
-  return 3 * SMALL_BOX_W + 2 * SMALL_BOX_GAP;
+/** Width of one single-box group */
+function singleBoxWidth(): number {
+  return SMALL_BOX_W;
 }
 
 /** Draw the optical reading mark (small black square on the left margin) */
@@ -306,7 +303,7 @@ function drawGrid(
   const colW = (gridW - (numCols - 1) * COL_GAP) / numCols;
 
   // Calculate per-question height
-  const tbw = tripleBoxWidth();
+  const tbw = singleBoxWidth();
   const answerRowW = MARK_W + MARK_GAP + NUM_W + 5 * (tbw + GROUP_GAP);
 
   // Draw thick dashed line at top of grid
@@ -406,14 +403,14 @@ function drawGrid(
       // Row 1: Answer boxes (A B C D E)
       for (let li = 0; li < LETTERS.length; li++) {
         const groupX = boxStartX + li * (tbw + GROUP_GAP);
-        drawTripleBox(page, groupX, curY);
+        drawSingleBox(page, groupX, curY);
       }
 
       // Row 2: Droit au remords boxes
       const remordsY = curY - SMALL_BOX_H - ROW_GAP;
       for (let li = 0; li < LETTERS.length; li++) {
         const groupX = boxStartX + li * (tbw + GROUP_GAP);
-        drawTripleBox(page, groupX, remordsY, { fill: true });
+        drawSingleBox(page, groupX, remordsY, { fill: true });
       }
     }
   }

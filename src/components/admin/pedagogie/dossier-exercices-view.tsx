@@ -572,15 +572,11 @@ export function FullSerieEditor({
                 questionCount={serieQuestions.length}
                 examDebutAt={examDebutAt}
                 examFinAt={examFinAt}
-                ueCode={(() => { const src = examName || name; const m = src.match(/(UE\s*\d+)/i); return m ? m[1] : ""; })()}
+                ueCode={(() => { const src = `${examName || ""} ${name}`; const m = src.match(/(UE\s*\d+)/i); return m ? m[1] : ""; })()}
                 subjectName={(() => {
-                  const src = examName || name;
-                  // Try "UE1 - Chimie" pattern first
-                  const m = src.match(/UE\s*\d+\s*[-–—]\s*(.+?)$/i);
-                  if (m) return m[1].trim();
-                  // Fallback: last segment after last dash
-                  const parts = src.split(/\s*[-–—]\s*/);
-                  return parts.length > 1 ? parts[parts.length - 1].trim() : "";
+                  const src = `${examName || ""} ${name}`;
+                  const m = src.match(/UE\s*\d+\s*[-–—]\s*(\w+)/i);
+                  return m ? m[1].trim() : "";
                 })()}
                 onQuestionsChanged={loadAll}
               />
