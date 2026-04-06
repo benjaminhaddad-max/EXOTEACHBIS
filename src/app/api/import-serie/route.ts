@@ -589,19 +589,27 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
     let converted = 0;
 
     async function convertEmfImage(img: string, label: string, pageIdx?: number): Promise<string | null> {
-      // Try individual conversion
+      // Try individual conversion via CloudConvert
       try {
         const pngDataUri = await convertDataUriToPng(img);
         if (pngDataUri) {
-          converted++;
-          console.log(`[import-serie] ${label}: EMF/WMF → PNG via CloudConvert`);
-          return pngDataUri;
+          // Verify the PNG is not empty/blank (CloudConvert sometimes returns empty PNGs for ChemSketch EMFs)
+          const b64Data = pngDataUri.split(",")[1] || "";
+          const pngSize = Math.round(b64Data.length * 0.75); // approximate byte size
+          if (pngSize > 2000) {
+            // Valid PNG (>2KB = has actual content)
+            converted++;
+            console.log(`[import-serie] ${label}: EMF/WMF → PNG via CloudConvert (${Math.round(pngSize / 1024)}KB)`);
+            return pngDataUri;
+          } else {
+            console.warn(`[import-serie] ${label}: CloudConvert returned empty PNG (${pngSize}B), trying page fallback`);
+          }
         }
       } catch (e: any) {
-        console.warn(`[import-serie] ${label}: CloudConvert failed: ${e.message}`);
+        console.warn(`[import-serie] ${label}: CloudConvert individual conversion failed: ${e.message}`);
       }
 
-      // Fallback: use page PNG from CloudConvert DOCX→pages conversion
+      // Fallback: use page PNG from CloudConvert DOCX→pages conversion (rendered perfectly by LibreOffice)
       if (pageImages && pageIdx != null && pageIdx >= 0 && pageIdx < pageImages.length) {
         const pagePng = pageImages[pageIdx];
         const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
