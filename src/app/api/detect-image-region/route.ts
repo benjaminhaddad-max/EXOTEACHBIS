@@ -3,10 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 60;
 
 /**
- * Uses mupdf to analyze PDF page structure and detect graphical regions.
- * Extracts text block positions via StructuredText walker, then finds
- * the largest vertical gap between text blocks — that's where drawings are.
- * Returns a pre-cropped PNG of just the graphic region.
+ * Uses mupdf structured text to find the graphic region on a PDF page.
+ *
+ * Strategy: Analyze text content to find boundaries:
+ * 1. INTRO = first sentence lines at top (question header + intro text)
+ * 2. GRAPHIC = everything between intro and question text (molecules, schemas, labels)
+ * 3. QUESTION TEXT = the sentence right before options A-E
+ * 4. OPTIONS = lines starting with A., B., C., D., E.
+ *
+ * Crops between end of INTRO and start of QUESTION TEXT.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +24,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "pdfUrl et pageNum requis" }, { status: 400 });
     }
 
-    // Download PDF
     const pdfRes = await fetch(pdfUrl);
     if (!pdfRes.ok) {
       return NextResponse.json({ error: `PDF fetch failed: ${pdfRes.status}` }, { status: 502 });
@@ -35,115 +39,126 @@ export async function POST(req: NextRequest) {
     }
 
     const page = doc.loadPage(pageNum - 1);
-    const pageBounds = page.getBounds(); // [x0, y0, x1, y1]
+    const pageBounds = page.getBounds();
     const pageHeight = pageBounds[3] - pageBounds[1];
     const pageWidth = pageBounds[2] - pageBounds[0];
 
-    // Extract structured text using the walker API
+    // Extract structured text with content
     const sText = page.toStructuredText("preserve-whitespace");
 
-    // Collect all text line bounding boxes and image/vector blocks
-    const textLines: { y0: number; y1: number }[] = [];
-    const graphicBlocks: { y0: number; y1: number }[] = [];
+    const lines: { y0: number; y1: number; text: string }[] = [];
+    const imageBlocks: { y0: number; y1: number }[] = [];
+    let currentLineText = "";
+    let currentLineBbox: number[] | null = null;
 
     sText.walk({
-      beginLine(bbox) {
-        if (bbox) {
-          textLines.push({ y0: bbox[1], y1: bbox[3] });
-        }
+      beginLine(bbox: number[]) {
+        currentLineBbox = bbox;
+        currentLineText = "";
       },
-      onImageBlock(bbox) {
+      onChar(c: string) {
+        currentLineText += c;
+      },
+      endLine() {
+        const trimmed = currentLineText.trim();
+        if (currentLineBbox && trimmed.length > 0) {
+          lines.push({ y0: currentLineBbox[1], y1: currentLineBbox[3], text: trimmed });
+        }
+        currentLineBbox = null;
+        currentLineText = "";
+      },
+      onImageBlock(bbox: number[]) {
         if (bbox) {
-          graphicBlocks.push({ y0: bbox[1], y1: bbox[3] });
+          imageBlocks.push({ y0: bbox[1], y1: bbox[3] });
         }
       },
     });
 
-    console.log(`[detect-image-region] Page ${pageNum}: ${textLines.length} text lines, ${graphicBlocks.length} image blocks`);
+    console.log(`[detect-image-region] Page ${pageNum}: ${lines.length} lines, ${imageBlocks.length} image blocks`);
+    for (const l of lines) {
+      console.log(`  line y0=${l.y0.toFixed(1)} y1=${l.y1.toFixed(1)} "${l.text.substring(0, 50)}"`);
+    }
 
-    // If mupdf found explicit image blocks, use those directly
-    if (graphicBlocks.length > 0) {
-      const minY = Math.min(...graphicBlocks.map(b => b.y0));
-      const maxY = Math.max(...graphicBlocks.map(b => b.y1));
-
+    // ── Strategy 1: If mupdf found embedded image blocks, use their bounding box ──
+    if (imageBlocks.length > 0) {
+      const minY = Math.min(...imageBlocks.map(b => b.y0));
+      const maxY = Math.max(...imageBlocks.map(b => b.y1));
+      console.log(`[detect-image-region] Using image blocks: y0=${minY.toFixed(1)}, y1=${maxY.toFixed(1)}`);
       return cropAndReturn(page, mupdf, pageBounds, minY, maxY, pageWidth, pageHeight);
     }
 
-    // Otherwise, find the largest gap between text regions (drawings = gap in text)
-    if (textLines.length === 0) {
+    // ── Strategy 2: Text content analysis ──
+    if (lines.length < 3) {
       return NextResponse.json({ found: false });
     }
 
-    // Sort text lines by Y position
-    textLines.sort((a, b) => a.y0 - b.y0);
+    // Find options block (lines starting with A./B./C./D./E.)
+    const optionPattern = /^[A-E][\.\)\s]/;
+    const firstOptionIdx = lines.findIndex(l => optionPattern.test(l.text));
 
-    // Group nearby text lines into text regions (within 8pt of each other)
-    const TEXT_GROUP_GAP = 8;
-    const textRegions: { y0: number; y1: number }[] = [];
-    let cur = { y0: textLines[0].y0, y1: textLines[0].y1 };
+    if (firstOptionIdx <= 1) {
+      // No options or not enough content before them
+      return NextResponse.json({ found: false });
+    }
 
-    for (let i = 1; i < textLines.length; i++) {
-      const line = textLines[i];
-      if (line.y0 - cur.y1 <= TEXT_GROUP_GAP) {
-        cur.y1 = Math.max(cur.y1, line.y1);
+    const SENTENCE_MIN_LENGTH = 18;
+
+    // ── Find INTRO end ──
+    // Always skip line 0 (question number like "11. Question")
+    // Extend intro to include subsequent sentence-length lines
+    let introEndY1 = lines[0].y1;
+    for (let i = 1; i < firstOptionIdx; i++) {
+      if (lines[i].text.length >= SENTENCE_MIN_LENGTH) {
+        introEndY1 = lines[i].y1;
       } else {
-        textRegions.push({ ...cur });
-        cur = { y0: line.y0, y1: line.y1 };
-      }
-    }
-    textRegions.push({ ...cur });
-
-    console.log(`[detect-image-region] Page ${pageNum}: ${textRegions.length} text regions`);
-    for (const r of textRegions) {
-      console.log(`  region: y0=${r.y0.toFixed(1)}, y1=${r.y1.toFixed(1)}, height=${(r.y1 - r.y0).toFixed(1)}`);
-    }
-
-    // Find largest gap between text regions
-    let bestGap = { start: 0, end: 0, size: 0 };
-    for (let i = 0; i < textRegions.length - 1; i++) {
-      const gapStart = textRegions[i].y1;
-      const gapEnd = textRegions[i + 1].y0;
-      const gapSize = gapEnd - gapStart;
-      if (gapSize > bestGap.size) {
-        bestGap = { start: gapStart, end: gapEnd, size: gapSize };
+        break; // First short line = start of graphic zone (labels like "+", "1", "NH₂")
       }
     }
 
-    console.log(`[detect-image-region] Best gap: start=${bestGap.start.toFixed(1)}, end=${bestGap.end.toFixed(1)}, size=${bestGap.size.toFixed(1)}`);
+    // ── Find QUESTION TEXT before options ──
+    // Search backwards from first option to find the last sentence line
+    let questionTextY0 = lines[firstOptionIdx].y0; // fallback: top of options
+    for (let i = firstOptionIdx - 1; i >= 0; i--) {
+      if (lines[i].text.length >= SENTENCE_MIN_LENGTH) {
+        questionTextY0 = lines[i].y0;
+        break;
+      }
+    }
 
-    // Minimum gap to be considered a graphical region (50pt ≈ 1.8cm)
-    if (bestGap.size < 50) {
+    // Graphic region = from end of intro to start of question text
+    const graphicHeight = questionTextY0 - introEndY1;
+    console.log(`[detect-image-region] introEndY1=${introEndY1.toFixed(1)}, questionTextY0=${questionTextY0.toFixed(1)}, graphicHeight=${graphicHeight.toFixed(1)}`);
+
+    if (graphicHeight < 30) {
+      // Gap too small — no graphic region
       return NextResponse.json({ found: false });
     }
 
-    return cropAndReturn(page, mupdf, pageBounds, bestGap.start, bestGap.end, pageWidth, pageHeight);
+    return cropAndReturn(page, mupdf, pageBounds, introEndY1, questionTextY0, pageWidth, pageHeight);
   } catch (e: unknown) {
     console.error("[detect-image-region]", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur serveur." }, { status: 500 });
   }
 }
 
-async function cropAndReturn(
+function cropAndReturn(
   page: any,
   mupdf: any,
-  pageBounds: [number, number, number, number],
+  pageBounds: number[],
   cropY0: number,
   cropY1: number,
   pageWidth: number,
   pageHeight: number,
 ) {
   const scale = 2;
-  const PADDING = 8; // points of padding
+  const PADDING = 5; // points
 
-  // Clamp coordinates
   const y0 = Math.max(pageBounds[1], cropY0 - PADDING);
   const y1 = Math.min(pageBounds[3], cropY1 + PADDING);
 
-  // Render full page at 2x
   const matrix: [number, number, number, number, number, number] = [scale, 0, 0, scale, 0, 0];
   const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
 
-  // Convert to pixel coordinates
   const pixY0 = Math.max(0, Math.round((y0 - pageBounds[1]) * scale));
   const pixY1 = Math.min(Math.round(pageHeight * scale), Math.round((y1 - pageBounds[1]) * scale));
   const pixWidth = Math.round(pageWidth * scale);
@@ -152,9 +167,10 @@ async function cropAndReturn(
     return NextResponse.json({ found: false });
   }
 
-  // Crop the pixmap
   const croppedPixmap = pixmap.clone([0, pixY0, pixWidth, pixY1]);
   const croppedPng = Buffer.from(croppedPixmap.asPNG());
+
+  console.log(`[detect-image-region] Cropped: ${pixWidth}x${pixY1 - pixY0}px (y: ${pixY0}-${pixY1})`);
 
   return NextResponse.json({
     found: true,
