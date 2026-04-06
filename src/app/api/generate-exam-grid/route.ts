@@ -3,7 +3,7 @@ import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
+// v2 - single box per choice, 2 rows per question
 const MM = 2.835;
 
 // A4 Landscape
