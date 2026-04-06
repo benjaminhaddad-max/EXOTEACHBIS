@@ -111,17 +111,17 @@ export function ExamenDetailShell({
       showToast(json.message, "success");
       setImportedSerieIds(prev => new Set(prev).add(serieId));
 
-      // Step 2: Client crops ONLY the image regions from the PDF (not full page screenshots)
-      const questions: { id: string; page: number; hasImage: boolean; yStart: number; yEnd: number }[] =
-        (json.createdQuestions ?? []).map((q: any) => ({ id: q.id, page: q.page, hasImage: q.hasImage, yStart: q.yStart, yEnd: q.yEnd }));
+      // Step 2: Client renders pages, uses Claude Vision to detect & crop image regions
+      const questions: { id: string; page: number; hasImage: boolean }[] =
+        (json.createdQuestions ?? []).map((q: any) => ({ id: q.id, page: q.page, hasImage: q.hasImage }));
 
-      const questionsWithImages = questions.filter(q => q.hasImage && q.yStart < q.yEnd);
+      const questionsWithImages = questions.filter(q => q.hasImage);
       if (questionsWithImages.length === 0) {
         showToast("Aucune image détectée dans les questions", "success");
         return;
       }
 
-      showToast(`Extraction de ${questionsWithImages.length} image(s)…`, "success");
+      showToast(`Détection de ${questionsWithImages.length} image(s) via Vision…`, "success");
 
       try {
         // Load sujet PDF via proxy (CORS bypass)
@@ -134,11 +134,11 @@ export function ExamenDetailShell({
         const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfData) }).promise;
         const supabase = createClient();
         const scale = 2;
-        const PADDING = 10; // px padding around the cropped image
+        const PADDING = 15;
 
-        // Render needed pages (cache full page canvases)
+        // Render pages that have images
         const uniquePages = [...new Set(questionsWithImages.map(q => q.page))].sort((a, b) => a - b);
-        const pageCanvases: Record<number, { canvas: HTMLCanvasElement; viewport: any }> = {};
+        const pageCrops: Record<number, { url: string } | null> = {};
 
         for (const pageNum of uniquePages) {
           const page = await pdfDoc.getPage(pageNum);
@@ -150,48 +150,55 @@ export function ExamenDetailShell({
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, vp.width, vp.height);
           await (page.render({ canvasContext: ctx, viewport: vp } as any).promise);
-          pageCanvases[pageNum] = { canvas, viewport: vp };
-        }
 
-        // Crop each question's image region and upload
-        let assigned = 0;
-        for (const q of questionsWithImages) {
-          const cached = pageCanvases[q.page];
-          if (!cached) continue;
+          // Convert to base64 for Vision API
+          const fullB64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
 
-          const { canvas: fullCanvas, viewport: vp } = cached;
+          // Call Claude Vision to detect graphical region
+          const detectRes = await fetch("/api/detect-image-region", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: fullB64, width: vp.width, height: vp.height }),
+          });
+          const detectJson = await detectRes.json();
 
-          // Convert PDF points to canvas pixels (PDF origin = bottom-left, canvas = top-left)
-          const cropY = Math.max(0, Math.round(q.yStart * scale) - PADDING);
-          const cropYEnd = Math.min(fullCanvas.height, Math.round(q.yEnd * scale) + PADDING);
+          if (!detectJson.found) {
+            pageCrops[pageNum] = null;
+            continue;
+          }
+
+          // Crop the detected region
+          const cropY = Math.max(0, Math.round(detectJson.y_start) - PADDING);
+          const cropYEnd = Math.min(canvas.height, Math.round(detectJson.y_end) + PADDING);
           const cropHeight = cropYEnd - cropY;
-          if (cropHeight <= 0) continue;
+          if (cropHeight <= 0) { pageCrops[pageNum] = null; continue; }
 
-          // Full width crop (left margin to right margin)
-          const cropX = 0;
-          const cropWidth = fullCanvas.width;
-
-          // Create cropped canvas
           const cropCanvas = document.createElement("canvas");
-          cropCanvas.width = cropWidth;
+          cropCanvas.width = canvas.width;
           cropCanvas.height = cropHeight;
           const cropCtx = cropCanvas.getContext("2d")!;
           cropCtx.fillStyle = "white";
-          cropCtx.fillRect(0, 0, cropWidth, cropHeight);
-          cropCtx.drawImage(fullCanvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+          cropCtx.fillRect(0, 0, cropCanvas.width, cropHeight);
+          cropCtx.drawImage(canvas, 0, cropY, canvas.width, cropHeight, 0, 0, canvas.width, cropHeight);
 
           const blob = await new Promise<Blob | null>(r => cropCanvas.toBlob(r, "image/jpeg", 0.85));
-          if (!blob) continue;
+          if (!blob) { pageCrops[pageNum] = null; continue; }
 
           const fd = new FormData();
-          fd.append("file", new File([blob], `q_${q.id}.jpg`, { type: "image/jpeg" }));
-          fd.append("path", `questions/_pdf_images/${serieId}/q_${q.id}.jpg`);
+          fd.append("file", new File([blob], `page_${pageNum}_crop.jpg`, { type: "image/jpeg" }));
+          fd.append("path", `questions/_pdf_images/${serieId}/page_${pageNum}_crop.jpg`);
           const uploadRes = await fetch("/api/upload-image", { method: "POST", body: fd });
           const uploadJson = await uploadRes.json();
-          if (uploadJson.url) {
-            await supabase.from("questions").update({ image_url: uploadJson.url }).eq("id", q.id);
-            assigned++;
-          }
+          pageCrops[pageNum] = uploadJson.url ? { url: uploadJson.url } : null;
+        }
+
+        // Assign cropped image to questions
+        let assigned = 0;
+        for (const q of questionsWithImages) {
+          const crop = pageCrops[q.page];
+          if (!crop) continue;
+          await supabase.from("questions").update({ image_url: crop.url }).eq("id", q.id);
+          assigned++;
         }
 
         showToast(`${assigned} image(s) extraite(s) et assignée(s)`, "success");
