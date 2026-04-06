@@ -401,10 +401,13 @@ export async function POST(req: NextRequest) {
 
         // Upload image to Supabase Storage if present
         if (p.images.length > 0) {
-          const imgUrl = await uploadBase64Image(supabase, p.images[0], newQ.id, 0);
-          if (imgUrl) {
-            await supabase.from("questions").update({ image_url: imgUrl }).eq("id", newQ.id);
+          let imgUrl = await uploadBase64Image(supabase, p.images[0], newQ.id, 0);
+          if (!imgUrl) {
+            // Fallback: store data URI directly if upload fails
+            console.warn("[import-serie] image upload failed for Q", i + 1, "- storing data URI");
+            imgUrl = p.images[0];
           }
+          await supabase.from("questions").update({ image_url: imgUrl }).eq("id", newQ.id);
         }
 
         // Créer les options
