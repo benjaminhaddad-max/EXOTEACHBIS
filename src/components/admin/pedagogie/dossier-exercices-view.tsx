@@ -466,49 +466,72 @@ export function FullSerieEditor({
               <span className="text-[10px] text-white/30">{serieQuestions.length} question{serieQuestions.length !== 1 ? "s" : ""}</span>
             </div>
           </div>
-          {/* Workflow button for concours_blanc */}
-          {isConcoursBlanc && (
-            <button onClick={() => setShowWorkflow(!showWorkflow)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${showWorkflow ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/15 text-white/60 hover:text-white hover:border-white/30"}`}>
-              <Layers size={12} />
-              Workflow
-            </button>
-          )}
-          {/* Import */}
-          <input ref={importRef} type="file" accept=".docx" className="hidden" onChange={handleImport} />
-          <button onClick={() => importRef.current?.click()} disabled={importing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40">
-            {importing ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />}
-            Importer
-          </button>
-          {serieQuestions.length > 0 && (
-            <button onClick={handleRemoveAll} disabled={removingAll}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400/70 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-colors disabled:opacity-40">
-              {removingAll ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-              Vider
-            </button>
-          )}
-          {/* Export */}
-          <div className="relative group">
-            <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
-              <FileDown size={12} /> Word
-            </button>
-            <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:flex flex-col w-44 rounded-xl border border-white/10 shadow-xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
-              <a href={`/api/export-serie?serieId=${serie.id}`} download
-                className="flex items-center gap-2 px-3 py-2.5 text-xs text-white/70 hover:bg-white/8 hover:text-white transition-colors">
-                <FileDown size={12} /> Sujet (sans correction)
+          {isConcoursBlanc ? (
+            <>
+              {/* Tab switcher for concours_blanc */}
+              <div className="flex bg-white/5 rounded-lg p-0.5">
+                <button onClick={() => setShowWorkflow(false)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${!showWorkflow ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/50 hover:text-white/70"}`}>
+                  QCM
+                </button>
+                <button onClick={() => setShowWorkflow(true)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${showWorkflow ? "bg-[#C9A84C]/20 text-[#C9A84C]" : "text-white/50 hover:text-white/70"}`}>
+                  Génération Sujet + Grille
+                </button>
+              </div>
+              {!showWorkflow && serieQuestions.length > 0 && (
+                <button onClick={handleRemoveAll} disabled={removingAll}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400/70 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-colors disabled:opacity-40">
+                  {removingAll ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  Vider
+                </button>
+              )}
+              {!showWorkflow && (
+                <a href={`/serie/${serie.id}`} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+                  <Eye size={12} /> Vue élève
+                </a>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Import */}
+              <input ref={importRef} type="file" accept=".docx" className="hidden" onChange={handleImport} />
+              <button onClick={() => importRef.current?.click()} disabled={importing}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40">
+                {importing ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />}
+                Importer
+              </button>
+              {serieQuestions.length > 0 && (
+                <button onClick={handleRemoveAll} disabled={removingAll}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400/70 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-colors disabled:opacity-40">
+                  {removingAll ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  Vider
+                </button>
+              )}
+              {/* Export */}
+              <div className="relative group">
+                <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+                  <FileDown size={12} /> Word
+                </button>
+                <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:flex flex-col w-44 rounded-xl border border-white/10 shadow-xl overflow-hidden" style={{ backgroundColor: "#0e1e35" }}>
+                  <a href={`/api/export-serie?serieId=${serie.id}`} download
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs text-white/70 hover:bg-white/8 hover:text-white transition-colors">
+                    <FileDown size={12} /> Sujet (sans correction)
+                  </a>
+                  <a href={`/api/export-serie?serieId=${serie.id}&corrections=1`} download
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs text-white/70 hover:bg-white/8 hover:text-white transition-colors border-t border-white/8">
+                    <Check size={12} /> Avec corrections
+                  </a>
+                </div>
+              </div>
+              {/* Preview */}
+              <a href={`/serie/${serie.id}`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
+                <Eye size={12} /> Vue élève
               </a>
-              <a href={`/api/export-serie?serieId=${serie.id}&corrections=1`} download
-                className="flex items-center gap-2 px-3 py-2.5 text-xs text-white/70 hover:bg-white/8 hover:text-white transition-colors border-t border-white/8">
-                <Check size={12} /> Avec corrections
-              </a>
-            </div>
-          </div>
-          {/* Preview */}
-          <a href={`/serie/${serie.id}`} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
-            <Eye size={12} /> Vue élève
-          </a>
+            </>
+          )}
           {/* Save */}
           <button onClick={handleSaveSettings} disabled={savingSettings}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${savedMsg ? "bg-green-600 text-white" : "bg-[#C9A84C] text-[#0e1e35]"} disabled:opacity-50`}>
@@ -519,7 +542,7 @@ export function FullSerieEditor({
         </div>
 
         {/* Import feedback */}
-        {importMsg && (
+        {!isConcoursBlanc && importMsg && (
           <div className={`px-5 py-2 text-xs font-medium flex items-center gap-2 ${importMsg.ok ? "bg-green-600/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
             {importMsg.ok ? <Check size={12} /> : <AlertCircle size={12} />}
             {importMsg.text}
@@ -529,7 +552,7 @@ export function FullSerieEditor({
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left: Settings */}
-          <div className="w-52 shrink-0 border-r border-white/8 p-4 space-y-4 overflow-y-auto">
+          {!isConcoursBlanc && <div className="w-52 shrink-0 border-r border-white/8 p-4 space-y-4 overflow-y-auto">
             <div>
               <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2">Type</p>
               <div className="space-y-1.5">
@@ -559,12 +582,12 @@ export function FullSerieEditor({
                 </button>
               </label>
             </div>
-          </div>
+          </div>}
 
           {/* Right: Questions or Workflow */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {/* Workflow mode for concours_blanc */}
-            {isConcoursBlanc && (showWorkflow || serieQuestions.length === 0) && !loadingQ ? (
+            {isConcoursBlanc && showWorkflow && !loadingQ ? (
               <ExamWorkflowStepper
                 serieId={serie.id}
                 serieName={name}
