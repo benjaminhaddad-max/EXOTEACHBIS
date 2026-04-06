@@ -19,6 +19,7 @@ import { FlashcardsSection } from "./flashcards-section";
 import { ImportExoteachModal } from "./import-exoteach-modal";
 import { AccFabricator } from "./acc-fabricator";
 import { AccCheck } from "./acc-check";
+import ExamWorkflowStepper from "../examens/exam-workflow-stepper";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -359,6 +360,10 @@ export function FullSerieEditor({
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const importRef = React.useRef<HTMLInputElement>(null);
 
+  // Workflow mode for concours_blanc
+  const [showWorkflow, setShowWorkflow] = useState(false);
+  const isConcoursBlanc = serie.type === "concours_blanc";
+
   const coursId = serie.cours_id ?? coursList[0]?.id ?? "";
 
   const loadAll = useCallback(async () => {
@@ -457,6 +462,14 @@ export function FullSerieEditor({
               <span className="text-[10px] text-white/30">{serieQuestions.length} question{serieQuestions.length !== 1 ? "s" : ""}</span>
             </div>
           </div>
+          {/* Workflow button for concours_blanc */}
+          {isConcoursBlanc && (
+            <button onClick={() => setShowWorkflow(!showWorkflow)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${showWorkflow ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]" : "border-white/15 text-white/60 hover:text-white hover:border-white/30"}`}>
+              <Layers size={12} />
+              Workflow
+            </button>
+          )}
           {/* Import */}
           <input ref={importRef} type="file" accept=".docx" className="hidden" onChange={handleImport} />
           <button onClick={() => importRef.current?.click()} disabled={importing}
@@ -544,8 +557,19 @@ export function FullSerieEditor({
             </div>
           </div>
 
-          {/* Right: Questions */}
+          {/* Right: Questions or Workflow */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {/* Workflow mode for concours_blanc */}
+            {isConcoursBlanc && (showWorkflow || serieQuestions.length === 0) && !loadingQ ? (
+              <ExamWorkflowStepper
+                serieId={serie.id}
+                serieName={name}
+                serieType={serie.type}
+                questionCount={serieQuestions.length}
+                onQuestionsChanged={loadAll}
+              />
+            ) : (
+            <>
             <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3">
               Questions dans cette série ({serieQuestions.length})
             </p>
@@ -627,7 +651,9 @@ export function FullSerieEditor({
               })
             )}
 
-            
+
+          </>
+          )}
           </div>
         </div>
       </div>
