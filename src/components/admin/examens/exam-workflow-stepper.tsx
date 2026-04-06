@@ -23,6 +23,8 @@ type ExamWorkflowProps = {
   questionCount: number;
   examDebutAt?: string | null;
   examFinAt?: string | null;
+  ueCode?: string;
+  subjectName?: string;
   onQuestionsChanged: () => void;
   onSujetGenerated?: (url: string) => void;
 };
@@ -65,6 +67,8 @@ export default function ExamWorkflowStepper({
   questionCount,
   examDebutAt,
   examFinAt,
+  ueCode: propUeCode,
+  subjectName: propSubjectName,
   onQuestionsChanged,
   onSujetGenerated,
 }: ExamWorkflowProps) {
@@ -90,8 +94,8 @@ export default function ExamWorkflowStepper({
     institution: "Diploma Santé",
     academicYear: "2025 - 2026",
     examTitle: serieName,
-    ueCode: "",
-    subjectName: "",
+    ueCode: propUeCode || "",
+    subjectName: propSubjectName || "",
     duration: "1H30",
     dateTime: examDebutAt
       ? new Date(examDebutAt).toLocaleString("fr-FR", {
@@ -267,7 +271,13 @@ export default function ExamWorkflowStepper({
       const res = await fetch("/api/generate-exam-grid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serieId }),
+        body: JSON.stringify({
+          serieId,
+          questionCount,
+          examTitle: pdfForm.examTitle || serieName,
+          subjectName: pdfForm.subjectName || "",
+          examDate: pdfForm.dateTime || "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -784,6 +784,9 @@ export function ExamenDetailShell({
           onClose={() => setEditingSerie(null)}
           onSaved={() => setEditingSerie(null)}
           readonlyType
+          examDebutAt={epreuves.find(e => e.series_id === editingSerie.id)?.debut_at}
+          examFinAt={epreuves.find(e => e.series_id === editingSerie.id)?.fin_at}
+          examName={examenName}
         />
       )}
     </div>

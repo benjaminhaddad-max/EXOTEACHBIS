@@ -324,10 +324,14 @@ function EditSerieModal({
 
 export function FullSerieEditor({
   serie, coursList, onClose, onSaved, readonlyType,
+  examDebutAt, examFinAt, examName,
 }: {
   serie: SerieSummary; coursList: CoursBasic[];
   onClose: () => void; onSaved: () => void;
   readonlyType?: boolean;
+  examDebutAt?: string | null;
+  examFinAt?: string | null;
+  examName?: string;
 }) {
   // Settings
   const [name, setName] = useState(serie.name);
@@ -566,6 +570,10 @@ export function FullSerieEditor({
                 serieName={name}
                 serieType={serie.type}
                 questionCount={serieQuestions.length}
+                examDebutAt={examDebutAt}
+                examFinAt={examFinAt}
+                ueCode={(() => { const m = (examName || name).match(/UE\s*\d+/i); return m ? m[0] : ""; })()}
+                subjectName={(() => { const m = (examName || name).match(/[-–—]\s*(.+?)$/); return m ? m[1].trim() : ""; })()}
                 onQuestionsChanged={loadAll}
               />
             ) : (
