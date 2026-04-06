@@ -583,29 +583,47 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
       questions.filter(q => q.images.length > 0).length, "questions with images");
   }
 
-  // ── Convert EMF/WMF images to PNG individually via CloudConvert ───────────
+  // ── Convert EMF/WMF images to PNG ───────────────────────────────────────
+  // Strategy: try individual CloudConvert first, then fallback to page PNG
   {
     let converted = 0;
+
+    async function convertEmfImage(img: string, label: string, pageIdx?: number): Promise<string | null> {
+      // Try individual conversion
+      try {
+        const pngDataUri = await convertDataUriToPng(img);
+        if (pngDataUri) {
+          converted++;
+          console.log(`[import-serie] ${label}: EMF/WMF → PNG via CloudConvert`);
+          return pngDataUri;
+        }
+      } catch (e: any) {
+        console.warn(`[import-serie] ${label}: CloudConvert failed: ${e.message}`);
+      }
+
+      // Fallback: use page PNG from CloudConvert DOCX→pages conversion
+      if (pageImages && pageIdx != null && pageIdx >= 0 && pageIdx < pageImages.length) {
+        const pagePng = pageImages[pageIdx];
+        const pageDataUri = `data:image/png;base64,${pagePng.toString("base64")}`;
+        console.log(`[import-serie] ${label}: using page ${pageIdx + 1} PNG as fallback (${Math.round(pagePng.length / 1024)}KB)`);
+        converted++;
+        return pageDataUri;
+      }
+
+      // No fallback available — drop the image (EMF can't be displayed by browsers)
+      console.warn(`[import-serie] ${label}: EMF/WMF dropped (no conversion possible)`);
+      return null;
+    }
+
     for (let qi = 0; qi < questions.length; qi++) {
       const q = questions[qi];
       const newImages: string[] = [];
       for (const img of q.images) {
         if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
-          // Convert individual EMF/WMF to PNG (not full page!)
-          try {
-            const pngDataUri = await convertDataUriToPng(img);
-            if (pngDataUri) {
-              newImages.push(pngDataUri);
-              converted++;
-            } else {
-              newImages.push(img); // Keep original if conversion fails
-            }
-          } catch (e) {
-            console.warn(`[import-serie] Q${qi + 1}: EMF/WMF conversion failed`, e);
-            newImages.push(img); // Keep original
-          }
+          const result = await convertEmfImage(img, `Q${qi + 1}`, q.pageIndex);
+          if (result) newImages.push(result);
         } else {
-          newImages.push(img); // Keep non-EMF/WMF images as-is
+          newImages.push(img);
         }
       }
       q.images = newImages;
@@ -617,17 +635,10 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
       const newImages: string[] = [];
       for (const img of s.images) {
         if (/^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(img)) {
-          try {
-            const pngDataUri = await convertDataUriToPng(img);
-            if (pngDataUri) {
-              newImages.push(pngDataUri);
-              converted++;
-            } else {
-              newImages.push(img);
-            }
-          } catch (e) {
-            newImages.push(img);
-          }
+          // For sections, use the page of the first question in that section
+          const firstQInSection = questions.find(q => q.sectionIndex === si);
+          const result = await convertEmfImage(img, `Section ${si + 1}`, firstQInSection?.pageIndex);
+          if (result) newImages.push(result);
         } else {
           newImages.push(img);
         }
