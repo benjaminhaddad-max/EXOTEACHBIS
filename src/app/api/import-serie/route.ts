@@ -282,6 +282,7 @@ function parseDocx(html: string, docXml?: string): ParsedQuestion[] {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
   const fromXml = docXml ? parseXmlHighlightFormat(docXml, html) : [];
+  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${fromXml.length} docXml=${docXml ? "yes" : "no"}`);
   const results = [fromTables, fromParagraphs, fromXml];
   return results.reduce((best, cur) => cur.length > best.length ? cur : best, []);
 }
@@ -350,7 +351,10 @@ export async function POST(req: NextRequest) {
       const zip = await JSZip.loadAsync(buffer);
       const xmlFile = zip.file("word/document.xml");
       if (xmlFile) docXml = await xmlFile.async("string");
-    } catch { /* ignore zip errors */ }
+      console.log("[import-serie] XML extracted:", docXml ? `${docXml.length} chars` : "null");
+    } catch (e: any) {
+      console.error("[import-serie] JSZip error:", e.message);
+    }
 
     // Parser (essaie les trois formats)
     const parsed = parseDocx(html, docXml);
