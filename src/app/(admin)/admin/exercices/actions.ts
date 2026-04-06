@@ -464,6 +464,18 @@ export async function removeQuestionFromSerie(
   return { success: true };
 }
 
+export async function removeAllQuestionsFromSerie(series_id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("series_questions")
+    .delete()
+    .eq("series_id", series_id);
+
+  if (error) return { error: error.message };
+  revalidatePath(PATH);
+  return { success: true };
+}
+
 export async function reorderSerieQuestions(
   series_id: string,
   question_ids: string[]

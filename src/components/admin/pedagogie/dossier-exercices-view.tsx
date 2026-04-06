@@ -13,7 +13,7 @@ import type { Dossier, Cours } from "@/types/database";
 import { MathText } from "@/components/ui/math-text";
 import { InlineQuestionEditor } from "./cours-detail-panel";
 import { getSeriesByDossier, getSerieQuestions, getBankQuestionsForSerie, updateQuestionCoursId } from "@/app/(admin)/admin/pedagogie/actions";
-import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
+import { toggleSerieVisible, deleteSerie, createSerie, updateSerie, updateSerieAnnee, addQuestionToSerie, removeQuestionFromSerie, removeAllQuestionsFromSerie, createQuestion, updateQuestion } from "@/app/(admin)/admin/exercices/actions";
 import { batchCreateQuestions } from "@/app/(admin)/admin/exercices/actions";
 import { FlashcardsSection } from "./flashcards-section";
 import { ImportExoteachModal } from "./import-exoteach-modal";
@@ -346,6 +346,7 @@ export function FullSerieEditor({
   const [loadingQ, setLoadingQ] = useState(true);
   const [expandedQ, setExpandedQ] = useState<Set<string>>(new Set());
   const [removing, setRemoving] = useState<string | null>(null);
+  const [removingAll, setRemovingAll] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
 
   // Chapter assignment
@@ -393,6 +394,14 @@ export function FullSerieEditor({
     await removeQuestionFromSerie(serie.id, qId);
     await loadAll();
     setRemoving(null);
+  };
+
+  const handleRemoveAll = async () => {
+    if (!confirm(`Supprimer les ${serieQuestions.length} questions de cette série ?`)) return;
+    setRemovingAll(true);
+    await removeAllQuestionsFromSerie(serie.id);
+    await loadAll();
+    setRemovingAll(false);
   };
 
   const handleAddQ = async (qId: string) => {
@@ -452,6 +461,13 @@ export function FullSerieEditor({
             {importing ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />}
             Importer
           </button>
+          {serieQuestions.length > 0 && (
+            <button onClick={handleRemoveAll} disabled={removingAll}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-red-500/30 text-red-400/70 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-colors disabled:opacity-40">
+              {removingAll ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+              Vider
+            </button>
+          )}
           {/* Export */}
           <div className="relative group">
             <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-white/15 text-white/60 hover:text-white hover:border-white/30 transition-colors">
