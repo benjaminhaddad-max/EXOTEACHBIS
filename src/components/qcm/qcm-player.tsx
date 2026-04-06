@@ -10,101 +10,167 @@ import { AskQuestionFab } from "@/components/qa/ask-question-fab";
 
 // ─── ZoomableImage ────────────────────────────────────────────────────────
 
-/**
- * Try to convert an EMF/WMF image to a displayable PNG data URL.
- * Returns the converted URL, or null if not an EMF/WMF or conversion fails.
- */
-async function tryConvertMetafile(src: string): Promise<string | null> {
-  try {
-    // Determine format from data URI or URL extension
-    const isEmfDataUri = /^data:image\/(x-emf|emf)/i.test(src);
-    const isWmfDataUri = /^data:image\/(x-wmf|wmf)/i.test(src);
-    const isEmfUrl = /\.emf$/i.test(src);
-    const isWmfUrl = /\.wmf$/i.test(src);
+/** Check if a src is an EMF/WMF metafile */
+function isMetafileSrc(src: string): { isEmf: boolean; isWmf: boolean } {
+  const isEmf = /^data:image\/(x-emf|emf)/i.test(src) || /\.emf$/i.test(src);
+  const isWmf = /^data:image\/(x-wmf|wmf)/i.test(src) || /\.wmf$/i.test(src);
+  return { isEmf, isWmf };
+}
 
-    if (!isEmfDataUri && !isWmfDataUri && !isEmfUrl && !isWmfUrl) return null;
-
-    // Get the raw binary data
-    let buffer: ArrayBuffer;
-    if (src.startsWith("data:")) {
-      const base64 = src.split(",")[1];
-      const binary = atob(base64);
-      buffer = new ArrayBuffer(binary.length);
-      const view = new Uint8Array(buffer);
-      for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
-    } else {
-      const resp = await fetch(src);
-      buffer = await resp.arrayBuffer();
-    }
-
-    // Dynamic import to avoid bundling if not needed
-    const { convertEmfToDataUrl, convertWmfToDataUrl } = await import("emf-converter");
-    const isWmf = isWmfDataUri || isWmfUrl;
-    const pngDataUrl = await (isWmf ? convertWmfToDataUrl : convertEmfToDataUrl)(buffer, 2400, 1800);
-    return pngDataUrl || null;
-  } catch (e) {
-    console.warn("[ZoomableImage] metafile conversion failed:", e);
-    return null;
+/** Get raw ArrayBuffer from a data URI or URL */
+async function getBuffer(src: string): Promise<ArrayBuffer> {
+  if (src.startsWith("data:")) {
+    const base64 = src.split(",")[1];
+    const binary = atob(base64);
+    const buffer = new ArrayBuffer(binary.length);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < binary.length; i++) view[i] = binary.charCodeAt(i);
+    return buffer;
   }
+  const resp = await fetch(src);
+  return resp.arrayBuffer();
+}
+
+/**
+ * Render EMF/WMF to an SVG element using rtf.js (native SVG rendering).
+ * This gives much better text rendering than Canvas-based converters.
+ */
+function MetafileRenderer({ src, onRendered }: { src: string; onRendered?: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    container.innerHTML = "";
+
+    const { isEmf, isWmf } = isMetafileSrc(src);
+    if (!isEmf && !isWmf) return;
+
+    (async () => {
+      try {
+        const buffer = await getBuffer(src);
+
+        if (isEmf) {
+          // @ts-ignore — rtf.js has no type declarations
+          const { Renderer } = await import("rtf.js/dist/EMFJS.bundle.js");
+          const renderer = new Renderer(buffer);
+          const svg = renderer.render({
+            width: "100%", height: "100%",
+            wExt: 0, hExt: 0, xExt: 0, yExt: 0, mapMode: 8,
+          });
+          // Fix viewBox if it's 0 0 0 0
+          const inner = svg.querySelector("svg");
+          if (inner) {
+            const w = inner.getAttribute("width");
+            const h = inner.getAttribute("height");
+            if (w && h) svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+          }
+          svg.style.width = "100%";
+          svg.style.height = "auto";
+          container.appendChild(svg);
+        } else {
+          // @ts-ignore — rtf.js has no type declarations
+          const { Renderer } = await import("rtf.js/dist/WMFJS.bundle.js");
+          const renderer = new Renderer(buffer);
+          const svg = renderer.render({
+            width: "100%", height: "100%",
+            wExt: 0, hExt: 0, xExt: 0, yExt: 0, mapMode: 8,
+          });
+          svg.style.width = "100%";
+          svg.style.height = "auto";
+          container.appendChild(svg);
+        }
+        onRendered?.();
+      } catch (e) {
+        console.warn("[MetafileRenderer] Failed:", e);
+        // Fallback to emf-converter (Canvas-based)
+        try {
+          const buffer = await getBuffer(src);
+          const { convertEmfToDataUrl, convertWmfToDataUrl } = await import("emf-converter");
+          const converter = isWmf ? convertWmfToDataUrl : convertEmfToDataUrl;
+          const pngDataUrl = await converter(buffer, 2400, 1800);
+          if (pngDataUrl) {
+            const img = document.createElement("img");
+            img.src = pngDataUrl;
+            img.style.width = "100%";
+            container.appendChild(img);
+            onRendered?.();
+          } else {
+            setError(true);
+          }
+        } catch {
+          setError(true);
+        }
+      }
+    })();
+  }, [src, onRendered]);
+
+  if (error) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-sm text-gray-400">Image non disponible</p>
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} />;
 }
 
 function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
   const [fullscreen, setFullscreen] = useState(false);
-  const [displaySrc, setDisplaySrc] = useState(src);
   const [status, setStatus] = useState<"loading" | "ok" | "broken">("loading");
 
-  useEffect(() => {
-    setDisplaySrc(src);
-    setStatus("loading");
-
-    // Pre-check: if it's an EMF/WMF, convert before attempting to display
-    const isMetafile = /\.(emf|wmf)$/i.test(src) || /^data:image\/(x-emf|emf|x-wmf|wmf)/i.test(src);
-    if (isMetafile) {
-      tryConvertMetafile(src).then((converted) => {
-        if (converted) {
-          setDisplaySrc(converted);
-          setStatus("ok");
-        } else {
-          setStatus("broken");
-        }
-      });
-    }
-  }, [src]);
+  const { isEmf, isWmf } = isMetafileSrc(src);
+  const isMetafile = isEmf || isWmf;
 
   if (!src) return null;
 
-  // Show placeholder for broken/non-displayable images
-  if (status === "broken") {
+  // EMF/WMF: render via SVG (rtf.js) instead of <img>
+  if (isMetafile) {
     return (
-      <div className="mt-3 mb-1 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center">
-        <p className="text-sm text-gray-400">Image non disponible</p>
-        <p className="text-[10px] text-gray-300 mt-1">Format non supporté par le navigateur</p>
-      </div>
+      <>
+        <div
+          className="mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 p-3 cursor-pointer"
+          style={{ maxHeight: small ? 200 : undefined, overflow: "hidden" }}
+          onClick={() => setFullscreen(true)}
+        >
+          <MetafileRenderer src={src} onRendered={() => setStatus("ok")} />
+          {status === "ok" && (
+            <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
+              <ZoomIn size={11} /> Cliquer pour agrandir
+            </p>
+          )}
+        </div>
+
+        {fullscreen && (
+          <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
+            onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}
+              className="absolute top-4 right-4 z-[10000] p-3 rounded-full bg-white/20 text-white hover:bg-white/40">
+              <X size={24} />
+            </button>
+            <div className="max-w-[90vw] max-h-[90vh] bg-white rounded-lg p-4 overflow-auto"
+              onClick={(e) => e.stopPropagation()}>
+              <MetafileRenderer src={src} />
+            </div>
+          </div>
+        )}
+      </>
     );
+  }
+
+  // Regular image (PNG/JPEG/etc.)
+  if (status === "broken") {
+    return null;
   }
 
   return (
     <>
       <div className="mt-3 mb-1 rounded-xl border border-gray-100 bg-gray-50 p-3 cursor-pointer" onClick={() => setFullscreen(true)}>
-        <img src={displaySrc} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }}
+        <img src={src} alt="" className="w-full object-contain" style={{ maxHeight: small ? 200 : undefined }}
           onLoad={() => setStatus("ok")}
-          onError={() => {
-            // If normal load fails, try EMF/WMF conversion as fallback
-            if (displaySrc === src) {
-              tryConvertMetafile(src).then((converted) => {
-                if (converted) {
-                  setDisplaySrc(converted);
-                } else {
-                  setStatus("broken");
-                }
-              });
-            } else {
-              setStatus("broken");
-            }
-          }} />
-        {status === "loading" && (
-          <p className="text-center text-[10px] text-gray-400 mt-2">Chargement...</p>
-        )}
+          onError={() => setStatus("broken")} />
         {status === "ok" && (
           <p className="text-center text-[10px] text-gray-400 mt-2 flex items-center justify-center gap-1">
             <ZoomIn size={11} /> Cliquer pour agrandir
@@ -112,7 +178,6 @@ function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
         )}
       </div>
 
-      {/* Fullscreen overlay */}
       {fullscreen && status === "ok" && (
         <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
           onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>
@@ -120,7 +185,7 @@ function ZoomableImage({ src, small }: { src: string; small?: boolean }) {
             className="absolute top-4 right-4 z-[10000] p-3 rounded-full bg-white/20 text-white hover:bg-white/40">
             <X size={24} />
           </button>
-          <img src={displaySrc} alt="" className="max-w-[90vw] max-h-[90vh] object-contain"
+          <img src={src} alt="" className="max-w-[90vw] max-h-[90vh] object-contain"
             onClick={(e) => e.stopPropagation()} />
         </div>
       )}
