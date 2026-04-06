@@ -90,45 +90,7 @@ export function ExamenDetailShell({
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper: render a PDF page to JPEG base64 using pdfjs-dist
-  const renderPdfPage = async (pdfUrl: string, pageNum: number): Promise<string | null> => {
-    try {
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-      const pdfBytes = await fetch(pdfUrl).then(r => r.arrayBuffer());
-      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
-      if (pageNum > doc.numPages) return null;
-      const page = await doc.getPage(pageNum);
-      const vp = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement("canvas");
-      canvas.width = vp.width;
-      canvas.height = vp.height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport: vp } as any).promise;
-      return canvas.toDataURL("image/jpeg", 0.7);
-    } catch (e) {
-      console.error("[renderPdfPage]", e);
-      return null;
-    }
-  };
-
-  // Helper: upload a data URL as question image
-  const uploadPageImage = async (dataUrl: string, questionId: string): Promise<string | null> => {
-    try {
-      const blob = await fetch(dataUrl).then(r => r.blob());
-      const file = new File([blob], `page_${questionId}.jpg`, { type: "image/jpeg" });
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("path", `questions/${questionId}/pdf_page.jpg`);
-      const res = await fetch("/api/upload-image", { method: "POST", body: fd });
-      const json = await res.json();
-      return json.url ?? null;
-    } catch { return null; }
-  };
-
-  // Helper: import QCM from uploaded PDFs via Claude Vision
+  // Helper: import QCM from uploaded PDFs via Claude Vision (images rendered server-side)
   const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
     setImportingSerieId(serieId);
     try {
@@ -141,30 +103,6 @@ export function ExamenDetailShell({
       if (res.ok && json.success) {
         showToast(json.message, "success");
         setImportedSerieIds(prev => new Set(prev).add(serieId));
-
-        // Upload images for questions that have them
-        const qWithImages: { questionId: string; page: number }[] = json.questionsWithImages ?? [];
-        if (qWithImages.length > 0) {
-          showToast(`Upload des images (${qWithImages.length})…`, "success");
-          const supabase = createClient();
-          // Deduplicate pages to render
-          const pages = [...new Set(qWithImages.map(q => q.page))];
-          const pageImages: Record<number, string> = {};
-          for (const p of pages) {
-            const img = await renderPdfPage(sujetUrl, p);
-            if (img) pageImages[p] = img;
-          }
-          // Upload and assign to each question
-          for (const { questionId, page } of qWithImages) {
-            const dataUrl = pageImages[page];
-            if (!dataUrl) continue;
-            const url = await uploadPageImage(dataUrl, questionId);
-            if (url) {
-              await supabase.from("questions").update({ image_url: url }).eq("id", questionId);
-            }
-          }
-          showToast("Images importées", "success");
-        }
       } else {
         showToast(json.error ?? "Erreur import PDF", "error");
       }

@@ -7,6 +7,36 @@ export const maxDuration = 300;
 type ParsedOption = { label: string; text: string; is_correct: boolean };
 type ParsedQuestion = { text: string; options: ParsedOption[]; has_image?: boolean; image_page?: number | null };
 
+// ─── Server-side PDF page rendering ──────────────────────────────────────────
+
+async function renderPdfPageToJpeg(pdfBytes: Buffer, pageNum: number): Promise<Buffer | null> {
+  try {
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const { createCanvas } = await import("@napi-rs/canvas");
+
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes), useSystemFonts: true }).promise;
+    if (pageNum > doc.numPages) return null;
+
+    const page = await doc.getPage(pageNum);
+    const vp = page.getViewport({ scale: 2.0 });
+    const canvas = createCanvas(vp.width, vp.height);
+    const ctx = canvas.getContext("2d");
+
+    // Fill white background
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, vp.width, vp.height);
+
+    await page.render({ canvasContext: ctx as any, viewport: vp, canvas: canvas as any }).promise;
+
+    return canvas.toBuffer("image/jpeg");
+  } catch (e) {
+    console.error("[renderPdfPage]", e);
+    return null;
+  }
+}
+
+// ─── Route POST ──────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -28,7 +58,20 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-    // Download both PDFs
+    // ── Anti-duplicate check ─────────────────────────────────────────────────
+    const { data: existingQ } = await supabase
+      .from("series_questions")
+      .select("question_id")
+      .eq("series_id", serieId)
+      .limit(1);
+
+    if (existingQ && existingQ.length > 0) {
+      return NextResponse.json({
+        error: "Cette série contient déjà des questions. Supprimez-les d'abord pour réimporter.",
+      }, { status: 409 });
+    }
+
+    // ── Download both PDFs ───────────────────────────────────────────────────
     const [sujetRes, correctionRes] = await Promise.all([
       fetch(sujetUrl),
       fetch(correctionUrl),
@@ -43,10 +86,11 @@ export async function POST(req: NextRequest) {
       correctionRes.arrayBuffer(),
     ]);
 
-    const sujetB64 = Buffer.from(sujetBuf).toString("base64");
+    const sujetBuffer = Buffer.from(sujetBuf);
+    const sujetB64 = sujetBuffer.toString("base64");
     const correctionB64 = Buffer.from(correctionBuf).toString("base64");
 
-    // Call Claude API with both PDFs
+    // ── Claude API — extract questions ───────────────────────────────────────
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const stream = await client.messages.stream({
@@ -79,8 +123,13 @@ RÈGLES ABSOLUES — NE PAS RÉSUMER :
 - Si la question dit "Concernant la molécule X ci-dessous, cochez la(les) proposition(s) exacte(s) :", tu dois écrire EXACTEMENT ce texte.
 - NE PAS écrire "Question sur X" ou "À propos de X". Copie le texte VERBATIM.
 - Retire seulement le numéro de la question au début (ex: "1." ou "Q1.") et le "A." / "B." au début des options.
-- Si une question fait référence à une image/schéma/structure ("ci-dessous", "ci-contre", "représentée"), garde cette référence dans le texte et ajoute "has_image": true.
 - Formules chimiques et mathématiques : garde-les telles quelles (ex: CH₃⁺, sp², etc.)
+
+IMAGES — TRÈS IMPORTANT :
+- Si la question contient une image, un schéma, une structure moléculaire, un graphique, ou TOUT élément visuel non-texte, mets "has_image": true.
+- Si le texte fait référence à un visuel ("ci-dessous", "ci-contre", "représentée", "suivante", "schéma", "figure"), c'est qu'il y a une image : "has_image": true.
+- "image_page" = numéro de la page du SUJET (1-indexed) où se trouve l'image/schéma.
+- En cas de doute, préfère mettre has_image: true.
 
 Réponds UNIQUEMENT en JSON strict, un array :
 [
@@ -90,17 +139,13 @@ Réponds UNIQUEMENT en JSON strict, un array :
     "image_page": null,
     "options": [
       {"label": "A", "text": "Texte EXACT de la proposition A", "is_correct": true},
-      {"label": "B", "text": "Texte EXACT de la proposition B", "is_correct": false},
-      {"label": "C", "text": "Texte EXACT de la proposition C", "is_correct": true},
-      {"label": "D", "text": "Texte EXACT de la proposition D", "is_correct": false},
-      {"label": "E", "text": "Texte EXACT de la proposition E", "is_correct": false}
+      {"label": "B", "text": "Texte EXACT de la proposition B", "is_correct": false}
     ]
   }
 ]
 
-- "has_image": true si la question contient ou fait référence à une image/schéma/structure moléculaire.
-- "image_page": numéro de la page du SUJET (1-indexed) où se trouve l'image. null si pas d'image.
 - Chaque question DOIT avoir exactement 5 options (A à E), sauf si le QCM en a moins.
+- NE DUPLIQUE PAS les questions. Chaque question numérotée dans le PDF = 1 seule entrée dans le JSON.
 - Respecte l'ordre des questions tel qu'il apparaît dans le PDF.`,
             },
           ],
@@ -127,12 +172,33 @@ Réponds UNIQUEMENT en JSON strict, un array :
       return NextResponse.json({ error: "Aucune question trouvée." }, { status: 422 });
     }
 
-    // Insert questions in DB (same pattern as import-serie Mode 1)
+    // ── Render PDF pages that contain images ─────────────────────────────────
+    const pagesNeeded = [...new Set(
+      parsed.filter(q => q.has_image && q.image_page).map(q => q.image_page!)
+    )];
+
+    const pageImages: Record<number, string> = {};
+    for (const pageNum of pagesNeeded) {
+      const jpegBuf = await renderPdfPageToJpeg(sujetBuffer, pageNum);
+      if (!jpegBuf) continue;
+
+      const path = `questions/_pdf_pages/${serieId}/page_${pageNum}.jpg`;
+      const { error: uploadErr } = await supabase.storage
+        .from("question-images")
+        .upload(path, jpegBuf, { contentType: "image/jpeg", upsert: true });
+
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from("question-images").getPublicUrl(path);
+        if (urlData?.publicUrl) pageImages[pageNum] = urlData.publicUrl;
+      }
+    }
+
+    // ── Insert questions in DB ───────────────────────────────────────────────
     let created = 0;
-    const questionsWithImages: { questionId: string; page: number }[] = [];
 
     for (let i = 0; i < parsed.length; i++) {
       const q = parsed[i];
+      const imageUrl = (q.has_image && q.image_page && pageImages[q.image_page]) || null;
 
       const { data: newQ, error: qErr } = await supabase
         .from("questions")
@@ -142,6 +208,7 @@ Réponds UNIQUEMENT en JSON strict, un array :
           difficulty: 2,
           cours_id: coursId ?? null,
           matiere_id: null,
+          image_url: imageUrl,
         })
         .select("id")
         .single();
@@ -163,10 +230,6 @@ Réponds UNIQUEMENT en JSON strict, un array :
         order_index: i,
       });
 
-      if (q.has_image && q.image_page) {
-        questionsWithImages.push({ questionId: newQ.id, page: q.image_page });
-      }
-
       created++;
     }
 
@@ -174,7 +237,7 @@ Réponds UNIQUEMENT en JSON strict, un array :
       success: true,
       message: `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""} depuis les PDFs.`,
       count: created,
-      questionsWithImages,
+      imagesUploaded: Object.keys(pageImages).length,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erreur serveur.";
