@@ -1,43 +1,33 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+// mupdf is ESM-only, loaded dynamically
+let _mupdf: typeof import("mupdf") | null = null;
+async function getMupdf() {
+  if (!_mupdf) _mupdf = await import("mupdf");
+  return _mupdf;
+}
 
 export const maxDuration = 300;
 
 type ParsedOption = { label: string; text: string; is_correct: boolean };
 type ParsedQuestion = { text: string; options: ParsedOption[]; page?: number };
 
-// ─── Server-side PDF page → JPEG ─────────────────────────────────────────────
+// ─── PDF page → PNG using MuPDF (WASM, no native deps) ──────────────────────
 
-async function renderPdfPageToJpeg(pdfBytes: Buffer, pageNum: number): Promise<Buffer | null> {
-  try {
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const { createCanvas } = await import("@napi-rs/canvas");
-
-    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes), useSystemFonts: true }).promise;
-    if (pageNum > doc.numPages) return null;
-
-    const page = await doc.getPage(pageNum);
-    const vp = page.getViewport({ scale: 2.0 });
-    const canvas = createCanvas(vp.width, vp.height);
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, vp.width, vp.height);
-
-    await page.render({ canvasContext: ctx as any, viewport: vp, canvas: canvas as any }).promise;
-    return Buffer.from(canvas.toBuffer("image/jpeg"));
-  } catch (e) {
-    console.error("[renderPdfPage] page", pageNum, e);
-    return null;
-  }
+async function renderPdfPageToPng(pdfBytes: Buffer, pageNum: number): Promise<Buffer | null> {
+  const m = await getMupdf();
+  const doc = m.Document.openDocument(pdfBytes, "application/pdf");
+  const page = doc.loadPage(pageNum - 1); // 0-indexed
+  const pixmap = page.toPixmap([2, 0, 0, 2, 0, 0], m.ColorSpace.DeviceRGB, false, true);
+  const pngBytes = pixmap.asPNG();
+  return Buffer.from(pngBytes);
 }
 
 async function getPdfPageCount(pdfBytes: Buffer): Promise<number> {
-  try {
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes), useSystemFonts: true }).promise;
-    return doc.numPages;
-  } catch { return 0; }
+  const m = await getMupdf();
+  const doc = m.Document.openDocument(pdfBytes, "application/pdf");
+  return doc.countPages();
 }
 
 // ─── Route POST ──────────────────────────────────────────────────────────────
@@ -119,23 +109,15 @@ export async function POST(req: NextRequest) {
 1. Le SUJET (premier PDF) : contient les questions numérotées avec les propositions A, B, C, D, E.
 2. La CORRECTION (deuxième PDF) : même contenu mais avec les bonnes réponses surlignées en vert ou marquées d'une manière distinctive.
 
-Ta tâche :
-- Extrais TOUTES les questions du sujet avec leurs propositions (A à E).
-- Pour chaque proposition, détermine si elle est correcte en regardant la correction (surlignée en vert = correcte).
+COPIE EXACTEMENT le texte. Ne résume JAMAIS. Retire seulement le numéro de question et le "A."/"B." au début des options.
 
-RÈGLES ABSOLUES — NE PAS RÉSUMER :
-- COPIE EXACTEMENT le texte tel qu'il apparaît dans le PDF. Ne résume JAMAIS. Ne reformule JAMAIS.
-- Retire seulement le numéro de la question au début (ex: "1." ou "Q1.") et le "A." / "B." au début des options.
-- Formules chimiques et mathématiques : garde-les telles quelles (ex: CH₃⁺, sp², etc.)
-
-PAGE — OBLIGATOIRE pour chaque question :
-- "page" = numéro de la page du SUJET (1-indexed) où se trouve cette question. TOUJOURS un entier ≥ 1.
+Pour chaque question, indique "page" = numéro de page du SUJET (1-indexed, entier ≥ 1).
 
 Réponds UNIQUEMENT en JSON strict :
-[{"text":"...","page":1,"options":[{"label":"A","text":"...","is_correct":true},...]}]
+[{"text":"...","page":1,"options":[{"label":"A","text":"...","is_correct":true},{"label":"B","text":"...","is_correct":false},...]}]
 
 - 5 options (A-E) par question sauf si moins dans le PDF.
-- NE DUPLIQUE PAS. 1 question numérotée = 1 entrée.`,
+- NE DUPLIQUE PAS. 1 question = 1 entrée.`,
             },
           ],
         },
@@ -161,22 +143,27 @@ Réponds UNIQUEMENT en JSON strict :
       return NextResponse.json({ error: "Aucune question trouvée." }, { status: 422 });
     }
 
-    // ── Render ALL PDF pages to JPEG and upload ──────────────────────────────
+    // ── Render ALL PDF pages to PNG and upload ───────────────────────────────
     const totalPages = await getPdfPageCount(sujetBuffer);
     const pageUrls: Record<number, string> = {};
+    const renderErrors: string[] = [];
 
     for (let p = 1; p <= totalPages; p++) {
-      const jpegBuf = await renderPdfPageToJpeg(sujetBuffer, p);
-      if (!jpegBuf) continue;
+      try {
+        const pngBuf = await renderPdfPageToPng(sujetBuffer, p);
+        if (!pngBuf) { renderErrors.push(`page ${p}: null`); continue; }
 
-      const path = `questions/_pdf_pages/${serieId}/page_${p}.jpg`;
-      const { error: uploadErr } = await supabase.storage
-        .from("question-images")
-        .upload(path, jpegBuf, { contentType: "image/jpeg", upsert: true });
+        const path = `questions/_pdf_pages/${serieId}/page_${p}.png`;
+        const { error: uploadErr } = await supabase.storage
+          .from("question-images")
+          .upload(path, pngBuf, { contentType: "image/png", upsert: true });
 
-      if (!uploadErr) {
+        if (uploadErr) { renderErrors.push(`page ${p} upload: ${uploadErr.message}`); continue; }
+
         const { data: urlData } = supabase.storage.from("question-images").getPublicUrl(path);
         if (urlData?.publicUrl) pageUrls[p] = urlData.publicUrl;
+      } catch (e: any) {
+        renderErrors.push(`page ${p}: ${e.message}`);
       }
     }
 
@@ -186,8 +173,7 @@ Réponds UNIQUEMENT en JSON strict :
 
     for (let i = 0; i < parsed.length; i++) {
       const q = parsed[i];
-      // Use page from Claude if available, otherwise distribute evenly
-      const pageNum = q.page ?? Math.min(Math.floor(i / questionsPerPage) + 1, totalPages);
+      const pageNum = q.page ?? Math.min(Math.floor(i / questionsPerPage) + 1, totalPages || 1);
       const imageUrl = pageUrls[pageNum] ?? null;
 
       const { data: newQ, error: qErr } = await supabase
@@ -223,11 +209,18 @@ Réponds UNIQUEMENT en JSON strict :
       created++;
     }
 
+    const imagesCount = Object.keys(pageUrls).length;
+    let message = `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""}`;
+    if (imagesCount > 0) message += ` avec ${imagesCount} pages d'images`;
+    if (renderErrors.length > 0) message += ` (${renderErrors.length} erreurs de rendu)`;
+    message += ".";
+
     return NextResponse.json({
       success: true,
-      message: `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""} avec images depuis les PDFs.`,
+      message,
       count: created,
-      pagesRendered: Object.keys(pageUrls).length,
+      pagesRendered: imagesCount,
+      renderErrors: renderErrors.length > 0 ? renderErrors : undefined,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erreur serveur.";
