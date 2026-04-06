@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     // Call Claude API with both PDFs
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const msg = await client.messages.create({
+    const stream = await client.messages.stream({
       model: "claude-sonnet-4-20250514",
       max_tokens: 32000,
       messages: [
@@ -108,6 +108,7 @@ Réponds UNIQUEMENT en JSON strict, un array :
       ],
     });
 
+    const msg = await stream.finalMessage();
     const responseText = msg.content.find((c) => c.type === "text")?.text ?? "[]";
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
 
