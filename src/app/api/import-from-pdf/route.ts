@@ -61,20 +61,48 @@ export async function POST(req: NextRequest) {
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: correctionB64 } },
           {
             type: "text",
-            text: `Tu reçois deux PDFs d'un QCM médical. SUJET = questions. CORRECTION = bonnes réponses en vert.
+            text: `Tu reçois deux PDFs d'un QCM médical :
+1. Le SUJET (premier PDF) : contient les questions numérotées avec les propositions A, B, C, D, E.
+2. La CORRECTION (deuxième PDF) : même contenu mais avec les bonnes réponses surlignées en vert.
 
-COPIE le texte EXACTEMENT. Ne résume JAMAIS.
+Ta tâche :
+- Extrais TOUTES les questions du sujet avec leurs propositions (A à E).
+- Pour chaque proposition, détermine si elle est correcte en regardant la correction (surlignée en vert = correcte).
 
-Pour chaque question retourne :
-- "page": page du SUJET (1-indexed)
-- "has_image": true si schéma/structure/molécule/graphique accompagne la question
-- "image_y_start": position Y en points PDF (~0-842) du DÉBUT de l'image sur la page
-- "image_y_end": position Y de la FIN de l'image
+RÈGLES ABSOLUES — NE PAS RÉSUMER :
+- COPIE EXACTEMENT le texte tel qu'il apparaît dans le PDF. Ne résume JAMAIS. Ne reformule JAMAIS.
+- Le "text" de la question = UNIQUEMENT l'énoncé de la question, PAS les propositions.
+- Les propositions A-E vont dans le tableau "options", PAS dans "text".
+- Retire le numéro de question au début (ex: "1." ou "Q1.") et le "A."/"B." au début des options.
+- Formules chimiques et mathématiques : garde-les telles quelles (ex: CH₃⁺, sp², etc.)
 
-JSON strict :
-[{"text":"...","page":1,"has_image":false,"options":[{"label":"A","text":"...","is_correct":true},...]}]
+IMAGES :
+- "has_image": true si un schéma/structure/molécule/graphique accompagne la question
+- "image_y_start": coordonnée Y en points PDF (0=haut, ~842=bas de page A4) où l'image COMMENCE
+- "image_y_end": coordonnée Y où l'image SE TERMINE
+- Si pas d'image : has_image=false, pas de image_y_start/image_y_end
 
-5 options (A-E). NE DUPLIQUE PAS. 1 question = 1 entrée.`,
+Réponds UNIQUEMENT en JSON strict, un array :
+[
+  {
+    "text": "Texte EXACT de l'énoncé uniquement",
+    "page": 1,
+    "has_image": true,
+    "image_y_start": 150,
+    "image_y_end": 320,
+    "options": [
+      {"label": "A", "text": "Texte EXACT de la proposition A", "is_correct": true},
+      {"label": "B", "text": "Texte EXACT de la proposition B", "is_correct": false},
+      {"label": "C", "text": "Texte EXACT de la proposition C", "is_correct": true},
+      {"label": "D", "text": "Texte EXACT de la proposition D", "is_correct": false},
+      {"label": "E", "text": "Texte EXACT de la proposition E", "is_correct": false}
+    ]
+  }
+]
+
+- Chaque question DOIT avoir exactement 5 options (A à E), sauf si le QCM en a moins.
+- NE DUPLIQUE PAS les questions. Chaque question numérotée dans le PDF = 1 seule entrée.
+- Respecte l'ordre des questions tel qu'il apparaît dans le PDF.`,
           },
         ],
       }],
