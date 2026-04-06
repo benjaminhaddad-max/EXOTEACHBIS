@@ -171,14 +171,27 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
 function extractImagesPerQuestion(html: string): string[][] {
   const parts = html.split(/<(?:li>)?<strong>Question<\/strong>(?:<\/li>)?/i);
   const result: string[][] = [];
-  // Skip part[0] (content before first Question)
-  for (let i = 1; i < parts.length; i++) {
-    const imgMatches = parts[i].match(/<img\s+[^>]*src="(data:image\/[^"]+)"[^>]*>/gi) || [];
-    const imgs = imgMatches.map(m => {
+
+  function extractImgs(htmlPart: string): string[] {
+    const imgMatches = htmlPart.match(/<img\s+[^>]*src="(data:image\/[^"]+)"[^>]*>/gi) || [];
+    return imgMatches.map(m => {
       const srcMatch = m.match(/src="(data:image\/[^"]+)"/);
       return srcMatch ? srcMatch[1] : "";
     }).filter(Boolean);
-    result.push(imgs);
+  }
+
+  // Images before first Question → last one is usually the relevant structure
+  const preImages = extractImgs(parts[0] ?? "");
+  // Keep only the last pre-image (skip logos/headers, keep the structure)
+  const relevantPreImage = preImages.length > 0 ? [preImages[preImages.length - 1]] : [];
+
+  for (let i = 1; i < parts.length; i++) {
+    const imgs = extractImgs(parts[i]);
+    if (i === 1) {
+      result.push([...relevantPreImage, ...imgs]);
+    } else {
+      result.push(imgs);
+    }
   }
   return result;
 }
