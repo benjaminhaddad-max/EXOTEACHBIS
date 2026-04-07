@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
     const boxGroupW = 5 * BOX + 4 * HGAP;
     const COL_W = NUM_W + boxGroupW + mm(2); // tight frame around content
     const COL_GAP = (CW - COLS * COL_W) / (COLS - 1); // distribute remaining as column gaps
-    const LABEL_H = mm(2);
+    const LABEL_H = mm(3);
     const FRAME_PAD_T = mm(0.5);
     const FRAME_PAD_B = mm(0.3);
     const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
