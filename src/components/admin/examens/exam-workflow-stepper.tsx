@@ -131,20 +131,26 @@ export default function ExamWorkflowStepper({
     const formData = new FormData();
     formData.append("serieId", serieId);
 
-    // Large files (>4MB): extract just the XML from the ZIP client-side (skip heavy images)
+    // Large files (>4MB): upload to Storage → compress TIFF→JPEG server-side → import compressed
     if (file.size > 4 * 1024 * 1024) {
       try {
-        const buf = await file.arrayBuffer();
-        const zip = await JSZip.loadAsync(buf);
-        const xmlFile = zip.file("word/document.xml");
-        if (!xmlFile) { setSujetError("Fichier Word invalide (pas de document.xml)"); setImportingSujet(false); return; }
-        const xml = await xmlFile.async("string");
-        formData.append("docXml", xml);
-        formData.append("largeFile", "true");
-        // Also upload full file to Storage in background for future reference
-        uploadLargeFile(file, serieId).catch(() => {});
+        // Step 1: Upload original to Storage
+        const storagePath = await uploadLargeFile(file, serieId);
+        if (!storagePath) { setSujetError("Erreur upload du fichier. Réessayez."); setImportingSujet(false); return; }
+
+        // Step 2: Compress (TIFF→JPEG) server-side
+        const compressRes = await fetch("/api/compress-docx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storagePath }),
+        });
+        if (!compressRes.ok) { setSujetError("Erreur compression du fichier"); setImportingSujet(false); return; }
+        const { compressedPath } = await compressRes.json();
+
+        // Step 3: Import from compressed file on Storage
+        formData.append("storagePath", compressedPath);
       } catch (e: any) {
-        setSujetError("Erreur lecture du fichier: " + e.message); setImportingSujet(false); return;
+        setSujetError("Erreur: " + e.message); setImportingSujet(false); return;
       }
     } else {
       formData.append("file", file);
@@ -196,15 +202,17 @@ export default function ExamWorkflowStepper({
 
     if (file.size > 4 * 1024 * 1024) {
       try {
-        const buf = await file.arrayBuffer();
-        const zip = await JSZip.loadAsync(buf);
-        const xmlFile = zip.file("word/document.xml");
-        if (!xmlFile) { setCorrectionError("Fichier Word invalide"); setImportingCorrection(false); return; }
-        const xml = await xmlFile.async("string");
-        formData.append("docXml", xml);
-        formData.append("largeFile", "true");
+        const storagePath = await uploadLargeFile(file, serieId);
+        if (!storagePath) { setCorrectionError("Erreur upload du fichier. Réessayez."); setImportingCorrection(false); return; }
+        const compressRes = await fetch("/api/compress-docx", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storagePath }),
+        });
+        if (!compressRes.ok) { setCorrectionError("Erreur compression"); setImportingCorrection(false); return; }
+        const { compressedPath } = await compressRes.json();
+        formData.append("storagePath", compressedPath);
       } catch (e: any) {
-        setCorrectionError("Erreur lecture du fichier: " + e.message); setImportingCorrection(false); return;
+        setCorrectionError("Erreur: " + e.message); setImportingCorrection(false); return;
       }
     } else {
       formData.append("file", file);
