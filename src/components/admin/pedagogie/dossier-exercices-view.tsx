@@ -587,7 +587,7 @@ export function FullSerieEditor({
           {/* Right: Questions or Workflow */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
             {/* Workflow mode for concours_blanc */}
-            {isConcoursBlanc && showWorkflow && !loadingQ ? (
+            {isConcoursBlanc && showWorkflow ? (
               <ExamWorkflowStepper
                 serieId={serie.id}
                 serieName={name}
