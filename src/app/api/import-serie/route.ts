@@ -620,8 +620,8 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
     const text = p.text;
     const raw = p.raw;
 
-    // Detect "QCM N :" / "QCM N -" / "QCM N." patterns (with optional BOM)
-    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*[-:.]\s*(.*)/iu);
+    // Detect "QCM N :" / "QCM N -" / "QCM N –" / "QCM N." patterns (with optional BOM)
+    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*[-:.–—]\s*(.*)/iu);
     if (qcmMatch) {
       flushQuestion();
       currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [] };
@@ -1248,7 +1248,69 @@ export async function POST(req: NextRequest) {
         if (options.length >= 2) parsed.push({ options });
       }
 
-      console.log(`[import-serie] Correction fast parse: ${parsed.length} questions, ${parsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0)} correct answers`);
+      console.log(`[import-serie] Correction highlight parse: ${parsed.length} questions, ${parsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0)} correct answers`);
+
+      // ── Fallback: "QCM N : CE" + VRAI/FAUX format ──
+      // If highlight parsing found 0 questions or 0 correct answers, try text-based correction
+      const highlightCorrectCount = parsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0);
+      if (parsed.length === 0 || highlightCorrectCount === 0) {
+        console.log("[import-serie] No highlights found, trying text-based correction format (QCM N : ABC / VRAI/FAUX)");
+
+        // Use mammoth raw text for simpler parsing
+        const { value: rawText } = await mammoth.extractRawText({ buffer });
+        const lines = rawText.split(/\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+
+        const textParsed: CorrectionQ[] = [];
+        let currentCorrectLetters: string[] = [];
+        let currentVraiFaux: boolean[] = [];
+
+        const flushCorrectionQ = () => {
+          if (currentCorrectLetters.length > 0) {
+            // Mode 1: letters after QCM header (e.g., "QCM 1 : CE")
+            textParsed.push({
+              options: LABELS.map(l => ({ label: l, is_correct: currentCorrectLetters.includes(l) })),
+            });
+          } else if (currentVraiFaux.length >= 3) {
+            // Mode 2: VRAI/FAUX lines
+            textParsed.push({
+              options: currentVraiFaux.slice(0, 5).map((v, idx) => ({ label: LABELS[idx], is_correct: v })),
+            });
+          }
+          currentCorrectLetters = [];
+          currentVraiFaux = [];
+        };
+
+        for (const line of lines) {
+          // Match "QCM N : CE" or "QCM N- ABE" or "QCM N – ABCDE"
+          const qcmCorrMatch = line.match(/^\s*\ufeff?\s*QCM\s+\d+\s*[-:.–—]\s*([A-E\s,]+)$/i);
+          if (qcmCorrMatch) {
+            flushCorrectionQ();
+            const letters = qcmCorrMatch[1].replace(/[\s,]+/g, "").toUpperCase().split("").filter((c: string) => /^[A-E]$/.test(c));
+            currentCorrectLetters = letters;
+            continue;
+          }
+
+          // Match "QCM N : text" (question header without answer letters — skip)
+          const qcmHeaderMatch = line.match(/^\s*\ufeff?\s*QCM\s+\d+\s*[-:.–—]/i);
+          if (qcmHeaderMatch) {
+            flushCorrectionQ();
+            continue;
+          }
+
+          // Match VRAI/FAUX lines
+          const vraiMatch = line.match(/^(?:[A-E]\s*[.):]?\s*)?VRAI/i);
+          const fauxMatch = line.match(/^(?:[A-E]\s*[.):]?\s*)?FAUX/i);
+          if (vraiMatch) { currentVraiFaux.push(true); continue; }
+          if (fauxMatch) { currentVraiFaux.push(false); continue; }
+        }
+        flushCorrectionQ();
+
+        if (textParsed.length > 0 && textParsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0) > 0) {
+          console.log(`[import-serie] Text-based correction: ${textParsed.length} questions, ${textParsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0)} correct answers`);
+          parsed.length = 0;
+          parsed.push(...textParsed);
+        }
+      }
 
       if (parsed.length === 0) {
         return NextResponse.json({ error: "Aucune question trouvée dans la correction." }, { status: 422 });
