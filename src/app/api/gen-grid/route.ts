@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import * as path from "path";
 import { promises as fs } from "fs";
+import sharp from "sharp";
 
 export const maxDuration = 30;
 
@@ -39,13 +40,14 @@ export async function POST(req: NextRequest) {
     const F = await doc.embedFont(StandardFonts.Helvetica);
     const B = await doc.embedFont(StandardFonts.HelveticaBold);
 
-    // Load logo
+    // Load B&W SVG logo → convert to PNG via sharp
     let logo = null;
     try {
-      const logoPath = path.join(process.cwd(), "public", "ds-logo-2026.png");
-      const logoBytes = await fs.readFile(logoPath);
-      logo = await doc.embedPng(logoBytes);
-    } catch { /* logo not found, skip */ }
+      const svgPath = path.join(process.cwd(), "public", "ds-logo-2026-bw.svg");
+      const svgBuf = await fs.readFile(svgPath);
+      const pngBuf = await sharp(svgBuf).resize({ height: 200 }).png().toBuffer();
+      logo = await doc.embedPng(pngBuf);
+    } catch (e) { console.error("[gen-grid] logo error", e); }
 
     let y = PH;
 
@@ -57,13 +59,15 @@ export async function POST(req: NextRequest) {
     const barH = mm(16);
     page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, borderWidth: 1, borderColor: BLACK, color: WHITE });
 
-    // Logo (left) — skip PNG (has navy background), use text instead for B&W
-    page.drawText("DIPLOMA SANT\u00C9", {
-      x: MX + mm(3), y: y - barH + (barH - 12) / 2 + 2, size: 12, font: B, color: BLACK,
-    });
-    page.drawText("la pr\u00E9pa m\u00E9decine", {
-      x: MX + mm(3), y: y - barH + (barH - 12) / 2 - 8, size: 7, font: F, color: GRAY,
-    });
+    // Logo (left) — B&W SVG rendered as PNG
+    if (logo) {
+      const logoH = barH - mm(3);
+      const logoW = logoH * (logo.width / logo.height);
+      page.drawImage(logo, {
+        x: MX + mm(2), y: y - barH + (barH - logoH) / 2,
+        width: logoW, height: logoH,
+      });
+    }
 
     // Year (right)
     const yearText = academicYear || "2026 - 2027";
@@ -87,12 +91,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Info line (centered, lower line)
+    // Info line (centered, lower line) — prominent
     const info = [ueCode, subjectName, examDate].filter(Boolean).join("  \u2014  ");
     if (info) {
-      const iw = F.widthOfTextAtSize(info, 7.5);
+      const iw = B.widthOfTextAtSize(info, 9);
       page.drawText(info, {
-        x: PW / 2 - iw / 2, y: y - mm(10), size: 7.5, font: F, color: GRAY,
+        x: PW / 2 - iw / 2, y: y - mm(10.5), size: 9, font: B, color: BLACK,
       });
     }
 
@@ -108,7 +112,7 @@ export async function POST(req: NextRequest) {
     // NOM
     page.drawText("NOM", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
     page.drawRectangle({
-      x: MX + mm(14), y: y - mm(1.5), width: mm(50), height: fH,
+      x: MX + mm(14), y: y - mm(1.5), width: mm(80), height: fH,
       borderWidth: 0.4, borderColor: BLACK, color: WHITE,
     });
     y -= fH + mm(2);
@@ -116,7 +120,7 @@ export async function POST(req: NextRequest) {
     // Prénom
     page.drawText("Pr\u00E9nom", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
     page.drawRectangle({
-      x: MX + mm(14), y: y - mm(1.5), width: mm(50), height: fH,
+      x: MX + mm(14), y: y - mm(1.5), width: mm(80), height: fH,
       borderWidth: 0.4, borderColor: BLACK, color: WHITE,
     });
 
