@@ -5,6 +5,7 @@ import { Upload, CheckCircle2, Loader2, Download, RefreshCw } from "lucide-react
 import { removeAllQuestionsFromSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
 import JSZip from "jszip";
+import UTIF from "utif2";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,59 @@ type ExamWorkflowProps = {
 };
 
 const GRID_QUESTION_COUNT = 72;
+
+/**
+ * Compress a DOCX file client-side by converting TIFF images to JPEG.
+ * Uses utif2 to decode TIFF in the browser + OffscreenCanvas to encode JPEG.
+ * 15MB → ~0.6MB typical compression.
+ */
+async function compressDocxClientSide(file: File): Promise<File> {
+  const buf = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  const tiffFiles = Object.keys(zip.files).filter(f => /\.(tiff|tif)$/i.test(f));
+
+  if (tiffFiles.length === 0) return file; // No TIFF, return as-is
+
+  for (const mediaPath of tiffFiles) {
+    try {
+      const tiffBuf = await zip.file(mediaPath)!.async("arraybuffer");
+      const ifds = UTIF.decode(tiffBuf);
+      if (ifds.length === 0) continue;
+      UTIF.decodeImage(tiffBuf, ifds[0]);
+      const rgba = UTIF.toRGBA8(ifds[0]);
+      const w = ifds[0].width;
+      const h = ifds[0].height;
+
+      // Draw on OffscreenCanvas and convert to JPEG
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext("2d")!;
+      const clampedArr = new Uint8ClampedArray(rgba.length);
+      clampedArr.set(rgba);
+      const imgData = new ImageData(clampedArr as any, w, h);
+      ctx.putImageData(imgData, 0, 0);
+      const jpegBlob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.75 });
+
+      // Replace TIFF with JPEG in ZIP
+      const jpegName = mediaPath.replace(/\.(tiff|tif)$/i, ".jpeg");
+      zip.remove(mediaPath);
+      zip.file(jpegName, await jpegBlob.arrayBuffer());
+
+      // Update rels
+      const relsFile = zip.file("word/_rels/document.xml.rels");
+      if (relsFile) {
+        let rels = await relsFile.async("string");
+        rels = rels.replace(mediaPath.replace("word/", ""), jpegName.replace("word/", ""));
+        zip.file("word/_rels/document.xml.rels", rels);
+      }
+    } catch (e) {
+      console.warn("[compress] Skip", mediaPath, e);
+    }
+  }
+
+  const compressedBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  console.log(`[compress] ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(compressedBlob.size / 1024 / 1024).toFixed(1)}MB (${tiffFiles.length} TIFF converted)`);
+  return new File([compressedBlob], file.name, { type: file.type });
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -131,26 +185,13 @@ export default function ExamWorkflowStepper({
     const formData = new FormData();
     formData.append("serieId", serieId);
 
-    // Large files (>4MB): upload to Storage → compress TIFF→JPEG server-side → import compressed
+    // Large files (>4MB): compress TIFF→JPEG entirely client-side, then send compressed file
     if (file.size > 4 * 1024 * 1024) {
       try {
-        // Step 1: Upload original to Storage
-        const storagePath = await uploadLargeFile(file, serieId);
-        if (!storagePath) { setSujetError("Erreur upload du fichier. Réessayez."); setImportingSujet(false); return; }
-
-        // Step 2: Compress (TIFF→JPEG) server-side
-        const compressRes = await fetch("/api/compress-docx", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ storagePath }),
-        });
-        if (!compressRes.ok) { setSujetError("Erreur compression du fichier"); setImportingSujet(false); return; }
-        const { compressedPath } = await compressRes.json();
-
-        // Step 3: Import from compressed file on Storage
-        formData.append("storagePath", compressedPath);
+        const compressed = await compressDocxClientSide(file);
+        formData.append("file", compressed);
       } catch (e: any) {
-        setSujetError("Erreur: " + e.message); setImportingSujet(false); return;
+        setSujetError("Erreur compression: " + e.message); setImportingSujet(false); return;
       }
     } else {
       formData.append("file", file);
@@ -202,17 +243,10 @@ export default function ExamWorkflowStepper({
 
     if (file.size > 4 * 1024 * 1024) {
       try {
-        const storagePath = await uploadLargeFile(file, serieId);
-        if (!storagePath) { setCorrectionError("Erreur upload du fichier. Réessayez."); setImportingCorrection(false); return; }
-        const compressRes = await fetch("/api/compress-docx", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ storagePath }),
-        });
-        if (!compressRes.ok) { setCorrectionError("Erreur compression"); setImportingCorrection(false); return; }
-        const { compressedPath } = await compressRes.json();
-        formData.append("storagePath", compressedPath);
+        const compressed = await compressDocxClientSide(file);
+        formData.append("file", compressed);
       } catch (e: any) {
-        setCorrectionError("Erreur: " + e.message); setImportingCorrection(false); return;
+        setCorrectionError("Erreur compression: " + e.message); setImportingCorrection(false); return;
       }
     } else {
       formData.append("file", file);
