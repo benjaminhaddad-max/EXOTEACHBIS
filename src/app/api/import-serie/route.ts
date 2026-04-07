@@ -1508,6 +1508,36 @@ export async function POST(req: NextRequest) {
         .order("order_index");
       const existingIds = (sqData ?? []).map((r: any) => r.question_id).filter(Boolean);
 
+      // Extract correction images from mammoth HTML (images between question blocks)
+      const { value: corrHtml } = await mammoth.convertToHtml({ buffer });
+      const correctionImages: (string | null)[] = [];
+      {
+        // Split HTML by question headers to find images per question
+        const qHeaderRegex = /(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]/i;
+        const allElems: { text: string; raw: string }[] = [];
+        const elemRx = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+        let em;
+        while ((em = elemRx.exec(corrHtml)) !== null) {
+          allElems.push({ raw: em[1], text: em[1].replace(/<[^>]+>/g, " ").trim() });
+        }
+
+        let currentQIdx = -1;
+        const imgsByQ: Map<number, string> = new Map();
+        for (const el of allElems) {
+          if (qHeaderRegex.test(el.text)) { currentQIdx++; continue; }
+          if (currentQIdx >= 0 && !imgsByQ.has(currentQIdx)) {
+            const imgMatch = el.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+            if (imgMatch && el.text.replace(/\[image\]/g, "").trim().length < 10) {
+              imgsByQ.set(currentQIdx, imgMatch[1]);
+            }
+          }
+        }
+        for (let i = 0; i < parsed.length; i++) {
+          correctionImages.push(imgsByQ.get(i) ?? null);
+        }
+        console.log(`[import-serie] Correction images found: ${imgsByQ.size}/${parsed.length}`);
+      }
+
       // Update correct answers on existing questions
       let updated = 0;
       for (let i = 0; i < Math.min(parsed.length, existingIds.length); i++) {
@@ -1524,6 +1554,16 @@ export async function POST(req: NextRequest) {
             .eq("question_id", qId)
             .eq("label", opt.label);
         }
+
+        // Upload correction image if present
+        const corrImg = correctionImages[i];
+        if (corrImg) {
+          const imgUrl = await uploadBase64Image(supabase, corrImg, qId, 99);
+          if (imgUrl) {
+            await supabase.from("questions").update({ explanation_image_url: imgUrl }).eq("id", qId);
+          }
+        }
+
         if (p.options.some(o => o.is_correct)) updated++;
       }
 
