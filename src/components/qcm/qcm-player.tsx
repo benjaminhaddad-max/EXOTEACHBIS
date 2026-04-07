@@ -585,12 +585,29 @@ function PlayingScreen({
               return (
                 <React.Fragment key={q.id}>
                   {sectionInfo && (
-                    <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm">
-                      <h3 className="text-sm font-bold text-blue-900 mb-2">{sectionInfo.title}</h3>
+                    <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm space-y-3">
+                      {sectionInfo.title && <h3 className="text-sm font-bold text-blue-900">{sectionInfo.title}</h3>}
                       {sectionInfo.intro_text && (
-                        <p className="text-xs text-blue-800/80 leading-relaxed mb-3">
-                          <MathText text={sectionInfo.intro_text} className="text-xs" />
-                        </p>
+                        <div className="space-y-3">
+                          {sectionInfo.intro_text.split("\n").map((line, li) => {
+                            const isFigure = /^Figure\s+\d+/i.test(line.trim());
+                            if (isFigure) {
+                              return (
+                                <div key={li} className="bg-blue-100/50 rounded-lg px-4 py-2.5 border border-blue-200/60">
+                                  <p className="text-xs text-blue-900 leading-relaxed">
+                                    <strong>{line.match(/^Figure\s+\d+\.?/i)?.[0]}</strong>
+                                    {" "}<MathText text={line.replace(/^Figure\s+\d+\.?\s*/i, "")} className="text-xs" />
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return (
+                              <p key={li} className="text-xs text-blue-800/80 leading-relaxed">
+                                <MathText text={line} className="text-xs" />
+                              </p>
+                            );
+                          })}
+                        </div>
                       )}
                       {sectionInfo.image_url && (
                         <QuestionImages imageUrl={sectionInfo.image_url} />
