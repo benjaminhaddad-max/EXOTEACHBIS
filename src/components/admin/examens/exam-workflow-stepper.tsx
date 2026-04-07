@@ -183,6 +183,11 @@ export default function ExamWorkflowStepper({
         imagesUploaded: data.imagesUploaded ?? 0,
         sectionsCreated: data.sectionsCreated ?? 0,
       });
+      // Store the original .docx URL for direct download
+      if (data.sujetDocxUrl) {
+        setPdfUrl(data.sujetDocxUrl + "?t=" + Date.now());
+        onSujetGenerated?.(data.sujetDocxUrl);
+      }
       markComplete(1);
       onQuestionsChanged();
     } catch (err: any) {
@@ -261,33 +266,7 @@ export default function ExamWorkflowStepper({
   // ─── Auto-generate PDF + Grid ────────────────────────────────────────────────
 
   async function autoGenerateOutputs() {
-    // Generate PDF
-    setGeneratingPdf(true);
-    setPdfError(null);
-    try {
-      const res = await fetch("/api/generate-exam-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serieId,
-          institution: pdfForm.institution,
-          academicYear: pdfForm.academicYear,
-          examTitle: pdfForm.examTitle,
-          ueCode: pdfForm.ueCode,
-          subjectName: pdfForm.subjectName,
-          duration: pdfForm.duration,
-          examDate: pdfForm.dateTime,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.url) {
-        setPdfUrl(data.url + "?t=" + Date.now());
-        onSujetGenerated?.(data.url);
-      } else {
-        setPdfError((data.error || "Erreur g\u00E9n\u00E9ration du document") + (data.details ? ` \u2014 ${data.details}` : ""));
-      }
-    } catch (e: any) { setPdfError(e.message); }
-    finally { setGeneratingPdf(false); }
+    // Sujet Word is already stored during import — no generation needed
 
     // Generate Grid (always 72 lines)
     setGeneratingGrid(true);
@@ -679,7 +658,7 @@ export default function ExamWorkflowStepper({
           {(generatingPdf || generatingGrid) && (
             <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
               <Loader2 size={18} className="animate-spin text-[#C9A84C]" />
-              {generatingPdf ? "Génération du sujet Word..." : "Génération de la grille..."}
+              {"Génération de la grille..."}
             </div>
           )}
 

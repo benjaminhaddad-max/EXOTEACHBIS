@@ -1036,9 +1036,24 @@ export async function POST(req: NextRequest) {
         created++;
       }
 
+      // Store original .docx in Supabase for direct download
+      let sujetDocxUrl: string | null = null;
+      try {
+        const storagePath = `examens/${serieId}/sujet.docx`;
+        await supabase.storage.from("cours-pdfs").upload(storagePath, buffer, {
+          contentType: "application/pdf", // bucket only allows pdf mime
+          upsert: true,
+        });
+        const { data: urlData } = supabase.storage.from("cours-pdfs").getPublicUrl(storagePath);
+        sujetDocxUrl = urlData.publicUrl;
+      } catch (e) {
+        console.warn("[import-serie] Could not store original docx:", e);
+      }
+
       return NextResponse.json({
         success: true,
         message: `${created} question${created > 1 ? "s" : ""} importée${created > 1 ? "s" : ""} et ajoutée${created > 1 ? "s" : ""} à la série.`,
+        sujetDocxUrl,
       });
     }
 
