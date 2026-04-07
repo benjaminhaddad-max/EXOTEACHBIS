@@ -61,6 +61,70 @@ function extractDrawingImageRids(paragraphXml: string): string[] {
 }
 
 /**
+ * Add <w:keepNext/> to question and option paragraphs in document.xml
+ * so Word keeps them together on the same page (no mid-question page breaks).
+ */
+function addKeepNextToQuestions(xml: string): string {
+  // Match all <w:p ...>...</w:p> blocks
+  const pBlocks: { start: number; end: number; text: string }[] = [];
+  const pRegex = /<w:p[\s>][\s\S]*?<\/w:p>/g;
+  let m;
+  while ((m = pRegex.exec(xml)) !== null) {
+    // Extract text content from <w:t> elements
+    const tRegex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
+    let text = "";
+    let tm;
+    while ((tm = tRegex.exec(m[0])) !== null) text += tm[1];
+    pBlocks.push({ start: m.index, end: m.index + m[0].length, text: text.trim() });
+  }
+
+  // Classify paragraphs
+  const isQ = (t: string) => /^(Question\s+\d+|\d+[\s.\-)]+\s*\S)/i.test(t);
+  const isOpt = (t: string) => /^[A-F][.\s)\-]/.test(t);
+
+  // Determine which need keepNext: question + all its options except the last
+  const keepNextIndices = new Set<number>();
+  for (let i = 0; i < pBlocks.length; i++) {
+    const t = pBlocks[i].text;
+    if (isQ(t)) {
+      keepNextIndices.add(i);
+    } else if (isOpt(t)) {
+      // Add keepNext if next paragraph is also an option
+      const next = pBlocks[i + 1];
+      if (next && isOpt(next.text)) {
+        keepNextIndices.add(i);
+      }
+      // Last option: no keepNext → allows page break after full question
+    }
+  }
+
+  if (keepNextIndices.size === 0) return xml;
+
+  // Apply modifications in reverse order to preserve string indices
+  let result = xml;
+  const sorted = [...keepNextIndices].sort((a, b) => b - a);
+  for (const idx of sorted) {
+    const { start, end } = pBlocks[idx];
+    let pXml = result.substring(start, end);
+
+    // Skip if already has keepNext
+    if (/<w:keepNext/.test(pXml)) continue;
+
+    if (/<w:pPr[\s>]/.test(pXml)) {
+      // Insert keepNext inside existing pPr
+      pXml = pXml.replace(/(<w:pPr[^>]*>)/, "$1<w:keepNext/>");
+    } else {
+      // No pPr — add one after the opening <w:p ...> tag
+      pXml = pXml.replace(/(<w:p[^>]*>)/, "$1<w:pPr><w:keepNext/></w:pPr>");
+    }
+
+    result = result.substring(0, start) + pXml + result.substring(end);
+  }
+
+  return result;
+}
+
+/**
  * Parse word/_rels/document.xml.rels to build rId → target path mapping.
  */
 function parseRelationships(relsXml: string): Record<string, string> {
@@ -1036,18 +1100,31 @@ export async function POST(req: NextRequest) {
         created++;
       }
 
-      // Store original .docx in Supabase for direct download
+      // Fix page breaks: add keepNext to question+option paragraphs so they don't split
+      try {
+        const docXmlFile = zip.file("word/document.xml");
+        if (docXmlFile) {
+          let docXml = await docXmlFile.async("string");
+          docXml = addKeepNextToQuestions(docXml);
+          zip.file("word/document.xml", docXml);
+        }
+      } catch (e) {
+        console.warn("[import-serie] Could not fix page breaks:", e);
+      }
+
+      // Store cleaned .docx in Supabase for direct download
       let sujetDocxUrl: string | null = null;
       try {
+        const cleanedBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
         const storagePath = `examens/${serieId}/sujet.docx`;
-        await supabase.storage.from("cours-pdfs").upload(storagePath, buffer, {
+        await supabase.storage.from("cours-pdfs").upload(storagePath, cleanedBuffer, {
           contentType: "application/pdf", // bucket only allows pdf mime
           upsert: true,
         });
         const { data: urlData } = supabase.storage.from("cours-pdfs").getPublicUrl(storagePath);
         sujetDocxUrl = urlData.publicUrl;
       } catch (e) {
-        console.warn("[import-serie] Could not store original docx:", e);
+        console.warn("[import-serie] Could not store docx:", e);
       }
 
       return NextResponse.json({
