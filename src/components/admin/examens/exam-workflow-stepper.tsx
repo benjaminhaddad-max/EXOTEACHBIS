@@ -74,13 +74,22 @@ export default function ExamWorkflowStepper({
   onQuestionsChanged,
   onSujetGenerated,
 }: ExamWorkflowProps) {
-  // Auto-detect completed steps from DB state
-  const initialSteps = new Set<number>();
-  if (questionCount > 0) initialSteps.add(1);
-  if (hasCorrections) { initialSteps.add(1); initialSteps.add(2); }
+  const [currentStep, setCurrentStep] = useState(1);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
-  const [currentStep, setCurrentStep] = useState(hasCorrections ? 2 : (questionCount > 0 ? 2 : 1));
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(initialSteps);
+  // Auto-detect completed steps when props change (questions loaded async)
+  useEffect(() => {
+    const steps = new Set<number>();
+    if (questionCount > 0) steps.add(1);
+    if (hasCorrections) { steps.add(1); steps.add(2); }
+    if (steps.size > 0) {
+      setCompletedSteps(prev => {
+        const merged = new Set([...prev, ...steps]);
+        return merged.size !== prev.size ? merged : prev;
+      });
+      if (questionCount > 0 && currentStep === 1) setCurrentStep(2);
+    }
+  }, [questionCount, hasCorrections]);
 
   // Step 1 state
   const [importing, setImporting] = useState(false);
