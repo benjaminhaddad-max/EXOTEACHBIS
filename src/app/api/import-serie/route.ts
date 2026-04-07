@@ -1318,7 +1318,18 @@ export async function POST(req: NextRequest) {
     if (directXml) {
       console.log(`[import-serie] Direct XML mode — skipping mammoth, XML: ${(directXml.length / 1024).toFixed(0)} KB`);
 
-      const { questions: parsed, sections: parsedSections } = await parseDocx("", directXml);
+      // Convert XML paragraphs to fake HTML so all parsers can work on them
+      const wpRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+      let wpm: RegExpExecArray | null;
+      const htmlParts: string[] = [];
+      while ((wpm = wpRegex.exec(directXml)) !== null) {
+        const text = extractParagraphText(wpm[1]).trim();
+        if (text.length > 0) htmlParts.push(`<p>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`);
+      }
+      const fakeHtml = htmlParts.join("\n");
+      console.log(`[import-serie] Converted XML to ${htmlParts.length} paragraphs (${(fakeHtml.length / 1024).toFixed(0)} KB)`);
+
+      const { questions: parsed, sections: parsedSections } = await parseDocx(fakeHtml, directXml);
       if (parsed.length === 0) {
         return NextResponse.json({ error: "Aucune question trouvée dans le fichier." }, { status: 422 });
       }
