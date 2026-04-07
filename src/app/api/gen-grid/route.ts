@@ -96,10 +96,10 @@ export async function POST(req: NextRequest) {
     const dRows = 8;
     const dGridW = dCols * (dBox + dGap) - dGap;
     const dGridX = MX + CW - dGridW;
-    let dy = sectionTop;
+    let dy = sectionTop - mm(0.5);
 
-    page.drawText("N\u00B0 \u00E9tudiant", { x: dGridX, y: dy + mm(0.5), size: 5.5, font: B, color: BLACK });
-    dy -= mm(2.5);
+    page.drawText("N\u00B0 \u00E9tudiant", { x: dGridX, y: dy, size: 5.5, font: B, color: BLACK });
+    dy -= mm(3);
 
     // Column headers 0-9
     for (let d = 0; d < dCols; d++) {
