@@ -54,9 +54,9 @@ export async function POST(req: NextRequest) {
         x: MX + CW - aw - mm(2), y: y - barH + mm(1.5), size: 7, font: F, color: GOLD,
       });
     }
-    y -= barH + mm(1);
+    y -= barH + mm(2);
 
-    // Title
+    // Title (more space after bar so it doesn't overlap)
     if (examTitle) {
       let ts = 9;
       while (ts > 5 && B.widthOfTextAtSize(examTitle, ts) > CW - mm(4)) ts -= 0.5;
@@ -76,18 +76,55 @@ export async function POST(req: NextRequest) {
     page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
     y -= mm(1.5);
 
-    // NOM / Prénom / N° étudiant
+    // NOM / Prénom (left) + N° étudiant digit grid (right)
     const fH = mm(5);
+    const sectionTop = y;
+
+    // NOM
     page.drawText("NOM", { x: MX, y: y - 0.5, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(10), y: y - mm(1.5), width: mm(40), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    page.drawRectangle({ x: MX + mm(10), y: y - mm(1.5), width: mm(50), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    y -= fH + mm(1.5);
 
-    page.drawText("Pr\u00E9nom", { x: MX + mm(53), y: y - 0.5, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(66), y: y - mm(1.5), width: mm(40), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    // Prénom
+    page.drawText("Pr\u00E9nom", { x: MX, y: y - 0.5, size: 7, font: B, color: BLACK });
+    page.drawRectangle({ x: MX + mm(14), y: y - mm(1.5), width: mm(46), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
 
-    page.drawText("N\u00B0 \u00E9tudiant", { x: MX + mm(109), y: y - 0.5, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(126), y: y - mm(1.5), width: mm(35), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    // N° étudiant: digit grid on the right (8 rows x 10 columns: 0-9)
+    const dBox = mm(2.8);
+    const dGap = mm(0.3);
+    const dCols = 10;
+    const dRows = 8;
+    const dGridW = dCols * (dBox + dGap) - dGap;
+    const dGridX = MX + CW - dGridW;
+    let dy = sectionTop;
 
-    y -= fH + mm(2);
+    page.drawText("N\u00B0 \u00E9tudiant", { x: dGridX, y: dy + mm(0.5), size: 5.5, font: B, color: BLACK });
+    dy -= mm(2.5);
+
+    // Column headers 0-9
+    for (let d = 0; d < dCols; d++) {
+      const dx = dGridX + d * (dBox + dGap);
+      const dw = B.widthOfTextAtSize(String(d), 5.5);
+      page.drawText(String(d), { x: dx + dBox / 2 - dw / 2, y: dy, size: 5.5, font: B, color: BLACK });
+    }
+    dy -= mm(2);
+
+    // Grid cells
+    for (let row = 0; row < dRows; row++) {
+      for (let d = 0; d < dCols; d++) {
+        page.drawRectangle({
+          x: dGridX + d * (dBox + dGap), y: dy - row * (dBox + dGap),
+          width: dBox, height: dBox,
+          borderWidth: 0.3, borderColor: BLACK, color: WHITE,
+        });
+      }
+    }
+
+    // Move Y below both sections
+    const belowFields = y - mm(1.5);
+    const belowGrid = dy - dRows * (dBox + dGap) - mm(0.5);
+    y = Math.min(belowFields, belowGrid) - mm(1);
+
     page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
     y -= mm(1);
 
