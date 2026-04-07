@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, CheckCircle2, Loader2, Download, RefreshCw } from "lucide-react";
 import { removeAllQuestionsFromSerie } from "@/app/(admin)/admin/exercices/actions";
-import { createClient } from "@/lib/supabase/client";
+// Large file upload uses signed URLs from /api/upload-signed-url
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -99,13 +99,27 @@ export default function ExamWorkflowStepper({
     }
   }, [correctionDone, questionCount]);
 
-  // ─── Upload large file to Storage first, then send URL to API ───────────────
-  async function uploadToStorage(file: File, path: string): Promise<string | null> {
-    const supabase = createClient();
-    const { error } = await supabase.storage.from("cours-pdfs").upload(path, file, { upsert: true });
-    if (error) { console.error("[upload]", error); return null; }
-    const { data } = supabase.storage.from("cours-pdfs").getPublicUrl(path);
-    return data.publicUrl;
+  // ─── Upload large file via signed URL (server creates the signed URL) ───────
+  async function uploadLargeFile(file: File, serieId: string): Promise<string | null> {
+    try {
+      // Step 1: Get a signed upload URL from the server
+      const res = await fetch("/api/upload-signed-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serieId, fileName: file.name }),
+      });
+      if (!res.ok) return null;
+      const { signedUrl, storagePath } = await res.json();
+
+      // Step 2: Upload directly to Storage using the signed URL
+      const uploadRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadRes.ok) return null;
+      return storagePath;
+    } catch (e) { console.error("[upload-large]", e); return null; }
   }
 
   // ─── Import sujet ───────────────────────────────────────────────────────────
@@ -116,12 +130,10 @@ export default function ExamWorkflowStepper({
     const formData = new FormData();
     formData.append("serieId", serieId);
 
-    // Large files (>4MB): upload to Storage first, send URL instead of file body
+    // Large files (>4MB): upload to Storage first via signed URL, send path to API
     if (file.size > 4 * 1024 * 1024) {
-      const storagePath = `examens/${serieId}/upload_${Date.now()}.docx`;
-      const storageUrl = await uploadToStorage(file, storagePath);
-      if (!storageUrl) { setSujetError("Erreur upload du fichier (trop volumineux)"); setImportingSujet(false); return; }
-      formData.append("fileUrl", storageUrl);
+      const storagePath = await uploadLargeFile(file, serieId);
+      if (!storagePath) { setSujetError("Erreur upload du fichier volumineux. Réessayez."); setImportingSujet(false); return; }
       formData.append("storagePath", storagePath);
     } else {
       formData.append("file", file);
@@ -172,10 +184,8 @@ export default function ExamWorkflowStepper({
     formData.append("serieId", serieId);
 
     if (file.size > 4 * 1024 * 1024) {
-      const storagePath = `examens/${serieId}/corr_${Date.now()}.docx`;
-      const storageUrl = await uploadToStorage(file, storagePath);
-      if (!storageUrl) { setCorrectionError("Erreur upload du fichier (trop volumineux)"); setImportingCorrection(false); return; }
-      formData.append("fileUrl", storageUrl);
+      const storagePath = await uploadLargeFile(file, serieId);
+      if (!storagePath) { setCorrectionError("Erreur upload du fichier volumineux. Réessayez."); setImportingCorrection(false); return; }
       formData.append("storagePath", storagePath);
     } else {
       formData.append("file", file);
