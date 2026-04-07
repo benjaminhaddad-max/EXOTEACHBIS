@@ -418,6 +418,7 @@ function PlayingScreen({
   onSubmit,
   sections,
   questionSectionMap,
+  isAdminPreview,
 }: {
   questions: QuestionWithOptions[];
   serie: Serie;
@@ -433,6 +434,7 @@ function PlayingScreen({
   onSubmit: () => void;
   sections?: SectionInfo[];
   questionSectionMap?: Record<string, string>;
+  isAdminPreview?: boolean;
 }) {
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -1179,6 +1181,7 @@ export function QcmPlayer({ serie, questions, userId, sections, questionSectionM
         onSubmit={handleSubmit}
         sections={sections}
         questionSectionMap={questionSectionMap}
+        isAdminPreview={isAdminPreview}
       />
     );
   }
