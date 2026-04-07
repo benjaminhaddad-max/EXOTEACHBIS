@@ -629,8 +629,8 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
     // Check for image in this element
     const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
 
-    // Detect "QCM N :" / "QCM N -" / "QCM N –" / "QCM N." patterns (with optional BOM)
-    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*[-:.–—]\s*(.*)/iu);
+    // Detect question headers: "QCM N :", "Question N°1 :", "Question 1 :", etc.
+    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*(?:QCM|Question)\s+(?:N°\s*)?(\d+)\s*[-:.–—]\s*(.*)/iu);
     if (qcmMatch) {
       flushQuestion();
 
@@ -687,6 +687,16 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
       if (/^EXERCICE$/i.test(trimmed)) {
         // Clear any admin header text collected before this
         pendingIntroLines = [];
+        continue;
+      }
+      // "Exercice N : Title" → start a new section context
+      const exoMatch = trimmed.match(/^Exercice\s+\d+\s*[-:.–—]\s*(.*)/i);
+      if (exoMatch) {
+        // Flush any previous context and start fresh for this exercise
+        if (pendingImages.length > 0 || pendingIntroLines.length > 0) {
+          // Don't lose existing context — it'll be picked up by next QCM
+        }
+        pendingIntroLines = [trimmed];
         continue;
       }
       // After EXERCICE or between question groups, collect context text
@@ -1368,7 +1378,7 @@ export async function POST(req: NextRequest) {
 
         for (const line of lines) {
           // Match "QCM N : CE" or "QCM N- ABE" or "QCM N – ABCDE"
-          const qcmCorrMatch = line.match(/^\s*\ufeff?\s*QCM\s+\d+\s*[-:.–—]\s*([A-E\s,]+)$/i);
+          const qcmCorrMatch = line.match(/^\s*\ufeff?\s*(?:QCM|Question)\s+(?:N°\s*)?\d+\s*[-:.–—]\s*([A-E\s,]+)$/i);
           if (qcmCorrMatch) {
             flushCorrectionQ();
             const letters = qcmCorrMatch[1].replace(/[\s,]+/g, "").toUpperCase().split("").filter((c: string) => /^[A-E]$/.test(c));
@@ -1376,8 +1386,8 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          // Match "QCM N : text" (question header without answer letters — skip)
-          const qcmHeaderMatch = line.match(/^\s*\ufeff?\s*QCM\s+\d+\s*[-:.–—]/i);
+          // Match "QCM N : text" or "Question N°X : text" (question header without answer letters — skip)
+          const qcmHeaderMatch = line.match(/^\s*\ufeff?\s*(?:QCM|Question)\s+(?:N°\s*)?\d+\s*[-:.–—]/i);
           if (qcmHeaderMatch) {
             flushCorrectionQ();
             continue;
