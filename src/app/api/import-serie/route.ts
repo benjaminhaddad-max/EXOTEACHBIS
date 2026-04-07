@@ -1342,51 +1342,72 @@ export async function POST(req: NextRequest) {
       if (!xmlFile) return NextResponse.json({ error: "document.xml introuvable" }, { status: 422 });
       const docXml = await xmlFile.async("string");
 
-      // Inline fast parsing: extract questions + green highlights only
+      // Inline fast parsing: extract questions + highlights (green, yellow, or shading)
       const LABELS = ["A", "B", "C", "D", "E"];
+      const CORRECT_HIGHLIGHTS = new Set(["green", "yellow"]);
+      const CORRECT_FILLS = new Set(["FFFF00", "00FF00", "92D050", "00B050"]); // yellow + green fills
       const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
       let pm: RegExpExecArray | null;
-      const cParas: { text: string; bold: boolean; highlighted: string | null }[] = [];
+      const cParas: { text: string; bold: boolean; highlighted: string | null; hasImage: boolean }[] = [];
       while ((pm = pRegex.exec(docXml)) !== null) {
         const content = pm[1];
         const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
+        const shdMatch = content.match(/w:shd[^>]*w:fill="([^"]+)"/);
         const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
+        const hasImage = content.includes("<w:drawing") || content.includes("<w:pict");
         const texts: string[] = [];
         const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
         let tm;
         while ((tm = tRegex.exec(content)) !== null) texts.push(tm[1]);
-        // Also extract math text
         const mtRegex = /<m:t[^>]*>([^<]*)<\/m:t>/g;
         while ((tm = mtRegex.exec(content)) !== null) texts.push(tm[1]);
         const text = texts.join("").trim();
-        if (text.length > 0) cParas.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null });
+        // Determine if highlighted (highlight tag or shading fill)
+        let hl = highlightMatch?.[1] ?? null;
+        if (!hl && shdMatch) {
+          const fill = shdMatch[1].toUpperCase();
+          if (CORRECT_FILLS.has(fill)) hl = "yellow";
+        }
+        if (text.length > 0 || hasImage) cParas.push({ text, bold: isBold, highlighted: hl, hasImage });
       }
 
-      // Find Question markers
+      // Find Question markers — support both "Question" bold and "Question N°X" / "QCM X" patterns
       const cqMarkers: number[] = [];
       for (let j = 0; j < cParas.length; j++) {
-        if (cParas[j].bold && /^question$/i.test(cParas[j].text.trim())) cqMarkers.push(j);
+        const t = cParas[j].text.trim();
+        if (cParas[j].bold && /^question$/i.test(t)) cqMarkers.push(j);
+        else if (/^(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]/i.test(t)) cqMarkers.push(j);
       }
 
-      // Extract questions with is_correct + justification from highlights
-      type CorrectionQ = { options: { label: string; is_correct: boolean; justification?: string }[] };
+      // Extract questions with is_correct from highlights
+      type CorrectionQ = { options: { label: string; is_correct: boolean; justification?: string }[]; correctionImageIdx?: number };
       const parsed: CorrectionQ[] = [];
       for (let qi = 0; qi < cqMarkers.length; qi++) {
         const start = cqMarkers[qi] + 1;
         const end = qi + 1 < cqMarkers.length ? cqMarkers[qi + 1] : cParas.length;
-        const items = [];
+        // Collect option-like items (starting with A./B. or just non-bold short text)
+        const items: typeof cParas[0][] = [];
+        let correctionImageIdx: number | undefined;
         for (let j = start; j < end; j++) {
-          if (cParas[j].bold) continue;
-          if (cParas[j].text.trim().length < 2) continue;
-          items.push(cParas[j]);
+          const p = cParas[j];
+          // Skip bold lines (sub-headers)
+          if (p.bold && p.text.length > 3) continue;
+          // Detect option lines (start with A./B./etc or are short non-bold)
+          if (/^\s*[A-E]\s*[.):\t]/.test(p.text) || (p.text.length > 1 && items.length < 5)) {
+            items.push(p);
+          }
+          // First image after options = correction image
+          if (p.hasImage && items.length > 0 && !correctionImageIdx) {
+            correctionImageIdx = j;
+          }
         }
         if (items.length < 2) continue;
-        const optionItems = items.length <= 5 ? items : items.slice(Math.max(0, items.length - 5));
-        const options = optionItems.slice(0, 5).map((p, idx) => ({
+        const optionItems = items.slice(0, 5);
+        const options = optionItems.map((p, idx) => ({
           label: LABELS[idx],
-          is_correct: p.highlighted === "green",
+          is_correct: CORRECT_HIGHLIGHTS.has(p.highlighted ?? ""),
         }));
-        if (options.length >= 2) parsed.push({ options });
+        if (options.length >= 2) parsed.push({ options, correctionImageIdx });
       }
 
       console.log(`[import-serie] Correction highlight parse: ${parsed.length} questions, ${parsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0)} correct answers`);
