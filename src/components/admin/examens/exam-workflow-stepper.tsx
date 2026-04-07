@@ -47,6 +47,21 @@ export default function ExamWorkflowStepper({
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const fileInputCorrection = useRef<HTMLInputElement>(null);
 
+  const [dragOverSujet, setDragOverSujet] = useState(false);
+  const [dragOverCorrection, setDragOverCorrection] = useState(false);
+
+  const onDrop = (handler: (f: File) => void, setDrag: (v: boolean) => void) =>
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDrag(false);
+      const f = e.dataTransfer.files?.[0];
+      if (f && f.name.endsWith(".docx")) handler(f);
+    };
+  const onDragOver = (setDrag: (v: boolean) => void) =>
+    (e: React.DragEvent) => { e.preventDefault(); setDrag(true); };
+  const onDragLeave = (setDrag: (v: boolean) => void) =>
+    () => setDrag(false);
+
   const [generatingGrid, setGeneratingGrid] = useState(false);
   const [gridUrl, setGridUrl] = useState<string | null>(null);
   const [gridError, setGridError] = useState<string | null>(null);
@@ -235,9 +250,12 @@ export default function ExamWorkflowStepper({
               <input ref={fileInputSujet} type="file" accept=".docx" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportSujet(f); }} />
               <button onClick={() => fileInputSujet.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5 px-4 py-6 text-sm text-[#C9A84C] transition hover:border-[#C9A84C]/70 hover:bg-[#C9A84C]/10">
+                onDrop={onDrop(handleImportSujet, setDragOverSujet)}
+                onDragOver={onDragOver(setDragOverSujet)}
+                onDragLeave={onDragLeave(setDragOverSujet)}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm transition ${dragOverSujet ? "border-[#C9A84C] bg-[#C9A84C]/20 text-[#C9A84C]" : "border-[#C9A84C]/40 bg-[#C9A84C]/5 text-[#C9A84C] hover:border-[#C9A84C]/70 hover:bg-[#C9A84C]/10"}`}>
                 <Upload size={18} />
-                Fichier sujet .docx
+                {dragOverSujet ? "Déposer ici" : "Fichier sujet .docx"}
               </button>
             </>
           )}
@@ -277,9 +295,12 @@ export default function ExamWorkflowStepper({
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportCorrection(f); }} />
               <button onClick={() => fileInputCorrection.current?.click()}
                 disabled={!sujetDone}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5 px-4 py-6 text-sm text-[#C9A84C] transition hover:border-[#C9A84C]/70 hover:bg-[#C9A84C]/10 disabled:opacity-30 disabled:cursor-not-allowed">
+                onDrop={onDrop(handleImportCorrection, setDragOverCorrection)}
+                onDragOver={onDragOver(setDragOverCorrection)}
+                onDragLeave={onDragLeave(setDragOverCorrection)}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm transition disabled:opacity-30 disabled:cursor-not-allowed ${dragOverCorrection ? "border-[#C9A84C] bg-[#C9A84C]/20 text-[#C9A84C]" : "border-[#C9A84C]/40 bg-[#C9A84C]/5 text-[#C9A84C] hover:border-[#C9A84C]/70 hover:bg-[#C9A84C]/10"}`}>
                 <Upload size={18} />
-                Fichier correction .docx
+                {dragOverCorrection ? "Déposer ici" : "Fichier correction .docx"}
               </button>
             </>
           )}
