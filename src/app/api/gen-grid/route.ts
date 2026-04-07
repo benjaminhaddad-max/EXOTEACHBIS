@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    y -= barH + mm(3);
+    y -= barH + mm(5);
 
     // ═══════════════════════════════════════════════════════════════════
     // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
