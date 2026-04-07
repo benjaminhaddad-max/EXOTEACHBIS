@@ -1426,8 +1426,18 @@ export async function POST(req: NextRequest) {
       if (parsedSections.length > 0) {
         for (let si = 0; si < parsedSections.length; si++) {
           const s = parsedSections[si];
+          // Upload section images if any
+          let secImgUrl: string | null = null;
+          if (s.images.length > 0) {
+            const urls: string[] = [];
+            for (let ii = 0; ii < s.images.length; ii++) {
+              const url = await uploadBase64Image(supabase, s.images[ii], `sec_${si}_${Date.now()}_${ii}`, ii);
+              urls.push(url || s.images[ii]);
+            }
+            secImgUrl = urls.length === 1 ? urls[0] : JSON.stringify(urls);
+          }
           const { data: secData } = await supabase.from("series_sections").insert({
-            series_id: serieId, title: s.title, intro_text: s.intro_text || null, order_index: si,
+            series_id: serieId, title: s.title, intro_text: s.intro_text || null, image_url: secImgUrl, order_index: si,
           }).select("id").single();
           if (secData) sectionIdMap[si] = secData.id;
         }
@@ -1802,12 +1812,16 @@ export async function POST(req: NextRequest) {
     if (parsedSections.length > 0 && existingIds.length === 0) {
       for (let si = 0; si < parsedSections.length; si++) {
         const s = parsedSections[si];
-        // Upload section image if present
+        // Upload ALL section images and store as JSON array
         let sectionImageUrl: string | null = null;
         if (s.images.length > 0) {
-          const tmpId = `section_${si}_${Date.now()}`;
-          sectionImageUrl = await uploadBase64Image(supabase, s.images[0], tmpId, 0);
-          if (!sectionImageUrl) sectionImageUrl = s.images[0]; // fallback to data URI
+          const uploadedUrls: string[] = [];
+          for (let imgIdx = 0; imgIdx < s.images.length; imgIdx++) {
+            const tmpId = `section_${si}_${Date.now()}_${imgIdx}`;
+            const url = await uploadBase64Image(supabase, s.images[imgIdx], tmpId, imgIdx);
+            uploadedUrls.push(url || s.images[imgIdx]); // fallback to data URI
+          }
+          sectionImageUrl = uploadedUrls.length === 1 ? uploadedUrls[0] : JSON.stringify(uploadedUrls);
         }
 
         const { data: secData } = await supabase
