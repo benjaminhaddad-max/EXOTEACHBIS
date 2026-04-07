@@ -636,9 +636,8 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
 
       // First QCM after pending images → create a section
       if (pendingImages.length > 0) {
-        const sectionTitle = pendingCaptions.length > 0
-          ? pendingCaptions[0].substring(0, 80)
-          : pendingIntroLines.length > 0 ? pendingIntroLines[0].substring(0, 80) : "Exercice";
+        // No truncated title — use section intro text for context display
+        const sectionTitle = "";
         const introText = [...pendingIntroLines, ...pendingCaptions].join("\n").trim();
         sections.push({
           title: sectionTitle,
@@ -668,10 +667,8 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
 
     // Image paragraph — buffer as context for next section
     if (imgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
-      // Skip images before any content marker (likely document logo)
-      if (!seenFirstQcm && pendingIntroLines.length === 0 && pendingCaptions.length === 0 && questions.length === 0) {
-        // Check if there's been an "EXERCICE" or similar intro yet
-        // If not, this is probably a header logo — skip it
+      // Skip images before any meaningful content (likely document header logo)
+      if (pendingIntroLines.length === 0 && pendingCaptions.length === 0 && questions.length === 0 && !seenFirstQcm) {
         continue;
       }
       pendingImages.push(imgMatch[1]);
@@ -685,19 +682,23 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
     }
 
     if (!currentQuestion) {
-      // Collect intro/context text before QCMs (e.g., "EXERCICE", exercise intro)
-      if (text.trim().length > 5 && seenFirstQcm) {
-        // Text between question groups → could be intro for next section
-        pendingIntroLines.push(text.trim());
-      } else if (!seenFirstQcm && /exercice|figure/i.test(text.trim())) {
-        pendingIntroLines.push(text.trim());
+      const trimmed = text.trim();
+      // Detect "EXERCICE" marker → start collecting intro from here
+      if (/^EXERCICE$/i.test(trimmed)) {
+        // Clear any admin header text collected before this
+        pendingIntroLines = [];
+        continue;
       }
-      continue;
-    }
-
-    // Figure caption after a QCM (between questions) → buffer for next section
-    if (/^Figure\s+\d+/i.test(text.trim()) && currentQuestion && currentQuestion.options.length > 0) {
-      pendingCaptions.push(text.trim());
+      // After EXERCICE or between question groups, collect context text
+      // Only collect if we have pending images/captions OR we've already started collecting
+      if (trimmed.length > 10 && (pendingImages.length > 0 || pendingCaptions.length > 0 || (seenFirstQcm && pendingIntroLines.length >= 0))) {
+        pendingIntroLines.push(trimmed);
+      } else if (trimmed.length > 20 && !seenFirstQcm) {
+        // Pre-first-QCM: only collect substantial content lines (skip admin headers)
+        if (!/^\d{4}|^(UNIVERSITÉ|INFORMATIONS|RECOMMANDATIONS|À LIRE|Vérifier|Les correcteurs|Aucun candidat|Veiller|Ne pas|Les calculatrices|Les questions sans|Une seule|Merci de|Durée|Le sujet contient|L'épreuve comporte|Concours|BIOLOGIE|CORRECTION)/i.test(trimmed)) {
+          pendingIntroLines.push(trimmed);
+        }
+      }
       continue;
     }
 
@@ -737,9 +738,14 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
     // Skip empty / very short lines
     if (text.trim().length < 3) continue;
 
-    // Text after a question's options → inter-group context (e.g., "Les 20 questions suivantes sont indépendantes")
-    if (currentQuestion && currentQuestion.options.length > 0 && p.tag === "p") {
-      pendingIntroLines.push(text.trim());
+    // Text after a question's options that doesn't look like an option → inter-group context
+    if (currentQuestion && currentQuestion.options.length >= 5 && p.tag === "p" && !/^\s*[A-E]\s*[.):\t]/.test(text)) {
+      // Could be a figure caption or transition text (e.g., "Les 20 questions suivantes sont indépendantes")
+      if (/^Figure\s+\d+/i.test(text.trim())) {
+        pendingCaptions.push(text.trim());
+      } else if (text.trim().length > 10) {
+        pendingIntroLines.push(text.trim());
+      }
       continue;
     }
 
