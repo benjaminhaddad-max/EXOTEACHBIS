@@ -47,6 +47,15 @@ export default async function ProfilPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
+          {profile.student_id && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Num\u00E9ro \u00E9tudiant</p>
+                <p className="text-2xl font-bold font-mono text-blue-900 mt-1">{profile.student_id}</p>
+              </div>
+              <p className="text-xs text-blue-400">Ce num\u00E9ro est votre identifiant sur la plateforme</p>
+            </div>
+          )}
           <ProfilForm profile={profile} />
 
           {/* Recent attempts */}

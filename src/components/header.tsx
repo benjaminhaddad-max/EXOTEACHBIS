@@ -11,10 +11,11 @@ interface BreadcrumbItem {
 
 interface HeaderProps {
   title: string;
+  subtitle?: string;
   breadcrumb?: BreadcrumbItem[];
 }
 
-export function Header({ title, breadcrumb }: HeaderProps) {
+export function Header({ title, subtitle, breadcrumb }: HeaderProps) {
   const { profile } = useUser();
 
   const roleLabel =
@@ -48,6 +49,7 @@ export function Header({ title, breadcrumb }: HeaderProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white/90">{title}</h1>
+          {subtitle && <p className="text-sm text-white/50 mt-0.5">{subtitle}</p>}
           <div className="mt-1.5 h-0.5 w-10 rounded-full" style={{ background: "linear-gradient(90deg, #C9A84C, rgba(201,168,76,0.3))" }} />
         </div>
         <div className="hidden lg:flex items-center gap-3">

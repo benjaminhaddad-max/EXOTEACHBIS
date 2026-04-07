@@ -27,6 +27,7 @@ export interface Profile {
   filiere_id: string | null;
   access_dossier_id: string | null;
   etiquettes: string[];
+  student_id: string | null;
   created_at: string;
   updated_at: string;
   // Relations

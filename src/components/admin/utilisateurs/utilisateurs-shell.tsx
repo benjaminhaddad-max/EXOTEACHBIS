@@ -2012,6 +2012,7 @@ function ComptesView({
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.03)" }}>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Utilisateur</th>
+              <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>N°</th>
               <th className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Rôle</th>
               <th colSpan={3} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.4)" }}>Activité</th>
               <th className="px-4 py-2.5" />
@@ -2040,6 +2041,11 @@ function ComptesView({
                         <p className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{u.email}</p>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.student_id && (
+                      <span className="font-mono text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>{u.student_id}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${rc.bg} ${rc.color}`}>
