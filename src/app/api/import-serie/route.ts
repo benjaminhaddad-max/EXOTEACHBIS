@@ -538,6 +538,130 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
 }
 
 /**
+ * Format 4 : "QCM N :" format (common in university concours blancs)
+ * Questions as "QCM 1 : text" or "QCM 11 : text"
+ * Options as "A. text" / "A) text" / "A\ttext" or plain unlabeled lines
+ */
+function parseQcmLabelFormat(html: string): ParsedQuestion[] {
+  const questions: ParsedQuestion[] = [];
+  const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  const paragraphs: { raw: string; text: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = pRegex.exec(html)) !== null) {
+    paragraphs.push({ raw: m[1], text: stripTags(m[1]) });
+  }
+
+  const LABELS = ["A", "B", "C", "D", "E"];
+  let currentQuestion: ParsedQuestion | null = null;
+  let questionTextLines: string[] = [];
+
+  const flushQuestion = () => {
+    if (!currentQuestion) return;
+    // If question has no options yet, try to extract from collected text lines
+    if (currentQuestion.options.length === 0 && questionTextLines.length >= 2) {
+      // Take up to last 5 non-empty lines as options
+      const nonEmpty = questionTextLines.filter(l => l.trim().length > 2);
+      // Find the split: first line(s) = question text, rest = options
+      // Heuristic: if we have exactly 5 lines, they're all options and text is already set
+      // Otherwise look for lines that start with A./B./etc or assume last 5 are options
+      const optionLines: string[] = [];
+      const textLines: string[] = [];
+      for (const line of nonEmpty) {
+        const optLabelMatch = line.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
+        if (optLabelMatch) {
+          optionLines.push(line);
+        } else {
+          // Could be an unlabeled option or more question text
+          textLines.push(line);
+        }
+      }
+
+      if (optionLines.length >= 3) {
+        // We found labeled options
+        if (textLines.length > 0) {
+          currentQuestion.text = (currentQuestion.text + "\n" + textLines.join("\n")).trim();
+        }
+        for (const ol of optionLines) {
+          const olm = ol.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
+          if (olm) {
+            currentQuestion.options.push({ label: olm[1], text: olm[2].trim(), is_correct: false });
+          }
+        }
+      } else {
+        // Unlabeled options — last 5 (or fewer) non-empty lines are options
+        const optCount = Math.min(5, nonEmpty.length - 1);
+        if (optCount >= 3) {
+          const qTextLines = nonEmpty.slice(0, nonEmpty.length - optCount);
+          const optsRaw = nonEmpty.slice(nonEmpty.length - optCount);
+          if (qTextLines.length > 0) {
+            currentQuestion.text = (currentQuestion.text + "\n" + qTextLines.join("\n")).trim();
+          }
+          optsRaw.forEach((ot, idx) => {
+            // Strip leading label if present
+            const cleaned = ot.replace(/^\s*[A-E]\s*[.):\t]\s*/, "").trim();
+            currentQuestion!.options.push({
+              label: LABELS[idx] || String.fromCharCode(65 + idx),
+              text: cleaned,
+              is_correct: false,
+            });
+          });
+        }
+      }
+    }
+    if (currentQuestion.options.length > 0) {
+      questions.push(currentQuestion);
+    }
+  };
+
+  for (const p of paragraphs) {
+    const text = p.text;
+    const raw = p.raw;
+
+    // Detect "QCM N :" pattern (with optional BOM, spaces, ﻿)
+    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*:\s*(.*)/iu);
+    if (qcmMatch) {
+      flushQuestion();
+      currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [] };
+      questionTextLines = [];
+
+      // Check for image in same paragraph
+      const imgMatch = raw.match(/<img\s+src="(data:image\/[^"]+)"/i);
+      if (imgMatch) currentQuestion.images.push(imgMatch[1]);
+      continue;
+    }
+
+    if (!currentQuestion) continue;
+
+    // Image paragraph
+    const imgMatch = raw.match(/<img\s+src="(data:image\/[^"]+)"/i);
+    if (imgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
+      currentQuestion.images.push(imgMatch[1]);
+      continue;
+    }
+
+    // Try labeled option: "A. text" / "A) text" / "A : text" / "A\ttext"
+    const optMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
+    if (optMatch) {
+      currentQuestion.options.push({
+        label: optMatch[1].toUpperCase(),
+        text: optMatch[2].trim(),
+        is_correct: false,
+      });
+      continue;
+    }
+
+    // Skip empty / very short lines
+    if (text.trim().length < 3) continue;
+
+    // Collect as potential question text or unlabeled option
+    questionTextLines.push(text.trim());
+  }
+
+  flushQuestion();
+  return questions;
+}
+
+/**
  * Extract images per question from mammoth HTML by splitting at "Question" markers
  */
 function extractImagesPerQuestion(html: string): string[][] {
@@ -864,11 +988,12 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
+  const fromQcmLabel = parseQcmLabelFormat(html);
   const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
-  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
+  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} qcmLabel=${fromQcmLabel.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
 
   // Pick whichever format found the most questions
-  const allFormats = [fromTables, fromParagraphs, xmlResult.questions];
+  const allFormats = [fromTables, fromParagraphs, fromQcmLabel, xmlResult.questions];
   const best = allFormats.reduce((b, cur) => cur.length > b.length ? cur : b, [] as ParsedQuestion[]);
 
   // Return sections only if the XML format won
