@@ -91,6 +91,15 @@ export default function ExamWorkflowStepper({
     }
   }, [questionCount, hasCorrections]);
 
+  // Auto-generate documents when both steps are already done (returning to page)
+  const [autoGenDone, setAutoGenDone] = useState(false);
+  useEffect(() => {
+    if (hasCorrections && questionCount > 0 && !autoGenDone && !pdfUrl && !gridUrl && !generatingPdf && !generatingGrid) {
+      setAutoGenDone(true);
+      autoGenerateOutputs().catch(e => console.error("[autoGen on mount]", e));
+    }
+  }, [hasCorrections, questionCount]);
+
   // Step 1 state
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -536,6 +545,27 @@ export default function ExamWorkflowStepper({
   }
 
   function renderStep2() {
+    // If corrections already exist (from DB), show completed state directly
+    const alreadyDone = hasCorrections && !correctionResult && !importingCorrection;
+
+    if (alreadyDone) {
+      return (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-400">
+            <CheckCircle2 size={16} className="mb-1 mr-2 inline" />
+            Correction déjà importée — les documents sont disponibles ci-dessous.
+          </div>
+          <button
+            onClick={() => { setCorrectionResult(null); }}
+            className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors"
+          >
+            <RefreshCw size={12} />
+            Réimporter une correction
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-4">
         <p className="text-sm text-white/60">
