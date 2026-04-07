@@ -542,8 +542,9 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
  * Questions as "QCM 1 : text" or "QCM 11 : text"
  * Options as "A. text" / "A) text" / "A\ttext" or plain unlabeled lines (often in <ol><li>)
  */
-function parseQcmLabelFormat(html: string): ParsedQuestion[] {
+function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const questions: ParsedQuestion[] = [];
+  const sections: ParsedSection[] = [];
   // Extract both <p> and <li> elements to capture options in ordered lists
   const elemRegex = /<(p|li)[^>]*>([\s\S]*?)<\/(?:p|li)>/gi;
   const paragraphs: { raw: string; text: string; tag: string }[] = [];
@@ -616,6 +617,10 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
 
   let liCount = 0; // track consecutive <li> items for unlabeled options
   let pendingImages: string[] = []; // images before the next QCM (context figures)
+  let pendingCaptions: string[] = []; // "Figure N." captions
+  let pendingIntroLines: string[] = []; // intro text before figures
+  let currentSectionIdx: number | undefined; // current section index for questions
+  let seenFirstQcm = false; // to skip header logo before any content
 
   for (const p of paragraphs) {
     const text = p.text;
@@ -628,29 +633,73 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
     const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*[-:.–—]\s*(.*)/iu);
     if (qcmMatch) {
       flushQuestion();
-      currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [...pendingImages] };
-      pendingImages = [];
+
+      // First QCM after pending images → create a section
+      if (pendingImages.length > 0) {
+        const sectionTitle = pendingCaptions.length > 0
+          ? pendingCaptions[0].substring(0, 80)
+          : pendingIntroLines.length > 0 ? pendingIntroLines[0].substring(0, 80) : "Exercice";
+        const introText = [...pendingIntroLines, ...pendingCaptions].join("\n").trim();
+        sections.push({
+          title: sectionTitle,
+          intro_text: introText,
+          images: [...pendingImages],
+        });
+        currentSectionIdx = sections.length - 1;
+        pendingImages = [];
+        pendingCaptions = [];
+        pendingIntroLines = [];
+      } else if (pendingIntroLines.length > 0) {
+        // Intro text without images (e.g., "Les 20 questions suivantes sont indépendantes")
+        // → reset section, these questions are standalone
+        currentSectionIdx = undefined;
+        pendingIntroLines = [];
+        pendingCaptions = [];
+      }
+
+      currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [], sectionIndex: currentSectionIdx };
       questionTextLines = [];
       liCount = 0;
 
       if (imgMatch) currentQuestion.images.push(imgMatch[1]);
+      seenFirstQcm = true;
       continue;
     }
 
-    // Image paragraph — buffer for next QCM if current question already has options,
-    // or if no question exists yet (context images before first QCM)
+    // Image paragraph — buffer as context for next section
     if (imgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
-      if (!currentQuestion || currentQuestion.options.length > 0) {
-        // Image between questions → context for next QCM
-        pendingImages.push(imgMatch[1]);
-      } else {
-        // Image within current question (before its options)
-        currentQuestion.images.push(imgMatch[1]);
+      // Skip images before any content marker (likely document logo)
+      if (!seenFirstQcm && pendingIntroLines.length === 0 && pendingCaptions.length === 0 && questions.length === 0) {
+        // Check if there's been an "EXERCICE" or similar intro yet
+        // If not, this is probably a header logo — skip it
+        continue;
+      }
+      pendingImages.push(imgMatch[1]);
+      continue;
+    }
+
+    // "Figure N." caption → buffer for section
+    if (/^Figure\s+\d+/i.test(text.trim()) && !currentQuestion) {
+      pendingCaptions.push(text.trim());
+      continue;
+    }
+
+    if (!currentQuestion) {
+      // Collect intro/context text before QCMs (e.g., "EXERCICE", exercise intro)
+      if (text.trim().length > 5 && seenFirstQcm) {
+        // Text between question groups → could be intro for next section
+        pendingIntroLines.push(text.trim());
+      } else if (!seenFirstQcm && /exercice|figure/i.test(text.trim())) {
+        pendingIntroLines.push(text.trim());
       }
       continue;
     }
 
-    if (!currentQuestion) continue;
+    // Figure caption after a QCM (between questions) → buffer for next section
+    if (/^Figure\s+\d+/i.test(text.trim()) && currentQuestion && currentQuestion.options.length > 0) {
+      pendingCaptions.push(text.trim());
+      continue;
+    }
 
     // <li> elements are direct options (labeled or unlabeled)
     if (p.tag === "li" && text.trim().length > 2) {
@@ -688,6 +737,12 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
     // Skip empty / very short lines
     if (text.trim().length < 3) continue;
 
+    // Text after a question's options → inter-group context (e.g., "Les 20 questions suivantes sont indépendantes")
+    if (currentQuestion && currentQuestion.options.length > 0 && p.tag === "p") {
+      pendingIntroLines.push(text.trim());
+      continue;
+    }
+
     // Reset liCount when we hit a <p> that's not an option
     liCount = 0;
 
@@ -696,7 +751,7 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
   }
 
   flushQuestion();
-  return questions;
+  return { questions, sections };
 }
 
 /**
@@ -1026,17 +1081,20 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const fromQcmLabel = parseQcmLabelFormat(html);
+  const qcmLabelResult = parseQcmLabelFormat(html);
   const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
-  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} qcmLabel=${fromQcmLabel.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections=${xmlResult.sections.length}`);
+  console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} qcmLabel=${qcmLabelResult.questions.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections(xml=${xmlResult.sections.length},qcm=${qcmLabelResult.sections.length})`);
 
   // Pick whichever format found the most questions
-  const allFormats = [fromTables, fromParagraphs, fromQcmLabel, xmlResult.questions];
-  const best = allFormats.reduce((b, cur) => cur.length > b.length ? cur : b, [] as ParsedQuestion[]);
+  const allFormats: { questions: ParsedQuestion[]; sections: ParsedSection[] }[] = [
+    { questions: fromTables, sections: [] },
+    { questions: fromParagraphs, sections: [] },
+    qcmLabelResult,
+    xmlResult,
+  ];
+  const best = allFormats.reduce((b, cur) => cur.questions.length > b.questions.length ? cur : b);
 
-  // Return sections only if the XML format won
-  const sections = best === xmlResult.questions ? xmlResult.sections : [];
-  return { questions: best, sections };
+  return { questions: best.questions, sections: best.sections };
 }
 
 // ─── Image upload helper ──────────────────────────────────────────────────────
