@@ -459,9 +459,9 @@ function PlayingScreen({
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: "#F5F6FA" }}>
 
       {/* ── TOP HEADER ── */}
-      <header className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-navy">
-        <div className="flex items-center gap-3">
-          <img src="/ds-logo-2026.png" alt="Diploma Santé" className="h-8 w-auto object-contain" />
+      <header className="shrink-0 flex items-center justify-between px-6 py-4 bg-navy">
+        <div className="flex items-center gap-4">
+          <img src="/ds-logo-2026.png" alt="Diploma Santé" className="h-12 w-auto object-contain" />
           <div className="h-5 w-px bg-white/20" />
           <div>
             <p className="text-sm font-bold text-white">{serie.name}</p>
