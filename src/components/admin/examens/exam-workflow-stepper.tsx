@@ -284,7 +284,7 @@ export default function ExamWorkflowStepper({
         setPdfUrl(data.url + "?t=" + Date.now());
         onSujetGenerated?.(data.url);
       } else {
-        setPdfError(data.error || "Erreur génération PDF");
+        setPdfError((data.error || "Erreur génération PDF") + (data.details ? ` — ${data.details}` : ""));
       }
     } catch (e: any) { setPdfError(e.message); }
     finally { setGeneratingPdf(false); }

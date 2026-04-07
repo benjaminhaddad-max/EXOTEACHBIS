@@ -9,6 +9,8 @@ import {
   PDFImage,
 } from "pdf-lib";
 
+export const maxDuration = 60;
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const A4_WIDTH = 595.28;
