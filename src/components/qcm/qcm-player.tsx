@@ -468,12 +468,12 @@ function PlayingScreen({
           <a href="/admin/pedagogie" className="text-xs font-semibold underline hover:no-underline">← Retour \u00E0 l'admin</a>
         </div>
       )}
-      <header className="shrink-0 flex items-center justify-between px-6 py-3 bg-navy">
-        <div className="flex items-center gap-4 min-w-0">
+      <header className="shrink-0 flex flex-wrap items-center gap-y-1 px-6 py-3 bg-navy">
+        <div className="flex items-center gap-4 mr-auto">
           <img src="/ds-logo-2026.png" alt="Diploma Santé" className="h-10 w-auto object-contain shrink-0" />
           <div className="h-5 w-px bg-white/20 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-white truncate">{serie.name}</p>
+          <div>
+            <p className="text-sm font-bold text-white">{serie.name}</p>
             <p className="text-xs text-white/50">{serie.type === "concours_blanc" ? "Concours blanc" : serie.type === "revision" ? "R\u00E9vision" : serie.type === "entrainement" ? "Entra\u00EEnement" : "QCM"}</p>
           </div>
         </div>
