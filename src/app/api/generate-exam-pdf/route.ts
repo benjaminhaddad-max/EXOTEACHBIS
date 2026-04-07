@@ -10,6 +10,8 @@ import {
 } from "pdf-lib";
 import * as path from "path";
 import { promises as fs } from "fs";
+// @ts-expect-error — sharp default import works at runtime with Next.js esModuleInterop
+import sharp from "sharp";
 
 export const maxDuration = 60;
 
@@ -66,147 +68,128 @@ interface ExamInput {
 
 /** Strip LaTeX/Markdown/HTML and replace non-WinAnsi chars for PDF plain text */
 function cleanText(text: string): string {
-  return (
-    text
-      // Remove LaTeX display/inline math delimiters but keep inner text
-      .replace(/\$\$?([^$]+)\$\$?/g, (_m, t) => t)
-      // Strip LaTeX commands: \left, \right, \text{...}, \mathrm{...}, etc.
-      .replace(/\\left\s?[.(|{\\]/g, "")
-      .replace(/\\left\s?\[/g, "[")
-      .replace(/\\right\s?[.)|}\\]/g, "")
-      .replace(/\\right\s?\]/g, "]")
-      .replace(/\\left/g, "")
-      .replace(/\\right/g, "")
-      .replace(/\\text\{([^}]*)\}/g, "$1")
-      .replace(/\\mathrm\{([^}]*)\}/g, "$1")
-      .replace(/\\textbf\{([^}]*)\}/g, "$1")
-      .replace(/\\textit\{([^}]*)\}/g, "$1")
-      .replace(/\\emph\{([^}]*)\}/g, "$1")
-      .replace(/\\overline\{([^}]*)\}/g, "$1")
-      .replace(/\\underline\{([^}]*)\}/g, "$1")
-      .replace(/\\vec\{([^}]*)\}/g, "$1")
-      .replace(/\\hat\{([^}]*)\}/g, "$1")
-      .replace(/\\bar\{([^}]*)\}/g, "$1")
-      .replace(/\\tilde\{([^}]*)\}/g, "$1")
-      // \frac{a}{b} → a/b
-      .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1/$2")
-      // \sqrt{x} → sqrt(x)
-      .replace(/\\sqrt\{([^}]*)\}/g, "sqrt($1)")
-      // Superscripts: ^{...} → ^(...)  or ^x → ^x
-      .replace(/\^\{([^}]*)\}/g, "^($1)")
-      // Subscripts: _{...} → _(...) or _x → _x
-      .replace(/_\{([^}]*)\}/g, "_($1)")
-      // Remove remaining \commands (e.g. \cdot, \times, \pm, \alpha, etc.)
-      .replace(/\\cdot/g, ".")
-      .replace(/\\times/g, "x")
-      .replace(/\\pm/g, "+/-")
-      .replace(/\\neq/g, "!=")
-      .replace(/\\leq/g, "<=")
-      .replace(/\\geq/g, ">=")
-      .replace(/\\approx/g, "~")
-      .replace(/\\infty/g, "inf")
-      .replace(/\\Delta/g, "D")
-      .replace(/\\alpha/g, "alpha")
-      .replace(/\\beta/g, "beta")
-      .replace(/\\gamma/g, "gamma")
-      .replace(/\\delta/g, "delta")
-      .replace(/\\epsilon/g, "epsilon")
-      .replace(/\\theta/g, "theta")
-      .replace(/\\lambda/g, "lambda")
-      .replace(/\\mu/g, "mu")
-      .replace(/\\pi/g, "pi")
-      .replace(/\\sigma/g, "sigma")
-      .replace(/\\omega/g, "omega")
-      .replace(/\\phi/g, "phi")
-      .replace(/\\chi/g, "chi")
-      .replace(/\\psi/g, "psi")
-      // Strip any remaining \command sequences
-      .replace(/\\[a-zA-Z]+/g, "")
-      // Remove stray braces left over
-      .replace(/[{}]/g, "")
-      // Markdown bold/italic
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/\*([^*]+)\*/g, "$1")
-      // HTML tags
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      // Greek letters → Latin equivalents (WinAnsi doesn't support Greek)
-      .replace(/σ/g, "s")
-      .replace(/Σ/g, "S")
-      .replace(/π/g, "p")
-      .replace(/Π/g, "P")
-      .replace(/δ/g, "d")
-      .replace(/Δ/g, "D")
-      .replace(/α/g, "a")
-      .replace(/Α/g, "A")
-      .replace(/β/g, "b")
-      .replace(/Β/g, "B")
-      .replace(/γ/g, "g")
-      .replace(/Γ/g, "G")
-      .replace(/λ/g, "l")
-      .replace(/Λ/g, "L")
-      .replace(/μ/g, "u")
-      .replace(/Μ/g, "M")
-      .replace(/ω/g, "w")
-      .replace(/Ω/g, "W")
-      .replace(/θ/g, "th")
-      .replace(/Θ/g, "Th")
-      .replace(/φ/g, "ph")
-      .replace(/Φ/g, "Ph")
-      .replace(/χ/g, "ch")
-      .replace(/Χ/g, "Ch")
-      .replace(/ψ/g, "ps")
-      .replace(/Ψ/g, "Ps")
-      .replace(/ε/g, "e")
-      .replace(/η/g, "n")
-      .replace(/ν/g, "v")
-      .replace(/ρ/g, "r")
-      .replace(/τ/g, "t")
-      .replace(/ζ/g, "z")
-      .replace(/ξ/g, "x")
-      .replace(/ι/g, "i")
-      .replace(/κ/g, "k")
-      .replace(/υ/g, "y")
-      // Subscript/superscript numbers
-      .replace(/₀/g, "0")
-      .replace(/₁/g, "1")
-      .replace(/₂/g, "2")
-      .replace(/₃/g, "3")
-      .replace(/₄/g, "4")
-      .replace(/₅/g, "5")
-      .replace(/₆/g, "6")
-      .replace(/₇/g, "7")
-      .replace(/₈/g, "8")
-      .replace(/₉/g, "9")
-      .replace(/⁰/g, "0")
-      .replace(/¹/g, "1")
-      .replace(/²/g, "2")
-      .replace(/³/g, "3")
-      .replace(/⁴/g, "4")
-      .replace(/⁵/g, "5")
-      .replace(/⁺/g, "+")
-      .replace(/⁻/g, "-")
-      // Other special chars
-      .replace(/→/g, "->")
-      .replace(/←/g, "<-")
-      .replace(/↔/g, "<->")
-      .replace(/≤/g, "<=")
-      .replace(/≥/g, ">=")
-      .replace(/≠/g, "!=")
-      .replace(/±/g, "+/-")
-      .replace(/×/g, "x")
-      .replace(/÷/g, "/")
-      .replace(/∞/g, "inf")
-      .replace(/∆/g, "D")
-      // Remove any remaining non-WinAnsi characters
-      .replace(/[^\x00-\xFF]/g, "?")
-      // Collapse multiple spaces
-      .replace(/\s+/g, " ")
-      .trim()
-  );
+  let s = text;
+
+  // ── 1. Smart quotes & typographic chars → ASCII (BEFORE WinAnsi strip)
+  s = s
+    .replace(/[\u2018\u2019\u201A\u2039\u203A]/g, "'") // ' ' ‚ ‹ ›
+    .replace(/[\u201C\u201D\u201E\u00AB\u00BB]/g, '"') // " " „ « »
+    .replace(/\u2026/g, "...") // …
+    .replace(/\u2014/g, " - ") // — em dash
+    .replace(/\u2013/g, "-") // – en dash
+    .replace(/\u00A0/g, " "); // non-breaking space
+
+  // ── 2. HTML entities & tags
+  s = s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&rdquo;/g, '"')
+    .replace(/&ldquo;/g, '"')
+    .replace(/&#?\w+;/g, "") // remaining HTML entities
+    .replace(/<[^>]+>/g, ""); // HTML tags
+
+  // ── 3. Markdown bold/italic
+  s = s.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1");
+
+  // ── 4. LaTeX cleanup
+  s = s
+    // Remove display/inline math delimiters
+    .replace(/\$\$?([^$]+)\$\$?/g, (_m, t) => t)
+    // \left and \right with delimiters
+    .replace(/\\left\s?[.(|{\\]/g, "")
+    .replace(/\\left\s?\[/g, "[")
+    .replace(/\\right\s?[.)|}\\]/g, "")
+    .replace(/\\right\s?\]/g, "]")
+    .replace(/\\left/g, "")
+    .replace(/\\right/g, "")
+    // \text{...}, \mathrm{...}, etc. → content
+    .replace(/\\(?:text|mathrm|textbf|textit|emph|operatorname)\{([^}]*)\}/g, "$1")
+    .replace(/\\(?:overline|underline|vec|hat|bar|tilde|widetilde|widehat)\{([^}]*)\}/g, "$1")
+    // \frac{a}{b} → a/b
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1/$2")
+    // \sqrt{x} → sqrt(x)
+    .replace(/\\sqrt\{([^}]*)\}/g, "sqrt($1)")
+    // Named LaTeX symbols → readable text
+    .replace(/\\cdot/g, "\u00B7")
+    .replace(/\\times/g, "\u00D7")
+    .replace(/\\pm/g, "\u00B1")
+    .replace(/\\neq/g, "\u2260")
+    .replace(/\\leq/g, "\u2264")
+    .replace(/\\geq/g, "\u2265")
+    .replace(/\\approx/g, "~")
+    .replace(/\\infty/g, "inf")
+    .replace(/\\Delta/g, "D")
+    .replace(/\\alpha/g, "alpha")
+    .replace(/\\beta/g, "beta")
+    .replace(/\\gamma/g, "gamma")
+    .replace(/\\delta/g, "delta")
+    .replace(/\\epsilon/g, "epsilon")
+    .replace(/\\theta/g, "theta")
+    .replace(/\\lambda/g, "lambda")
+    .replace(/\\mu/g, "mu")
+    .replace(/\\pi/g, "pi")
+    .replace(/\\sigma/g, "sigma")
+    .replace(/\\omega/g, "omega")
+    .replace(/\\phi/g, "phi")
+    .replace(/\\chi/g, "chi")
+    .replace(/\\psi/g, "psi")
+    // Strip any remaining \command sequences
+    .replace(/\\[a-zA-Z]+/g, "");
+
+  // ── 5. Superscripts & subscripts: clean braces, keep readable
+  s = s
+    // Empty ^{} or _{} → remove entirely
+    .replace(/\^\{\s*\}/g, "")
+    .replace(/_\{\s*\}/g, "")
+    // ^{single} → ^single  (e.g. ^{2} → ^2, ^{-} → ^-)
+    .replace(/\^\{([^}])\}/g, "^$1")
+    // ^{multi} → ^(multi)  (e.g. ^{2+} → ^(2+))
+    .replace(/\^\{([^}]+)\}/g, "^($1)")
+    // _{single} → content as subscript inline (e.g. _{2} → 2)
+    .replace(/_\{([^}])\}/g, "$1")
+    // _{multi} → (multi) inline
+    .replace(/_\{([^}]+)\}/g, "($1)")
+    // Remove stray braces
+    .replace(/[{}]/g, "");
+
+  // ── 6. Unicode Greek → Latin (WinAnsi doesn't support Greek)
+  const greekMap: Record<string, string> = {
+    "\u03B1": "alpha", "\u03B2": "beta", "\u03B3": "gamma", "\u03B4": "delta",
+    "\u03B5": "epsilon", "\u03B6": "zeta", "\u03B7": "eta", "\u03B8": "theta",
+    "\u03B9": "iota", "\u03BA": "kappa", "\u03BB": "lambda", "\u03BC": "mu",
+    "\u03BD": "nu", "\u03BE": "xi", "\u03BF": "o", "\u03C0": "pi",
+    "\u03C1": "rho", "\u03C3": "sigma", "\u03C4": "tau", "\u03C5": "upsilon",
+    "\u03C6": "phi", "\u03C7": "chi", "\u03C8": "psi", "\u03C9": "omega",
+    "\u0391": "A", "\u0392": "B", "\u0393": "G", "\u0394": "D",
+    "\u0398": "Th", "\u039B": "L", "\u039C": "M", "\u03A0": "P",
+    "\u03A3": "S", "\u03A6": "Ph", "\u03A7": "Ch", "\u03A8": "Ps", "\u03A9": "W",
+  };
+  for (const [greek, latin] of Object.entries(greekMap)) {
+    s = s.split(greek).join(latin);
+  }
+
+  // ── 7. Unicode sub/superscript digits → normal digits
+  s = s
+    .replace(/[₀⁰]/g, "0").replace(/[₁¹]/g, "1").replace(/[₂²]/g, "2")
+    .replace(/[₃³]/g, "3").replace(/[₄⁴]/g, "4").replace(/[₅⁵]/g, "5")
+    .replace(/[₆]/g, "6").replace(/[₇]/g, "7").replace(/[₈]/g, "8").replace(/[₉]/g, "9")
+    .replace(/⁺/g, "+").replace(/⁻/g, "-");
+
+  // ── 8. Other Unicode symbols → WinAnsi-safe equivalents
+  s = s
+    .replace(/→/g, "->").replace(/←/g, "<-").replace(/↔/g, "<->")
+    .replace(/\u2264/g, "<=").replace(/\u2265/g, ">=").replace(/\u2260/g, "!=")
+    .replace(/\u00B1/g, "+/-").replace(/\u00D7/g, "x").replace(/\u00F7/g, "/")
+    .replace(/\u221E/g, "inf").replace(/\u2206/g, "D").replace(/\u00B7/g, ".");
+
+  // ── 9. Final: strip any remaining non-WinAnsi, collapse spaces
+  s = s.replace(/[^\x00-\xFF]/g, "").replace(/\s+/g, " ").trim();
+
+  return s;
 }
 
 /** Word-wrap text to fit within maxWidth, returning lines */
@@ -612,23 +595,46 @@ function drawCoverPage(
   w.drawFooter();
 }
 
-// ─── Fetch image bytes ───────────────────────────────────────────────────────
+// ─── Fetch image bytes (convert any format → PNG/JPG via sharp) ─────────────
 
 async function fetchImageBytes(
   url: string
 ): Promise<{ bytes: Uint8Array; type: "png" | "jpg" } | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return null;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) {
+      console.warn("[generate-exam-pdf] Image fetch failed:", res.status, url.substring(0, 80));
+      return null;
+    }
     const contentType = res.headers.get("content-type") ?? "";
     const buffer = await res.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
+    const rawBytes = new Uint8Array(buffer);
 
-    if (contentType.includes("png") || url.toLowerCase().endsWith(".png")) {
-      return { bytes, type: "png" };
+    if (rawBytes.length < 100) return null; // too small to be a real image
+
+    const urlLower = url.toLowerCase();
+    const isPng = contentType.includes("png") || urlLower.endsWith(".png");
+    const isJpg = contentType.includes("jpeg") || contentType.includes("jpg") ||
+                  urlLower.endsWith(".jpg") || urlLower.endsWith(".jpeg");
+
+    // If already PNG or JPG, return directly
+    if (isPng) return { bytes: rawBytes, type: "png" };
+    if (isJpg) return { bytes: rawBytes, type: "jpg" };
+
+    // For any other format (WEBP, SVG, TIFF, BMP, EMF data-uri, etc.)
+    // convert to PNG via sharp
+    try {
+      const pngBuffer = await sharp(Buffer.from(rawBytes))
+        .png()
+        .toBuffer();
+      return { bytes: new Uint8Array(pngBuffer), type: "png" };
+    } catch (sharpErr) {
+      console.warn("[generate-exam-pdf] sharp conversion failed, trying raw embed:", sharpErr);
+      // Fall back: try as JPG (some servers lie about content-type)
+      return { bytes: rawBytes, type: "jpg" };
     }
-    return { bytes, type: "jpg" };
-  } catch {
+  } catch (e) {
+    console.warn("[generate-exam-pdf] Image fetch error:", e, url.substring(0, 80));
     return null;
   }
 }
