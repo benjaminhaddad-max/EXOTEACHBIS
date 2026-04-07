@@ -818,12 +818,22 @@ export async function POST(req: NextRequest) {
       console.error("[import-serie] JSZip error:", e.message);
     }
 
-    // Convert DOCX to PNG pages via CloudConvert (used for page-level fallback only)
+    // Quick check: if serie already has questions, skip expensive CloudConvert (correction mode)
+    const { count: existingCount } = await supabase
+      .from("series_questions")
+      .select("*", { count: "exact", head: true })
+      .eq("series_id", serieId);
+    const isCorrection = (existingCount ?? 0) > 0;
+    if (isCorrection) console.log("[import-serie] Correction mode: skipping CloudConvert + EMF conversion");
+
+    // Convert DOCX to PNG pages via CloudConvert (only for initial import, not correction)
     let pageImages: Buffer[] = [];
-    try {
-      pageImages = await convertDocxToPages(buffer);
-    } catch (e: any) {
-      console.warn("[import-serie] DOCX→PNG conversion failed (non-critical):", e.message);
+    if (!isCorrection) {
+      try {
+        pageImages = await convertDocxToPages(buffer);
+      } catch (e: any) {
+        console.warn("[import-serie] DOCX→PNG conversion failed (non-critical):", e.message);
+      }
     }
 
     // Parser (essaie les trois formats)
