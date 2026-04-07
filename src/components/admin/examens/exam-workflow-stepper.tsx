@@ -114,11 +114,12 @@ export default function ExamWorkflowStepper({
       // Step 2: Upload directly to Supabase Storage using the signed token (bypasses Vercel)
       const supabase = createClient();
       const { error } = await supabase.storage.from("cours-pdfs").uploadToSignedUrl(path, token, file, {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         upsert: true,
       });
-      if (error) { console.error("[upload-large] storage upload error", error); return null; }
+      if (error) { console.error("[upload-large] storage upload error", JSON.stringify(error)); return null; }
       return storagePath;
-    } catch (e) { console.error("[upload-large]", e); return null; }
+    } catch (e: any) { console.error("[upload-large] exception", e?.message || e); return null; }
   }
 
   // ─── Import sujet ───────────────────────────────────────────────────────────
