@@ -1300,8 +1300,8 @@ export async function POST(req: NextRequest) {
         if (cParas[j].bold && /^question$/i.test(cParas[j].text.trim())) cqMarkers.push(j);
       }
 
-      // Extract questions with is_correct from highlights
-      type CorrectionQ = { options: { label: string; is_correct: boolean }[] };
+      // Extract questions with is_correct + justification from highlights
+      type CorrectionQ = { options: { label: string; is_correct: boolean; justification?: string }[] };
       const parsed: CorrectionQ[] = [];
       for (let qi = 0; qi < cqMarkers.length; qi++) {
         const start = cqMarkers[qi] + 1;
@@ -1335,18 +1335,31 @@ export async function POST(req: NextRequest) {
 
         const textParsed: CorrectionQ[] = [];
         let currentCorrectLetters: string[] = [];
-        let currentVraiFaux: boolean[] = [];
+        let currentVraiFaux: { correct: boolean; justification: string }[] = [];
 
         const flushCorrectionQ = () => {
-          if (currentCorrectLetters.length > 0) {
-            // Mode 1: letters after QCM header (e.g., "QCM 1 : CE")
+          if (currentCorrectLetters.length > 0 && currentVraiFaux.length >= 3) {
+            // Mode 1+2 combined: letters for correct answers + VRAI/FAUX with justifications
+            textParsed.push({
+              options: currentVraiFaux.slice(0, 5).map((v, idx) => ({
+                label: LABELS[idx],
+                is_correct: currentCorrectLetters.includes(LABELS[idx]),
+                justification: v.justification,
+              })),
+            });
+          } else if (currentCorrectLetters.length > 0) {
+            // Mode 1 only: letters after QCM header (e.g., "QCM 1 : CE")
             textParsed.push({
               options: LABELS.map(l => ({ label: l, is_correct: currentCorrectLetters.includes(l) })),
             });
           } else if (currentVraiFaux.length >= 3) {
-            // Mode 2: VRAI/FAUX lines
+            // Mode 2 only: VRAI/FAUX lines
             textParsed.push({
-              options: currentVraiFaux.slice(0, 5).map((v, idx) => ({ label: LABELS[idx], is_correct: v })),
+              options: currentVraiFaux.slice(0, 5).map((v, idx) => ({
+                label: LABELS[idx],
+                is_correct: v.correct,
+                justification: v.justification,
+              })),
             });
           }
           currentCorrectLetters = [];
@@ -1370,11 +1383,18 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
-          // Match VRAI/FAUX lines
-          const vraiMatch = line.match(/^(?:[A-E]\s*[.):]?\s*)?VRAI/i);
-          const fauxMatch = line.match(/^(?:[A-E]\s*[.):]?\s*)?FAUX/i);
-          if (vraiMatch) { currentVraiFaux.push(true); continue; }
-          if (fauxMatch) { currentVraiFaux.push(false); continue; }
+          // Match VRAI/FAUX lines with optional justification text
+          // Formats: "VRAI", "FAUX - explanation", "A.FAUX - explanation", "Vrai"
+          const vraiMatch = line.match(/^(?:[A-E]\s*[.):]?\s*)?VRAI\s*[-–—]?\s*(.*)/i);
+          const fauxMatch = line.match(/^(?:[A-E]\s*[.):]?\s*)?FAUX\s*[-–—]?\s*(.*)/i);
+          if (vraiMatch) {
+            currentVraiFaux.push({ correct: true, justification: vraiMatch[1].trim() });
+            continue;
+          }
+          if (fauxMatch) {
+            currentVraiFaux.push({ correct: false, justification: fauxMatch[1].trim() });
+            continue;
+          }
         }
         flushCorrectionQ();
 
@@ -1403,11 +1423,13 @@ export async function POST(req: NextRequest) {
         const p = parsed[i];
         const qId = existingIds[i];
 
-        // Update options is_correct
+        // Update options is_correct + justification
         for (const opt of p.options) {
+          const updateData: Record<string, any> = { is_correct: opt.is_correct };
+          if (opt.justification) updateData.justification = opt.justification;
           await supabase
             .from("options")
-            .update({ is_correct: opt.is_correct })
+            .update(updateData)
             .eq("question_id", qId)
             .eq("label", opt.label);
         }
