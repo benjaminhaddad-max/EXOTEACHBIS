@@ -601,6 +601,7 @@ export function FullSerieEditor({
                   const m = src.match(/UE\s*\d+\s*[-–—]\s*(\w+)/i);
                   return m ? m[1].trim() : "";
                 })()}
+                hasCorrections={serieQuestions.some((q: any) => q.options?.some((o: any) => o.is_correct))}
                 onQuestionsChanged={loadAll}
               />
             ) : (

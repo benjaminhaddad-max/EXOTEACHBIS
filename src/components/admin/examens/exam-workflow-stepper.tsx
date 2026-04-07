@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Upload,
   FileText,
@@ -25,6 +25,7 @@ type ExamWorkflowProps = {
   examFinAt?: string | null;
   ueCode?: string;
   subjectName?: string;
+  hasCorrections?: boolean;
   onQuestionsChanged: () => void;
   onSujetGenerated?: (url: string) => void;
 };
@@ -69,13 +70,17 @@ export default function ExamWorkflowStepper({
   examFinAt,
   ueCode: propUeCode,
   subjectName: propSubjectName,
+  hasCorrections,
   onQuestionsChanged,
   onSujetGenerated,
 }: ExamWorkflowProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(
-    new Set(questionCount > 0 ? [1] : [])
-  );
+  // Auto-detect completed steps from DB state
+  const initialSteps = new Set<number>();
+  if (questionCount > 0) initialSteps.add(1);
+  if (hasCorrections) { initialSteps.add(1); initialSteps.add(2); }
+
+  const [currentStep, setCurrentStep] = useState(hasCorrections ? 2 : (questionCount > 0 ? 2 : 1));
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(initialSteps);
 
   // Step 1 state
   const [importing, setImporting] = useState(false);
