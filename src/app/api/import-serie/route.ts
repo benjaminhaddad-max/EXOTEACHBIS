@@ -1253,19 +1253,24 @@ export async function POST(req: NextRequest) {
       academicYear: (formData.get("academicYear") as string) || "2025 - 2026",
     };
 
-    // Large files: download from Supabase Storage using service role client
-    const storagePath = formData.get("storagePath") as string | null;
-    if (!file && storagePath) {
-      console.log(`[import-serie] Reading large file from Storage: ${storagePath}`);
-      const { createClient: createSB } = await import("@supabase/supabase-js");
-      const serviceClient = createSB(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-      const { data: fileData, error: dlErr } = await serviceClient.storage.from("cours-pdfs").download(storagePath);
-      if (dlErr || !fileData) return NextResponse.json({ error: "Erreur lecture du fichier depuis le storage: " + dlErr?.message }, { status: 400 });
-      file = new File([fileData], "upload.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-      console.log(`[import-serie] File downloaded from storage: ${(fileData.size / 1024 / 1024).toFixed(1)} MB`);
+    // Large files: client extracted XML directly (no download needed)
+    const directXml = formData.get("docXml") as string | null;
+    const isLargeFileMode = formData.get("largeFile") === "true";
+
+    if (!file && !directXml) {
+      // Fallback: try Storage path
+      const storagePath = formData.get("storagePath") as string | null;
+      if (storagePath) {
+        console.log(`[import-serie] Reading large file from Storage: ${storagePath}`);
+        const { createClient: createSB } = await import("@supabase/supabase-js");
+        const serviceClient = createSB(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const { data: fileData, error: dlErr } = await serviceClient.storage.from("cours-pdfs").download(storagePath);
+        if (dlErr || !fileData) return NextResponse.json({ error: "Erreur lecture du fichier depuis le storage: " + dlErr?.message }, { status: 400 });
+        file = new File([fileData], "upload.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      }
     }
 
-    if (!serieId || !file) {
+    if (!serieId || (!file && !directXml)) {
       return NextResponse.json({ error: "serieId et fichier requis" }, { status: 400 });
     }
 
@@ -1274,14 +1279,27 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-    // Lire le fichier
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const isLargeFile = buffer.length > 5 * 1024 * 1024;
+    // Lire le fichier (or use direct XML for large files)
+    let buffer: Buffer;
+    let isLargeFile: boolean;
+    if (file) {
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      isLargeFile = buffer.length > 5 * 1024 * 1024;
+    } else {
+      // directXml mode: no file, create minimal buffer for JSZip (won't be used for images)
+      buffer = Buffer.alloc(0);
+      isLargeFile = true;
+    }
 
     // Extract ZIP first (needed for both mammoth image upgrade and XML parsing)
-    const zip = await JSZip.loadAsync(buffer);
-    const mediaCatalog = catalogMediaFiles(zip);
+    // Skip for directXml mode (client already extracted the XML)
+    let zip: JSZip | null = null;
+    let mediaCatalog = new Map<string, string[]>();
+    if (buffer.length > 0) {
+      zip = await JSZip.loadAsync(buffer);
+      mediaCatalog = catalogMediaFiles(zip);
+    }
 
     // Build a lookup: for EMF/WMF files, find if a PNG/JPEG alternative exists
     const imageUpgradeMap = new Map<string, { path: string; mime: string }>();
@@ -1296,7 +1314,122 @@ export async function POST(req: NextRequest) {
     }
     console.log("[import-serie] Media catalog:", mediaCatalog.size, "files,", imageUpgradeMap.size, "upgradable EMF→web");
 
-    // Convertir DOCX → HTML via mammoth (with custom image handler)
+    // ─── Direct XML mode: skip mammoth entirely (large files) ────────────────
+    if (directXml) {
+      console.log(`[import-serie] Direct XML mode — skipping mammoth, XML: ${(directXml.length / 1024).toFixed(0)} KB`);
+
+      const { questions: parsed, sections: parsedSections } = await parseDocx("", directXml);
+      if (parsed.length === 0) {
+        return NextResponse.json({ error: "Aucune question trouvée dans le fichier." }, { status: 422 });
+      }
+
+      // Check if correction mode
+      const { count: existingCount } = await supabase
+        .from("series_questions")
+        .select("*", { count: "exact", head: true })
+        .eq("series_id", serieId);
+      const isCorrectionMode = (existingCount ?? 0) > 0;
+
+      if (isCorrectionMode) {
+        // Correction mode with direct XML
+        const LABELS = ["A", "B", "C", "D", "E"];
+        const CORRECT_HIGHLIGHTS = new Set(["green", "yellow"]);
+        const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+        let pm: RegExpExecArray | null;
+        const cParas: { text: string; bold: boolean; highlighted: string | null }[] = [];
+        while ((pm = pRegex.exec(directXml)) !== null) {
+          const content = pm[1];
+          const hlMatch = content.match(/w:highlight w:val="([^"]+)"/);
+          const shdMatch = content.match(/w:shd[^>]*w:fill="([^"]+)"/);
+          const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
+          const texts: string[] = [];
+          const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+          let tm;
+          while ((tm = tRegex.exec(content)) !== null) texts.push(tm[1]);
+          const text = texts.join("").trim();
+          let hl = hlMatch?.[1] ?? null;
+          if (!hl && shdMatch) {
+            const fill = shdMatch[1].toUpperCase();
+            if (["FFFF00", "00FF00", "92D050", "00B050"].includes(fill)) hl = "yellow";
+          }
+          if (text.length > 0) cParas.push({ text, bold: isBold, highlighted: hl });
+        }
+
+        // Find question markers
+        const cqMarkers: number[] = [];
+        for (let j = 0; j < cParas.length; j++) {
+          const t = cParas[j].text.trim();
+          if (cParas[j].bold && /^question$/i.test(t)) cqMarkers.push(j);
+          else if (/^(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]/i.test(t)) cqMarkers.push(j);
+        }
+
+        type CQ = { options: { label: string; is_correct: boolean }[] };
+        const corrParsed: CQ[] = [];
+        for (let qi = 0; qi < cqMarkers.length; qi++) {
+          const start = cqMarkers[qi] + 1;
+          const end = qi + 1 < cqMarkers.length ? cqMarkers[qi + 1] : cParas.length;
+          const items: typeof cParas[0][] = [];
+          for (let j = start; j < end; j++) {
+            if (cParas[j].bold && cParas[j].text.length > 3) continue;
+            if (/^\s*[A-E]\s*[.):\t]/.test(cParas[j].text) || (cParas[j].text.length > 1 && items.length < 5)) items.push(cParas[j]);
+          }
+          if (items.length < 2) continue;
+          corrParsed.push({ options: items.slice(0, 5).map((p, idx) => ({ label: LABELS[idx], is_correct: CORRECT_HIGHLIGHTS.has(p.highlighted ?? "") })) });
+        }
+
+        // Update existing questions
+        const { data: sqData } = await supabase.from("series_questions").select("question_id, order_index").eq("series_id", serieId).order("order_index");
+        const existingIds = (sqData ?? []).map((r: any) => r.question_id).filter(Boolean);
+        let updated = 0;
+        for (let i = 0; i < Math.min(corrParsed.length, existingIds.length); i++) {
+          for (const opt of corrParsed[i].options) {
+            await supabase.from("options").update({ is_correct: opt.is_correct }).eq("question_id", existingIds[i]).eq("label", opt.label);
+          }
+          if (corrParsed[i].options.some(o => o.is_correct)) updated++;
+        }
+        return NextResponse.json({ success: true, questionsUpdated: updated, correctAnswersMarked: corrParsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0) });
+      }
+
+      // ─── Normal import with direct XML ─────────────────────────────────────
+      const { data: serie } = await supabase.from("series").select("cours_id").eq("id", serieId).single();
+
+      // Create sections if any
+      const sectionIdMap: Record<number, string> = {};
+      if (parsedSections.length > 0) {
+        for (let si = 0; si < parsedSections.length; si++) {
+          const s = parsedSections[si];
+          const { data: secData } = await supabase.from("series_sections").insert({
+            series_id: serieId, title: s.title, intro_text: s.intro_text || null, order_index: si,
+          }).select("id").single();
+          if (secData) sectionIdMap[si] = secData.id;
+        }
+      }
+
+      // Create questions
+      let created = 0;
+      for (let i = 0; i < parsed.length; i++) {
+        const p = parsed[i];
+        const { data: newQ, error: qErr } = await supabase.from("questions").insert({
+          text: p.text, type: "qcm_multiple", difficulty: 2, cours_id: serie?.cours_id ?? null,
+        }).select("id").single();
+        if (qErr || !newQ) continue;
+
+        const optionsToInsert = p.options.map((opt, idx) => ({
+          question_id: newQ.id, label: opt.label, text: opt.text, is_correct: opt.is_correct, order_index: idx,
+        }));
+        await supabase.from("options").insert(optionsToInsert);
+
+        const sectionId = p.sectionIndex != null ? sectionIdMap[p.sectionIndex] ?? null : null;
+        await supabase.from("series_questions").insert({
+          series_id: serieId, question_id: newQ.id, order_index: i, ...(sectionId ? { section_id: sectionId } : {}),
+        });
+        created++;
+      }
+
+      return NextResponse.json({ success: true, created, questionsCreated: created });
+    }
+
+    // ─── Normal mode: full file processing via mammoth ───────────────────────
     const mammothOptions: any = {};
 
     if (isLargeFile) {
@@ -1313,7 +1446,7 @@ export async function POST(req: NextRequest) {
           if (contentType.includes("emf") || contentType.includes("wmf")) {
             for (const [baseName, info] of imageUpgradeMap) {
               try {
-                const webFile = zip.file(info.path);
+                const webFile = zip?.file(info.path);
                 if (webFile) {
                   const webBase64 = await webFile.async("base64");
                   console.log(`[mammoth] Upgraded image: ${baseName} EMF → ${info.mime}`);
@@ -1332,18 +1465,18 @@ export async function POST(req: NextRequest) {
     let docXml: string | undefined;
     let drawingImages: Map<number, string[]> | undefined;
     try {
-      const xmlFile = zip.file("word/document.xml");
+      const xmlFile = zip?.file("word/document.xml");
       if (xmlFile) docXml = await xmlFile.async("string");
       console.log("[import-serie] XML extracted:", docXml ? `${docXml.length} chars` : "null");
 
       // Extract relationships and drawing images from ZIP
       if (docXml) {
-        const relsFile = zip.file("word/_rels/document.xml.rels");
+        const relsFile = zip?.file("word/_rels/document.xml.rels");
         if (relsFile) {
           const relsXml = await relsFile.async("string");
           const relsMap = parseRelationships(relsXml);
-          drawingImages = await extractDrawingImages(zip, docXml, relsMap);
-          if (drawingImages.size > 0) {
+          drawingImages = zip ? await extractDrawingImages(zip, docXml, relsMap) : undefined;
+          if (drawingImages && drawingImages.size > 0) {
             console.log("[import-serie] DrawingML/VML images found:", drawingImages.size, "paragraphs with images");
           }
         }
@@ -1363,7 +1496,7 @@ export async function POST(req: NextRequest) {
     // Only parse XML for green highlights, skip mammoth + images + CloudConvert
     if (isCorrection) {
       console.log("[import-serie] Correction mode (fast path): only parsing highlights");
-      const xmlFile = zip.file("word/document.xml");
+      const xmlFile = zip?.file("word/document.xml");
       if (!xmlFile) return NextResponse.json({ error: "document.xml introuvable" }, { status: 422 });
       const docXml = await xmlFile.async("string");
 

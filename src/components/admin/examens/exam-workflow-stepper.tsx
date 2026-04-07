@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Upload, CheckCircle2, Loader2, Download, RefreshCw } from "lucide-react";
 import { removeAllQuestionsFromSerie } from "@/app/(admin)/admin/exercices/actions";
 import { createClient } from "@/lib/supabase/client";
+import JSZip from "jszip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,11 +131,21 @@ export default function ExamWorkflowStepper({
     const formData = new FormData();
     formData.append("serieId", serieId);
 
-    // Large files (>4MB): upload to Storage first via signed URL, send path to API
+    // Large files (>4MB): extract just the XML from the ZIP client-side (skip heavy images)
     if (file.size > 4 * 1024 * 1024) {
-      const storagePath = await uploadLargeFile(file, serieId);
-      if (!storagePath) { setSujetError("Erreur upload du fichier volumineux. Réessayez."); setImportingSujet(false); return; }
-      formData.append("storagePath", storagePath);
+      try {
+        const buf = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const xmlFile = zip.file("word/document.xml");
+        if (!xmlFile) { setSujetError("Fichier Word invalide (pas de document.xml)"); setImportingSujet(false); return; }
+        const xml = await xmlFile.async("string");
+        formData.append("docXml", xml);
+        formData.append("largeFile", "true");
+        // Also upload full file to Storage in background for future reference
+        uploadLargeFile(file, serieId).catch(() => {});
+      } catch (e: any) {
+        setSujetError("Erreur lecture du fichier: " + e.message); setImportingSujet(false); return;
+      }
     } else {
       formData.append("file", file);
     }
@@ -184,9 +195,17 @@ export default function ExamWorkflowStepper({
     formData.append("serieId", serieId);
 
     if (file.size > 4 * 1024 * 1024) {
-      const storagePath = await uploadLargeFile(file, serieId);
-      if (!storagePath) { setCorrectionError("Erreur upload du fichier volumineux. Réessayez."); setImportingCorrection(false); return; }
-      formData.append("storagePath", storagePath);
+      try {
+        const buf = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const xmlFile = zip.file("word/document.xml");
+        if (!xmlFile) { setCorrectionError("Fichier Word invalide"); setImportingCorrection(false); return; }
+        const xml = await xmlFile.async("string");
+        formData.append("docXml", xml);
+        formData.append("largeFile", "true");
+      } catch (e: any) {
+        setCorrectionError("Erreur lecture du fichier: " + e.message); setImportingCorrection(false); return;
+      }
     } else {
       formData.append("file", file);
     }
