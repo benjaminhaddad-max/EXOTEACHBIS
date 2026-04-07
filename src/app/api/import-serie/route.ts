@@ -785,12 +785,19 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       liCount++;
       continue;
     }
-    // Extra <li> after 5 options → could be figure caption or inter-group text
+    // Extra <li> after 5 options → could be figure caption, legend continuation, or inter-group text
     if (p.tag === "li" && currentQuestion.options.length >= 5) {
       const liImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
-      if (liImgMatch) pendingImages.push(liImgMatch[1]);
-      else if (/^Figure\s+\d+/i.test(text.trim())) pendingCaptions.push(text.trim());
-      else if (text.trim().length > 10) pendingIntroLines.push(text.trim());
+      if (liImgMatch) {
+        pendingImages.push(liImgMatch[1]);
+      } else if (/^Figure\s+\d+/i.test(text.trim())) {
+        pendingCaptions.push(text.trim());
+      } else if (pendingCaptions.length > 0 && text.trim().length > 2) {
+        // Legend continuation: append to last Figure caption
+        pendingCaptions[pendingCaptions.length - 1] += "\n" + text.trim();
+      } else if (text.trim().length > 10) {
+        pendingIntroLines.push(text.trim());
+      }
       continue;
     }
 
