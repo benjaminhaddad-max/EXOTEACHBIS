@@ -462,22 +462,23 @@ function PlayingScreen({
     <div className="fixed inset-0 z-40 flex flex-col overflow-hidden" style={{ backgroundColor: "#F5F6FA" }}>
 
       {/* ── TOP HEADER ── */}
-      <header className="shrink-0 flex items-center justify-between px-6 py-4 bg-navy">
-        <div className="flex items-center gap-4">
-          <img src="/ds-logo-2026.png" alt="Diploma Santé" className="h-12 w-auto object-contain" />
-          <div className="h-5 w-px bg-white/20" />
-          <div>
-            <p className="text-sm font-bold text-white">{serie.name}</p>
-            <p className="text-xs text-white/50">{serie.type === "concours_blanc" ? "Concours blanc" : serie.type === "revision" ? "Révision" : serie.type === "entrainement" ? "Entraînement" : "QCM"}</p>
+      {isAdminPreview && (
+        <div className="shrink-0 flex items-center justify-between px-6 py-1.5 bg-[#C9A84C] text-[#0e1e35]">
+          <span className="text-xs font-semibold">👁️ Mode aper\u00E7u \u00E9l\u00E8ve</span>
+          <a href="/admin/pedagogie" className="text-xs font-semibold underline hover:no-underline">← Retour \u00E0 l'admin</a>
+        </div>
+      )}
+      <header className="shrink-0 flex items-center justify-between px-6 py-3 bg-navy">
+        <div className="flex items-center gap-4 min-w-0">
+          <img src="/ds-logo-2026.png" alt="Diploma Santé" className="h-10 w-auto object-contain shrink-0" />
+          <div className="h-5 w-px bg-white/20 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white truncate">{serie.name}</p>
+            <p className="text-xs text-white/50">{serie.type === "concours_blanc" ? "Concours blanc" : serie.type === "revision" ? "R\u00E9vision" : serie.type === "entrainement" ? "Entra\u00EEnement" : "QCM"}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {isAdminPreview && (
-            <a href="/admin/pedagogie" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold/20 text-gold text-xs font-semibold hover:bg-gold/30 transition">
-              ← Retour admin
-            </a>
-          )}
+        <div className="flex items-center gap-3 shrink-0">
           {timed && (
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-white/10 text-white/80"}`}>
               <Clock size={14} />
