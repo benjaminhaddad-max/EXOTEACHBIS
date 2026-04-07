@@ -16,19 +16,20 @@ const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const MARGIN = 12 * MM;
 
-// Grid layout: 4 columns, 30 questions per column, groups of 10
-const TOTAL_Q = 120;
+// Grid layout: 4 columns, 18 questions per column = 72 total
+const TOTAL_Q = 72;
 const COLS = 4;
-const Q_PER_COL = 30;
+const Q_PER_COL = 18;
 const GROUP_SIZE = 10;
 
-// Box dimensions (small square)
-const BOX = 3.2 * MM;   // box width & height
-const BOX_GAP = 0.8 * MM; // gap between boxes
-const ROW_H = 4.5 * MM; // row height (box + vertical gap)
-const NUM_W = 8 * MM;    // question number width
+// Box dimensions
+const BOX = 3.5 * MM;    // box width & height
+const BOX_GAP = 1.2 * MM; // gap between boxes
+const REMORD_GAP = 0.5 * MM; // gap between answer row and remords row
+const ROW_H = (BOX * 2 + REMORD_GAP + 2 * MM); // 2 rows per question + spacing
+const NUM_W = 9 * MM;    // question number width
 const COL_GAP = 5 * MM;  // gap between columns
-const GROUP_GAP = 3 * MM; // extra gap between groups of 10
+const GROUP_GAP = 4 * MM; // extra gap between groups of 10
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 // ─── Main Route ──────────────────────────────────────────────────────────────
@@ -101,9 +102,29 @@ export async function POST(req: NextRequest) {
       borderWidth: 0.5, borderColor: BLACK, color: WHITE,
     });
 
+    // Right side: exam info box
+    const infoX = PAGE_W - MARGIN - 50 * MM;
+    page.drawRectangle({
+      x: infoX, y: numGridY - 6 * MM, width: 50 * MM, height: 7 * MM,
+      borderWidth: 0.5, borderColor: BLACK, color: WHITE,
+    });
+    if (examTitle) {
+      page.drawText(examTitle, {
+        x: infoX + 2 * MM, y: numGridY - 4 * MM, size: 6, font: fontBold, color: BLACK,
+      });
+    }
+
+    // Date + Matière pre-filled
+    page.drawText("Date : " + examDate, {
+      x: fieldsX, y: numGridY - 28 * MM, size: 7, font, color: BLACK,
+    });
+    page.drawText("Matière : " + subjectName, {
+      x: fieldsX + 40 * MM, y: numGridY - 28 * MM, size: 7, font, color: BLACK,
+    });
+
     // "Vous pouvez écrire uniquement dans ce cadre"
     page.drawText("Vous pouvez écrire uniquement dans ce cadre", {
-      x: fieldsX + 15 * MM, y: numGridY - 30 * MM, size: 6, font, color: GRAY,
+      x: fieldsX + 15 * MM, y: numGridY - 34 * MM, size: 6, font, color: GRAY,
     });
 
     // Instruction line
@@ -159,7 +180,7 @@ export async function POST(req: NextRequest) {
             size: numSize, font: fontBold, color: BLACK,
           });
 
-          // 5 boxes (A B C D E)
+          // Row 1: Answer boxes (A B C D E)
           for (let li = 0; li < LETTERS.length; li++) {
             const bx = colX + NUM_W + li * (BOX + BOX_GAP);
             page.drawRectangle({
@@ -169,8 +190,19 @@ export async function POST(req: NextRequest) {
             });
           }
 
-          // Horizontal line after each question
-          const lineY = rowY - 0.3 * MM;
+          // Row 2: Droit au remords (same 5 boxes below)
+          const remordY = rowY - BOX - REMORD_GAP;
+          for (let li = 0; li < LETTERS.length; li++) {
+            const bx = colX + NUM_W + li * (BOX + BOX_GAP);
+            page.drawRectangle({
+              x: bx, y: remordY,
+              width: BOX, height: BOX,
+              borderWidth: 0.5, borderColor: BLACK, color: WHITE,
+            });
+          }
+
+          // Horizontal separator after each question
+          const lineY = remordY - 0.5 * MM;
           page.drawLine({
             start: { x: colX + NUM_W, y: lineY },
             end: { x: colX + NUM_W + 5 * (BOX + BOX_GAP) - BOX_GAP, y: lineY },
