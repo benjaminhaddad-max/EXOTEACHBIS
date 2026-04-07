@@ -552,18 +552,10 @@ function extractImagesPerQuestion(html: string): string[][] {
     }).filter(Boolean);
   }
 
-  // Images before first Question → last one is usually the relevant structure
-  const preImages = extractImgs(parts[0] ?? "");
-  // Keep only the last pre-image (skip logos/headers, keep the structure)
-  const relevantPreImage = preImages.length > 0 ? [preImages[preImages.length - 1]] : [];
-
+  // Images before first Question are section images (handled separately)
+  // Don't assign them to Q1 to avoid duplication
   for (let i = 1; i < parts.length; i++) {
-    const imgs = extractImgs(parts[i]);
-    if (i === 1) {
-      result.push([...relevantPreImage, ...imgs]);
-    } else {
-      result.push(imgs);
-    }
+    result.push(extractImgs(parts[i]));
   }
   return result;
 }

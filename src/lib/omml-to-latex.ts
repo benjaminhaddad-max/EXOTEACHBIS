@@ -322,7 +322,17 @@ export function extractParagraphText(paragraphContent: string): string {
     pos = mPos;
   }
 
-  return parts.join("").trim();
+  // Ensure spaces around math blocks so they don't merge with adjacent text
+  // e.g. "$n=2$et" → "$n=2$ et"
+  let result = parts.join("");
+  // Match $...$ blocks and ensure space before/after when adjacent to letters
+  result = result.replace(/\$([^$]+)\$/g, (match) => {
+    return `\x00${match}\x01`; // temp markers for open/close
+  });
+  result = result.replace(/\x01([a-zA-ZÀ-ÿ])/g, "\x01 $1"); // space after math block + letter
+  result = result.replace(/([a-zA-ZÀ-ÿ0-9])\x00/g, "$1 \x00"); // space before math block after letter/digit
+  result = result.replace(/\x00/g, "").replace(/\x01/g, ""); // remove markers
+  return result.trim();
 }
 
 /**
