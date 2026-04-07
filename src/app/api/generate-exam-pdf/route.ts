@@ -62,7 +62,7 @@ interface ExamInput {
 
 // ─── Text helpers ────────────────────────────────────────────────────────────
 
-/** Strip LaTeX/Markdown for PDF plain text */
+/** Strip LaTeX/Markdown and replace non-WinAnsi chars for PDF plain text */
 function cleanText(text: string): string {
   return text
     .replace(/\$\$?([^$]+)\$\$?/g, (_m, t) => t)
@@ -73,6 +73,39 @@ function cleanText(text: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    // Greek letters → Latin equivalents (WinAnsi doesn't support Greek)
+    .replace(/σ/g, "s").replace(/Σ/g, "S")
+    .replace(/π/g, "p").replace(/Π/g, "P")
+    .replace(/δ/g, "d").replace(/Δ/g, "D")
+    .replace(/α/g, "a").replace(/Α/g, "A")
+    .replace(/β/g, "b").replace(/Β/g, "B")
+    .replace(/γ/g, "g").replace(/Γ/g, "G")
+    .replace(/λ/g, "l").replace(/Λ/g, "L")
+    .replace(/μ/g, "u").replace(/Μ/g, "M")
+    .replace(/ω/g, "w").replace(/Ω/g, "W")
+    .replace(/θ/g, "th").replace(/Θ/g, "Th")
+    .replace(/φ/g, "ph").replace(/Φ/g, "Ph")
+    .replace(/χ/g, "ch").replace(/Χ/g, "Ch")
+    .replace(/ψ/g, "ps").replace(/Ψ/g, "Ps")
+    .replace(/ε/g, "e").replace(/η/g, "n")
+    .replace(/ν/g, "v").replace(/ρ/g, "r")
+    .replace(/τ/g, "t").replace(/ζ/g, "z")
+    .replace(/ξ/g, "x").replace(/ι/g, "i")
+    .replace(/κ/g, "k").replace(/υ/g, "y")
+    // Subscript/superscript numbers
+    .replace(/₀/g, "0").replace(/₁/g, "1").replace(/₂/g, "2")
+    .replace(/₃/g, "3").replace(/₄/g, "4").replace(/₅/g, "5")
+    .replace(/₆/g, "6").replace(/₇/g, "7").replace(/₈/g, "8").replace(/₉/g, "9")
+    .replace(/⁰/g, "0").replace(/¹/g, "1").replace(/²/g, "2")
+    .replace(/³/g, "3").replace(/⁴/g, "4").replace(/⁵/g, "5")
+    .replace(/⁺/g, "+").replace(/⁻/g, "-")
+    // Other special chars
+    .replace(/→/g, "->").replace(/←/g, "<-").replace(/↔/g, "<->")
+    .replace(/≤/g, "<=").replace(/≥/g, ">=").replace(/≠/g, "!=")
+    .replace(/±/g, "+/-").replace(/×/g, "x").replace(/÷/g, "/")
+    .replace(/∞/g, "inf").replace(/∆/g, "D")
+    // Remove any remaining non-WinAnsi characters
+    .replace(/[^\x00-\xFF]/g, "?")
     .trim();
 }
 
