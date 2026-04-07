@@ -584,47 +584,71 @@ function PlayingScreen({
 
               return (
                 <React.Fragment key={q.id}>
-                  {sectionInfo && (
-                    <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm space-y-3">
-                      {sectionInfo.title && <h3 className="text-sm font-bold text-blue-900">{sectionInfo.title}</h3>}
-                      {sectionInfo.intro_text && (
-                        <div className="space-y-3">
-                          {sectionInfo.intro_text.split("\n").map((line, li) => {
-                            const isFigure = /^Figure\s+\d+/i.test(line.trim());
-                            if (isFigure) {
-                              return (
-                                <div key={li} className="bg-blue-100/50 rounded-lg px-4 py-2.5 border border-blue-200/60">
-                                  <p className="text-xs text-blue-900 leading-relaxed">
-                                    <strong>{line.match(/^Figure\s+\d+\.?/i)?.[0]}</strong>
-                                    {" "}<MathText text={line.replace(/^Figure\s+\d+\.?\s*/i, "")} className="text-xs" />
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return (
-                              <p key={li} className="text-xs text-blue-800/80 leading-relaxed">
-                                <MathText text={line} className="text-xs" />
+                  {sectionInfo && (() => {
+                    const urls = parseImageUrls(sectionInfo.image_url);
+                    const lines = (sectionInfo.intro_text || "").split("\n");
+
+                    // Split into: intro lines (before first Figure) + figure blocks (Figure caption + sub-lines)
+                    const introLines: string[] = [];
+                    const figureBlocks: { caption: string; subLines: string[]; imageUrl?: string }[] = [];
+                    let currentFigure: { caption: string; subLines: string[] } | null = null;
+
+                    for (const line of lines) {
+                      if (/^Figure\s+\d+/i.test(line.trim())) {
+                        if (currentFigure) figureBlocks.push(currentFigure);
+                        currentFigure = { caption: line.trim(), subLines: [] };
+                      } else if (currentFigure) {
+                        currentFigure.subLines.push(line);
+                      } else {
+                        introLines.push(line);
+                      }
+                    }
+                    if (currentFigure) figureBlocks.push(currentFigure);
+
+                    // Pair images with figure blocks (in order)
+                    for (let fi = 0; fi < figureBlocks.length && fi < urls.length; fi++) {
+                      figureBlocks[fi].imageUrl = urls[fi];
+                    }
+                    // Extra images not paired with a figure
+                    const extraImages = urls.slice(figureBlocks.length);
+
+                    return (
+                      <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm space-y-4">
+                        {sectionInfo.title && <h3 className="text-sm font-bold text-blue-900">{sectionInfo.title}</h3>}
+
+                        {/* Intro text (before figures) */}
+                        {introLines.filter(l => l.trim()).map((line, li) => (
+                          <p key={"intro" + li} className="text-xs text-blue-800/80 leading-relaxed">
+                            <MathText text={line} className="text-xs" />
+                          </p>
+                        ))}
+
+                        {/* Each Figure: caption box → image → sub-lines */}
+                        {figureBlocks.map((fb, fi) => (
+                          <div key={"fig" + fi} className="space-y-2">
+                            <div className="bg-blue-100/50 rounded-lg px-4 py-2.5 border border-blue-200/60">
+                              <p className="text-xs text-blue-900 leading-relaxed">
+                                <strong>{fb.caption.match(/^Figure\s+\d+\.?\s*:?/i)?.[0]}</strong>
+                                {" "}<MathText text={fb.caption.replace(/^Figure\s+\d+\.?\s*:?\s*/i, "")} className="text-xs" />
                               </p>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {sectionInfo.image_url && (() => {
-                        const urls = parseImageUrls(sectionInfo.image_url);
-                        // Find which Figure captions exist in intro_text to pair images with legends
-                        const figureLines = (sectionInfo.intro_text || "").split("\n").filter(l => /^Figure\s+\d+/i.test(l.trim()));
-                        if (figureLines.length > 1 && urls.length >= figureLines.length) {
-                          // Multiple figures: show each image under its caption (already rendered above)
-                          return <div className="space-y-3">
-                            {urls.map((url, i) => (
-                              <ZoomableImage key={i} src={url} />
-                            ))}
-                          </div>;
-                        }
-                        return <QuestionImages imageUrl={sectionInfo.image_url} />;
-                      })()}
-                    </div>
-                  )}
+                              {fb.subLines.filter(l => l.trim()).map((sl, si) => (
+                                <p key={si} className="text-xs text-blue-800/70 leading-relaxed mt-1 ml-2">
+                                  <MathText text={sl} className="text-xs" />
+                                </p>
+                              ))}
+                            </div>
+                            {fb.imageUrl && <ZoomableImage src={fb.imageUrl} />}
+                          </div>
+                        ))}
+
+                        {/* Extra images not paired with a figure */}
+                        {extraImages.map((url, ei) => <ZoomableImage key={"extra" + ei} src={url} />)}
+
+                        {/* If no figure blocks but has images, show them */}
+                        {figureBlocks.length === 0 && urls.length > 0 && <QuestionImages imageUrl={sectionInfo.image_url} />}
+                      </div>
+                    );
+                  })()}
                 <div
                   ref={(el) => { questionRefs.current[i] = el; }}
                   className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
