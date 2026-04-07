@@ -205,22 +205,31 @@ export default function ExamWorkflowStepper({
         method: "POST",
         body: formData,
       });
+
+      // Handle non-JSON responses (timeout, 500, etc.)
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("json")) {
+        setCorrectionError(`Erreur serveur (${res.status}). Le serveur n'a pas répondu correctement. Réessayez.`);
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok) {
-        setCorrectionError(data.error || "Erreur lors de l'import de la correction");
+        setCorrectionError(data.error || `Erreur ${res.status}`);
         return;
       }
       setCorrectionResult({
-        questionsUpdated: data.questionsUpdated ?? data.updated ?? 0,
+        questionsUpdated: data.questionsUpdated ?? data.updated ?? data.created ?? 0,
         correctAnswersMarked: data.correctAnswersMarked ?? data.answersMarked ?? 0,
       });
       markComplete(2);
       onQuestionsChanged();
 
-      // Auto-generate PDF + Grid after correction
-      autoGenerateOutputs();
+      // Auto-generate PDF + Grid after correction (don't await - fire and forget)
+      autoGenerateOutputs().catch(e => console.error("[autoGenerate]", e));
     } catch (err: any) {
-      setCorrectionError(err.message || "Erreur réseau");
+      console.error("[correction import]", err);
+      setCorrectionError(String(err?.message || err || "Erreur réseau — vérifiez que le deploy Vercel est terminé"));
     } finally {
       setImportingCorrection(false);
     }
