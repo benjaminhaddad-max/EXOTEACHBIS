@@ -77,27 +77,75 @@ export async function POST(req: NextRequest) {
     y -= mm(2);
 
     // ═══════════════════════════════════════════════════════════════════
-    // NOM / Prénom / N° étudiant — one row, simple text fields
+    // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
     // ═══════════════════════════════════════════════════════════════════
 
-    const fH = mm(5.5);
-    const thirdW = (CW - mm(6)) / 3;
+    const fH = mm(5);
+    const sectionTop = y;
 
     // NOM
     page.drawText("NOM", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(10), y: y - mm(1.5), width: thirdW - mm(10), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    page.drawRectangle({
+      x: MX + mm(14), y: y - mm(1.5), width: mm(50), height: fH,
+      borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+    });
+    y -= fH + mm(2);
 
     // Prénom
-    const px = MX + thirdW + mm(3);
-    page.drawText("Pr\u00E9nom", { x: px, y: y - 1, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: px + mm(14), y: y - mm(1.5), width: thirdW - mm(14), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    page.drawText("Pr\u00E9nom", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
+    page.drawRectangle({
+      x: MX + mm(14), y: y - mm(1.5), width: mm(50), height: fH,
+      borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+    });
 
-    // N° étudiant
-    const nx = MX + 2 * thirdW + mm(6);
-    page.drawText("N\u00B0 \u00E9tudiant", { x: nx, y: y - 1, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: nx + mm(18), y: y - mm(1.5), width: thirdW - mm(18), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    // ── N° étudiant grid (right side) ──
+    const DIGITS = 6;
+    const bigBox = mm(5);
+    const bigGap = mm(1.5);
+    const smallBox = mm(3.5);
+    const smallGap = mm(0.5);
+    const gridW = DIGITS * (bigBox + bigGap) - bigGap;
+    const gridX = MX + CW - gridW - mm(2);
+    let gy = sectionTop;
 
-    y -= fH + mm(2);
+    // Title
+    page.drawText("Saisir votre N\u00B0 d'\u00E9tudiant", {
+      x: gridX, y: gy, size: 6, font: B, color: BLACK,
+    });
+    gy -= mm(3);
+
+    // Large write-in boxes
+    for (let d = 0; d < DIGITS; d++) {
+      page.drawRectangle({
+        x: gridX + d * (bigBox + bigGap), y: gy - bigBox * 1.5,
+        width: bigBox, height: bigBox * 1.5,
+        borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+      });
+    }
+    gy -= bigBox * 1.5 + mm(2);
+
+    // Bubbling grid: 10 rows (0-9) x DIGITS columns
+    for (let r = 0; r < 10; r++) {
+      const ry = gy - r * (smallBox + smallGap);
+      // Row label
+      page.drawText(String(r), {
+        x: gridX - mm(3), y: ry - smallBox + mm(0.5),
+        size: 5.5, font: B, color: BLACK,
+      });
+      // Boxes (centered under big boxes)
+      for (let d = 0; d < DIGITS; d++) {
+        const bx = gridX + d * (bigBox + bigGap) + (bigBox - smallBox) / 2;
+        page.drawRectangle({
+          x: bx, y: ry - smallBox,
+          width: smallBox, height: smallBox,
+          borderWidth: 0.3, borderColor: BLACK, color: WHITE,
+        });
+      }
+    }
+
+    const gridEndY = gy - 10 * (smallBox + smallGap);
+    const leftEndY = y - mm(1.5);
+    y = Math.min(leftEndY, gridEndY) - mm(2);
 
     page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
     y -= mm(1);
@@ -110,14 +158,16 @@ export async function POST(req: NextRequest) {
 
     // ═══════════════════════════════════════════════════════════════════
     // QCM GRID — Each question in a bordered frame
+    // Letters A B C D E BETWEEN answer and remords rows
     // ═══════════════════════════════════════════════════════════════════
 
-    const COL_GAP = mm(2);
-    const COL_W = (CW - (COLS - 1) * COL_GAP) / COLS;
     const BOX = mm(3.5);
+    const HGAP = mm(1.5);
     const NUM_W = mm(7);
-    const HGAP = mm(1);
-    const LABEL_H = mm(0.8);
+    const boxGroupW = 5 * BOX + 4 * HGAP;
+    const COL_W = NUM_W + boxGroupW + mm(2); // tight frame around content
+    const COL_GAP = (CW - COLS * COL_W) / (COLS - 1); // distribute remaining as column gaps
+    const LABEL_H = mm(2);
     const FRAME_PAD_T = mm(0.5);
     const FRAME_PAD_B = mm(0.3);
     const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
@@ -142,14 +192,14 @@ export async function POST(req: NextRequest) {
 
         // Question number
         page.drawText(String(q), {
-          x: cx + mm(1.5), y: frameTop - FRAME_PAD_T - BOX + mm(0.8),
+          x: cx + mm(1.5), y: frameTop - FRAME_PAD_T - BOX + mm(1),
           size: 8, font: B, color: BLACK,
         });
 
         const bx0 = cx + NUM_W;
-
-        // Answer boxes
         const r1y = frameTop - FRAME_PAD_T;
+
+        // Answer boxes (top row)
         for (let li = 0; li < 5; li++) {
           page.drawRectangle({
             x: bx0 + li * (BOX + HGAP), y: r1y - BOX,
@@ -158,17 +208,18 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Letter labels (directly under answer boxes)
+        // Letters BETWEEN rows (centered vertically in LABEL_H gap)
+        const letterY = r1y - BOX - (LABEL_H / 2) - 2;
         for (let li = 0; li < 5; li++) {
           const lx = bx0 + li * (BOX + HGAP);
           const lw = B.widthOfTextAtSize(LETTERS[li], 6);
           page.drawText(LETTERS[li], {
-            x: lx + BOX / 2 - lw / 2, y: r1y - BOX - mm(0.3) - 5,
+            x: lx + BOX / 2 - lw / 2, y: letterY,
             size: 6, font: B, color: BLACK,
           });
         }
 
-        // Remords boxes
+        // Remords boxes (bottom row)
         const r3y = r1y - BOX - LABEL_H;
         for (let li = 0; li < 5; li++) {
           page.drawRectangle({
