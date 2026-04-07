@@ -629,9 +629,14 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
     // Check for image in this element
     const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
 
-    // Detect question headers: "QCM N :", "Question N°1 :", "Question 1 :", etc.
-    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*(?:QCM|Question)\s+(?:N°\s*)?(\d+)\s*[-:.–—]\s*(.*)/iu);
-    if (qcmMatch) {
+    // Detect any question header: "QCM 1:", "Question N°1:", "Q1:", "Q.1", "1. text" (>10 chars), "1) text"
+    let qNum: string | null = null;
+    let qText = "";
+    const labeledMatch = text.match(/^\s*\u{FEFF}?\s*(?:QCM|Question|Q)\.?\s*(?:N°\s*)?(\d+)\s*[-:.–—]?\s*(.*)/iu);
+    const numberedMatch = !labeledMatch ? text.match(/^\s*(\d{1,3})\s*[.)]\s+(.{10,})/) : null;
+    if (labeledMatch) { qNum = labeledMatch[1]; qText = labeledMatch[2].trim(); }
+    else if (numberedMatch) { qNum = numberedMatch[1]; qText = numberedMatch[2].trim(); }
+    if (qNum) {
       flushQuestion();
 
       // First QCM after pending images → create a section
@@ -656,7 +661,7 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
         pendingCaptions = [];
       }
 
-      currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [], sectionIndex: currentSectionIdx };
+      currentQuestion = { text: qText, options: [], images: [], sectionIndex: currentSectionIdx };
       questionTextLines = [];
       liCount = 0;
 
@@ -1378,16 +1383,18 @@ export async function POST(req: NextRequest) {
 
         for (const line of lines) {
           // Match "QCM N : CE" or "QCM N- ABE" or "QCM N – ABCDE"
-          const qcmCorrMatch = line.match(/^\s*\ufeff?\s*(?:QCM|Question)\s+(?:N°\s*)?\d+\s*[-:.–—]\s*([A-E\s,]+)$/i);
-          if (qcmCorrMatch) {
+          // Match any question header with answer letters: "QCM 1 : CE", "Question N°1 : ABE", "Q1 : CD", "1. CE"
+          const corrLabelMatch = line.match(/^\s*\ufeff?\s*(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]\s*([A-E\s,]+)$/i)
+            || line.match(/^\s*(\d{1,3})\s*[.)]\s*([A-E\s,]+)$/);
+          if (corrLabelMatch) {
             flushCorrectionQ();
-            const letters = qcmCorrMatch[1].replace(/[\s,]+/g, "").toUpperCase().split("").filter((c: string) => /^[A-E]$/.test(c));
-            currentCorrectLetters = letters;
-            continue;
+            const raw = (corrLabelMatch[1] || corrLabelMatch[2] || "");
+            const letters = raw.replace(/[\s,]+/g, "").toUpperCase().split("").filter((c: string) => /^[A-E]$/.test(c));
+            if (letters.length > 0) { currentCorrectLetters = letters; continue; }
           }
 
-          // Match "QCM N : text" or "Question N°X : text" (question header without answer letters — skip)
-          const qcmHeaderMatch = line.match(/^\s*\ufeff?\s*(?:QCM|Question)\s+(?:N°\s*)?\d+\s*[-:.–—]/i);
+          // Match question header without answer letters — skip
+          const qcmHeaderMatch = line.match(/^\s*\ufeff?\s*(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]/i);
           if (qcmHeaderMatch) {
             flushCorrectionQ();
             continue;
