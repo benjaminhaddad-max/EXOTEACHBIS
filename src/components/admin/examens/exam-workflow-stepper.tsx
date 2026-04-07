@@ -175,6 +175,14 @@ export default function ExamWorkflowStepper({
     const formData = new FormData();
     formData.append("file", file);
     formData.append("serieId", serieId);
+    // Exam metadata for cover page update
+    formData.append("examTitle", pdfForm.examTitle || serieName);
+    formData.append("ueCode", pdfForm.ueCode || "");
+    formData.append("subjectName", pdfForm.subjectName || "");
+    formData.append("duration", pdfForm.duration || "1H30");
+    formData.append("examDate", pdfForm.dateTime || "");
+    formData.append("institution", pdfForm.institution || "Diploma Santé");
+    formData.append("academicYear", pdfForm.academicYear || "2025 - 2026");
 
     try {
       const res = await fetch("/api/import-serie", {

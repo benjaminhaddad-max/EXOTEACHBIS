@@ -124,6 +124,117 @@ function addKeepNextToQuestions(xml: string): string {
   return result;
 }
 
+type ExamMeta = {
+  examTitle: string;
+  ueCode: string;
+  subjectName: string;
+  duration: string;
+  examDate: string;
+  institution: string;
+  academicYear: string;
+};
+
+/** Helper: create a Word XML paragraph */
+function wxp(text: string, opts: { bold?: boolean; size?: number; color?: string; center?: boolean; spacing?: { before?: number; after?: number }; underline?: boolean } = {}): string {
+  const sz = opts.size ?? 22;
+  const color = opts.color ?? "333333";
+  const rPr = [
+    `<w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>`,
+    `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`,
+    `<w:color w:val="${color}"/>`,
+    opts.bold ? "<w:b/><w:bCs/>" : "",
+    opts.underline ? `<w:u w:val="single"/>` : "",
+  ].join("");
+  const pPr = [
+    opts.center ? `<w:jc w:val="center"/>` : "",
+    opts.spacing ? `<w:spacing w:before="${opts.spacing.before ?? 0}" w:after="${opts.spacing.after ?? 0}"/>` : "",
+  ].join("");
+  return `<w:p><w:pPr>${pPr}</w:pPr><w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+}
+
+/**
+ * Replace everything before the first question with a clean DS cover page.
+ */
+function replaceCoverPage(xml: string, meta: ExamMeta): string {
+  // Find first question paragraph (starts with "Question" or "QCM" or "1.")
+  const bodyStart = xml.indexOf("<w:body>");
+  const bodyEnd = xml.indexOf("</w:body>");
+  if (bodyStart < 0 || bodyEnd < 0) return xml;
+
+  const bodyContent = xml.substring(bodyStart + 8, bodyEnd);
+
+  // Find first question paragraph
+  const pRegex = /<w:p[\s>][\s\S]*?<\/w:p>/g;
+  let m;
+  let firstQuestionIdx = -1;
+  while ((m = pRegex.exec(bodyContent)) !== null) {
+    const tRegex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
+    let text = "";
+    let tm;
+    while ((tm = tRegex.exec(m[0])) !== null) text += tm[1];
+    text = text.trim();
+    if (/^(Question\s+\d|QCM\s+\d|\d+[\s.\-)]+\s*\S)/i.test(text) || /^Partie\s+[A-Z]/i.test(text)) {
+      firstQuestionIdx = m.index;
+      break;
+    }
+  }
+
+  if (firstQuestionIdx < 0) return xml; // no question found, don't touch
+
+  // Build DS cover page paragraphs
+  const ueSubject = [meta.ueCode, meta.subjectName].filter(Boolean).join(" - ");
+  const cover = [
+    // Header bar (institution + year)
+    wxp(`${meta.institution}          ${meta.academicYear}`, { bold: true, size: 24, color: "0E1E35", center: true, spacing: { before: 0, after: 400 } }),
+    // Title
+    wxp(meta.examTitle || "Examen", { bold: true, size: 48, color: "0E1E35", center: true, spacing: { before: 400, after: 200 } }),
+    // UE - Subject
+    ...(ueSubject ? [wxp(ueSubject, { bold: true, size: 32, color: "0E1E35", center: true, spacing: { before: 100, after: 200 } })] : []),
+    // SUJET
+    wxp("SUJET", { bold: true, size: 40, color: "C9A84C", center: true, spacing: { before: 100, after: 200 } }),
+    // Duration + Date
+    wxp(`Dur\u00E9e de l'\u00E9preuve : ${meta.duration}`, { size: 22, color: "555555", center: true, spacing: { before: 100, after: 50 } }),
+    ...(meta.examDate ? [wxp(meta.examDate, { size: 22, color: "555555", center: true, spacing: { before: 0, after: 400 } })] : []),
+    // Instructions title
+    wxp("A LIRE AVANT DE COMMENCER L'\u00C9PREUVE", { bold: true, size: 20, color: "0E1E35", center: true, underline: true, spacing: { before: 300, after: 150 } }),
+    // Instructions
+    wxp("- V\u00E9rifier que les informations saisies sur les GRILLES sont correctes (nom, pr\u00E9nom, num\u00E9ro d'\u00E9tudiant).", { size: 18, color: "555555", spacing: { before: 40, after: 40 } }),
+    wxp("- Les correcteurs liquides et les stylos effa\u00E7ables sont interdits.", { size: 18, color: "555555", spacing: { before: 40, after: 40 } }),
+    wxp("- Seules les r\u00E9ponses port\u00E9es sur la GRILLE DE R\u00C9PONSES seront prises en compte.", { size: 18, color: "555555", spacing: { before: 40, after: 40 } }),
+    wxp("- L'utilisation de tout appareil \u00E9lectronique est formellement interdite.", { size: 18, color: "555555", spacing: { before: 40, after: 40 } }),
+    // Regulatory
+    wxp("INFORMATIONS R\u00C9GLEMENTAIRES", { bold: true, size: 20, color: "0E1E35", center: true, underline: true, spacing: { before: 300, after: 150 } }),
+    wxp("- Les questions sans r\u00E9ponse seront consid\u00E9r\u00E9es comme nulles.", { size: 18, color: "555555", spacing: { before: 40, after: 40 } }),
+    wxp("- Les questions \u00E0 choix multiples peuvent comporter une ou plusieurs r\u00E9ponses exactes.", { size: 18, color: "555555", spacing: { before: 40, after: 40 } }),
+    wxp("- Aucune r\u00E9clamation ne sera accept\u00E9e apr\u00E8s la fin de l'\u00E9preuve.", { size: 18, color: "555555", spacing: { before: 40, after: 200 } }),
+    // Page break
+    `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`,
+  ].join("");
+
+  // Replace: body start → first question with new cover + keep questions
+  const newBody = cover + bodyContent.substring(firstQuestionIdx);
+  return xml.substring(0, bodyStart + 8) + newBody + xml.substring(bodyEnd);
+}
+
+/**
+ * Reformat question headings: "Question X." or "X." → "QCM X :"
+ */
+function reformatQuestionHeadings(xml: string): string {
+  // Replace "Question X." or "Question X :" patterns in <w:t> elements
+  let result = xml;
+  result = result.replace(
+    /(<w:t[^>]*>)\s*Question\s+(\d+)\s*[.:]\s*/gi,
+    "$1QCM $2 : "
+  );
+  // Also handle standalone number "1." at start of text in bold runs
+  // Only if preceded by bold formatting in the same run
+  result = result.replace(
+    /(<w:rPr>[^<]*<w:b\/>[^<]*<\/w:rPr>\s*<w:t[^>]*>)\s*(\d+)\s*\.\s+/g,
+    "$1QCM $2 : "
+  );
+  return result;
+}
+
 /**
  * Parse word/_rels/document.xml.rels to build rId → target path mapping.
  */
@@ -802,6 +913,17 @@ export async function POST(req: NextRequest) {
     const serieId = formData.get("serieId") as string;
     const file    = formData.get("file") as File | null;
 
+    // Exam metadata for cover page
+    const examMeta = {
+      examTitle: (formData.get("examTitle") as string) || "",
+      ueCode: (formData.get("ueCode") as string) || "",
+      subjectName: (formData.get("subjectName") as string) || "",
+      duration: (formData.get("duration") as string) || "1H30",
+      examDate: (formData.get("examDate") as string) || "",
+      institution: (formData.get("institution") as string) || "Diploma Santé",
+      academicYear: (formData.get("academicYear") as string) || "2025 - 2026",
+    };
+
     if (!serieId || !file) {
       return NextResponse.json({ error: "serieId et fichier requis" }, { status: 400 });
     }
@@ -1100,16 +1222,21 @@ export async function POST(req: NextRequest) {
         created++;
       }
 
-      // Fix page breaks: add keepNext to question+option paragraphs so they don't split
+      // Clean up the .docx: cover page, question formatting, page breaks
       try {
         const docXmlFile = zip.file("word/document.xml");
         if (docXmlFile) {
           let docXml = await docXmlFile.async("string");
+          // 1. Replace cover page with DS-branded one
+          docXml = replaceCoverPage(docXml, examMeta);
+          // 2. Reformat question headings: "Question X." → "QCM X :"
+          docXml = reformatQuestionHeadings(docXml);
+          // 3. Add keepNext to prevent question/option page splits
           docXml = addKeepNextToQuestions(docXml);
           zip.file("word/document.xml", docXml);
         }
       } catch (e) {
-        console.warn("[import-serie] Could not fix page breaks:", e);
+        console.warn("[import-serie] Could not clean docx:", e);
       }
 
       // Store cleaned .docx in Supabase for direct download
