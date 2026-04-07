@@ -589,7 +589,7 @@ export async function POST(req: NextRequest) {
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("cours-pdfs")
       .upload(`examens/${serieId}/sujet.docx`, docxBuffer, {
-        contentType: "application/octet-stream",
+        contentType: "application/pdf",
         upsert: true,
       });
 
