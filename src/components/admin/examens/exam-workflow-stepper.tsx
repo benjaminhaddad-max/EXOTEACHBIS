@@ -170,7 +170,7 @@ export default function ExamWorkflowStepper({
           subjectName: propSubjectName || "",
           examDate,
           institution: "Diploma Santé",
-          academicYear: "2025 - 2026",
+          academicYear: "2026 - 2027",
         }),
       });
       const data = await res.json();
