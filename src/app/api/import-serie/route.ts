@@ -1101,7 +1101,7 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
       }
     }
 
-    if (emfEntries.length > 0) {
+    if (emfEntries.length > 0 && !isLargeFile) {
       console.log(`[import-serie] Found ${emfEntries.length} EMF/WMF images to convert`);
 
       // Parse data URIs to buffers
@@ -1294,15 +1294,41 @@ export async function POST(req: NextRequest) {
     }
     console.log("[import-serie] Media catalog:", mediaCatalog.size, "files,", imageUpgradeMap.size, "upgradable EMF→web");
 
-    // Convertir DOCX → HTML via mammoth (with custom image handler to prefer PNG over EMF)
+    // Convertir DOCX → HTML via mammoth (with custom image handler)
+    const isLargeFile = buffer.length > 5 * 1024 * 1024;
     const mammothOptions: any = {};
-    if (imageUpgradeMap.size > 0) {
+
+    if (isLargeFile) {
+      // For large files: skip heavy images (TIFF, BMP) to avoid memory explosion
+      // Only keep small JPEG/PNG images, drop everything else
+      console.log(`[import-serie] Large file mode (${(buffer.length / 1024 / 1024).toFixed(1)} MB) — skipping heavy images in mammoth`);
       mammothOptions.convertImage = mammoth.images.imgElement((image: any) => {
         return image.read("base64").then(async (base64: string) => {
           const contentType: string = image.contentType || "";
-          // If it's an EMF/WMF, check if we have a web alternative
+          // Skip TIFF and other heavy formats
+          if (contentType.includes("tiff") || contentType.includes("bmp") || contentType.includes("emf") || contentType.includes("wmf")) {
+            // Check for web alternative in ZIP
+            for (const [baseName, info] of imageUpgradeMap) {
+              try {
+                const webFile = zip.file(info.path);
+                if (webFile) {
+                  const webBase64 = await webFile.async("base64");
+                  return { src: `data:${info.mime};base64,${webBase64}` };
+                }
+              } catch {}
+            }
+            return { src: "" }; // drop heavy image
+          }
+          // Keep small images (< 500KB base64)
+          if (base64.length > 500000) return { src: "" };
+          return { src: `data:${contentType};base64,${base64}` };
+        });
+      });
+    } else if (imageUpgradeMap.size > 0) {
+      mammothOptions.convertImage = mammoth.images.imgElement((image: any) => {
+        return image.read("base64").then(async (base64: string) => {
+          const contentType: string = image.contentType || "";
           if (contentType.includes("emf") || contentType.includes("wmf")) {
-            // Try to find the corresponding web image in the ZIP
             for (const [baseName, info] of imageUpgradeMap) {
               try {
                 const webFile = zip.file(info.path);
