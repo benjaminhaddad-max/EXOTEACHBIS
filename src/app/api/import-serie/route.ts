@@ -1222,24 +1222,11 @@ export async function POST(req: NextRequest) {
         created++;
       }
 
-      // Fix page breaks only (safe minimal XML change)
-      try {
-        const docXmlFile = zip.file("word/document.xml");
-        if (docXmlFile) {
-          let docXml = await docXmlFile.async("string");
-          docXml = addKeepNextToQuestions(docXml);
-          zip.file("word/document.xml", docXml);
-        }
-      } catch (e) {
-        console.warn("[import-serie] Could not fix page breaks:", e);
-      }
-
-      // Store cleaned .docx in Supabase for direct download
+      // Store original .docx as-is in Supabase for direct download
       let sujetDocxUrl: string | null = null;
       try {
-        const cleanedBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
         const storagePath = `examens/${serieId}/sujet.docx`;
-        await supabase.storage.from("cours-pdfs").upload(storagePath, cleanedBuffer, {
+        await supabase.storage.from("cours-pdfs").upload(storagePath, buffer, {
           contentType: "application/pdf", // bucket only allows pdf mime
           upsert: true,
         });
