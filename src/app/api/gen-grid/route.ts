@@ -80,12 +80,17 @@ export async function POST(req: NextRequest) {
       size: 11, font: F, color: GOLD,
     });
 
-    // Title (centered in bar, upper portion)
+    // Title (centered in bar, upper portion) — strip UE/subject if present in info line
     if (examTitle) {
+      let titleText = examTitle;
+      // Remove UE code and subject from title if they'll be in the info line below
+      if (ueCode && titleText.includes(ueCode)) {
+        titleText = titleText.replace(new RegExp(`\\s*[—\\-]\\s*${ueCode}.*$`), "").trim();
+      }
       let ts = 11;
-      while (ts > 5 && B.widthOfTextAtSize(examTitle, ts) > CW - mm(70)) ts -= 0.5;
-      const tw = B.widthOfTextAtSize(examTitle, ts);
-      page.drawText(examTitle, {
+      while (ts > 5 && B.widthOfTextAtSize(titleText, ts) > CW - mm(70)) ts -= 0.5;
+      const tw = B.widthOfTextAtSize(titleText, ts);
+      page.drawText(titleText, {
         x: PW / 2 - tw / 2, y: y - mm(6), size: ts, font: B, color: WHITE,
       });
     }
@@ -99,7 +104,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    y -= barH + mm(5);
+    y -= barH + mm(8);
 
     // ═══════════════════════════════════════════════════════════════════
     // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
@@ -172,7 +177,6 @@ export async function POST(req: NextRequest) {
     const leftEndY = y - mm(1.5);
     y = Math.min(leftEndY, gridEndY) - mm(2);
 
-    page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
     y -= mm(1);
 
     // Instruction
