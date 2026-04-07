@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     // HEADER
     // ═══════════════════════════════════════════════════════════════════
 
+    // Navy bar
     const barH = mm(5.5);
     page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, color: NAVY });
     page.drawText((institution || "DIPLOMA SANT\u00C9").toUpperCase(), {
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
     y -= barH + mm(2);
 
-    // Title (more space after bar so it doesn't overlap)
+    // Title
     if (examTitle) {
       let ts = 9;
       while (ts > 5 && B.widthOfTextAtSize(examTitle, ts) > CW - mm(4)) ts -= 0.5;
@@ -74,46 +75,55 @@ export async function POST(req: NextRequest) {
     }
 
     page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
-    y -= mm(1.5);
+    y -= mm(2);
 
+    // ═══════════════════════════════════════════════════════════════════
     // NOM / Prénom (left) + N° étudiant digit grid (right)
+    // ═══════════════════════════════════════════════════════════════════
+
     const fH = mm(5);
-    const sectionTop = y;
+    const leftY = y;
 
     // NOM
-    page.drawText("NOM", { x: MX, y: y - 0.5, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(10), y: y - mm(1.5), width: mm(50), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
-    y -= fH + mm(1.5);
+    page.drawText("NOM", { x: MX, y: leftY - 0.5, size: 7, font: B, color: BLACK });
+    page.drawRectangle({
+      x: MX + mm(14), y: leftY - mm(1.5), width: mm(55), height: fH,
+      borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+    });
 
     // Prénom
-    page.drawText("Pr\u00E9nom", { x: MX, y: y - 0.5, size: 7, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(14), y: y - mm(1.5), width: mm(46), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
+    page.drawText("Pr\u00E9nom", { x: MX, y: leftY - fH - mm(2), size: 7, font: B, color: BLACK });
+    page.drawRectangle({
+      x: MX + mm(14), y: leftY - fH - mm(3.5), width: mm(55), height: fH,
+      borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+    });
 
-    // N° étudiant: digit grid on the right (5 rows x 10 columns: 0-9)
+    // N° étudiant: digit grid (5 rows x 10 columns)
     const dBox = mm(2.2);
-    const dGap = mm(0.3);
+    const dGap = mm(0.25);
     const dCols = 10;
     const dRows = 5;
     const dGridW = dCols * (dBox + dGap) - dGap;
     const dGridX = MX + CW - dGridW;
-    let dy = sectionTop - mm(0.5);
 
-    page.drawText("N\u00B0 \u00E9tudiant", { x: dGridX, y: dy, size: 5.5, font: B, color: BLACK });
-    dy -= mm(3);
+    // Title
+    page.drawText("N\u00B0 \u00E9tudiant", { x: dGridX, y: leftY - 0.5, size: 6, font: B, color: BLACK });
 
-    // Column headers 0-9
+    // Digits 0-9 headers
+    const digitsY = leftY - mm(4);
     for (let d = 0; d < dCols; d++) {
       const dx = dGridX + d * (dBox + dGap);
-      const dw = B.widthOfTextAtSize(String(d), 5.5);
-      page.drawText(String(d), { x: dx + dBox / 2 - dw / 2, y: dy, size: 5.5, font: B, color: BLACK });
+      const dw = B.widthOfTextAtSize(String(d), 5);
+      page.drawText(String(d), { x: dx + dBox / 2 - dw / 2, y: digitsY, size: 5, font: B, color: BLACK });
     }
-    dy -= mm(2);
 
-    // Grid cells
+    // Grid boxes
+    const gridStartY = digitsY - mm(2);
     for (let row = 0; row < dRows; row++) {
+      const ry = gridStartY - row * (dBox + dGap);
       for (let d = 0; d < dCols; d++) {
         page.drawRectangle({
-          x: dGridX + d * (dBox + dGap), y: dy - row * (dBox + dGap),
+          x: dGridX + d * (dBox + dGap), y: ry - dBox,
           width: dBox, height: dBox,
           borderWidth: 0.3, borderColor: BLACK, color: WHITE,
         });
@@ -121,9 +131,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Move Y below both sections
-    const belowFields = y - mm(1.5);
-    const belowGrid = dy - dRows * (dBox + dGap) - mm(0.5);
-    y = Math.min(belowFields, belowGrid) - mm(1);
+    const leftBottom = leftY - 2 * fH - mm(3.5);
+    const gridBottom = gridStartY - dRows * (dBox + dGap);
+    y = Math.min(leftBottom, gridBottom) - mm(2);
 
     page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
     y -= mm(1);
@@ -136,27 +146,18 @@ export async function POST(req: NextRequest) {
 
     // ═══════════════════════════════════════════════════════════════════
     // QCM GRID — Each question in a bordered frame
-    // Layout per question:
-    //   ┌──────────────────┐
-    //   │ N  □ □ □ □ □     │  answer boxes
-    //   │    A B C D E     │  letter labels
-    //   │    □ □ □ □ □     │  remords boxes
-    //   └──────────────────┘
     // ═══════════════════════════════════════════════════════════════════
 
     const COL_GAP = mm(2);
     const COL_W = (CW - (COLS - 1) * COL_GAP) / COLS;
-
     const BOX = mm(3.2);
     const HGAP = mm(0.8);
     const NUM_W = mm(7);
-
     const LABEL_H = mm(2.8);
     const FRAME_PAD_T = mm(0.8);
     const FRAME_PAD_B = mm(0.5);
     const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
     const FRAME_GAP = mm(0.8);
-
     const gridTop = y;
 
     for (let col = 0; col < COLS; col++) {
@@ -169,24 +170,21 @@ export async function POST(req: NextRequest) {
 
         const frameTop = gridTop - i * (FRAME_H + FRAME_GAP);
 
-        // Frame border
+        // Frame
         page.drawRectangle({
-          x: cx, y: frameTop - FRAME_H,
-          width: COL_W, height: FRAME_H,
+          x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H,
           borderWidth: 0.4, borderColor: BLACK, color: WHITE,
         });
 
         // Question number
-        const qs = String(q);
-        page.drawText(qs, {
-          x: cx + mm(1.5),
-          y: frameTop - FRAME_PAD_T - BOX + mm(0.8),
+        page.drawText(String(q), {
+          x: cx + mm(1.5), y: frameTop - FRAME_PAD_T - BOX + mm(0.8),
           size: 8, font: B, color: BLACK,
         });
 
         const bx0 = cx + NUM_W;
 
-        // Row 1: answer boxes
+        // Answer boxes
         const r1y = frameTop - FRAME_PAD_T;
         for (let li = 0; li < 5; li++) {
           page.drawRectangle({
@@ -196,7 +194,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Row 2: letter labels
+        // Letter labels
         const labY = r1y - BOX - LABEL_H + mm(0.3);
         for (let li = 0; li < 5; li++) {
           const lx = bx0 + li * (BOX + HGAP);
@@ -207,7 +205,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Row 3: remords boxes
+        // Remords boxes
         const r3y = r1y - BOX - LABEL_H;
         for (let li = 0; li < 5; li++) {
           page.drawRectangle({
