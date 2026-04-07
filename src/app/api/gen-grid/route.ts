@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
     const NUM_W = mm(7);
     // Calculate HGAP so boxes fill the frame width
     const HGAP = (COL_W - NUM_W - 5 * BOX - mm(1)) / 4; // distribute remaining space between 5 boxes (4 gaps)
-    const LABEL_H = mm(2.8);
+    const LABEL_H = mm(1.8);
     const FRAME_PAD_T = mm(0.8);
     const FRAME_PAD_B = mm(0.5);
     const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
