@@ -1101,7 +1101,7 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
       }
     }
 
-    if (emfEntries.length > 0 && !isLargeFile) {
+    if (emfEntries.length > 0) {
       console.log(`[import-serie] Found ${emfEntries.length} EMF/WMF images to convert`);
 
       // Parse data URIs to buffers
