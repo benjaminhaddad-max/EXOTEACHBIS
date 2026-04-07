@@ -57,21 +57,13 @@ export async function POST(req: NextRequest) {
     const barH = mm(16);
     page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, borderWidth: 1, borderColor: BLACK, color: WHITE });
 
-    // Logo (left)
-    if (logo) {
-      const logoMaxH = mm(10);
-      const logoScale = logoMaxH / logo.height;
-      const logoW = logo.width * logoScale;
-      const logoH = logo.height * logoScale;
-      page.drawImage(logo, {
-        x: MX + mm(2), y: y - barH + (barH - logoH) / 2,
-        width: logoW, height: logoH,
-      });
-    } else {
-      page.drawText("DIPLOMA SANT\u00C9", {
-        x: MX + mm(2), y: y - mm(6), size: 11, font: B, color: BLACK,
-      });
-    }
+    // Logo (left) — skip PNG (has navy background), use text instead for B&W
+    page.drawText("DIPLOMA SANT\u00C9", {
+      x: MX + mm(3), y: y - barH + (barH - 12) / 2 + 2, size: 12, font: B, color: BLACK,
+    });
+    page.drawText("la pr\u00E9pa m\u00E9decine", {
+      x: MX + mm(3), y: y - barH + (barH - 12) / 2 - 8, size: 7, font: F, color: GRAY,
+    });
 
     // Year (right)
     const yearText = academicYear || "2026 - 2027";
@@ -104,7 +96,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    y -= barH + mm(4);
+    y -= barH + mm(6);
 
     // ═══════════════════════════════════════════════════════════════════
     // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
