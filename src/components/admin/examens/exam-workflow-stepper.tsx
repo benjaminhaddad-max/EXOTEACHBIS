@@ -54,9 +54,9 @@ type PdfFormData = {
 const STEPS = [
   { num: 1, title: "Dépôt du sujet", icon: Upload },
   { num: 2, title: "Dépôt de la correction", icon: FileText },
-  { num: 3, title: "Génération du sujet PDF", icon: FileText },
-  { num: 4, title: "Grille d'examen", icon: FileSpreadsheet },
 ] as const;
+
+const GRID_QUESTION_COUNT = 72; // Always 72 lines in the grid
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -216,11 +216,70 @@ export default function ExamWorkflowStepper({
       });
       markComplete(2);
       onQuestionsChanged();
+
+      // Auto-generate PDF + Grid after correction
+      autoGenerateOutputs();
     } catch (err: any) {
       setCorrectionError(err.message || "Erreur réseau");
     } finally {
       setImportingCorrection(false);
     }
+  }
+
+  // ─── Auto-generate PDF + Grid ────────────────────────────────────────────────
+
+  async function autoGenerateOutputs() {
+    // Generate PDF
+    setGeneratingPdf(true);
+    setPdfError(null);
+    try {
+      const res = await fetch("/api/generate-exam-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serieId,
+          institution: pdfForm.institution,
+          academicYear: pdfForm.academicYear,
+          examTitle: pdfForm.examTitle,
+          ueCode: pdfForm.ueCode,
+          subjectName: pdfForm.subjectName,
+          duration: pdfForm.duration,
+          dateTime: pdfForm.dateTime,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setPdfUrl(data.url + "?t=" + Date.now());
+        onSujetGenerated?.(data.url);
+      } else {
+        setPdfError(data.error || "Erreur génération PDF");
+      }
+    } catch (e: any) { setPdfError(e.message); }
+    finally { setGeneratingPdf(false); }
+
+    // Generate Grid (always 72 lines)
+    setGeneratingGrid(true);
+    setGridError(null);
+    try {
+      const res = await fetch("/api/gen-grid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serieId,
+          questionCount: GRID_QUESTION_COUNT,
+          examTitle: pdfForm.examTitle || serieName,
+          subjectName: pdfForm.subjectName || "",
+          examDate: pdfForm.dateTime || "",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setGridUrl(data.url + "?t=" + Date.now());
+      } else {
+        setGridError(data.error || "Erreur génération grille");
+      }
+    } catch (e: any) { setGridError(e.message); }
+    finally { setGeneratingGrid(false); }
   }
 
   // ─── Step 3: Generate PDF ─────────────────────────────────────────────────────
@@ -739,13 +798,13 @@ export default function ExamWorkflowStepper({
     );
   }
 
-  const stepRenderers = [renderStep1, renderStep2, renderStep3, renderStep4];
+  const stepRenderers = [renderStep1, renderStep2];
 
   // ─── Main render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="rounded-xl border border-white/10 bg-[#0e1e35]">
-      {/* ── Stepper header ─────────────────────────────────────────────────────── */}
+      {/* ── Stepper header (2 steps) ──────────────────────────────────────────── */}
       <div className="flex items-center border-b border-white/10 px-6 py-4">
         {STEPS.map((step, idx) => (
           <div key={step.num} className="flex items-center">
@@ -783,6 +842,62 @@ export default function ExamWorkflowStepper({
 
       {/* ── Step content ───────────────────────────────────────────────────────── */}
       <div className="px-6 py-5">{stepRenderers[currentStep - 1]()}</div>
+
+      {/* ── Auto-generated outputs (after correction) ─────────────────────────── */}
+      {(generatingPdf || generatingGrid || pdfUrl || gridUrl || pdfError || gridError) && (
+        <div className="border-t border-white/10 px-6 py-5 space-y-4">
+          <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+            Documents générés automatiquement
+          </p>
+
+          {/* Loading state */}
+          {(generatingPdf || generatingGrid) && (
+            <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+              <Loader2 size={18} className="animate-spin text-[#C9A84C]" />
+              {generatingPdf ? "Génération du sujet PDF..." : "Génération de la grille..."}
+            </div>
+          )}
+
+          {/* Errors */}
+          {pdfError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              PDF : {pdfError}
+            </div>
+          )}
+          {gridError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              Grille : {gridError}
+            </div>
+          )}
+
+          {/* Download buttons */}
+          <div className="flex gap-3">
+            {pdfUrl && (
+              <a href={pdfUrl} download target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg bg-[#C9A84C] px-4 py-2.5 text-sm font-medium text-black transition hover:bg-[#d4b55c]">
+                <Download size={16} />
+                Télécharger le sujet PDF
+              </a>
+            )}
+            {gridUrl && (
+              <a href={gridUrl} download target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg bg-white/10 border border-white/20 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/15">
+                <Download size={16} />
+                Télécharger la grille (72 QCM)
+              </a>
+            )}
+          </div>
+
+          {/* Regenerate */}
+          {(pdfUrl || gridUrl) && (
+            <button onClick={autoGenerateOutputs} disabled={generatingPdf || generatingGrid}
+              className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors disabled:opacity-40">
+              <RefreshCw size={12} />
+              Regénérer les documents
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
