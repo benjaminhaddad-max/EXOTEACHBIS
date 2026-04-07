@@ -18,11 +18,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger: auto-assign student_id for 'eleve' role on INSERT or UPDATE
+-- Trigger: auto-assign student_id to ALL profiles on INSERT or UPDATE
 CREATE OR REPLACE FUNCTION assign_student_id()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.role = 'eleve' AND (NEW.student_id IS NULL OR NEW.student_id = '') THEN
+  IF NEW.student_id IS NULL OR NEW.student_id = '' THEN
     NEW.student_id := generate_student_id();
   END IF;
   RETURN NEW;
@@ -35,7 +35,7 @@ CREATE TRIGGER trg_assign_student_id
   FOR EACH ROW
   EXECUTE FUNCTION assign_student_id();
 
--- Backfill: assign student_id to all existing students who don't have one
+-- Backfill: assign student_id to all existing profiles who don't have one
 UPDATE profiles
 SET student_id = generate_student_id()
-WHERE role = 'eleve' AND (student_id IS NULL OR student_id = '');
+WHERE student_id IS NULL OR student_id = '';

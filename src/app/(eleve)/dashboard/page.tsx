@@ -55,7 +55,7 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <Header title={greeting} subtitle={profile?.student_id ? `N\u00B0 \u00E9tudiant : ${profile.student_id}` : undefined} />
+      <Header title={greeting} subtitle={profile?.student_id ? `N\u00B0 ${profile.role === "eleve" ? "\u00E9tudiant" : "plateforme"} : ${profile.student_id}` : undefined} />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-8">

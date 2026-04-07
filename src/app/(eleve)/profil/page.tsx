@@ -50,7 +50,7 @@ export default async function ProfilPage() {
           {profile.student_id && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Num\u00E9ro \u00E9tudiant</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-blue-500">Num\u00E9ro {profile.role === "eleve" ? "\u00E9tudiant" : "plateforme"}</p>
                 <p className="text-2xl font-bold font-mono text-blue-900 mt-1">{profile.student_id}</p>
               </div>
               <p className="text-xs text-blue-400">Ce num\u00E9ro est votre identifiant sur la plateforme</p>
