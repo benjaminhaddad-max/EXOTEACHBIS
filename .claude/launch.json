@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "/Users/benjaminhaddad-diplomasante/.nvm/versions/node/v20.20.1/bin/node",
+      "runtimeArgs": ["/Users/benjaminhaddad-diplomasante/Desktop/Plateformes Ben/EXOTEACHBIS-main/node_modules/.bin/next", "dev"],
       "port": 3000
     }
   ]

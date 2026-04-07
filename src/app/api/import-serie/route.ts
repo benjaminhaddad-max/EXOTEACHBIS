@@ -749,7 +749,14 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
     }
 
     // <li> elements are direct options (labeled or unlabeled)
-    if (p.tag === "li" && text.trim().length > 2) {
+    // Stop at 5 options max — extra <li> (images, captions) go to pending context
+    if (p.tag === "li" && text.trim().length > 2 && currentQuestion.options.length < 5) {
+      // Skip <li> that are just images (Figure images inside <ol>)
+      const liImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+      if (liImgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
+        pendingImages.push(liImgMatch[1]);
+        continue;
+      }
       const optLabelMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
       if (optLabelMatch) {
         currentQuestion.options.push({
@@ -766,6 +773,14 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
         });
       }
       liCount++;
+      continue;
+    }
+    // Extra <li> after 5 options → could be figure caption or inter-group text
+    if (p.tag === "li" && currentQuestion.options.length >= 5) {
+      const liImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+      if (liImgMatch) pendingImages.push(liImgMatch[1]);
+      else if (/^Figure\s+\d+/i.test(text.trim())) pendingCaptions.push(text.trim());
+      else if (text.trim().length > 10) pendingIntroLines.push(text.trim());
       continue;
     }
 
