@@ -47,18 +47,18 @@ export async function POST(req: NextRequest) {
       logo = await doc.embedPng(logoBytes);
     } catch { /* logo not found, skip */ }
 
-    let y = PH - mm(4);
+    let y = PH;
 
     // ═══════════════════════════════════════════════════════════════════
-    // HEADER — Navy bar with DS logo + year + title + info
+    // HEADER — Navy bar flush to top, logo + title + year
     // ═══════════════════════════════════════════════════════════════════
 
-    const barH = mm(14);
+    const barH = mm(16);
     page.drawRectangle({ x: 0, y: y - barH, width: PW, height: barH, color: NAVY });
 
-    // Logo (left, centered vertically)
+    // Logo (left, big, centered vertically)
     if (logo) {
-      const logoMaxH = mm(8);
+      const logoMaxH = mm(11);
       const logoScale = logoMaxH / logo.height;
       const logoW = logo.width * logoScale;
       const logoH = logo.height * logoScale;
@@ -68,38 +68,38 @@ export async function POST(req: NextRequest) {
       });
     } else {
       page.drawText("DIPLOMA SANT\u00C9", {
-        x: MX + mm(2), y: y - mm(5), size: 10, font: B, color: WHITE,
+        x: MX + mm(2), y: y - mm(6), size: 12, font: B, color: WHITE,
       });
     }
 
     // Year (right, centered vertically)
     const yearText = academicYear || "2026 - 2027";
-    const yw = F.widthOfTextAtSize(yearText, 10);
+    const yw = F.widthOfTextAtSize(yearText, 11);
     page.drawText(yearText, {
-      x: PW - MX - yw, y: y - barH + (barH - 10) / 2,
-      size: 10, font: F, color: GOLD,
+      x: PW - MX - yw, y: y - barH + (barH - 11) / 2,
+      size: 11, font: F, color: GOLD,
     });
 
-    // Title (centered in bar, upper half)
+    // Title (centered in bar, upper portion)
     if (examTitle) {
-      let ts = 10;
-      while (ts > 5 && B.widthOfTextAtSize(examTitle, ts) > CW - mm(60)) ts -= 0.5;
+      let ts = 11;
+      while (ts > 5 && B.widthOfTextAtSize(examTitle, ts) > CW - mm(70)) ts -= 0.5;
       const tw = B.widthOfTextAtSize(examTitle, ts);
       page.drawText(examTitle, {
-        x: PW / 2 - tw / 2, y: y - mm(5), size: ts, font: B, color: WHITE,
+        x: PW / 2 - tw / 2, y: y - mm(6), size: ts, font: B, color: WHITE,
       });
     }
 
-    // Info line (centered in bar, lower half)
+    // Info line (centered in bar, lower portion)
     const info = [ueCode, subjectName, examDate].filter(Boolean).join("  \u2014  ");
     if (info) {
-      const iw = F.widthOfTextAtSize(info, 7);
+      const iw = F.widthOfTextAtSize(info, 7.5);
       page.drawText(info, {
-        x: PW / 2 - iw / 2, y: y - mm(9), size: 7, font: F, color: GOLD,
+        x: PW / 2 - iw / 2, y: y - mm(10.5), size: 7.5, font: F, color: GOLD,
       });
     }
 
-    y -= barH + mm(1.5);
+    y -= barH + mm(3);
 
     // ═══════════════════════════════════════════════════════════════════
     // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
