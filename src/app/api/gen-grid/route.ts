@@ -53,12 +53,12 @@ export async function POST(req: NextRequest) {
     // HEADER — Navy bar flush to top, logo + title + year
     // ═══════════════════════════════════════════════════════════════════
 
-    const barH = mm(16);
+    const barH = mm(20);
     page.drawRectangle({ x: 0, y: y - barH, width: PW, height: barH, color: NAVY });
 
     // Logo (left, big, centered vertically)
     if (logo) {
-      const logoMaxH = mm(11);
+      const logoMaxH = mm(14);
       const logoScale = logoMaxH / logo.height;
       const logoW = logo.width * logoScale;
       const logoH = logo.height * logoScale;
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       while (ts > 5 && B.widthOfTextAtSize(titleText, ts) > CW - mm(70)) ts -= 0.5;
       const tw = B.widthOfTextAtSize(titleText, ts);
       page.drawText(titleText, {
-        x: PW / 2 - tw / 2, y: y - mm(6), size: ts, font: B, color: WHITE,
+        x: PW / 2 - tw / 2, y: y - mm(8), size: ts, font: B, color: WHITE,
       });
     }
 
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     if (info) {
       const iw = F.widthOfTextAtSize(info, 7.5);
       page.drawText(info, {
-        x: PW / 2 - iw / 2, y: y - mm(10.5), size: 7.5, font: F, color: GOLD,
+        x: PW / 2 - iw / 2, y: y - mm(13), size: 7.5, font: F, color: GOLD,
       });
     }
 
