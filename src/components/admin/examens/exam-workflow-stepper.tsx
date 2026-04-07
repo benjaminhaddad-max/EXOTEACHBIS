@@ -615,7 +615,7 @@ export default function ExamWorkflowStepper({
               {correctionResult.questionsUpdated ?? 0} questions mises à jour
               {(correctionResult.correctAnswersMarked ?? 0) > 0 &&
                 `, ${correctionResult.correctAnswersMarked} réponses correctes marquées`}
-              {" \u2014 Sujet Word et grille g\u00E9n\u00E9r\u00E9s automatiquement ci-dessous."}
+              {" — Sujet Word et grille générés automatiquement ci-dessous."}
             </div>
           </div>
         )}
@@ -679,7 +679,7 @@ export default function ExamWorkflowStepper({
           {(generatingPdf || generatingGrid) && (
             <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
               <Loader2 size={18} className="animate-spin text-[#C9A84C]" />
-              {generatingPdf ? "G\u00E9n\u00E9ration du sujet Word..." : "G\u00E9n\u00E9ration de la grille..."}
+              {generatingPdf ? "Génération du sujet Word..." : "Génération de la grille..."}
             </div>
           )}
 
@@ -698,11 +698,23 @@ export default function ExamWorkflowStepper({
           {/* Download buttons */}
           <div className="flex gap-3">
             {pdfUrl && (
-              <a href={pdfUrl} download target="_blank" rel="noopener noreferrer"
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch(pdfUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `sujet_${serieId}.docx`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch { window.open(pdfUrl, "_blank"); }
+                }}
                 className="flex items-center gap-2 rounded-lg bg-[#C9A84C] px-4 py-2.5 text-sm font-medium text-black transition hover:bg-[#d4b55c]">
                 <Download size={16} />
-                T\u00E9l\u00E9charger le sujet Word
-              </a>
+                Télécharger le sujet Word
+              </button>
             )}
             {gridUrl && (
               <a href={gridUrl} download target="_blank" rel="noopener noreferrer"
