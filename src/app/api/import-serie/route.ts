@@ -1253,12 +1253,13 @@ export async function POST(req: NextRequest) {
       academicYear: (formData.get("academicYear") as string) || "2025 - 2026",
     };
 
-    // Large files: download from Supabase Storage using server client (no HTTP roundtrip)
+    // Large files: download from Supabase Storage using service role client
     const storagePath = formData.get("storagePath") as string | null;
     if (!file && storagePath) {
       console.log(`[import-serie] Reading large file from Storage: ${storagePath}`);
-      const supabaseForFile = await createClient();
-      const { data: fileData, error: dlErr } = await supabaseForFile.storage.from("cours-pdfs").download(storagePath);
+      const { createClient: createSB } = await import("@supabase/supabase-js");
+      const serviceClient = createSB(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const { data: fileData, error: dlErr } = await serviceClient.storage.from("cours-pdfs").download(storagePath);
       if (dlErr || !fileData) return NextResponse.json({ error: "Erreur lecture du fichier depuis le storage: " + dlErr?.message }, { status: 400 });
       file = new File([fileData], "upload.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
       console.log(`[import-serie] File downloaded from storage: ${(fileData.size / 1024 / 1024).toFixed(1)} MB`);

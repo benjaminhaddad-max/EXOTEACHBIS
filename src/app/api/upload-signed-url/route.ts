@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth check with user's session
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -13,8 +15,13 @@ export async function POST(req: NextRequest) {
     const safeName = (fileName || "upload.docx").replace(/\s+/g, "_");
     const storagePath = `examens/${serieId}/${Date.now()}_${safeName}`;
 
-    // Create signed upload URL — client will upload directly to Storage
-    const { data, error } = await supabase.storage
+    // Use service role client for Storage operations (has full permissions)
+    const serviceClient = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    const { data, error } = await serviceClient.storage
       .from("cours-pdfs")
       .createSignedUploadUrl(storagePath);
 
@@ -24,7 +31,6 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      signedUrl: data.signedUrl,
       token: data.token,
       path: data.path,
       storagePath,
