@@ -94,7 +94,15 @@ export default function ExamWorkflowStepper({
   // Auto-generate documents when both steps are already done (returning to page)
   const [autoGenDone, setAutoGenDone] = useState(false);
   useEffect(() => {
-    if (hasCorrections && questionCount > 0 && !autoGenDone && !pdfUrl && !gridUrl && !generatingPdf && !generatingGrid) {
+    // Set sujet Word URL if questions exist (file was stored during import)
+    if (questionCount > 0 && !pdfUrl) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (supabaseUrl) {
+        setPdfUrl(`${supabaseUrl}/storage/v1/object/public/cours-pdfs/examens/${serieId}/sujet.docx?t=${Date.now()}`);
+      }
+    }
+    // Auto-generate grid when correction is done
+    if (hasCorrections && questionCount > 0 && !autoGenDone && !gridUrl && !generatingGrid) {
       setAutoGenDone(true);
       autoGenerateOutputs().catch(e => console.error("[autoGen on mount]", e));
     }
