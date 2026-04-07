@@ -407,9 +407,11 @@ function decodeEntities(text: string): string {
 function stripTags(html: string): string {
   const raw = html
     .replace(/<img[^>]*>/gi, " [image] ")
-    .replace(/<sub>(.*?)<\/sub>/gi, "_{$1}")    // subscript → LaTeX
-    .replace(/<sup>(.*?)<\/sup>/gi, "^{$1}")     // superscript → LaTeX
+    .replace(/<sub>(.*?)<\/sub>/gi, "$_{$1}$")    // subscript → LaTeX math mode
+    .replace(/<sup>(.*?)<\/sup>/gi, "$^{$1}$")     // superscript → LaTeX math mode
     .replace(/<[^>]+>/g, " ")
+    .replace(/\$\s*\$/g, "")                       // clean up empty $$ pairs
+    .replace(/\$\$+/g, "$")                         // merge adjacent $ delimiters
     .replace(/\s+/g, " ")
     .trim();
   return decodeEntities(raw);
@@ -548,8 +550,19 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
  * Questions as "QCM 1 : text" or "QCM 11 : text"
  * Options as "A. text" / "A) text" / "A\ttext" or plain unlabeled lines (often in <ol><li>)
  */
-function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
+function parseQcmLabelFormat(html: string, docXml?: string): { questions: ParsedQuestion[]; sections: ParsedSection[] } {
   const questions: ParsedQuestion[] = [];
+
+  // Pre-parse XML paragraphs for OMML formula extraction (fallback for empty options)
+  const xmlParas: string[] = [];
+  if (docXml) {
+    const wpRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+    let wm: RegExpExecArray | null;
+    while ((wm = wpRegex.exec(docXml)) !== null) {
+      xmlParas.push(extractParagraphText(wm[1]));
+    }
+  }
+  let xmlSearchFrom = 0; // track position to avoid finding wrong options
   const sections: ParsedSection[] = [];
   // Extract both <p> and <li> elements to capture options in ordered lists
   const elemRegex = /<(p|li)[^>]*>([\s\S]*?)<\/(?:p|li)>/gi;
@@ -676,6 +689,11 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
 
       currentQuestion = { text: qText, options: [], images: [], sectionIndex: currentSectionIdx };
       questionTextLines = [];
+      // Advance XML search position to near this question
+      if (xmlParas.length > 0 && qNum) {
+        const qIdx = xmlParas.findIndex((xp, xi) => xi >= xmlSearchFrom && new RegExp(`(?:QCM|Question|Q)\\.?\\s*(?:N°\\s*)?${qNum}\\b`, "i").test(xp));
+        if (qIdx >= 0) xmlSearchFrom = qIdx + 1;
+      }
       liCount = 0;
 
       if (imgMatch) currentQuestion.images.push(imgMatch[1]);
@@ -760,14 +778,26 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
       if (optText.length > 60 && /^[a-zàéèêëîïôùûüç]/i.test(optText) && !/^[A-E]\s*[=<>≥≤]/.test(optText)) {
         // Looks like question text, not an option — fall through
       } else {
-        // Check for image in same paragraph (formula rendered as image)
+        // If option text is empty, try to extract OMML formula from XML
+        let finalText = optText;
+        if (!finalText && xmlParas.length > 0) {
+          const label = optMatch[1].toUpperCase();
+          // Search XML paragraphs near current question for this label's formula
+          for (let xi = xmlSearchFrom; xi < Math.min(xmlSearchFrom + 20, xmlParas.length); xi++) {
+            const xt = xmlParas[xi].trim();
+            if (new RegExp(`^${label}\\.?\\s`).test(xt) && (xt.includes("$") || xt.length > 3)) {
+              finalText = xt.replace(/^\s*[A-E]\.?\s*/, "").trim();
+              break;
+            }
+          }
+        }
         const optImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
         currentQuestion.options.push({
           label: optMatch[1].toUpperCase(),
-          text: optText || (optImgMatch ? "[formule]" : ""),
+          text: finalText || (optImgMatch ? "[formule]" : ""),
           is_correct: false,
         });
-        if (optImgMatch && !optText) currentQuestion.images.push(optImgMatch[1]);
+        if (optImgMatch && !finalText) currentQuestion.images.push(optImgMatch[1]);
         liCount = 0;
         continue;
       }
@@ -1125,7 +1155,7 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 async function parseDocx(html: string, docXml?: string, drawingImages?: Map<number, string[]>, pageImages?: Buffer[]): Promise<{ questions: ParsedQuestion[]; sections: ParsedSection[] }> {
   const fromTables = parseTableFormat(html);
   const fromParagraphs = parseParagraphFormat(html);
-  const qcmLabelResult = parseQcmLabelFormat(html);
+  const qcmLabelResult = parseQcmLabelFormat(html, docXml);
   const xmlResult = docXml ? await parseXmlHighlightFormat(docXml, html, drawingImages, pageImages) : { questions: [], sections: [] };
   console.log(`[parseDocx] tables=${fromTables.length} paragraphs=${fromParagraphs.length} qcmLabel=${qcmLabelResult.questions.length} xml=${xmlResult.questions.length} docXml=${docXml ? "yes" : "no"} sections(xml=${xmlResult.sections.length},qcm=${qcmLabelResult.sections.length})`);
 
