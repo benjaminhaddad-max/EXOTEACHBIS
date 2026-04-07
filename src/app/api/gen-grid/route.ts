@@ -89,11 +89,11 @@ export async function POST(req: NextRequest) {
     page.drawText("Pr\u00E9nom", { x: MX, y: y - 0.5, size: 7, font: B, color: BLACK });
     page.drawRectangle({ x: MX + mm(14), y: y - mm(1.5), width: mm(46), height: fH, borderWidth: 0.4, borderColor: BLACK, color: WHITE });
 
-    // N° étudiant: digit grid on the right (8 rows x 10 columns: 0-9)
-    const dBox = mm(2.8);
+    // N° étudiant: digit grid on the right (5 rows x 10 columns: 0-9)
+    const dBox = mm(2.2);
     const dGap = mm(0.3);
     const dCols = 10;
-    const dRows = 8;
+    const dRows = 5;
     const dGridW = dCols * (dBox + dGap) - dGap;
     const dGridX = MX + CW - dGridW;
     let dy = sectionTop - mm(0.5);
