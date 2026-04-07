@@ -773,10 +773,12 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
     const optMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.*)/);
     if (optMatch && currentQuestion) {
       const optText = optMatch[2].trim();
-      // Guard: if text is very long and starts a sentence, it's probably NOT an option
-      // (e.g., "A partir de la figure..." is question context, not option A)
-      if (optText.length > 60 && /^[a-zàéèêëîïôùûüç]/i.test(optText) && !/^[A-E]\s*[=<>≥≤]/.test(optText)) {
-        // Looks like question text, not an option — fall through
+      // Guard: reject "A partir de la figure..." (starts with a common French word, not an option)
+      // But only if the question has NO options yet (if it already has options, this IS an option)
+      const isLikelyQuestionText = optText.length > 40 && currentQuestion.options.length === 0
+        && /^(partir|propos|l['']aide|l['']issue|l['']ensemble|travers|cause)/i.test(optText);
+      if (isLikelyQuestionText) {
+        // Looks like question text continuation, not an option — fall through
       } else {
         // If option text is empty, try to extract OMML formula from XML
         let finalText = optText;
