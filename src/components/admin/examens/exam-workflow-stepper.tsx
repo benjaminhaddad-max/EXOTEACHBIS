@@ -276,7 +276,7 @@ export default function ExamWorkflowStepper({
           ueCode: pdfForm.ueCode,
           subjectName: pdfForm.subjectName,
           duration: pdfForm.duration,
-          dateTime: pdfForm.dateTime,
+          examDate: pdfForm.dateTime,
         }),
       });
       const data = await res.json();
@@ -333,7 +333,7 @@ export default function ExamWorkflowStepper({
           ueCode: pdfForm.ueCode,
           subjectName: pdfForm.subjectName,
           duration: pdfForm.duration,
-          dateTime: pdfForm.dateTime,
+          examDate: pdfForm.dateTime,
         }),
       });
       const data = await res.json();

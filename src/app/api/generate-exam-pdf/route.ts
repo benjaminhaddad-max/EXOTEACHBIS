@@ -587,18 +587,31 @@ export async function POST(req: NextRequest) {
 
     async function getEmbeddedImage(url: string): Promise<PDFImage | null> {
       if (imageCache.has(url)) return imageCache.get(url)!;
-      const imgData = await fetchImageBytes(url);
-      if (!imgData) return null;
       try {
+        const imgData = await fetchImageBytes(url);
+        if (!imgData) return null;
         let embedded: PDFImage;
-        if (imgData.type === "png") {
-          embedded = await doc.embedPng(imgData.bytes);
-        } else {
-          embedded = await doc.embedJpg(imgData.bytes);
+        try {
+          if (imgData.type === "png") {
+            embedded = await doc.embedPng(imgData.bytes);
+          } else {
+            embedded = await doc.embedJpg(imgData.bytes);
+          }
+        } catch {
+          // If PNG fails, try as JPG and vice versa
+          try {
+            embedded = imgData.type === "png"
+              ? await doc.embedJpg(imgData.bytes)
+              : await doc.embedPng(imgData.bytes);
+          } catch {
+            console.warn("[generate-exam-pdf] Failed to embed image:", url.substring(0, 80));
+            return null;
+          }
         }
         imageCache.set(url, embedded);
         return embedded;
-      } catch {
+      } catch (e) {
+        console.warn("[generate-exam-pdf] Image fetch/embed error:", e);
         return null;
       }
     }
