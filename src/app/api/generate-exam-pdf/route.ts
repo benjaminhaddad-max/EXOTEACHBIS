@@ -74,17 +74,17 @@ const SUB_MAP: Record<string, string> = {
   "\u209A": "p", "\u209B": "s", "\u209C": "t", "\u2093": "x",
 };
 
-// Unicode Greek → Symbol font char
+// Unicode Greek → WinAnsi-safe Latin rendered in italic (sym=true → use oblique font)
 const GREEK_SYM: Record<string, string> = {
   "\u03B1": "a", "\u03B2": "b", "\u03B3": "g", "\u03B4": "d",
-  "\u03B5": "e", "\u03B6": "z", "\u03B7": "h", "\u03B8": "q",
-  "\u03B9": "i", "\u03BA": "k", "\u03BB": "l", "\u03BC": "m",
-  "\u03BD": "n", "\u03BE": "x", "\u03C0": "p", "\u03C1": "r",
-  "\u03C3": "s", "\u03C4": "t", "\u03C5": "u", "\u03C6": "f",
-  "\u03C7": "c", "\u03C8": "y", "\u03C9": "w",
+  "\u03B5": "e", "\u03B6": "z", "\u03B7": "h", "\u03B8": "th",
+  "\u03B9": "i", "\u03BA": "k", "\u03BB": "l", "\u03BC": "u",
+  "\u03BD": "v", "\u03BE": "x", "\u03C0": "p", "\u03C1": "r",
+  "\u03C3": "s", "\u03C4": "t", "\u03C5": "y", "\u03C6": "ph",
+  "\u03C7": "ch", "\u03C8": "ps", "\u03C9": "w",
   "\u0391": "A", "\u0392": "B", "\u0393": "G", "\u0394": "D",
-  "\u0398": "Q", "\u039B": "L", "\u03A0": "P", "\u03A3": "S",
-  "\u03A6": "F", "\u03A8": "Y", "\u03A9": "W",
+  "\u0398": "Th", "\u039B": "L", "\u03A0": "P", "\u03A3": "S",
+  "\u03A6": "Ph", "\u03A8": "Ps", "\u03A9": "W",
 };
 
 // ─── prepareText: clean HTML/smart quotes/LaTeX commands, preserve sub/sup/Greek ─
@@ -146,7 +146,7 @@ function processLatex(s: string): string {
   s = s.replace(/\\approx/g, "\u2248");
   s = s.replace(/\\infty/g, "\u221E");
 
-  // LaTeX Greek → Unicode Greek (will be rendered via Symbol font)
+  // LaTeX Greek → Unicode Greek (rendered in italic via oblique font)
   s = s.replace(/\\alpha/g, "\u03B1");
   s = s.replace(/\\beta/g, "\u03B2");
   s = s.replace(/\\gamma/g, "\u03B3");
@@ -231,7 +231,7 @@ function parseToSegments(text: string): Seg[] {
       continue;
     }
 
-    // Greek char → Symbol font
+    // Greek char → italic font
     if (ch in GREEK_SYM) {
       flush();
       segs.push({ text: GREEK_SYM[ch], style: "n", sym: true });
@@ -312,8 +312,8 @@ function parseToSegments(text: string): Seg[] {
 
 // ─── Segment measurement ────────────────────────────────────────────────────
 
-function segWidth(seg: Seg, font: PDFFont, symFont: PDFFont, fontSize: number): number {
-  const f = seg.sym ? symFont : font;
+function segWidth(seg: Seg, font: PDFFont, italicFont: PDFFont, fontSize: number): number {
+  const f = seg.sym ? italicFont : font;
   const sz = seg.style === "n" ? fontSize : fontSize * SS_RATIO;
   return f.widthOfTextAtSize(seg.text, sz);
 }
@@ -323,7 +323,7 @@ function segWidth(seg: Seg, font: PDFFont, symFont: PDFFont, fontSize: number): 
 function wrapRichText(
   text: string,
   font: PDFFont,
-  symFont: PDFFont,
+  italicFont: PDFFont,
   fontSize: number,
   maxWidth: number
 ): Seg[][] {
@@ -349,7 +349,7 @@ function wrapRichText(
     if (seg.style !== "n" || seg.sym) {
       // Sub/sup/Greek segments are always part of current word (no spaces inside)
       currentWordSegs.push(seg);
-      currentWordW += segWidth(seg, font, symFont, fontSize);
+      currentWordW += segWidth(seg, font, italicFont, fontSize);
       continue;
     }
 
@@ -360,7 +360,7 @@ function wrapRichText(
       if (parts[pi].length > 0) {
         const partSeg: Seg = { text: parts[pi], style: "n", sym: false };
         currentWordSegs.push(partSeg);
-        currentWordW += segWidth(partSeg, font, symFont, fontSize);
+        currentWordW += segWidth(partSeg, font, italicFont, fontSize);
       }
     }
   }
@@ -402,7 +402,7 @@ function drawRichLine(
   x: number,
   y: number,
   font: PDFFont,
-  symFont: PDFFont,
+  italicFont: PDFFont,
   fontSize: number,
   color: ReturnType<typeof rgb>
 ): number {
@@ -410,7 +410,7 @@ function drawRichLine(
   const ssFontSize = fontSize * SS_RATIO;
 
   for (const seg of segs) {
-    const f = seg.sym ? symFont : font;
+    const f = seg.sym ? italicFont : font;
     let sz = fontSize;
     let dy = 0;
 
@@ -475,15 +475,13 @@ class PdfWriter {
   fontRegular: PDFFont;
   fontBold: PDFFont;
   fontOblique: PDFFont;
-  fontSymbol: PDFFont;
   pageNumber: number;
 
-  constructor(doc: PDFDocument, fontRegular: PDFFont, fontBold: PDFFont, fontOblique: PDFFont, fontSymbol: PDFFont) {
+  constructor(doc: PDFDocument, fontRegular: PDFFont, fontBold: PDFFont, fontOblique: PDFFont) {
     this.doc = doc;
     this.fontRegular = fontRegular;
     this.fontBold = fontBold;
     this.fontOblique = fontOblique;
-    this.fontSymbol = fontSymbol;
     this.page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
     this.y = A4_HEIGHT - MARGIN;
     this.pageNumber = 1;
@@ -556,11 +554,11 @@ class PdfWriter {
     const lineHeight = options.lineHeight ?? size * 1.5;
 
     const prepared = prepareText(rawText);
-    const lines = wrapRichText(prepared, font, this.fontSymbol, size, maxWidth);
+    const lines = wrapRichText(prepared, font, this.fontOblique, size, maxWidth);
 
     for (const lineSegs of lines) {
       this.ensureSpace(lineHeight);
-      drawRichLine(this.page, lineSegs, x, this.y, font, this.fontSymbol, size, color);
+      drawRichLine(this.page, lineSegs, x, this.y, font, this.fontOblique, size, color);
       this.y -= lineHeight;
     }
     return lines.length;
@@ -777,9 +775,7 @@ export async function POST(req: NextRequest) {
     const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
     const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
     const fontOblique = await doc.embedFont(StandardFonts.HelveticaOblique);
-    const fontSymbol = await doc.embedFont(StandardFonts.Symbol);
-
-    const w = new PdfWriter(doc, fontRegular, fontBold, fontOblique, fontSymbol);
+    const w = new PdfWriter(doc, fontRegular, fontBold, fontOblique);
     const logo = await loadLogoPng(doc);
 
     drawCoverPage(w, { serieId, institution, academicYear, examTitle, ueCode, subjectName, duration, examDate }, questions.length, logo);
@@ -841,8 +837,8 @@ export async function POST(req: NextRequest) {
           const stSegs = parseToSegments(stPrepared);
           // Calculate width for centering
           let stTotalW = 0;
-          for (const seg of stSegs) stTotalW += segWidth(seg, w.fontBold, w.fontSymbol, 12);
-          drawRichLine(w.page, stSegs, A4_WIDTH / 2 - stTotalW / 2, w.y + 3, w.fontBold, w.fontSymbol, 12, WHITE);
+          for (const seg of stSegs) stTotalW += segWidth(seg, w.fontBold, w.fontOblique, 12);
+          drawRichLine(w.page, stSegs, A4_WIDTH / 2 - stTotalW / 2, w.y + 3, w.fontBold, w.fontOblique, 12, WHITE);
           w.y -= barHeight + 12;
 
           // Section intro text (rich)
@@ -889,14 +885,14 @@ export async function POST(req: NextRequest) {
 
       // Draw question text with rich rendering
       const qPrepared = prepareText(q.text);
-      const qLines = wrapRichText(qPrepared, w.fontRegular, w.fontSymbol, 10, CONTENT_WIDTH - prefixWidth);
+      const qLines = wrapRichText(qPrepared, w.fontRegular, w.fontOblique, 10, CONTENT_WIDTH - prefixWidth);
 
       if (qLines.length > 0) {
-        drawRichLine(w.page, qLines[0], MARGIN + prefixWidth, w.y, w.fontRegular, w.fontSymbol, 10, BLACK);
+        drawRichLine(w.page, qLines[0], MARGIN + prefixWidth, w.y, w.fontRegular, w.fontOblique, 10, BLACK);
         w.y -= 15;
         for (let li = 1; li < qLines.length; li++) {
           w.ensureSpace(15);
-          drawRichLine(w.page, qLines[li], MARGIN + prefixWidth, w.y, w.fontRegular, w.fontSymbol, 10, BLACK);
+          drawRichLine(w.page, qLines[li], MARGIN + prefixWidth, w.y, w.fontRegular, w.fontOblique, 10, BLACK);
           w.y -= 15;
         }
       } else {
@@ -935,14 +931,14 @@ export async function POST(req: NextRequest) {
         const optTextX = optionIndent + labelWidth + 6;
         const optMaxWidth = A4_WIDTH - MARGIN - optTextX;
         const optPrepared = prepareText(opt.text);
-        const optLines = wrapRichText(optPrepared, w.fontRegular, w.fontSymbol, 10, optMaxWidth);
+        const optLines = wrapRichText(optPrepared, w.fontRegular, w.fontOblique, 10, optMaxWidth);
 
         if (optLines.length > 0) {
-          drawRichLine(w.page, optLines[0], optTextX, optY, w.fontRegular, w.fontSymbol, 10, DARK_GRAY);
+          drawRichLine(w.page, optLines[0], optTextX, optY, w.fontRegular, w.fontOblique, 10, DARK_GRAY);
           w.y -= 15;
           for (let li = 1; li < optLines.length; li++) {
             w.ensureSpace(14);
-            drawRichLine(w.page, optLines[li], optTextX, w.y, w.fontRegular, w.fontSymbol, 10, DARK_GRAY);
+            drawRichLine(w.page, optLines[li], optTextX, w.y, w.fontRegular, w.fontOblique, 10, DARK_GRAY);
             w.y -= 14;
           }
         } else {
