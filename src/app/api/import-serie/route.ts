@@ -405,7 +405,13 @@ function decodeEntities(text: string): string {
 }
 
 function stripTags(html: string): string {
-  const raw = html.replace(/<img[^>]*>/gi, " [image] ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const raw = html
+    .replace(/<img[^>]*>/gi, " [image] ")
+    .replace(/<sub>(.*?)<\/sub>/gi, "_{$1}")    // subscript → LaTeX
+    .replace(/<sup>(.*?)<\/sup>/gi, "^{$1}")     // superscript → LaTeX
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return decodeEntities(raw);
 }
 
@@ -639,26 +645,33 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
     if (qNum) {
       flushQuestion();
 
-      // First QCM after pending images → create a section
-      if (pendingImages.length > 0) {
-        // No truncated title — use section intro text for context display
-        const sectionTitle = "";
-        const introText = [...pendingIntroLines, ...pendingCaptions].join("\n").trim();
-        sections.push({
-          title: sectionTitle,
-          intro_text: introText,
-          images: [...pendingImages],
-        });
-        currentSectionIdx = sections.length - 1;
+      // Check if pending context should create a section
+      const hasPendingContent = pendingImages.length > 0 || pendingIntroLines.length > 0 || pendingCaptions.length > 0;
+      if (hasPendingContent) {
+        // Does the pending content look like a real section? (has "Exercice N" / figures / images)
+        const hasExerciceMarker = pendingIntroLines.some(l => /^Exercice\s+\d+/i.test(l));
+        const hasFigures = pendingImages.length > 0 || pendingCaptions.length > 0;
+        const hasSubstantialIntro = pendingIntroLines.filter(l => l.length > 30 && !/^(Les \d+ questions|Bien lire)/i.test(l)).length > 0;
+
+        if (hasExerciceMarker || hasFigures || hasSubstantialIntro) {
+          // Create a section with this context
+          const exoLine = pendingIntroLines.find(l => /^Exercice\s+\d+/i.test(l));
+          const sectionTitle = exoLine || "";
+          const introLines = pendingIntroLines.filter(l => l !== exoLine);
+          const introText = [...introLines, ...pendingCaptions].join("\n").trim();
+          sections.push({
+            title: sectionTitle,
+            intro_text: introText,
+            images: [...pendingImages],
+          });
+          currentSectionIdx = sections.length - 1;
+        } else {
+          // Transition text without real section content → standalone questions
+          currentSectionIdx = undefined;
+        }
         pendingImages = [];
         pendingCaptions = [];
         pendingIntroLines = [];
-      } else if (pendingIntroLines.length > 0) {
-        // Intro text without images (e.g., "Les 20 questions suivantes sont indépendantes")
-        // → reset section, these questions are standalone
-        currentSectionIdx = undefined;
-        pendingIntroLines = [];
-        pendingCaptions = [];
       }
 
       currentQuestion = { text: qText, options: [], images: [], sectionIndex: currentSectionIdx };
@@ -738,16 +751,26 @@ function parseQcmLabelFormat(html: string): { questions: ParsedQuestion[]; secti
       continue;
     }
 
-    // Try labeled option in <p>: "A. text" / "A) text" / "A : text" / "A\ttext"
-    const optMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
-    if (optMatch) {
-      currentQuestion.options.push({
-        label: optMatch[1].toUpperCase(),
-        text: optMatch[2].trim(),
-        is_correct: false,
-      });
-      liCount = 0;
-      continue;
+    // Try labeled option in <p>: "A. text" / "A) text" / "A." (empty, formula in image)
+    const optMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.*)/);
+    if (optMatch && currentQuestion) {
+      const optText = optMatch[2].trim();
+      // Guard: if text is very long and starts a sentence, it's probably NOT an option
+      // (e.g., "A partir de la figure..." is question context, not option A)
+      if (optText.length > 60 && /^[a-zàéèêëîïôùûüç]/i.test(optText) && !/^[A-E]\s*[=<>≥≤]/.test(optText)) {
+        // Looks like question text, not an option — fall through
+      } else {
+        // Check for image in same paragraph (formula rendered as image)
+        const optImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+        currentQuestion.options.push({
+          label: optMatch[1].toUpperCase(),
+          text: optText || (optImgMatch ? "[formule]" : ""),
+          is_correct: false,
+        });
+        if (optImgMatch && !optText) currentQuestion.images.push(optImgMatch[1]);
+        liCount = 0;
+        continue;
+      }
     }
 
     // Skip empty / very short lines
