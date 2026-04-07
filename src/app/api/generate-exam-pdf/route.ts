@@ -595,12 +595,10 @@ export async function POST(req: NextRequest) {
 
     if (uploadError) {
       console.error("Upload error:", uploadError);
-      return new NextResponse(docxBuffer as unknown as BodyInit, {
-        headers: {
-          "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "Content-Disposition": `attachment; filename="sujet_${serieId}.docx"`,
-        },
-      });
+      return NextResponse.json(
+        { error: "Erreur upload du document", details: uploadError.message },
+        { status: 500 }
+      );
     }
 
     const { data: { publicUrl } } = supabase.storage.from("cours-pdfs").getPublicUrl(`examens/${serieId}/sujet.docx`);
