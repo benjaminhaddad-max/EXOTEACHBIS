@@ -1,515 +1,217 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 
+export const maxDuration = 30;
+
 // ─── Constants ───────────────────────────────────────────────────────────────
-// v2 - single box per choice, 2 rows per question
+
 const MM = 2.835;
-
-// A4 Landscape
-const PAGE_W = 841.89;
-const PAGE_H = 595.28;
-
-const MARGIN_X = 15 * MM;
-const MARGIN_Y = 10 * MM;
-
-// Colors
-const SALMON_BORDER = rgb(0.91, 0.63, 0.63); // #E8A0A0
-const SALMON_FILL = rgb(0.96, 0.84, 0.84); // #F5D5D5
 const BLACK = rgb(0, 0, 0);
 const WHITE = rgb(1, 1, 1);
-const DARK_BG = rgb(0.15, 0.15, 0.2);
-const DARK_TEXT = rgb(0.4, 0.4, 0.4);
-const GRAY_LINE = rgb(0.7, 0.7, 0.7);
+const GRAY = rgb(0.6, 0.6, 0.6);
 
-// Grid dimensions
-const MAX_Q_PER_COL = 18;
-const MAX_COLS = 4;
+// A4 Portrait
+const PAGE_W = 595.28;
+const PAGE_H = 841.89;
+const MARGIN = 12 * MM;
+
+// Grid layout: 4 columns, 30 questions per column, groups of 10
+const TOTAL_Q = 120;
+const COLS = 4;
+const Q_PER_COL = 30;
+const GROUP_SIZE = 10;
+
+// Box dimensions (small square)
+const BOX = 3.2 * MM;   // box width & height
+const BOX_GAP = 0.8 * MM; // gap between boxes
+const ROW_H = 4.5 * MM; // row height (box + vertical gap)
+const NUM_W = 8 * MM;    // question number width
+const COL_GAP = 5 * MM;  // gap between columns
+const GROUP_GAP = 3 * MM; // extra gap between groups of 10
 const LETTERS = ["A", "B", "C", "D", "E"];
-
-// Per-question box sizes
-const SMALL_BOX_W = 9 * MM; // width of each answer box (wide rectangle)
-const SMALL_BOX_H = 3.2 * MM; // height of each answer box (short)
-const SMALL_BOX_GAP = 0; // not used for single boxes
-const GROUP_GAP = 2.5 * MM; // gap between letter groups (A, B, C...)
-const ROW_GAP = 0.8 * MM; // gap between answer row and remords row
-const Q_GAP = 1.5 * MM; // gap between questions
-const NUM_W = 10 * MM; // width reserved for question number
-const MARK_W = 3.5 * MM; // optical mark square on left
-const MARK_GAP = 1.5 * MM;
-const LETTER_H = 3.5 * MM; // height for letter labels above grid
-const COL_GAP = 4 * MM; // gap between columns
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface ExamGridInput {
-  serieId: string;
-  questionCount: number;
-  examTitle: string;
-  subjectName: string;
-  examDate: string;
-}
-
-interface Fonts {
-  bold: PDFFont;
-  normal: PDFFont;
-  italic: PDFFont;
-}
-
-// ─── Drawing helpers ─────────────────────────────────────────────────────────
-
-/** Draw a single answer box (one rectangle per choice) */
-function drawSingleBox(
-  page: PDFPage,
-  x: number,
-  y: number,
-  opts: { fill: boolean } = { fill: true }
-) {
-  page.drawRectangle({
-    x,
-    y: y - SMALL_BOX_H,
-    width: SMALL_BOX_W,
-    height: SMALL_BOX_H,
-    borderWidth: 0.6,
-    borderColor: SALMON_BORDER,
-    color: opts.fill ? SALMON_FILL : WHITE,
-  });
-}
-
-/** Width of one single-box group */
-function singleBoxWidth(): number {
-  return SMALL_BOX_W;
-}
-
-/** Draw the optical reading mark (small black square on the left margin) */
-function drawOpticalMark(page: PDFPage, x: number, y: number) {
-  page.drawRectangle({
-    x,
-    y: y - MARK_W,
-    width: MARK_W,
-    height: MARK_W,
-    color: BLACK,
-  });
-}
-
-/** Draw a thick dashed line */
-function drawDashedLine(
-  page: PDFPage,
-  x1: number,
-  y: number,
-  x2: number,
-  dashLen: number = 4,
-  gapLen: number = 3,
-  thickness: number = 1.5
-) {
-  let cx = x1;
-  while (cx < x2) {
-    const end = Math.min(cx + dashLen, x2);
-    page.drawLine({
-      start: { x: cx, y },
-      end: { x: end, y },
-      thickness,
-      color: BLACK,
-    });
-    cx = end + gapLen;
-  }
-}
-
-// ─── Header ──────────────────────────────────────────────────────────────────
-
-function drawHeader(
-  page: PDFPage,
-  fonts: Fonts,
-  examTitle: string,
-  subjectName: string,
-  examDate: string
-): number {
-  const headerH = 38 * MM;
-  const headerTop = PAGE_H - MARGIN_Y;
-  const headerBottom = headerTop - headerH;
-
-  // Dark header background
-  page.drawRectangle({
-    x: MARGIN_X,
-    y: headerBottom,
-    width: PAGE_W - 2 * MARGIN_X,
-    height: headerH,
-    color: DARK_BG,
-  });
-
-  // Title
-  const titleSize = 16;
-  const titleW = fonts.bold.widthOfTextAtSize(examTitle, titleSize);
-  page.drawText(examTitle, {
-    x: PAGE_W / 2 - titleW / 2,
-    y: headerTop - 9 * MM,
-    size: titleSize,
-    font: fonts.bold,
-    color: WHITE,
-  });
-
-  // Subtitle: "GRILLE DE REPONSES"
-  const subtitle = "GRILLE DE REPONSES";
-  const subSize = 10;
-  const subW = fonts.bold.widthOfTextAtSize(subtitle, subSize);
-  page.drawText(subtitle, {
-    x: PAGE_W / 2 - subW / 2,
-    y: headerTop - 15 * MM,
-    size: subSize,
-    font: fonts.bold,
-    color: rgb(0.8, 0.8, 0.8),
-  });
-
-  // Fields area below title - white background
-  const fieldsH = 18 * MM;
-  const fieldsTop = headerBottom + fieldsH + 2 * MM;
-  const fieldsBottom = headerBottom + 2 * MM;
-  const fieldsX = MARGIN_X + 4 * MM;
-  const fieldsW = PAGE_W - 2 * MARGIN_X - 8 * MM;
-
-  page.drawRectangle({
-    x: fieldsX,
-    y: fieldsBottom,
-    width: fieldsW,
-    height: fieldsH,
-    color: WHITE,
-    borderWidth: 0.5,
-    borderColor: rgb(0.8, 0.8, 0.8),
-  });
-
-  // Row 1: NOM + PRENOM
-  const fieldLabelSize = 8;
-  const fieldLineW = 0.4;
-  const row1Y = fieldsTop - 5 * MM;
-  const halfW = fieldsW / 2;
-
-  // NOM
-  page.drawText("NOM :", {
-    x: fieldsX + 3 * MM,
-    y: row1Y,
-    size: fieldLabelSize,
-    font: fonts.bold,
-    color: BLACK,
-  });
-  const nomLineX = fieldsX + 3 * MM + fonts.bold.widthOfTextAtSize("NOM :", fieldLabelSize) + 2 * MM;
-  page.drawLine({
-    start: { x: nomLineX, y: row1Y - 1 },
-    end: { x: fieldsX + halfW - 5 * MM, y: row1Y - 1 },
-    thickness: fieldLineW,
-    color: GRAY_LINE,
-  });
-
-  // PRENOM
-  const prenomX = fieldsX + halfW;
-  page.drawText("PRENOM :", {
-    x: prenomX,
-    y: row1Y,
-    size: fieldLabelSize,
-    font: fonts.bold,
-    color: BLACK,
-  });
-  const prenomLineX = prenomX + fonts.bold.widthOfTextAtSize("PRENOM :", fieldLabelSize) + 2 * MM;
-  page.drawLine({
-    start: { x: prenomLineX, y: row1Y - 1 },
-    end: { x: fieldsX + fieldsW - 3 * MM, y: row1Y - 1 },
-    thickness: fieldLineW,
-    color: GRAY_LINE,
-  });
-
-  // Row 2: N ETUDIANT + DATE + MATIERE
-  const row2Y = row1Y - 7 * MM;
-  const thirdW = fieldsW / 3;
-
-  // N etudiant
-  page.drawText("N\u00b0 ETUDIANT :", {
-    x: fieldsX + 3 * MM,
-    y: row2Y,
-    size: fieldLabelSize,
-    font: fonts.bold,
-    color: BLACK,
-  });
-  const numLineX = fieldsX + 3 * MM + fonts.bold.widthOfTextAtSize("N\u00b0 ETUDIANT :", fieldLabelSize) + 2 * MM;
-  page.drawLine({
-    start: { x: numLineX, y: row2Y - 1 },
-    end: { x: fieldsX + thirdW - 3 * MM, y: row2Y - 1 },
-    thickness: fieldLineW,
-    color: GRAY_LINE,
-  });
-
-  // DATE
-  const dateX = fieldsX + thirdW;
-  page.drawText("DATE :", {
-    x: dateX,
-    y: row2Y,
-    size: fieldLabelSize,
-    font: fonts.bold,
-    color: BLACK,
-  });
-  // Pre-fill the date
-  const dateLabelEnd = dateX + fonts.bold.widthOfTextAtSize("DATE :", fieldLabelSize) + 2 * MM;
-  page.drawText(examDate, {
-    x: dateLabelEnd,
-    y: row2Y,
-    size: fieldLabelSize,
-    font: fonts.normal,
-    color: DARK_TEXT,
-  });
-  page.drawLine({
-    start: { x: dateLabelEnd, y: row2Y - 1 },
-    end: { x: fieldsX + 2 * thirdW - 3 * MM, y: row2Y - 1 },
-    thickness: fieldLineW,
-    color: GRAY_LINE,
-  });
-
-  // MATIERE
-  const matX = fieldsX + 2 * thirdW;
-  page.drawText("MATIERE :", {
-    x: matX,
-    y: row2Y,
-    size: fieldLabelSize,
-    font: fonts.bold,
-    color: BLACK,
-  });
-  const matLabelEnd = matX + fonts.bold.widthOfTextAtSize("MATIERE :", fieldLabelSize) + 2 * MM;
-  page.drawText(subjectName, {
-    x: matLabelEnd,
-    y: row2Y,
-    size: fieldLabelSize,
-    font: fonts.normal,
-    color: DARK_TEXT,
-  });
-  page.drawLine({
-    start: { x: matLabelEnd, y: row2Y - 1 },
-    end: { x: fieldsX + fieldsW - 3 * MM, y: row2Y - 1 },
-    thickness: fieldLineW,
-    color: GRAY_LINE,
-  });
-
-  return headerBottom - 3 * MM;
-}
-
-// ─── QCM Grid ────────────────────────────────────────────────────────────────
-
-function drawGrid(
-  page: PDFPage,
-  fonts: Fonts,
-  gridTop: number,
-  questionCount: number
-) {
-  const numCols = Math.min(Math.ceil(questionCount / MAX_Q_PER_COL), MAX_COLS);
-  const qPerCol = Math.ceil(questionCount / numCols);
-
-  const gridW = PAGE_W - 2 * MARGIN_X;
-  const colW = (gridW - (numCols - 1) * COL_GAP) / numCols;
-
-  // Calculate per-question height
-  const tbw = singleBoxWidth();
-  const answerRowW = MARK_W + MARK_GAP + NUM_W + 5 * (tbw + GROUP_GAP);
-
-  // Draw thick dashed line at top of grid
-  drawDashedLine(page, MARGIN_X, gridTop, PAGE_W - MARGIN_X);
-
-  // Instructions
-  const instrY = gridTop - 4 * MM;
-  const instrText = "Noircir les cases correspondant a votre reponse. Ligne inferieure = droit au remords.";
-  const instrSize = 6.5;
-  const instrW = fonts.italic.widthOfTextAtSize(instrText, instrSize);
-  page.drawText(instrText, {
-    x: PAGE_W / 2 - instrW / 2,
-    y: instrY,
-    size: instrSize,
-    font: fonts.italic,
-    color: DARK_TEXT,
-  });
-
-  const contentTop = instrY - 4 * MM;
-
-  // Draw letter headers for each column
-  const letterSize = 7;
-
-  for (let col = 0; col < numCols; col++) {
-    const colX = MARGIN_X + col * (colW + COL_GAP);
-    const boxStartX = colX + MARK_W + MARK_GAP + NUM_W;
-
-    for (let li = 0; li < LETTERS.length; li++) {
-      const letter = LETTERS[li];
-      const groupX = boxStartX + li * (tbw + GROUP_GAP);
-      const centerX = groupX + tbw / 2;
-      const lw = fonts.bold.widthOfTextAtSize(letter, letterSize);
-      page.drawText(letter, {
-        x: centerX - lw / 2,
-        y: contentTop,
-        size: letterSize,
-        font: fonts.bold,
-        color: BLACK,
-      });
-    }
-  }
-
-  const rowsTop = contentTop - LETTER_H;
-
-  // Height per question block (answer row + remords row + gap)
-  const qBlockH = SMALL_BOX_H + ROW_GAP + SMALL_BOX_H + Q_GAP;
-
-  // Draw questions
-  for (let col = 0; col < numCols; col++) {
-    const colX = MARGIN_X + col * (colW + COL_GAP);
-    const qStart = col * qPerCol + 1;
-    const qEnd = Math.min(qStart + qPerCol - 1, questionCount);
-
-    // Draw column separator if not first
-    if (col > 0) {
-      const sepX = colX - COL_GAP / 2;
-      page.drawLine({
-        start: { x: sepX, y: contentTop + LETTER_H },
-        end: { x: sepX, y: MARGIN_Y },
-        thickness: 0.3,
-        color: GRAY_LINE,
-      });
-    }
-
-    for (let q = qStart; q <= qEnd; q++) {
-      const inCol = q - qStart;
-      const curY = rowsTop - inCol * qBlockH;
-
-      // Group separator every 5 questions
-      if (inCol > 0 && inCol % 5 === 0) {
-        const sepY = curY + Q_GAP * 0.6;
-        page.drawLine({
-          start: { x: colX, y: sepY },
-          end: { x: colX + colW, y: sepY },
-          thickness: 0.3,
-          color: GRAY_LINE,
-        });
-      }
-
-      // Optical mark
-      drawOpticalMark(page, colX, curY);
-
-      // Question number
-      const numStr = String(q);
-      const numSize = 7;
-      const numTextW = fonts.bold.widthOfTextAtSize(numStr, numSize);
-      page.drawText(numStr, {
-        x: colX + MARK_W + MARK_GAP + NUM_W - numTextW - 1 * MM,
-        y: curY - SMALL_BOX_H / 2 - numSize / 3,
-        size: numSize,
-        font: fonts.bold,
-        color: BLACK,
-      });
-
-      const boxStartX = colX + MARK_W + MARK_GAP + NUM_W;
-
-      // Row 1: Answer boxes (A B C D E)
-      for (let li = 0; li < LETTERS.length; li++) {
-        const groupX = boxStartX + li * (tbw + GROUP_GAP);
-        drawSingleBox(page, groupX, curY);
-      }
-
-      // Row 2: Droit au remords boxes
-      const remordsY = curY - SMALL_BOX_H - ROW_GAP;
-      for (let li = 0; li < LETTERS.length; li++) {
-        const groupX = boxStartX + li * (tbw + GROUP_GAP);
-        drawSingleBox(page, groupX, remordsY, { fill: true });
-      }
-    }
-  }
-
-  // Draw thick dashed line at bottom of grid
-  const bottomY = MARGIN_Y;
-  drawDashedLine(page, MARGIN_X, bottomY, PAGE_W - MARGIN_X);
-}
 
 // ─── Main Route ──────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
-    const body: ExamGridInput = await req.json();
-    const {
-      serieId,
-      questionCount,
-      examTitle = "Examen",
-      subjectName = "",
-      examDate = "",
-    } = body;
+    const body = await req.json();
+    const { serieId, questionCount = TOTAL_Q, examTitle = "", subjectName = "", examDate = "" } = body;
 
     if (!serieId) {
       return NextResponse.json({ error: "serieId requis" }, { status: 400 });
     }
-    if (!questionCount || questionCount < 1 || questionCount > 120) {
-      return NextResponse.json(
-        { error: "questionCount invalide (1-120)" },
-        { status: 400 }
-      );
-    }
 
-    // Create PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([PAGE_W, PAGE_H]); // A4 landscape
+    const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const normal = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const italic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-    const fonts: Fonts = { bold, normal, italic };
+    // ── Header: Student info ─────────────────────────────────────────────────
 
-    // Draw header
-    const gridTop = drawHeader(page, fonts, examTitle, subjectName, examDate);
+    const headerTop = PAGE_H - MARGIN;
 
-    // Draw QCM grid
-    drawGrid(page, fonts, gridTop, questionCount);
+    // Number grid (student ID)
+    const numGridX = MARGIN;
+    const numGridY = headerTop;
 
-    // Footer
-    const footerSize = 6;
-    const footerText = `${examTitle} - ${subjectName} - ${questionCount} questions`;
-    const footerW = fonts.italic.widthOfTextAtSize(footerText, footerSize);
-    page.drawText(footerText, {
-      x: PAGE_W / 2 - footerW / 2,
-      y: MARGIN_Y / 2,
-      size: footerSize,
-      font: fonts.italic,
-      color: DARK_TEXT,
+    page.drawText("Saisir votre Numéro d'étudiant", {
+      x: numGridX, y: numGridY, size: 7, font, color: BLACK,
     });
 
+    const digitCols = 8;
+    const digitRows = 10;
+    const digitBox = 3 * MM;
+    const digitGap = 0.5 * MM;
+    const digitStartY = numGridY - 5 * MM;
+    const digitStartX = numGridX;
+
+    // Draw digit labels (0-9) on the left
+    for (let r = 0; r < digitRows; r++) {
+      page.drawText(String(r), {
+        x: digitStartX - 3 * MM,
+        y: digitStartY - r * (digitBox + digitGap) - digitBox + 1,
+        size: 6, font: fontBold, color: BLACK,
+      });
+    }
+
+    // Draw digit grid
+    for (let c = 0; c < digitCols; c++) {
+      for (let r = 0; r < digitRows; r++) {
+        page.drawRectangle({
+          x: digitStartX + c * (digitBox + digitGap),
+          y: digitStartY - r * (digitBox + digitGap) - digitBox,
+          width: digitBox, height: digitBox,
+          borderWidth: 0.5, borderColor: BLACK, color: WHITE,
+        });
+      }
+    }
+
+    // NOM / Prénom fields
+    const fieldsX = MARGIN + 45 * MM;
+    page.drawText("NOM", { x: fieldsX, y: numGridY - 2 * MM, size: 11, font: fontBold, color: BLACK });
+    page.drawRectangle({
+      x: fieldsX + 15 * MM, y: numGridY - 6 * MM, width: 55 * MM, height: 7 * MM,
+      borderWidth: 0.5, borderColor: BLACK, color: WHITE,
+    });
+
+    page.drawText("Prénom", { x: fieldsX, y: numGridY - 15 * MM, size: 11, font: fontBold, color: BLACK });
+    page.drawRectangle({
+      x: fieldsX + 15 * MM, y: numGridY - 19 * MM, width: 55 * MM, height: 7 * MM,
+      borderWidth: 0.5, borderColor: BLACK, color: WHITE,
+    });
+
+    // "Vous pouvez écrire uniquement dans ce cadre"
+    page.drawText("Vous pouvez écrire uniquement dans ce cadre", {
+      x: fieldsX + 15 * MM, y: numGridY - 30 * MM, size: 6, font, color: GRAY,
+    });
+
+    // Instruction line
+    const instrY = numGridY - 40 * MM;
+    page.drawText("répondez aux questions en noircissant les cases ci-dessous", {
+      x: PAGE_W / 2 - font.widthOfTextAtSize("répondez aux questions en noircissant les cases ci-dessous", 9) / 2,
+      y: instrY, size: 9, font, color: BLACK,
+    });
+
+    // ── QCM Grid ─────────────────────────────────────────────────────────────
+
+    const gridTop = instrY - 8 * MM;
+    const gridW = PAGE_W - 2 * MARGIN;
+    const colW = (gridW - (COLS - 1) * COL_GAP) / COLS;
+    const letterSize = 7;
+    const numSize = 7;
+
+    for (let col = 0; col < COLS; col++) {
+      const colX = MARGIN + col * (colW + COL_GAP);
+      const qStart = col * Q_PER_COL + 1;
+      const qEnd = Math.min(qStart + Q_PER_COL - 1, TOTAL_Q);
+
+      // Count groups in this column
+      const numGroups = Math.ceil((qEnd - qStart + 1) / GROUP_SIZE);
+
+      for (let g = 0; g < numGroups; g++) {
+        const groupStart = qStart + g * GROUP_SIZE;
+        const groupEnd = Math.min(groupStart + GROUP_SIZE - 1, qEnd);
+        const groupTopY = gridTop - g * (GROUP_SIZE * ROW_H + GROUP_GAP);
+
+        // Letter headers for this group
+        for (let li = 0; li < LETTERS.length; li++) {
+          const lx = colX + NUM_W + li * (BOX + BOX_GAP);
+          const lw = fontBold.widthOfTextAtSize(LETTERS[li], letterSize);
+          page.drawText(LETTERS[li], {
+            x: lx + BOX / 2 - lw / 2,
+            y: groupTopY + 2,
+            size: letterSize, font: fontBold, color: BLACK,
+          });
+        }
+
+        // Questions in this group
+        for (let q = groupStart; q <= groupEnd; q++) {
+          const inGroup = q - groupStart;
+          const rowY = groupTopY - (inGroup + 1) * ROW_H;
+
+          // Question number
+          const numStr = String(q);
+          const numW2 = fontBold.widthOfTextAtSize(numStr, numSize);
+          page.drawText(numStr, {
+            x: colX + NUM_W - numW2 - 1.5 * MM,
+            y: rowY + 1,
+            size: numSize, font: fontBold, color: BLACK,
+          });
+
+          // 5 boxes (A B C D E)
+          for (let li = 0; li < LETTERS.length; li++) {
+            const bx = colX + NUM_W + li * (BOX + BOX_GAP);
+            page.drawRectangle({
+              x: bx, y: rowY,
+              width: BOX, height: BOX,
+              borderWidth: 0.5, borderColor: BLACK, color: WHITE,
+            });
+          }
+
+          // Horizontal line after each question
+          const lineY = rowY - 0.3 * MM;
+          page.drawLine({
+            start: { x: colX + NUM_W, y: lineY },
+            end: { x: colX + NUM_W + 5 * (BOX + BOX_GAP) - BOX_GAP, y: lineY },
+            thickness: 0.15, color: GRAY,
+          });
+        }
+      }
+    }
+
+    // ── Upload to Supabase ───────────────────────────────────────────────────
+
     const pdfBytes = await pdfDoc.save();
-    const pdfBuffer = Buffer.from(pdfBytes);
-
-    // Upload to Supabase
     const supabase = await createClient();
-    const filePath = `examens/${serieId}/grille.pdf`;
 
-    const { data, error: uploadError } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from("cours-pdfs")
-      .upload(filePath, pdfBuffer, {
+      .upload(`examens/${serieId}/grille.pdf`, Buffer.from(pdfBytes), {
         contentType: "application/pdf",
         upsert: true,
       });
 
-    if (uploadError) {
-      console.error("[generate-exam-grid] Upload error:", uploadError);
-      // Still return the PDF as download if upload fails
-      return new NextResponse(pdfBuffer, {
-        status: 200,
+    if (error) {
+      console.error("[gen-grid] Upload error:", error.message);
+      // Return PDF directly as fallback
+      return new NextResponse(Buffer.from(pdfBytes), {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="grille-examen.pdf"`,
-          "X-Upload-Error": uploadError.message,
+          "Content-Disposition": `attachment; filename="grille.pdf"`,
         },
       });
     }
 
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("cours-pdfs").getPublicUrl(filePath);
+    const { data: urlData } = supabase.storage.from("cours-pdfs").getPublicUrl(data.path);
 
     return NextResponse.json({
       success: true,
-      url: publicUrl,
-      path: filePath,
+      url: urlData.publicUrl,
+      path: data.path,
     });
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Erreur interne";
-    console.error("[generate-exam-grid]", e);
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (e: any) {
+    console.error("[gen-grid]", e);
+    return NextResponse.json({ error: e.message || "Erreur serveur" }, { status: 500 });
   }
 }
