@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
     // HEADER
     // ═══════════════════════════════════════════════════════════════════
 
-    // Navy bar
     const barH = mm(5.5);
     page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, color: NAVY });
     page.drawText((institution || "DIPLOMA SANT\u00C9").toUpperCase(), {
@@ -78,62 +77,78 @@ export async function POST(req: NextRequest) {
     y -= mm(2);
 
     // ═══════════════════════════════════════════════════════════════════
-    // NOM / Prénom (left) + N° étudiant digit grid (right)
+    // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
     // ═══════════════════════════════════════════════════════════════════
 
     const fH = mm(5);
-    const leftY = y;
+    const sectionTop = y;
 
     // NOM
-    page.drawText("NOM", { x: MX, y: leftY - 0.5, size: 7, font: B, color: BLACK });
+    page.drawText("NOM", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
     page.drawRectangle({
-      x: MX + mm(14), y: leftY - mm(1.5), width: mm(55), height: fH,
+      x: MX + mm(14), y: y - mm(1.5), width: mm(50), height: fH,
       borderWidth: 0.4, borderColor: BLACK, color: WHITE,
     });
+    y -= fH + mm(2);
 
     // Prénom
-    page.drawText("Pr\u00E9nom", { x: MX, y: leftY - fH - mm(2), size: 7, font: B, color: BLACK });
+    page.drawText("Pr\u00E9nom", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
     page.drawRectangle({
-      x: MX + mm(14), y: leftY - fH - mm(3.5), width: mm(55), height: fH,
+      x: MX + mm(14), y: y - mm(1.5), width: mm(50), height: fH,
       borderWidth: 0.4, borderColor: BLACK, color: WHITE,
     });
 
-    // N° étudiant: digit grid (5 rows x 10 columns)
-    const dBox = mm(2.2);
-    const dGap = mm(0.25);
-    const dCols = 10;
-    const dRows = 5;
-    const dGridW = dCols * (dBox + dGap) - dGap;
-    const dGridX = MX + CW - dGridW;
+    // ── N° étudiant grid (right side) ──
+    const DIGITS = 6;
+    const bigBox = mm(5);
+    const bigGap = mm(1.5);
+    const smallBox = mm(2.2);
+    const smallGap = mm(0.3);
+    const gridW = DIGITS * (bigBox + bigGap) - bigGap;
+    const gridX = MX + CW - gridW - mm(2);
+    let gy = sectionTop;
 
     // Title
-    page.drawText("N\u00B0 \u00E9tudiant", { x: dGridX, y: leftY - 0.5, size: 6, font: B, color: BLACK });
+    page.drawText("Saisir votre N\u00B0 d'\u00E9tudiant", {
+      x: gridX, y: gy, size: 6, font: B, color: BLACK,
+    });
+    gy -= mm(3);
 
-    // Digits 0-9 headers
-    const digitsY = leftY - mm(4);
-    for (let d = 0; d < dCols; d++) {
-      const dx = dGridX + d * (dBox + dGap);
-      const dw = B.widthOfTextAtSize(String(d), 5);
-      page.drawText(String(d), { x: dx + dBox / 2 - dw / 2, y: digitsY, size: 5, font: B, color: BLACK });
+    // Large write-in boxes
+    for (let d = 0; d < DIGITS; d++) {
+      page.drawRectangle({
+        x: gridX + d * (bigBox + bigGap), y: gy - bigBox * 1.5,
+        width: bigBox, height: bigBox * 1.5,
+        borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+      });
     }
+    gy -= bigBox * 1.5 + mm(2);
 
-    // Grid boxes
-    const gridStartY = digitsY - mm(2);
-    for (let row = 0; row < dRows; row++) {
-      const ry = gridStartY - row * (dBox + dGap);
-      for (let d = 0; d < dCols; d++) {
+    // Bubbling grid: 10 rows (0-9) x DIGITS columns
+    const labelW = mm(3);
+    for (let r = 0; r < 10; r++) {
+      const ry = gy - r * (smallBox + smallGap);
+      // Row label
+      const rStr = String(r);
+      const rw = B.widthOfTextAtSize(rStr, 5.5);
+      page.drawText(rStr, {
+        x: gridX - labelW, y: ry - smallBox + mm(0.5),
+        size: 5.5, font: B, color: BLACK,
+      });
+      // Boxes (centered under big boxes)
+      for (let d = 0; d < DIGITS; d++) {
+        const bx = gridX + d * (bigBox + bigGap) + (bigBox - smallBox) / 2;
         page.drawRectangle({
-          x: dGridX + d * (dBox + dGap), y: ry - dBox,
-          width: dBox, height: dBox,
+          x: bx, y: ry - smallBox,
+          width: smallBox, height: smallBox,
           borderWidth: 0.3, borderColor: BLACK, color: WHITE,
         });
       }
     }
 
-    // Move Y below both sections
-    const leftBottom = leftY - 2 * fH - mm(3.5);
-    const gridBottom = gridStartY - dRows * (dBox + dGap);
-    y = Math.min(leftBottom, gridBottom) - mm(2);
+    const gridEndY = gy - 10 * (smallBox + smallGap);
+    const leftEndY = y - mm(1.5);
+    y = Math.min(leftEndY, gridEndY) - mm(2);
 
     page.drawLine({ start: { x: MX, y }, end: { x: MX + CW, y }, thickness: 0.3, color: LGRAY });
     y -= mm(1);
