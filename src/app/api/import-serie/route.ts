@@ -488,7 +488,7 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
     const raw = p.raw;
 
     // Check if paragraph contains an image (data URI)
-    const imgMatch = raw.match(/<img\s+src="(data:image\/[^"]+)"/i);
+    const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
 
     // Question pattern: "N) text" or "N. text" (with N being 1-999)
     const qMatch = text.match(/^\s*(\d{1,3})\s*[)\.]\s+(.+)/);
@@ -615,33 +615,42 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
   };
 
   let liCount = 0; // track consecutive <li> items for unlabeled options
+  let pendingImages: string[] = []; // images before the next QCM (context figures)
 
   for (const p of paragraphs) {
     const text = p.text;
     const raw = p.raw;
 
+    // Check for image in this element
+    const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+
     // Detect "QCM N :" / "QCM N -" / "QCM N –" / "QCM N." patterns (with optional BOM)
     const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*[-:.–—]\s*(.*)/iu);
     if (qcmMatch) {
       flushQuestion();
-      currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [] };
+      currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [...pendingImages] };
+      pendingImages = [];
       questionTextLines = [];
       liCount = 0;
 
-      // Check for image in same paragraph
-      const imgMatch = raw.match(/<img\s+src="(data:image\/[^"]+)"/i);
       if (imgMatch) currentQuestion.images.push(imgMatch[1]);
       continue;
     }
 
-    if (!currentQuestion) continue;
-
-    // Image paragraph
-    const imgMatch = raw.match(/<img\s+src="(data:image\/[^"]+)"/i);
+    // Image paragraph — buffer for next QCM if current question already has options,
+    // or if no question exists yet (context images before first QCM)
     if (imgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
-      currentQuestion.images.push(imgMatch[1]);
+      if (!currentQuestion || currentQuestion.options.length > 0) {
+        // Image between questions → context for next QCM
+        pendingImages.push(imgMatch[1]);
+      } else {
+        // Image within current question (before its options)
+        currentQuestion.images.push(imgMatch[1]);
+      }
       continue;
     }
+
+    if (!currentQuestion) continue;
 
     // <li> elements are direct options (labeled or unlabeled)
     if (p.tag === "li" && text.trim().length > 2) {
