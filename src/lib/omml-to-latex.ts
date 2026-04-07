@@ -7,6 +7,22 @@
  * Used by both import-word and import-serie routes.
  */
 
+/** Find index of an exact XML open tag (not a prefix match like <m:sSup matching <m:sSupPr) */
+function findExactTag(xml: string, tagPrefix: string, from: number): number {
+  let pos = from;
+  while (pos < xml.length) {
+    const idx = xml.indexOf(tagPrefix, pos);
+    if (idx < 0) return -1;
+    const after = xml[idx + tagPrefix.length];
+    // Exact tag: next char must be >, space, or / (not a letter/digit continuing the tag name)
+    if (after === ">" || after === " " || after === "/" || after === "\n" || after === "\r" || after === "\t") {
+      return idx;
+    }
+    pos = idx + 1;
+  }
+  return -1;
+}
+
 function decodeXmlEntities(text: string): string {
   return text
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
@@ -31,7 +47,7 @@ export function ommlToLatex(xml: string): string {
     let depth = 1;
     let pos = tagEnd + 1;
     while (depth > 0 && pos < xml.length) {
-      const nextOpen = xml.indexOf(openTag, pos);
+      const nextOpen = findExactTag(xml, openTag, pos);
       const nextClose = xml.indexOf(closeTag, pos);
       if (nextClose < 0) break;
       if (nextOpen >= 0 && nextOpen < nextClose) {
@@ -52,7 +68,7 @@ export function ommlToLatex(xml: string): string {
     const closeTag = `</${tag}>`;
     let searchFrom = 0;
     while (searchFrom < xml.length) {
-      const startIdx = xml.indexOf(openTag, searchFrom);
+      const startIdx = findExactTag(xml, openTag, searchFrom);
       if (startIdx < 0) break;
       const tagEnd = xml.indexOf(">", startIdx);
       if (tagEnd < 0) break;
@@ -60,7 +76,7 @@ export function ommlToLatex(xml: string): string {
       let depth = 1;
       let pos = tagEnd + 1;
       while (depth > 0 && pos < xml.length) {
-        const nextOpen = xml.indexOf(openTag, pos);
+        const nextOpen = findExactTag(xml, openTag, pos);
         const nextClose = xml.indexOf(closeTag, pos);
         if (nextClose < 0) { pos = xml.length; break; }
         if (nextOpen >= 0 && nextOpen < nextClose) { depth++; pos = nextOpen + openTag.length; }
@@ -107,7 +123,7 @@ export function ommlToLatex(xml: string): string {
       let ePos = tagEnd + 1;
       const openStr = `<m:${tagName}`;
       while (depth > 0 && ePos < xml.length) {
-        const nOpen = xml.indexOf(openStr, ePos);
+        const nOpen = findExactTag(xml, openStr, ePos);
         const nClose = xml.indexOf(closeTag, ePos);
         if (nClose < 0) { ePos = xml.length; break; }
         if (nOpen >= 0 && nOpen < nClose) { depth++; ePos = nOpen + openStr.length; }
@@ -282,7 +298,7 @@ export function extractParagraphText(paragraphContent: string): string {
     let mPos = tagEnd + 1;
     const openStr = `<${mathTag}`;
     while (depth > 0 && mPos < paragraphContent.length) {
-      const nOpen = paragraphContent.indexOf(openStr, mPos);
+      const nOpen = findExactTag(paragraphContent, openStr, mPos);
       const nClose = paragraphContent.indexOf(closeTag, mPos);
       if (nClose < 0) { mPos = paragraphContent.length; break; }
       if (nOpen >= 0 && nOpen < nClose) { depth++; mPos = nOpen + openStr.length; }
