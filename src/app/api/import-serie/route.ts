@@ -1228,13 +1228,19 @@ async function uploadBase64Image(
   }
 }
 
+// ─── Route config ─────────────────────────────────────────────────────────────
+
+export const maxDuration = 60; // seconds (Vercel Pro)
+export const dynamic = "force-dynamic";
+
 // ─── Route POST ───────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const serieId = formData.get("serieId") as string;
-    const file    = formData.get("file") as File | null;
+    let file    = formData.get("file") as File | null;
+    const fileUrl = formData.get("fileUrl") as string | null;
 
     // Exam metadata for cover page
     const examMeta = {
@@ -1246,6 +1252,15 @@ export async function POST(req: NextRequest) {
       institution: (formData.get("institution") as string) || "Diploma Santé",
       academicYear: (formData.get("academicYear") as string) || "2025 - 2026",
     };
+
+    // Large files: download from Storage URL instead of reading from FormData body
+    if (!file && fileUrl) {
+      console.log(`[import-serie] Downloading large file from Storage: ${fileUrl}`);
+      const resp = await fetch(fileUrl);
+      if (!resp.ok) return NextResponse.json({ error: "Erreur téléchargement du fichier depuis le storage" }, { status: 400 });
+      const blob = await resp.blob();
+      file = new File([blob], "upload.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    }
 
     if (!serieId || !file) {
       return NextResponse.json({ error: "serieId et fichier requis" }, { status: 400 });

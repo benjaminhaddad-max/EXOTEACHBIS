@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, CheckCircle2, Loader2, Download, RefreshCw } from "lucide-react";
 import { removeAllQuestionsFromSerie } from "@/app/(admin)/admin/exercices/actions";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,14 +99,33 @@ export default function ExamWorkflowStepper({
     }
   }, [correctionDone, questionCount]);
 
+  // ─── Upload large file to Storage first, then send URL to API ───────────────
+  async function uploadToStorage(file: File, path: string): Promise<string | null> {
+    const supabase = createClient();
+    const { error } = await supabase.storage.from("cours-pdfs").upload(path, file, { upsert: true });
+    if (error) { console.error("[upload]", error); return null; }
+    const { data } = supabase.storage.from("cours-pdfs").getPublicUrl(path);
+    return data.publicUrl;
+  }
+
   // ─── Import sujet ───────────────────────────────────────────────────────────
   async function handleImportSujet(file: File) {
     setImportingSujet(true);
     setSujetError(null);
 
     const formData = new FormData();
-    formData.append("file", file);
     formData.append("serieId", serieId);
+
+    // Large files (>4MB): upload to Storage first, send URL instead of file body
+    if (file.size > 4 * 1024 * 1024) {
+      const storagePath = `examens/${serieId}/upload_${Date.now()}.docx`;
+      const storageUrl = await uploadToStorage(file, storagePath);
+      if (!storageUrl) { setSujetError("Erreur upload du fichier (trop volumineux)"); setImportingSujet(false); return; }
+      formData.append("fileUrl", storageUrl);
+      formData.append("storagePath", storagePath);
+    } else {
+      formData.append("file", file);
+    }
 
     try {
       const res = await fetch("/api/import-serie", { method: "POST", body: formData });
@@ -149,8 +169,17 @@ export default function ExamWorkflowStepper({
     setCorrectionError(null);
 
     const formData = new FormData();
-    formData.append("file", file);
     formData.append("serieId", serieId);
+
+    if (file.size > 4 * 1024 * 1024) {
+      const storagePath = `examens/${serieId}/corr_${Date.now()}.docx`;
+      const storageUrl = await uploadToStorage(file, storagePath);
+      if (!storageUrl) { setCorrectionError("Erreur upload du fichier (trop volumineux)"); setImportingCorrection(false); return; }
+      formData.append("fileUrl", storageUrl);
+      formData.append("storagePath", storagePath);
+    } else {
+      formData.append("file", file);
+    }
 
     try {
       const res = await fetch("/api/import-serie", { method: "POST", body: formData });
