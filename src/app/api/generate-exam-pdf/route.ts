@@ -307,7 +307,25 @@ function parseToSegments(text: string): Seg[] {
   }
 
   // Remove empty segments
-  return segs.filter((s) => s.text.length > 0);
+  const result = segs.filter((s) => s.text.length > 0);
+
+  // Auto-insert space between sub/sup and following normal text starting with a letter
+  // Fixes cases like "n=2et" → "n=2 et" where DB text is missing spacing after subscripts
+  for (let j = result.length - 1; j > 0; j--) {
+    const prev = result[j - 1];
+    const curr = result[j];
+    if (
+      (prev.style === "sup" || prev.style === "sub") &&
+      curr.style === "n" &&
+      !curr.sym &&
+      curr.text.length > 0 &&
+      /^[a-zA-Z]/.test(curr.text)
+    ) {
+      curr.text = " " + curr.text;
+    }
+  }
+
+  return result;
 }
 
 // ─── Segment measurement ────────────────────────────────────────────────────
