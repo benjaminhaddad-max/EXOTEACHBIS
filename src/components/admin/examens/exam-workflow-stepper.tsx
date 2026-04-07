@@ -284,7 +284,7 @@ export default function ExamWorkflowStepper({
         setPdfUrl(data.url + "?t=" + Date.now());
         onSujetGenerated?.(data.url);
       } else {
-        setPdfError((data.error || "Erreur génération PDF") + (data.details ? ` — ${data.details}` : ""));
+        setPdfError((data.error || "Erreur g\u00E9n\u00E9ration du document") + (data.details ? ` \u2014 ${data.details}` : ""));
       }
     } catch (e: any) { setPdfError(e.message); }
     finally { setGeneratingPdf(false); }
@@ -615,7 +615,7 @@ export default function ExamWorkflowStepper({
               {correctionResult.questionsUpdated ?? 0} questions mises à jour
               {(correctionResult.correctAnswersMarked ?? 0) > 0 &&
                 `, ${correctionResult.correctAnswersMarked} réponses correctes marquées`}
-              {" — PDF et grille générés automatiquement ci-dessous."}
+              {" \u2014 Sujet Word et grille g\u00E9n\u00E9r\u00E9s automatiquement ci-dessous."}
             </div>
           </div>
         )}
@@ -679,14 +679,14 @@ export default function ExamWorkflowStepper({
           {(generatingPdf || generatingGrid) && (
             <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
               <Loader2 size={18} className="animate-spin text-[#C9A84C]" />
-              {generatingPdf ? "Génération du sujet PDF..." : "Génération de la grille..."}
+              {generatingPdf ? "G\u00E9n\u00E9ration du sujet Word..." : "G\u00E9n\u00E9ration de la grille..."}
             </div>
           )}
 
           {/* Errors */}
           {pdfError && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-              PDF : {pdfError}
+              Word : {pdfError}
             </div>
           )}
           {gridError && (
@@ -701,7 +701,7 @@ export default function ExamWorkflowStepper({
               <a href={pdfUrl} download target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-2 rounded-lg bg-[#C9A84C] px-4 py-2.5 text-sm font-medium text-black transition hover:bg-[#d4b55c]">
                 <Download size={16} />
-                Télécharger le sujet PDF
+                T\u00E9l\u00E9charger le sujet Word
               </a>
             )}
             {gridUrl && (
