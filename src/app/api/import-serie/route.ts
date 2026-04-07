@@ -1276,6 +1276,7 @@ export async function POST(req: NextRequest) {
     // Lire le fichier
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const isLargeFile = buffer.length > 5 * 1024 * 1024;
 
     // Extract ZIP first (needed for both mammoth image upgrade and XML parsing)
     const zip = await JSZip.loadAsync(buffer);
@@ -1295,7 +1296,6 @@ export async function POST(req: NextRequest) {
     console.log("[import-serie] Media catalog:", mediaCatalog.size, "files,", imageUpgradeMap.size, "upgradable EMF→web");
 
     // Convertir DOCX → HTML via mammoth (with custom image handler)
-    const isLargeFile = buffer.length > 5 * 1024 * 1024;
     const mammothOptions: any = {};
 
     if (isLargeFile) {
