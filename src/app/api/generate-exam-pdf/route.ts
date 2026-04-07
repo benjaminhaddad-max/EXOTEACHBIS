@@ -8,6 +8,8 @@ import {
   PDFPage,
   PDFImage,
 } from "pdf-lib";
+import * as path from "path";
+import { promises as fs } from "fs";
 
 export const maxDuration = 60;
 
@@ -15,13 +17,13 @@ export const maxDuration = 60;
 
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
-const MARGIN = 56.7; // ~2cm
+const MARGIN = 50;
 const CONTENT_WIDTH = A4_WIDTH - 2 * MARGIN;
 
-// Colors
-const NAVY = rgb(0x1a / 255, 0x27 / 255, 0x44 / 255);
-const GOLD = rgb(0xc9 / 255, 0xa8 / 255, 0x4c / 255);
-const DARK_GRAY = rgb(0.3, 0.3, 0.3);
+// Charter colors
+const NAVY = rgb(0x0e / 255, 0x1e / 255, 0x35 / 255); // #0e1e35
+const GOLD = rgb(0xc9 / 255, 0xa8 / 255, 0x4c / 255); // #c9a84c
+const DARK_GRAY = rgb(0.25, 0.25, 0.25);
 const MEDIUM_GRAY = rgb(0.5, 0.5, 0.5);
 const LIGHT_GRAY = rgb(0.85, 0.85, 0.85);
 const WHITE = rgb(1, 1, 1);
@@ -62,51 +64,149 @@ interface ExamInput {
 
 // ─── Text helpers ────────────────────────────────────────────────────────────
 
-/** Strip LaTeX/Markdown and replace non-WinAnsi chars for PDF plain text */
+/** Strip LaTeX/Markdown/HTML and replace non-WinAnsi chars for PDF plain text */
 function cleanText(text: string): string {
-  return text
-    .replace(/\$\$?([^$]+)\$\$?/g, (_m, t) => t)
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    // Greek letters → Latin equivalents (WinAnsi doesn't support Greek)
-    .replace(/σ/g, "s").replace(/Σ/g, "S")
-    .replace(/π/g, "p").replace(/Π/g, "P")
-    .replace(/δ/g, "d").replace(/Δ/g, "D")
-    .replace(/α/g, "a").replace(/Α/g, "A")
-    .replace(/β/g, "b").replace(/Β/g, "B")
-    .replace(/γ/g, "g").replace(/Γ/g, "G")
-    .replace(/λ/g, "l").replace(/Λ/g, "L")
-    .replace(/μ/g, "u").replace(/Μ/g, "M")
-    .replace(/ω/g, "w").replace(/Ω/g, "W")
-    .replace(/θ/g, "th").replace(/Θ/g, "Th")
-    .replace(/φ/g, "ph").replace(/Φ/g, "Ph")
-    .replace(/χ/g, "ch").replace(/Χ/g, "Ch")
-    .replace(/ψ/g, "ps").replace(/Ψ/g, "Ps")
-    .replace(/ε/g, "e").replace(/η/g, "n")
-    .replace(/ν/g, "v").replace(/ρ/g, "r")
-    .replace(/τ/g, "t").replace(/ζ/g, "z")
-    .replace(/ξ/g, "x").replace(/ι/g, "i")
-    .replace(/κ/g, "k").replace(/υ/g, "y")
-    // Subscript/superscript numbers
-    .replace(/₀/g, "0").replace(/₁/g, "1").replace(/₂/g, "2")
-    .replace(/₃/g, "3").replace(/₄/g, "4").replace(/₅/g, "5")
-    .replace(/₆/g, "6").replace(/₇/g, "7").replace(/₈/g, "8").replace(/₉/g, "9")
-    .replace(/⁰/g, "0").replace(/¹/g, "1").replace(/²/g, "2")
-    .replace(/³/g, "3").replace(/⁴/g, "4").replace(/⁵/g, "5")
-    .replace(/⁺/g, "+").replace(/⁻/g, "-")
-    // Other special chars
-    .replace(/→/g, "->").replace(/←/g, "<-").replace(/↔/g, "<->")
-    .replace(/≤/g, "<=").replace(/≥/g, ">=").replace(/≠/g, "!=")
-    .replace(/±/g, "+/-").replace(/×/g, "x").replace(/÷/g, "/")
-    .replace(/∞/g, "inf").replace(/∆/g, "D")
-    // Remove any remaining non-WinAnsi characters
-    .replace(/[^\x00-\xFF]/g, "?")
-    .trim();
+  return (
+    text
+      // Remove LaTeX display/inline math delimiters but keep inner text
+      .replace(/\$\$?([^$]+)\$\$?/g, (_m, t) => t)
+      // Strip LaTeX commands: \left, \right, \text{...}, \mathrm{...}, etc.
+      .replace(/\\left\s?[.(|{\\]/g, "")
+      .replace(/\\left\s?\[/g, "[")
+      .replace(/\\right\s?[.)|}\\]/g, "")
+      .replace(/\\right\s?\]/g, "]")
+      .replace(/\\left/g, "")
+      .replace(/\\right/g, "")
+      .replace(/\\text\{([^}]*)\}/g, "$1")
+      .replace(/\\mathrm\{([^}]*)\}/g, "$1")
+      .replace(/\\textbf\{([^}]*)\}/g, "$1")
+      .replace(/\\textit\{([^}]*)\}/g, "$1")
+      .replace(/\\emph\{([^}]*)\}/g, "$1")
+      .replace(/\\overline\{([^}]*)\}/g, "$1")
+      .replace(/\\underline\{([^}]*)\}/g, "$1")
+      .replace(/\\vec\{([^}]*)\}/g, "$1")
+      .replace(/\\hat\{([^}]*)\}/g, "$1")
+      .replace(/\\bar\{([^}]*)\}/g, "$1")
+      .replace(/\\tilde\{([^}]*)\}/g, "$1")
+      // \frac{a}{b} → a/b
+      .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1/$2")
+      // \sqrt{x} → sqrt(x)
+      .replace(/\\sqrt\{([^}]*)\}/g, "sqrt($1)")
+      // Superscripts: ^{...} → ^(...)  or ^x → ^x
+      .replace(/\^\{([^}]*)\}/g, "^($1)")
+      // Subscripts: _{...} → _(...) or _x → _x
+      .replace(/_\{([^}]*)\}/g, "_($1)")
+      // Remove remaining \commands (e.g. \cdot, \times, \pm, \alpha, etc.)
+      .replace(/\\cdot/g, ".")
+      .replace(/\\times/g, "x")
+      .replace(/\\pm/g, "+/-")
+      .replace(/\\neq/g, "!=")
+      .replace(/\\leq/g, "<=")
+      .replace(/\\geq/g, ">=")
+      .replace(/\\approx/g, "~")
+      .replace(/\\infty/g, "inf")
+      .replace(/\\Delta/g, "D")
+      .replace(/\\alpha/g, "alpha")
+      .replace(/\\beta/g, "beta")
+      .replace(/\\gamma/g, "gamma")
+      .replace(/\\delta/g, "delta")
+      .replace(/\\epsilon/g, "epsilon")
+      .replace(/\\theta/g, "theta")
+      .replace(/\\lambda/g, "lambda")
+      .replace(/\\mu/g, "mu")
+      .replace(/\\pi/g, "pi")
+      .replace(/\\sigma/g, "sigma")
+      .replace(/\\omega/g, "omega")
+      .replace(/\\phi/g, "phi")
+      .replace(/\\chi/g, "chi")
+      .replace(/\\psi/g, "psi")
+      // Strip any remaining \command sequences
+      .replace(/\\[a-zA-Z]+/g, "")
+      // Remove stray braces left over
+      .replace(/[{}]/g, "")
+      // Markdown bold/italic
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      // HTML tags
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      // Greek letters → Latin equivalents (WinAnsi doesn't support Greek)
+      .replace(/σ/g, "s")
+      .replace(/Σ/g, "S")
+      .replace(/π/g, "p")
+      .replace(/Π/g, "P")
+      .replace(/δ/g, "d")
+      .replace(/Δ/g, "D")
+      .replace(/α/g, "a")
+      .replace(/Α/g, "A")
+      .replace(/β/g, "b")
+      .replace(/Β/g, "B")
+      .replace(/γ/g, "g")
+      .replace(/Γ/g, "G")
+      .replace(/λ/g, "l")
+      .replace(/Λ/g, "L")
+      .replace(/μ/g, "u")
+      .replace(/Μ/g, "M")
+      .replace(/ω/g, "w")
+      .replace(/Ω/g, "W")
+      .replace(/θ/g, "th")
+      .replace(/Θ/g, "Th")
+      .replace(/φ/g, "ph")
+      .replace(/Φ/g, "Ph")
+      .replace(/χ/g, "ch")
+      .replace(/Χ/g, "Ch")
+      .replace(/ψ/g, "ps")
+      .replace(/Ψ/g, "Ps")
+      .replace(/ε/g, "e")
+      .replace(/η/g, "n")
+      .replace(/ν/g, "v")
+      .replace(/ρ/g, "r")
+      .replace(/τ/g, "t")
+      .replace(/ζ/g, "z")
+      .replace(/ξ/g, "x")
+      .replace(/ι/g, "i")
+      .replace(/κ/g, "k")
+      .replace(/υ/g, "y")
+      // Subscript/superscript numbers
+      .replace(/₀/g, "0")
+      .replace(/₁/g, "1")
+      .replace(/₂/g, "2")
+      .replace(/₃/g, "3")
+      .replace(/₄/g, "4")
+      .replace(/₅/g, "5")
+      .replace(/₆/g, "6")
+      .replace(/₇/g, "7")
+      .replace(/₈/g, "8")
+      .replace(/₉/g, "9")
+      .replace(/⁰/g, "0")
+      .replace(/¹/g, "1")
+      .replace(/²/g, "2")
+      .replace(/³/g, "3")
+      .replace(/⁴/g, "4")
+      .replace(/⁵/g, "5")
+      .replace(/⁺/g, "+")
+      .replace(/⁻/g, "-")
+      // Other special chars
+      .replace(/→/g, "->")
+      .replace(/←/g, "<-")
+      .replace(/↔/g, "<->")
+      .replace(/≤/g, "<=")
+      .replace(/≥/g, ">=")
+      .replace(/≠/g, "!=")
+      .replace(/±/g, "+/-")
+      .replace(/×/g, "x")
+      .replace(/÷/g, "/")
+      .replace(/∞/g, "inf")
+      .replace(/∆/g, "D")
+      // Remove any remaining non-WinAnsi characters
+      .replace(/[^\x00-\xFF]/g, "?")
+      // Collapse multiple spaces
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 /** Word-wrap text to fit within maxWidth, returning lines */
@@ -153,6 +253,7 @@ class PdfWriter {
   fontBold: PDFFont;
   fontOblique: PDFFont;
   pageNumber: number;
+  totalPages: number;
 
   constructor(
     doc: PDFDocument,
@@ -167,6 +268,7 @@ class PdfWriter {
     this.page = doc.addPage([A4_WIDTH, A4_HEIGHT]);
     this.y = A4_HEIGHT - MARGIN;
     this.pageNumber = 1;
+    this.totalPages = 1;
   }
 
   ensureSpace(needed: number) {
@@ -176,15 +278,15 @@ class PdfWriter {
   }
 
   newPage() {
-    // Footer on current page
     this.drawFooter();
     this.page = this.doc.addPage([A4_WIDTH, A4_HEIGHT]);
     this.pageNumber++;
+    this.totalPages++;
     this.y = A4_HEIGHT - MARGIN;
   }
 
   drawFooter() {
-    const text = `Page ${this.pageNumber}`;
+    const text = `${this.pageNumber}`;
     const w = this.fontRegular.widthOfTextAtSize(text, 9);
     this.page.drawText(text, {
       x: A4_WIDTH / 2 - w / 2,
@@ -228,246 +330,281 @@ class PdfWriter {
       font?: PDFFont;
       size?: number;
       color?: ReturnType<typeof rgb>;
+      maxWidth?: number;
     } = {}
   ) {
     const font = options.font ?? this.fontRegular;
     const size = options.size ?? 10;
     const color = options.color ?? BLACK;
-    const w = font.widthOfTextAtSize(text, size);
-    this.ensureSpace(size * 1.5);
-    this.page.drawText(text, {
-      x: A4_WIDTH / 2 - w / 2,
-      y: this.y,
-      size,
-      font,
-      color,
-    });
-    this.y -= size * 1.5;
-  }
+    const maxWidth = options.maxWidth ?? CONTENT_WIDTH;
 
-  drawLine(
-    x1: number,
-    y: number,
-    x2: number,
-    color: ReturnType<typeof rgb>,
-    thickness = 1
-  ) {
-    this.page.drawLine({
-      start: { x: x1, y },
-      end: { x: x2, y },
-      thickness,
-      color,
-    });
+    const lines = wrapText(text, font, size, maxWidth);
+    for (const line of lines) {
+      const w = font.widthOfTextAtSize(line, size);
+      this.ensureSpace(size * 1.5);
+      this.page.drawText(line, {
+        x: A4_WIDTH / 2 - w / 2,
+        y: this.y,
+        size,
+        font,
+        color,
+      });
+      this.y -= size * 1.5;
+    }
+  }
+}
+
+// ─── Logo loader ────────────────────────────────────────────────────────────
+
+async function loadLogoPng(doc: PDFDocument): Promise<PDFImage | null> {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "ds-logo-2026.png");
+    const logoBytes = await fs.readFile(logoPath);
+    return await doc.embedPng(logoBytes);
+  } catch (e) {
+    console.warn("[generate-exam-pdf] Could not load logo:", e);
+    return null;
   }
 }
 
 // ─── Cover Page ──────────────────────────────────────────────────────────────
 
-function drawCoverPage(w: PdfWriter, input: ExamInput, totalQuestions: number) {
+function drawCoverPage(
+  w: PdfWriter,
+  input: ExamInput,
+  totalQuestions: number,
+  logo: PDFImage | null
+) {
   const page = w.page;
 
-  // ── Header bar
+  // ── Navy header bar with logo and academic year
+  const headerHeight = 52;
   page.drawRectangle({
     x: 0,
-    y: A4_HEIGHT - 60,
+    y: A4_HEIGHT - headerHeight,
     width: A4_WIDTH,
-    height: 60,
+    height: headerHeight,
     color: NAVY,
   });
 
-  page.drawText(input.institution.toUpperCase(), {
-    x: MARGIN,
-    y: A4_HEIGHT - 40,
-    size: 16,
-    font: w.fontBold,
-    color: WHITE,
-  });
+  // Logo in header (left side)
+  if (logo) {
+    const logoMaxH = 34;
+    const logoScale = logoMaxH / logo.height;
+    const logoW = logo.width * logoScale;
+    const logoH = logo.height * logoScale;
+    page.drawImage(logo, {
+      x: MARGIN,
+      y: A4_HEIGHT - headerHeight + (headerHeight - logoH) / 2,
+      width: logoW,
+      height: logoH,
+    });
+  } else {
+    page.drawText("DIPLOMA SANTE", {
+      x: MARGIN,
+      y: A4_HEIGHT - 36,
+      size: 14,
+      font: w.fontBold,
+      color: WHITE,
+    });
+  }
 
+  // Academic year (right side, gold)
   const yearW = w.fontRegular.widthOfTextAtSize(input.academicYear, 12);
   page.drawText(input.academicYear, {
     x: A4_WIDTH - MARGIN - yearW,
-    y: A4_HEIGHT - 38,
+    y: A4_HEIGHT - 34,
     size: 12,
     font: w.fontRegular,
     color: GOLD,
   });
 
-  // ── Title area (centered, vertically in top third)
-  let ty = A4_HEIGHT - 200;
+  // ── Title area — starts well below header, centered
+  let ty = A4_HEIGHT - 180;
 
-  // Exam title
-  const titleSize = 28;
-  const titleW = w.fontBold.widthOfTextAtSize(input.examTitle, titleSize);
-  page.drawText(input.examTitle, {
-    x: A4_WIDTH / 2 - titleW / 2,
-    y: ty,
-    size: titleSize,
-    font: w.fontBold,
-    color: NAVY,
-  });
-  ty -= 30;
+  // Exam title (word-wrapped to not overflow)
+  const titleMaxWidth = CONTENT_WIDTH - 40;
+  const titleSize = 22;
+  const titleLines = wrapText(
+    input.examTitle,
+    w.fontBold,
+    titleSize,
+    titleMaxWidth
+  );
+  for (const line of titleLines) {
+    const lw = w.fontBold.widthOfTextAtSize(line, titleSize);
+    page.drawText(line, {
+      x: A4_WIDTH / 2 - lw / 2,
+      y: ty,
+      size: titleSize,
+      font: w.fontBold,
+      color: NAVY,
+    });
+    ty -= titleSize * 1.4;
+  }
+  ty -= 10;
 
   // Gold decorative line
-  const lineLen = 200;
+  const lineLen = 180;
   page.drawLine({
     start: { x: A4_WIDTH / 2 - lineLen / 2, y: ty },
     end: { x: A4_WIDTH / 2 + lineLen / 2, y: ty },
-    thickness: 2.5,
-    color: GOLD,
-  });
-  ty -= 35;
-
-  // UE code - Subject
-  const ueSubject = `${input.ueCode} - ${input.subjectName}`;
-  const ueW = w.fontBold.widthOfTextAtSize(ueSubject, 18);
-  page.drawText(ueSubject, {
-    x: A4_WIDTH / 2 - ueW / 2,
-    y: ty,
-    size: 18,
-    font: w.fontBold,
-    color: NAVY,
-  });
-  ty -= 40;
-
-  // SUJET
-  const sujetW = w.fontBold.widthOfTextAtSize("SUJET", 22);
-  page.drawText("SUJET", {
-    x: A4_WIDTH / 2 - sujetW / 2,
-    y: ty,
-    size: 22,
-    font: w.fontBold,
+    thickness: 2,
     color: GOLD,
   });
   ty -= 30;
 
+  // UE code - Subject
+  const ueSubject = `${input.ueCode} - ${input.subjectName}`;
+  const ueW = w.fontBold.widthOfTextAtSize(ueSubject, 16);
+  page.drawText(ueSubject, {
+    x: A4_WIDTH / 2 - ueW / 2,
+    y: ty,
+    size: 16,
+    font: w.fontBold,
+    color: NAVY,
+  });
+  ty -= 35;
+
+  // SUJET in gold
+  const sujetText = "SUJET";
+  const sujetW = w.fontBold.widthOfTextAtSize(sujetText, 20);
+  page.drawText(sujetText, {
+    x: A4_WIDTH / 2 - sujetW / 2,
+    y: ty,
+    size: 20,
+    font: w.fontBold,
+    color: GOLD,
+  });
+  ty -= 28;
+
   // Duration
-  const durText = `Duree de l'epreuve : ${input.duration}`;
-  const durW = w.fontRegular.widthOfTextAtSize(durText, 12);
+  const durText = `Dur\u00E9e de l'\u00E9preuve : ${input.duration}`;
+  const durW = w.fontRegular.widthOfTextAtSize(durText, 11);
   page.drawText(durText, {
     x: A4_WIDTH / 2 - durW / 2,
     y: ty,
-    size: 12,
+    size: 11,
     font: w.fontRegular,
     color: DARK_GRAY,
   });
-  ty -= 22;
+  ty -= 20;
 
   // Date
-  const dateW = w.fontRegular.widthOfTextAtSize(input.examDate, 12);
+  const dateW = w.fontRegular.widthOfTextAtSize(input.examDate, 11);
   page.drawText(input.examDate, {
     x: A4_WIDTH / 2 - dateW / 2,
     y: ty,
-    size: 12,
+    size: 11,
     font: w.fontRegular,
     color: DARK_GRAY,
   });
-  ty -= 60;
+  ty -= 50;
 
-  // ── Instructions box
+  // ── Instructions box (clean, minimal border)
   const boxTop = ty;
-  const boxHeight = 220;
+  const boxHeight = 185;
   page.drawRectangle({
     x: MARGIN,
     y: boxTop - boxHeight,
     width: CONTENT_WIDTH,
     height: boxHeight,
     borderColor: NAVY,
-    borderWidth: 1.5,
-    color: rgb(0.97, 0.97, 0.99),
+    borderWidth: 1,
+    color: WHITE,
   });
 
-  let iy = boxTop - 20;
+  let iy = boxTop - 18;
   const ixLeft = MARGIN + 15;
-  const instrFont = w.fontRegular;
-  const instrBoldFont = w.fontBold;
 
   // Section title
-  const instrTitle = "A LIRE AVANT DE COMMENCER L'EPREUVE";
-  const instrTitleW = instrBoldFont.widthOfTextAtSize(instrTitle, 11);
+  const instrTitle = "A LIRE AVANT DE COMMENCER L'\u00C9PREUVE";
+  const instrTitleW = w.fontBold.widthOfTextAtSize(instrTitle, 10);
   page.drawText(instrTitle, {
     x: A4_WIDTH / 2 - instrTitleW / 2,
     y: iy,
-    size: 11,
-    font: instrBoldFont,
+    size: 10,
+    font: w.fontBold,
     color: NAVY,
   });
-  iy -= 22;
+  iy -= 20;
 
   const instructions = [
-    "Verifier que les informations saisies sur les GRILLES sont correctes (nom, prenom, numero d'etudiant).",
-    "Les correcteurs liquides et les stylos effacables sont interdits.",
-    "Seules les reponses portees sur la GRILLE DE REPONSES seront prises en compte.",
-    "L'utilisation de tout appareil electronique est formellement interdite (telephone, montre connectee, calculatrice non autorisee).",
-    "Tout document non autorise sera considere comme une tentative de fraude.",
+    "V\u00E9rifier que les informations saisies sur les GRILLES sont correctes (nom, pr\u00E9nom, num\u00E9ro d'\u00E9tudiant).",
+    "Les correcteurs liquides et les stylos effa\u00E7ables sont interdits.",
+    "Seules les r\u00E9ponses port\u00E9es sur la GRILLE DE R\u00C9PONSES seront prises en compte.",
+    "L'utilisation de tout appareil \u00E9lectronique est formellement interdite (t\u00E9l\u00E9phone, montre connect\u00E9e, calculatrice non autoris\u00E9e).",
+    "Tout document non autoris\u00E9 sera consid\u00E9r\u00E9 comme une tentative de fraude.",
   ];
 
   for (const instr of instructions) {
-    const bullet = `  -  ${instr}`;
-    const lines = wrapText(bullet, instrFont, 9, CONTENT_WIDTH - 40);
+    const bullet = `- ${instr}`;
+    const lines = wrapText(bullet, w.fontRegular, 8.5, CONTENT_WIDTH - 40);
     for (const line of lines) {
       page.drawText(line, {
         x: ixLeft,
         y: iy,
-        size: 9,
-        font: instrFont,
+        size: 8.5,
+        font: w.fontRegular,
         color: DARK_GRAY,
       });
-      iy -= 13;
+      iy -= 12;
     }
-    iy -= 3;
+    iy -= 2;
   }
 
   // ── Regulatory section
-  let ry = boxTop - boxHeight - 30;
-  const regTitle = "INFORMATIONS REGLEMENTAIRES";
-  const regTitleW = instrBoldFont.widthOfTextAtSize(regTitle, 11);
+  let ry = boxTop - boxHeight - 25;
+  const regTitle = "INFORMATIONS R\u00C9GLEMENTAIRES";
+  const regTitleW = w.fontBold.widthOfTextAtSize(regTitle, 10);
   page.drawText(regTitle, {
     x: A4_WIDTH / 2 - regTitleW / 2,
     y: ry,
-    size: 11,
-    font: instrBoldFont,
+    size: 10,
+    font: w.fontBold,
     color: NAVY,
   });
-  ry -= 20;
+  ry -= 18;
 
   const regulations = [
-    "Les questions sans reponse seront considerees comme nulles.",
-    "Les questions a choix multiples peuvent comporter une ou plusieurs reponses exactes.",
-    "Aucune reclamation ne sera acceptee apres la fin de l'epreuve concernant le sujet.",
+    "Les questions sans r\u00E9ponse seront consid\u00E9r\u00E9es comme nulles.",
+    "Les questions \u00E0 choix multiples peuvent comporter une ou plusieurs r\u00E9ponses exactes.",
+    "Aucune r\u00E9clamation ne sera accept\u00E9e apr\u00E8s la fin de l'\u00E9preuve concernant le sujet.",
   ];
 
   for (const reg of regulations) {
-    const bullet = `  -  ${reg}`;
-    const lines = wrapText(bullet, instrFont, 9, CONTENT_WIDTH - 20);
+    const bullet = `- ${reg}`;
+    const lines = wrapText(bullet, w.fontRegular, 8.5, CONTENT_WIDTH - 20);
     for (const line of lines) {
       page.drawText(line, {
         x: MARGIN + 10,
         y: ry,
-        size: 9,
-        font: instrFont,
+        size: 8.5,
+        font: w.fontRegular,
         color: DARK_GRAY,
       });
-      ry -= 13;
+      ry -= 12;
     }
-    ry -= 3;
+    ry -= 2;
   }
 
   // ── Exam info at bottom
-  ry -= 25;
+  ry -= 20;
+  // Gold line
   page.drawLine({
-    start: { x: MARGIN, y: ry + 10 },
-    end: { x: A4_WIDTH - MARGIN, y: ry + 10 },
-    thickness: 1,
+    start: { x: MARGIN + 60, y: ry + 10 },
+    end: { x: A4_WIDTH - MARGIN - 60, y: ry + 10 },
+    thickness: 1.5,
     color: GOLD,
   });
 
-  const examInfo = `L'epreuve comporte ${totalQuestions} question${totalQuestions > 1 ? "s" : ""} numerotee${totalQuestions > 1 ? "s" : ""} de 1 a ${totalQuestions}.`;
-  const examInfoW = instrBoldFont.widthOfTextAtSize(examInfo, 11);
+  const examInfo = `L'\u00E9preuve comporte ${totalQuestions} question${totalQuestions > 1 ? "s" : ""} num\u00E9rot\u00E9e${totalQuestions > 1 ? "s" : ""} de 1 \u00E0 ${totalQuestions}.`;
+  const examInfoW = w.fontBold.widthOfTextAtSize(examInfo, 10);
   page.drawText(examInfo, {
     x: A4_WIDTH / 2 - examInfoW / 2,
     y: ry - 10,
-    size: 11,
-    font: instrBoldFont,
+    size: 10,
+    font: w.fontBold,
     color: NAVY,
   });
 
@@ -577,17 +714,30 @@ export async function POST(req: NextRequest) {
 
     const w = new PdfWriter(doc, fontRegular, fontBold, fontOblique);
 
+    // ── Load logo
+    const logo = await loadLogoPng(doc);
+
     // ── Draw cover page
     drawCoverPage(
       w,
-      { serieId, institution, academicYear, examTitle, ueCode, subjectName, duration, examDate },
-      questions.length
+      {
+        serieId,
+        institution,
+        academicYear,
+        examTitle,
+        ueCode,
+        subjectName,
+        duration,
+        examDate,
+      },
+      questions.length,
+      logo
     );
 
     // ── Start questions on new page
     w.newPage();
 
-    // Header on each question page
+    // Header on each question page: UE code top-right + thin line
     const drawQuestionPageHeader = (writer: PdfWriter) => {
       const headerText = `${ueCode} - ${subjectName}`;
       const hw = writer.fontRegular.widthOfTextAtSize(headerText, 9);
@@ -615,10 +765,10 @@ export async function POST(req: NextRequest) {
       drawQuestionPageHeader(w);
     };
 
-    // ── Image cache (embed each image only once)
+    // ── Image cache
     const imageCache = new Map<string, PDFImage>();
 
-    async function getEmbeddedImage(url: string): Promise<PDFImage | null> {
+    const getEmbeddedImage = async (url: string): Promise<PDFImage | null> => {
       if (imageCache.has(url)) return imageCache.get(url)!;
       try {
         const imgData = await fetchImageBytes(url);
@@ -631,13 +781,16 @@ export async function POST(req: NextRequest) {
             embedded = await doc.embedJpg(imgData.bytes);
           }
         } catch {
-          // If PNG fails, try as JPG and vice versa
           try {
-            embedded = imgData.type === "png"
-              ? await doc.embedJpg(imgData.bytes)
-              : await doc.embedPng(imgData.bytes);
+            embedded =
+              imgData.type === "png"
+                ? await doc.embedJpg(imgData.bytes)
+                : await doc.embedPng(imgData.bytes);
           } catch {
-            console.warn("[generate-exam-pdf] Failed to embed image:", url.substring(0, 80));
+            console.warn(
+              "[generate-exam-pdf] Failed to embed image:",
+              url.substring(0, 80)
+            );
             return null;
           }
         }
@@ -656,39 +809,49 @@ export async function POST(req: NextRequest) {
       const q = questions[idx];
       const qNum = idx + 1;
 
-      // ── Section header (if entering a new section)
+      // ── Section header
       if (q.sectionId && q.sectionId !== lastSectionId) {
         const section = sectionsMap.get(q.sectionId);
         if (section) {
           w.ensureSpace(80);
-          w.y -= 15;
+          w.y -= 12;
 
-          // Section title bar
+          // Section title bar (navy)
+          const barHeight = 28;
           w.page.drawRectangle({
             x: MARGIN,
-            y: w.y - 5,
+            y: w.y - 6,
             width: CONTENT_WIDTH,
-            height: 24,
+            height: barHeight,
             color: NAVY,
           });
-          const stW = w.fontBold.widthOfTextAtSize(section.title, 12);
-          w.page.drawText(section.title, {
+          // Centered white title
+          const sectionTitle = cleanText(section.title);
+          const stLines = wrapText(
+            sectionTitle,
+            w.fontBold,
+            12,
+            CONTENT_WIDTH - 30
+          );
+          const stText = stLines.join(" ");
+          const stW = w.fontBold.widthOfTextAtSize(stText, 12);
+          w.page.drawText(stText, {
             x: A4_WIDTH / 2 - stW / 2,
-            y: w.y + 2,
+            y: w.y + 3,
             size: 12,
             font: w.fontBold,
             color: WHITE,
           });
-          w.y -= 35;
+          w.y -= barHeight + 12;
 
-          // Section intro text
+          // Section intro text (italic)
           if (section.intro_text) {
             const introClean = cleanText(section.intro_text);
             w.drawText(introClean, {
               font: w.fontOblique,
-              size: 10,
+              size: 9.5,
               color: DARK_GRAY,
-              lineHeight: 14,
+              lineHeight: 13,
             });
             w.y -= 5;
           }
@@ -722,30 +885,27 @@ export async function POST(req: NextRequest) {
         lastSectionId = q.sectionId;
       }
 
-      // ── Question separator (dotted line)
-      if (idx > 0) {
-        w.ensureSpace(30);
-        const dotY = w.y + 5;
-        for (let dx = MARGIN; dx < A4_WIDTH - MARGIN; dx += 6) {
-          w.page.drawCircle({
-            x: dx,
-            y: dotY,
-            size: 0.5,
-            color: LIGHT_GRAY,
-          });
-        }
+      // ── Thin separator between questions (not before the first)
+      if (idx > 0 && !(q.sectionId && q.sectionId !== questions[idx - 1]?.sectionId)) {
+        w.ensureSpace(25);
+        w.page.drawLine({
+          start: { x: MARGIN + 20, y: w.y + 5 },
+          end: { x: A4_WIDTH - MARGIN - 20, y: w.y + 5 },
+          thickness: 0.4,
+          color: LIGHT_GRAY,
+        });
         w.y -= 5;
       }
 
-      // Estimate space needed for question header + at least 2 options
-      w.ensureSpace(100);
+      // Estimate space for question header + 2 options minimum
+      w.ensureSpace(90);
 
       // ── Question number + text
       const qText = cleanText(q.text);
       const prefix = `Question ${qNum}.  `;
       const prefixWidth = w.fontBold.widthOfTextAtSize(prefix, 11);
 
-      // Draw question number
+      // Draw question number in navy bold
       w.page.drawText(prefix, {
         x: MARGIN,
         y: w.y,
@@ -754,10 +914,14 @@ export async function POST(req: NextRequest) {
         color: NAVY,
       });
 
-      // Draw question text (wrapped, continuing from after the prefix on first line)
-      const qLines = wrapText(qText, w.fontRegular, 10, CONTENT_WIDTH - prefixWidth);
+      // Draw question text (word-wrapped)
+      const qLines = wrapText(
+        qText,
+        w.fontRegular,
+        10,
+        CONTENT_WIDTH - prefixWidth
+      );
       if (qLines.length > 0) {
-        // First line after prefix
         w.page.drawText(qLines[0], {
           x: MARGIN + prefixWidth,
           y: w.y,
@@ -767,11 +931,10 @@ export async function POST(req: NextRequest) {
         });
         w.y -= 15;
 
-        // Remaining lines
         for (let li = 1; li < qLines.length; li++) {
           w.ensureSpace(15);
           w.page.drawText(qLines[li], {
-            x: MARGIN,
+            x: MARGIN + prefixWidth,
             y: w.y,
             size: 10,
             font: w.fontRegular,
@@ -809,40 +972,27 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── Options
-      const optionIndent = MARGIN + 15;
-      const checkboxSize = 9;
+      // ── Options (no checkboxes — just letter + text)
+      const optionIndent = MARGIN + 20;
 
       for (const opt of q.options) {
-        w.ensureSpace(20);
+        w.ensureSpace(18);
 
         const optY = w.y;
 
-        // Draw checkbox square
-        w.page.drawRectangle({
-          x: optionIndent,
-          y: optY - 1,
-          width: checkboxSize,
-          height: checkboxSize,
-          borderColor: MEDIUM_GRAY,
-          borderWidth: 0.8,
-          color: WHITE,
-        });
-
-        // Draw label (A, B, C...)
+        // Bold letter label (A., B., C., ...)
         const labelText = `${opt.label}.`;
+        const labelWidth = w.fontBold.widthOfTextAtSize(labelText, 10);
         w.page.drawText(labelText, {
-          x: optionIndent + checkboxSize + 6,
+          x: optionIndent,
           y: optY,
           size: 10,
           font: w.fontBold,
           color: NAVY,
         });
 
-        // Draw option text
-        const labelWidth =
-          w.fontBold.widthOfTextAtSize(labelText, 10) + checkboxSize + 12;
-        const optTextX = optionIndent + labelWidth;
+        // Option text
+        const optTextX = optionIndent + labelWidth + 6;
         const optMaxWidth = A4_WIDTH - MARGIN - optTextX;
         const optText = cleanText(opt.text);
         const optLines = wrapText(optText, w.fontRegular, 10, optMaxWidth);
@@ -855,7 +1005,7 @@ export async function POST(req: NextRequest) {
             font: w.fontRegular,
             color: DARK_GRAY,
           });
-          w.y -= 16;
+          w.y -= 15;
 
           for (let li = 1; li < optLines.length; li++) {
             w.ensureSpace(14);
@@ -869,7 +1019,7 @@ export async function POST(req: NextRequest) {
             w.y -= 14;
           }
         } else {
-          w.y -= 16;
+          w.y -= 15;
         }
       }
 
@@ -893,7 +1043,6 @@ export async function POST(req: NextRequest) {
 
     if (uploadError) {
       console.error("Upload error:", uploadError);
-      // Still return the PDF as a download if upload fails
       return new NextResponse(pdfBuffer, {
         headers: {
           "Content-Type": "application/pdf",
