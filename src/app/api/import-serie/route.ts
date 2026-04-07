@@ -1253,13 +1253,15 @@ export async function POST(req: NextRequest) {
       academicYear: (formData.get("academicYear") as string) || "2025 - 2026",
     };
 
-    // Large files: download from Storage URL instead of reading from FormData body
-    if (!file && fileUrl) {
-      console.log(`[import-serie] Downloading large file from Storage: ${fileUrl}`);
-      const resp = await fetch(fileUrl);
-      if (!resp.ok) return NextResponse.json({ error: "Erreur téléchargement du fichier depuis le storage" }, { status: 400 });
-      const blob = await resp.blob();
-      file = new File([blob], "upload.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    // Large files: download from Supabase Storage using server client (no HTTP roundtrip)
+    const storagePath = formData.get("storagePath") as string | null;
+    if (!file && storagePath) {
+      console.log(`[import-serie] Reading large file from Storage: ${storagePath}`);
+      const supabaseForFile = await createClient();
+      const { data: fileData, error: dlErr } = await supabaseForFile.storage.from("cours-pdfs").download(storagePath);
+      if (dlErr || !fileData) return NextResponse.json({ error: "Erreur lecture du fichier depuis le storage: " + dlErr?.message }, { status: 400 });
+      file = new File([fileData], "upload.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      console.log(`[import-serie] File downloaded from storage: ${(fileData.size / 1024 / 1024).toFixed(1)} MB`);
     }
 
     if (!serieId || !file) {
@@ -1592,13 +1594,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert DOCX to PNG pages via CloudConvert (only for initial import, not correction)
+    // Skip for large files (>5MB) to avoid timeout
     let pageImages: Buffer[] = [];
-    if (!isCorrection) {
+    if (!isCorrection && buffer.length < 5 * 1024 * 1024) {
       try {
         pageImages = await convertDocxToPages(buffer);
       } catch (e: any) {
         console.warn("[import-serie] DOCX→PNG conversion failed (non-critical):", e.message);
       }
+    } else if (!isCorrection) {
+      console.log(`[import-serie] Skipping DOCX→PNG (file too large: ${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
     }
 
     // Parser (essaie les trois formats)
