@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const safeName = (fileName || "upload.docx").replace(/\s+/g, "_");
     const storagePath = `examens/${serieId}/${Date.now()}_${safeName}`;
 
-    // Create a signed upload URL (valid 10 minutes)
+    // Create signed upload URL — client will upload directly to Storage
     const { data, error } = await supabase.storage
       .from("cours-pdfs")
       .createSignedUploadUrl(storagePath);
@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       signedUrl: data.signedUrl,
+      token: data.token,
+      path: data.path,
       storagePath,
     });
   } catch (e: any) {

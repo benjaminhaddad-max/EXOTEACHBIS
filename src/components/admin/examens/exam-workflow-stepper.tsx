@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, CheckCircle2, Loader2, Download, RefreshCw } from "lucide-react";
 import { removeAllQuestionsFromSerie } from "@/app/(admin)/admin/exercices/actions";
-// Large file upload uses signed URLs from /api/upload-signed-url
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -99,25 +99,24 @@ export default function ExamWorkflowStepper({
     }
   }, [correctionDone, questionCount]);
 
-  // ─── Upload large file via signed URL (server creates the signed URL) ───────
+  // ─── Upload large file: server creates signed URL, client uploads directly ──
   async function uploadLargeFile(file: File, serieId: string): Promise<string | null> {
     try {
-      // Step 1: Get a signed upload URL from the server
+      // Step 1: Get signed upload URL from server (tiny JSON request, no file body)
       const res = await fetch("/api/upload-signed-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serieId, fileName: file.name }),
       });
-      if (!res.ok) return null;
-      const { signedUrl, storagePath } = await res.json();
+      if (!res.ok) { console.error("[upload-large] signed url error", res.status); return null; }
+      const { token, path, storagePath } = await res.json();
 
-      // Step 2: Upload directly to Storage using the signed URL
-      const uploadRes = await fetch(signedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
+      // Step 2: Upload directly to Supabase Storage using the signed token (bypasses Vercel)
+      const supabase = createClient();
+      const { error } = await supabase.storage.from("cours-pdfs").uploadToSignedUrl(path, token, file, {
+        upsert: true,
       });
-      if (!uploadRes.ok) return null;
+      if (error) { console.error("[upload-large] storage upload error", error); return null; }
       return storagePath;
     } catch (e) { console.error("[upload-large]", e); return null; }
   }
