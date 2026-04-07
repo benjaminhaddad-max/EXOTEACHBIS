@@ -10,7 +10,6 @@ import {
 } from "pdf-lib";
 import * as path from "path";
 import { promises as fs } from "fs";
-// @ts-expect-error — sharp default import works at runtime with Next.js esModuleInterop
 import sharp from "sharp";
 
 export const maxDuration = 60;
