@@ -833,8 +833,54 @@ export async function POST(req: NextRequest) {
       if (!xmlFile) return NextResponse.json({ error: "document.xml introuvable" }, { status: 422 });
       const docXml = await xmlFile.async("string");
 
-      // Parse with XML highlight format only (no images needed)
-      const { questions: parsed } = await parseXmlHighlightFormat(docXml);
+      // Inline fast parsing: extract questions + green highlights only
+      const LABELS = ["A", "B", "C", "D", "E"];
+      const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+      let pm: RegExpExecArray | null;
+      const cParas: { text: string; bold: boolean; highlighted: string | null }[] = [];
+      while ((pm = pRegex.exec(docXml)) !== null) {
+        const content = pm[1];
+        const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
+        const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
+        const texts: string[] = [];
+        const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+        let tm;
+        while ((tm = tRegex.exec(content)) !== null) texts.push(tm[1]);
+        // Also extract math text
+        const mtRegex = /<m:t[^>]*>([^<]*)<\/m:t>/g;
+        while ((tm = mtRegex.exec(content)) !== null) texts.push(tm[1]);
+        const text = texts.join("").trim();
+        if (text.length > 0) cParas.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null });
+      }
+
+      // Find Question markers
+      const cqMarkers: number[] = [];
+      for (let j = 0; j < cParas.length; j++) {
+        if (cParas[j].bold && /^question$/i.test(cParas[j].text.trim())) cqMarkers.push(j);
+      }
+
+      // Extract questions with is_correct from highlights
+      type CorrectionQ = { options: { label: string; is_correct: boolean }[] };
+      const parsed: CorrectionQ[] = [];
+      for (let qi = 0; qi < cqMarkers.length; qi++) {
+        const start = cqMarkers[qi] + 1;
+        const end = qi + 1 < cqMarkers.length ? cqMarkers[qi + 1] : cParas.length;
+        const items = [];
+        for (let j = start; j < end; j++) {
+          if (cParas[j].bold) continue;
+          if (cParas[j].text.trim().length < 2) continue;
+          items.push(cParas[j]);
+        }
+        if (items.length < 2) continue;
+        const optionItems = items.length <= 5 ? items : items.slice(Math.max(0, items.length - 5));
+        const options = optionItems.slice(0, 5).map((p, idx) => ({
+          label: LABELS[idx],
+          is_correct: p.highlighted === "green",
+        }));
+        if (options.length >= 2) parsed.push({ options });
+      }
+
+      console.log(`[import-serie] Correction fast parse: ${parsed.length} questions, ${parsed.reduce((s, q) => s + q.options.filter(o => o.is_correct).length, 0)} correct answers`);
 
       if (parsed.length === 0) {
         return NextResponse.json({ error: "Aucune question trouvée dans la correction." }, { status: 422 });
