@@ -56,12 +56,12 @@ export async function POST(req: NextRequest) {
     // ═══════════════════════════════════════════════════════════════════
 
     // Header: bordered box with logo + title + year (B&W friendly)
-    const barH = mm(16);
+    const barH = mm(20);
     page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, borderWidth: 1, borderColor: BLACK, color: WHITE });
 
     // Logo (left) — B&W SVG rendered as PNG
     if (logo) {
-      const logoH = barH - mm(3);
+      const logoH = barH - mm(2);
       const logoW = logoH * (logo.width / logo.height);
       page.drawImage(logo, {
         x: MX + mm(2), y: y - barH + (barH - logoH) / 2,
