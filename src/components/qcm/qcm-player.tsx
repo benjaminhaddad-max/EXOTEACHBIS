@@ -456,7 +456,7 @@ function PlayingScreen({
   const totalAnswered = questions.filter((q) => getStatus(q) !== "none").length;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: "#F5F6FA" }}>
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden" style={{ backgroundColor: "#F5F6FA" }}>
 
       {/* ── TOP HEADER ── */}
       <header className="shrink-0 flex items-center justify-between px-6 py-4 bg-navy">
