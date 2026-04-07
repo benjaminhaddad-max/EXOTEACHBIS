@@ -102,8 +102,8 @@ export async function POST(req: NextRequest) {
     const DIGITS = 6;
     const bigBox = mm(5);
     const bigGap = mm(1.5);
-    const smallBox = mm(2.2);
-    const smallGap = mm(0.3);
+    const smallBox = mm(3.5);
+    const smallGap = mm(0.5);
     const gridW = DIGITS * (bigBox + bigGap) - bigGap;
     const gridX = MX + CW - gridW - mm(2);
     let gy = sectionTop;
