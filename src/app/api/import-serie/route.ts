@@ -1299,30 +1299,11 @@ export async function POST(req: NextRequest) {
     const mammothOptions: any = {};
 
     if (isLargeFile) {
-      // For large files: skip heavy images (TIFF, BMP) to avoid memory explosion
-      // Only keep small JPEG/PNG images, drop everything else
-      console.log(`[import-serie] Large file mode (${(buffer.length / 1024 / 1024).toFixed(1)} MB) — skipping heavy images in mammoth`);
-      mammothOptions.convertImage = mammoth.images.imgElement((image: any) => {
-        return image.read("base64").then(async (base64: string) => {
-          const contentType: string = image.contentType || "";
-          // Skip TIFF and other heavy formats
-          if (contentType.includes("tiff") || contentType.includes("bmp") || contentType.includes("emf") || contentType.includes("wmf")) {
-            // Check for web alternative in ZIP
-            for (const [baseName, info] of imageUpgradeMap) {
-              try {
-                const webFile = zip.file(info.path);
-                if (webFile) {
-                  const webBase64 = await webFile.async("base64");
-                  return { src: `data:${info.mime};base64,${webBase64}` };
-                }
-              } catch {}
-            }
-            return { src: "" }; // drop heavy image
-          }
-          // Keep small images (< 500KB base64)
-          if (base64.length > 500000) return { src: "" };
-          return { src: `data:${contentType};base64,${base64}` };
-        });
+      // For large files: DROP ALL IMAGES to avoid memory/timeout explosion
+      // Questions will have text only — images can be re-imported later
+      console.log(`[import-serie] Large file mode (${(buffer.length / 1024 / 1024).toFixed(1)} MB) — dropping all images in mammoth`);
+      mammothOptions.convertImage = mammoth.images.imgElement((_image: any) => {
+        return Promise.resolve({ src: "" });
       });
     } else if (imageUpgradeMap.size > 0) {
       mammothOptions.convertImage = mammoth.images.imgElement((image: any) => {
