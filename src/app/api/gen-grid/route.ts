@@ -11,8 +11,8 @@ const BLACK = rgb(0, 0, 0);
 const WHITE = rgb(1, 1, 1);
 const GRAY = rgb(0.45, 0.45, 0.45);
 const LGRAY = rgb(0.7, 0.7, 0.7);
-const NAVY = rgb(0.055, 0.118, 0.208);
-const GOLD = rgb(0.75, 0.65, 0.35);
+const NAVY = rgb(0, 0, 0); // black for print
+const GOLD = rgb(0, 0, 0); // black for print
 
 const PW = 595.28;
 const PH = 841.89;
@@ -53,58 +53,58 @@ export async function POST(req: NextRequest) {
     // HEADER — Navy bar flush to top, logo + title + year
     // ═══════════════════════════════════════════════════════════════════
 
-    const barH = mm(20);
-    page.drawRectangle({ x: 0, y: y - barH, width: PW, height: barH, color: NAVY });
+    // Header: bordered box with logo + title + year (B&W friendly)
+    const barH = mm(16);
+    page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, borderWidth: 1, borderColor: BLACK, color: WHITE });
 
-    // Logo (left, big, centered vertically)
+    // Logo (left)
     if (logo) {
-      const logoMaxH = mm(14);
+      const logoMaxH = mm(10);
       const logoScale = logoMaxH / logo.height;
       const logoW = logo.width * logoScale;
       const logoH = logo.height * logoScale;
       page.drawImage(logo, {
-        x: MX, y: y - barH + (barH - logoH) / 2,
+        x: MX + mm(2), y: y - barH + (barH - logoH) / 2,
         width: logoW, height: logoH,
       });
     } else {
       page.drawText("DIPLOMA SANT\u00C9", {
-        x: MX + mm(2), y: y - mm(6), size: 12, font: B, color: WHITE,
+        x: MX + mm(2), y: y - mm(6), size: 11, font: B, color: BLACK,
       });
     }
 
-    // Year (right, centered vertically)
+    // Year (right)
     const yearText = academicYear || "2026 - 2027";
-    const yw = F.widthOfTextAtSize(yearText, 11);
+    const yw = B.widthOfTextAtSize(yearText, 10);
     page.drawText(yearText, {
-      x: PW - MX - yw, y: y - barH + (barH - 11) / 2,
-      size: 11, font: F, color: GOLD,
+      x: MX + CW - yw - mm(3), y: y - barH + (barH - 10) / 2,
+      size: 10, font: B, color: BLACK,
     });
 
-    // Title (centered in bar, upper portion) — strip UE/subject if present in info line
+    // Title (centered, upper line)
     if (examTitle) {
       let titleText = examTitle;
-      // Remove UE code and subject from title if they'll be in the info line below
       if (ueCode && titleText.includes(ueCode)) {
-        titleText = titleText.replace(new RegExp(`\\s*[—\\-]\\s*${ueCode}.*$`), "").trim();
+        titleText = titleText.replace(new RegExp(`\\s*[\u2014\\-]\\s*${ueCode}.*$`), "").trim();
       }
       let ts = 11;
       while (ts > 5 && B.widthOfTextAtSize(titleText, ts) > CW - mm(70)) ts -= 0.5;
       const tw = B.widthOfTextAtSize(titleText, ts);
       page.drawText(titleText, {
-        x: PW / 2 - tw / 2, y: y - mm(8), size: ts, font: B, color: WHITE,
+        x: PW / 2 - tw / 2, y: y - mm(5.5), size: ts, font: B, color: BLACK,
       });
     }
 
-    // Info line (centered in bar, lower portion)
+    // Info line (centered, lower line)
     const info = [ueCode, subjectName, examDate].filter(Boolean).join("  \u2014  ");
     if (info) {
       const iw = F.widthOfTextAtSize(info, 7.5);
       page.drawText(info, {
-        x: PW / 2 - iw / 2, y: y - mm(13), size: 7.5, font: F, color: GOLD,
+        x: PW / 2 - iw / 2, y: y - mm(10), size: 7.5, font: F, color: GRAY,
       });
     }
 
-    y -= barH + mm(8);
+    y -= barH + mm(4);
 
     // ═══════════════════════════════════════════════════════════════════
     // LEFT: NOM + Prénom | RIGHT: N° étudiant (write-in + bubble grid)
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
     const FRAME_PAD_T = mm(0.5);
     const FRAME_PAD_B = mm(0.3);
     const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
-    const FRAME_GAP = mm(0.6);
+    const FRAME_GAP = mm(1.5);
     const gridTop = y;
 
     for (let col = 0; col < COLS; col++) {
