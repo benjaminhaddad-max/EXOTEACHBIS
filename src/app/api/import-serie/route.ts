@@ -578,25 +578,24 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
   const sections: ParsedSection[] = [];
   const LABELS = ["A", "B", "C", "D", "E"];
 
-  // Extract paragraphs with text, bold, highlight, and PAGE NUMBER info
-  // Page breaks: <w:br w:type="page"/> or <w:lastRenderedPageBreak/>
-  type Para = { text: string; bold: boolean; highlighted: string | null; xmlIdx: number; page: number };
+  // Extract paragraphs with text, bold, highlight, numId (Word list), and PAGE NUMBER
+  type Para = { text: string; bold: boolean; highlighted: string | null; numId: string | null; xmlIdx: number; page: number };
   const paras: Para[] = [];
   const pRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
   let m: RegExpExecArray | null;
   let xmlParaCounter = 0;
-  let currentPage = 0; // 0-indexed page number
+  let currentPage = 0;
   while ((m = pRegex.exec(docXml)) !== null) {
     const content = m[1];
-    // Detect page breaks BEFORE processing this paragraph
     if (content.includes('w:type="page"') || content.includes("lastRenderedPageBreak")) {
       currentPage++;
     }
     const highlightMatch = content.match(/w:highlight w:val="([^"]+)"/);
     const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
+    const numIdMatch = content.match(/w:numId w:val="(\d+)"/);
     const text = extractParagraphText(content);
     if (text.length > 0) {
-      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null, xmlIdx: xmlParaCounter, page: currentPage });
+      paras.push({ text, bold: isBold, highlighted: highlightMatch?.[1] ?? null, numId: numIdMatch?.[1] ?? null, xmlIdx: xmlParaCounter, page: currentPage });
     }
     xmlParaCounter++;
   }
@@ -648,10 +647,13 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
   }
 
   // ── Parse questions ────────────────────────────────────────────────────────
+  // Uses Word list numbering (numId) when available to reliably separate
+  // option items from question text and section intros.
   for (let qi = 0; qi < qMarkers.length; qi++) {
     const start = qMarkers[qi] + 1;
     const end = qi + 1 < qMarkers.length ? qMarkers[qi + 1] : paras.length;
 
+    // Collect non-bold, non-empty paragraphs
     const items: Para[] = [];
     for (let j = start; j < end; j++) {
       if (paras[j].bold) continue;
@@ -661,19 +663,54 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
 
     if (items.length < 2) continue;
 
+    // Strategy: use numId to identify option items when available.
+    // Options are typically consecutive paragraphs sharing the same numId.
+    // Find the dominant numId among the items (the one with 3-5 consecutive uses).
+    const numIdCounts = new Map<string, number>();
+    for (const it of items) {
+      if (it.numId) numIdCounts.set(it.numId, (numIdCounts.get(it.numId) || 0) + 1);
+    }
+
+    let optionNumId: string | null = null;
+    for (const [nid, count] of numIdCounts) {
+      if (count >= 3 && count <= 6) { // options are typically 4-5 items with same numId
+        if (!optionNumId || count > (numIdCounts.get(optionNumId) || 0)) {
+          optionNumId = nid;
+        }
+      }
+    }
+
     let questionText: string;
     let optionItems: Para[];
 
-    if (items.length <= 5) {
-      questionText = `Question ${questions.length + 1}`;
-      optionItems = items;
-    } else if (items.length === 6) {
-      questionText = items[0].text;
-      optionItems = items.slice(1, 6);
+    if (optionNumId) {
+      // Split items by numId: items with optionNumId are options, rest is question text
+      const textParts: string[] = [];
+      const opts: Para[] = [];
+      for (const it of items) {
+        if (it.numId === optionNumId) {
+          opts.push(it);
+        } else if (opts.length === 0) {
+          // Before options → question text
+          textParts.push(it.text);
+        }
+        // After options end → ignore (section intro text that leaked in)
+      }
+      questionText = textParts.length > 0 ? textParts.join(" ") : `Question ${questions.length + 1}`;
+      optionItems = opts;
     } else {
-      const numTextParas = items.length - 5;
-      questionText = items.slice(0, numTextParas).map(p => p.text).join(" ");
-      optionItems = items.slice(numTextParas, numTextParas + 5);
+      // Fallback: no numId info → use the old heuristic (last 5 = options)
+      if (items.length <= 5) {
+        questionText = `Question ${questions.length + 1}`;
+        optionItems = items;
+      } else if (items.length === 6) {
+        questionText = items[0].text;
+        optionItems = items.slice(1, 6);
+      } else {
+        const numTextParas = items.length - 5;
+        questionText = items.slice(0, numTextParas).map(p => p.text).join(" ");
+        optionItems = items.slice(numTextParas, numTextParas + 5);
+      }
     }
 
     const options: ParsedOption[] = optionItems.slice(0, 5).map((p, idx) => ({
@@ -683,7 +720,6 @@ async function parseXmlHighlightFormat(docXml: string, html?: string, drawingIma
     }));
 
     if (options.length >= 2) {
-      // Get the page number from the "Question" marker paragraph
       const questionPage = paras[qMarkers[qi]].page;
       questions.push({
         text: questionText,
