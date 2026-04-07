@@ -824,7 +824,55 @@ export async function POST(req: NextRequest) {
       .select("*", { count: "exact", head: true })
       .eq("series_id", serieId);
     const isCorrection = (existingCount ?? 0) > 0;
-    if (isCorrection) console.log("[import-serie] Correction mode: skipping CloudConvert + EMF conversion");
+
+    // ─── FAST PATH: Correction mode ─────────────────────────────────────────
+    // Only parse XML for green highlights, skip mammoth + images + CloudConvert
+    if (isCorrection) {
+      console.log("[import-serie] Correction mode (fast path): only parsing highlights");
+      const xmlFile = zip.file("word/document.xml");
+      if (!xmlFile) return NextResponse.json({ error: "document.xml introuvable" }, { status: 422 });
+      const docXml = await xmlFile.async("string");
+
+      // Parse with XML highlight format only (no images needed)
+      const { questions: parsed } = await parseXmlHighlightFormat(docXml);
+
+      if (parsed.length === 0) {
+        return NextResponse.json({ error: "Aucune question trouvée dans la correction." }, { status: 422 });
+      }
+
+      // Fetch existing questions
+      const { data: sqData } = await supabase
+        .from("series_questions")
+        .select("question_id, order_index")
+        .eq("series_id", serieId)
+        .order("order_index");
+      const existingIds = (sqData ?? []).map((r: any) => r.question_id).filter(Boolean);
+
+      // Update correct answers on existing questions
+      let updated = 0;
+      for (let i = 0; i < Math.min(parsed.length, existingIds.length); i++) {
+        const p = parsed[i];
+        const qId = existingIds[i];
+
+        // Update options is_correct
+        for (const opt of p.options) {
+          await supabase
+            .from("options")
+            .update({ is_correct: opt.is_correct })
+            .eq("question_id", qId)
+            .eq("label", opt.label);
+        }
+        if (p.options.some(o => o.is_correct)) updated++;
+      }
+
+      console.log(`[import-serie] Correction: ${updated}/${existingIds.length} questions updated`);
+      return NextResponse.json({
+        success: true,
+        message: `${updated} questions mises à jour avec les réponses correctes.`,
+        questionsUpdated: updated,
+        correctAnswersMarked: parsed.reduce((sum, q) => sum + q.options.filter(o => o.is_correct).length, 0),
+      });
+    }
 
     // Convert DOCX to PNG pages via CloudConvert (only for initial import, not correction)
     let pageImages: Buffer[] = [];
