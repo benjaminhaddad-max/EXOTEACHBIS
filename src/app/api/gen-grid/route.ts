@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
+import * as path from "path";
+import { promises as fs } from "fs";
 
 export const maxDuration = 30;
 
@@ -37,24 +39,47 @@ export async function POST(req: NextRequest) {
     const F = await doc.embedFont(StandardFonts.Helvetica);
     const B = await doc.embedFont(StandardFonts.HelveticaBold);
 
+    // Load logo
+    let logo = null;
+    try {
+      const logoPath = path.join(process.cwd(), "public", "ds-logo-2026.png");
+      const logoBytes = await fs.readFile(logoPath);
+      logo = await doc.embedPng(logoBytes);
+    } catch { /* logo not found, skip */ }
+
     let y = PH - mm(6);
 
     // ═══════════════════════════════════════════════════════════════════
-    // HEADER
+    // HEADER — Navy bar with DS logo + year
     // ═══════════════════════════════════════════════════════════════════
 
-    const barH = mm(5.5);
-    page.drawRectangle({ x: MX, y: y - barH, width: CW, height: barH, color: NAVY });
-    page.drawText((institution || "DIPLOMA SANT\u00C9").toUpperCase(), {
-      x: MX + mm(2), y: y - barH + mm(1.5), size: 7, font: B, color: WHITE,
-    });
-    if (academicYear) {
-      const aw = F.widthOfTextAtSize(academicYear, 7);
-      page.drawText(academicYear, {
-        x: MX + CW - aw - mm(2), y: y - barH + mm(1.5), size: 7, font: F, color: GOLD,
+    const barH = mm(8);
+    page.drawRectangle({ x: 0, y: y - barH, width: PW, height: barH, color: NAVY });
+
+    // Logo (left, centered vertically)
+    if (logo) {
+      const logoMaxH = mm(5);
+      const logoScale = logoMaxH / logo.height;
+      const logoW = logo.width * logoScale;
+      const logoH = logo.height * logoScale;
+      page.drawImage(logo, {
+        x: MX, y: y - barH + (barH - logoH) / 2,
+        width: logoW, height: logoH,
+      });
+    } else {
+      page.drawText("DIPLOMA SANT\u00C9", {
+        x: MX + mm(2), y: y - barH + mm(2.5), size: 8, font: B, color: WHITE,
       });
     }
-    y -= barH + mm(2);
+
+    // Year (right)
+    const yearText = academicYear || "2025 - 2026";
+    const yw = F.widthOfTextAtSize(yearText, 9);
+    page.drawText(yearText, {
+      x: PW - MX - yw, y: y - barH + (barH - 9) / 2,
+      size: 9, font: F, color: GOLD,
+    });
+    y -= barH + mm(3);
 
     // Title
     if (examTitle) {
