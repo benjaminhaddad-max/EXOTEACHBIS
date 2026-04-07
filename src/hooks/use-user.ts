@@ -18,6 +18,7 @@ function buildProfileFallback(user: User): Profile {
     phone: null,
     access_dossier_id: null,
     etiquettes: [],
+    student_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
