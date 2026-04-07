@@ -459,24 +459,24 @@ function PlayingScreen({
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: "#F5F6FA" }}>
 
       {/* ── TOP HEADER ── */}
-      <header className="shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-white">
+      <header className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-navy">
         <div className="flex items-center gap-3">
-          <img src="/logo-ds.svg" alt="Diploma Santé" className="h-8 w-auto object-contain" style={{ filter: "brightness(0) saturate(100%) invert(8%) sepia(27%) saturate(2124%) hue-rotate(188deg) brightness(95%) contrast(103%)" }} />
-          <div className="h-5 w-px bg-gray-200" />
+          <img src="/ds-logo-2026.png" alt="Diploma Santé" className="h-8 w-auto object-contain" />
+          <div className="h-5 w-px bg-white/20" />
           <div>
-            <p className="text-sm font-bold text-gray-900">{serie.name}</p>
-            <p className="text-xs text-gray-400">{serie.type === "concours_blanc" ? "Concours blanc" : serie.type === "revision" ? "Révision" : serie.type === "entrainement" ? "Entraînement" : "QCM"}</p>
+            <p className="text-sm font-bold text-white">{serie.name}</p>
+            <p className="text-xs text-white/50">{serie.type === "concours_blanc" ? "Concours blanc" : serie.type === "revision" ? "Révision" : serie.type === "entrainement" ? "Entraînement" : "QCM"}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {timed && (
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? "bg-red-50 text-red-600 border border-red-200" : "bg-gray-100 text-gray-700"}`}>
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-white/10 text-white/80"}`}>
               <Clock size={14} />
               {formatTime(timeLeft)}
             </div>
           )}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy text-white text-sm font-bold">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white text-sm font-bold">
             <span className="text-gold">{totalComplete}</span>
             <span className="text-white/50">/</span>
             <span>{questions.length}</span>
