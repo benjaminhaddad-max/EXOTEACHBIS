@@ -540,15 +540,16 @@ function parseParagraphFormat(html: string): ParsedQuestion[] {
 /**
  * Format 4 : "QCM N :" format (common in university concours blancs)
  * Questions as "QCM 1 : text" or "QCM 11 : text"
- * Options as "A. text" / "A) text" / "A\ttext" or plain unlabeled lines
+ * Options as "A. text" / "A) text" / "A\ttext" or plain unlabeled lines (often in <ol><li>)
  */
 function parseQcmLabelFormat(html: string): ParsedQuestion[] {
   const questions: ParsedQuestion[] = [];
-  const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-  const paragraphs: { raw: string; text: string }[] = [];
+  // Extract both <p> and <li> elements to capture options in ordered lists
+  const elemRegex = /<(p|li)[^>]*>([\s\S]*?)<\/(?:p|li)>/gi;
+  const paragraphs: { raw: string; text: string; tag: string }[] = [];
   let m: RegExpExecArray | null;
-  while ((m = pRegex.exec(html)) !== null) {
-    paragraphs.push({ raw: m[1], text: stripTags(m[1]) });
+  while ((m = elemRegex.exec(html)) !== null) {
+    paragraphs.push({ raw: m[2], text: stripTags(m[2]), tag: m[1].toLowerCase() });
   }
 
   const LABELS = ["A", "B", "C", "D", "E"];
@@ -613,16 +614,19 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
     }
   };
 
+  let liCount = 0; // track consecutive <li> items for unlabeled options
+
   for (const p of paragraphs) {
     const text = p.text;
     const raw = p.raw;
 
-    // Detect "QCM N :" pattern (with optional BOM, spaces, ﻿)
-    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*:\s*(.*)/iu);
+    // Detect "QCM N :" / "QCM N -" / "QCM N." patterns (with optional BOM)
+    const qcmMatch = text.match(/^\s*\u{FEFF}?\s*QCM\s+(\d+)\s*[-:.]\s*(.*)/iu);
     if (qcmMatch) {
       flushQuestion();
       currentQuestion = { text: qcmMatch[2].trim(), options: [], images: [] };
       questionTextLines = [];
+      liCount = 0;
 
       // Check for image in same paragraph
       const imgMatch = raw.match(/<img\s+src="(data:image\/[^"]+)"/i);
@@ -639,7 +643,28 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
       continue;
     }
 
-    // Try labeled option: "A. text" / "A) text" / "A : text" / "A\ttext"
+    // <li> elements are direct options (labeled or unlabeled)
+    if (p.tag === "li" && text.trim().length > 2) {
+      const optLabelMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
+      if (optLabelMatch) {
+        currentQuestion.options.push({
+          label: optLabelMatch[1].toUpperCase(),
+          text: optLabelMatch[2].trim(),
+          is_correct: false,
+        });
+      } else {
+        // Unlabeled <li> — assign letter positionally
+        currentQuestion.options.push({
+          label: LABELS[liCount] || String.fromCharCode(65 + liCount),
+          text: text.trim(),
+          is_correct: false,
+        });
+      }
+      liCount++;
+      continue;
+    }
+
+    // Try labeled option in <p>: "A. text" / "A) text" / "A : text" / "A\ttext"
     const optMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
     if (optMatch) {
       currentQuestion.options.push({
@@ -647,11 +672,15 @@ function parseQcmLabelFormat(html: string): ParsedQuestion[] {
         text: optMatch[2].trim(),
         is_correct: false,
       });
+      liCount = 0;
       continue;
     }
 
     // Skip empty / very short lines
     if (text.trim().length < 3) continue;
+
+    // Reset liCount when we hit a <p> that's not an option
+    liCount = 0;
 
     // Collect as potential question text or unlabeled option
     questionTextLines.push(text.trim());
