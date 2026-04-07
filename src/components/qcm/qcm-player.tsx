@@ -186,6 +186,7 @@ interface QcmPlayerProps {
   userId: string;
   sections?: SectionInfo[];
   questionSectionMap?: Record<string, string>; // questionId → sectionId
+  isAdminPreview?: boolean;
 }
 
 type PlayerState = "setup" | "playing" | "results";
@@ -470,6 +471,11 @@ function PlayingScreen({
         </div>
 
         <div className="flex items-center gap-3">
+          {isAdminPreview && (
+            <a href="/admin/pedagogie" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold/20 text-gold text-xs font-semibold hover:bg-gold/30 transition">
+              ← Retour admin
+            </a>
+          )}
           {timed && (
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold ${timeLeft < 60 ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-white/10 text-white/80"}`}>
               <Clock size={14} />
@@ -977,7 +983,7 @@ function ResultsScreen({
 
 // ─── Main QcmPlayer ───────────────────────────────────────────────────────
 
-export function QcmPlayer({ serie, questions, userId, sections, questionSectionMap }: QcmPlayerProps) {
+export function QcmPlayer({ serie, questions, userId, sections, questionSectionMap, isAdminPreview }: QcmPlayerProps) {
   const [playerState, setPlayerState] = useState<PlayerState>("setup");
   const [timed, setTimed] = useState(false);
   const [timeLeft, setTimeLeft] = useState((serie.duration_minutes ?? 20) * 60);

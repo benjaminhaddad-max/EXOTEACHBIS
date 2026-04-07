@@ -82,23 +82,14 @@ export default async function SeriePage({ params }: Props) {
 
   return (
     <>
-      {isAdmin && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-2 text-xs font-semibold" style={{ backgroundColor: "#C9A84C", color: "#0e1e35" }}>
-          <span>👁️ Mode aperçu — vue élève</span>
-          <Link href="/admin/pedagogie" className="underline hover:no-underline">
-            ← Retour à la pédagogie
-          </Link>
-        </div>
-      )}
-      <div className={isAdmin ? "pt-9" : ""}>
-        <QcmPlayer
-          serie={serie}
-          questions={questions}
-          userId={user.id}
-          sections={sectionsData ?? undefined}
-          questionSectionMap={Object.keys(questionSectionMap).length > 0 ? questionSectionMap : undefined}
-        />
-      </div>
+      <QcmPlayer
+        serie={serie}
+        questions={questions}
+        userId={user.id}
+        sections={sectionsData ?? undefined}
+        questionSectionMap={Object.keys(questionSectionMap).length > 0 ? questionSectionMap : undefined}
+        isAdminPreview={isAdmin}
+      />
     </>
   );
 }
