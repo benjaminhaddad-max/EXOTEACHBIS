@@ -609,9 +609,20 @@ function PlayingScreen({
                           })}
                         </div>
                       )}
-                      {sectionInfo.image_url && (
-                        <QuestionImages imageUrl={sectionInfo.image_url} />
-                      )}
+                      {sectionInfo.image_url && (() => {
+                        const urls = parseImageUrls(sectionInfo.image_url);
+                        // Find which Figure captions exist in intro_text to pair images with legends
+                        const figureLines = (sectionInfo.intro_text || "").split("\n").filter(l => /^Figure\s+\d+/i.test(l.trim()));
+                        if (figureLines.length > 1 && urls.length >= figureLines.length) {
+                          // Multiple figures: show each image under its caption (already rendered above)
+                          return <div className="space-y-3">
+                            {urls.map((url, i) => (
+                              <ZoomableImage key={i} src={url} />
+                            ))}
+                          </div>;
+                        }
+                        return <QuestionImages imageUrl={sectionInfo.image_url} />;
+                      })()}
                     </div>
                   )}
                 <div

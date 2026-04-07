@@ -717,6 +717,16 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       continue;
     }
 
+    // Lines after a Figure caption (continuation of legend) → append to last caption
+    if (!currentQuestion && pendingCaptions.length > 0 && text.trim().length > 2) {
+      // If it starts with ":" or is a short definition, it's part of the previous caption
+      const trimmed = text.trim();
+      if (/^[:;(]/.test(trimmed) || /^[A-Z]{2,}\s/.test(trimmed) || trimmed.length < 80) {
+        pendingCaptions[pendingCaptions.length - 1] += "\n" + trimmed;
+        continue;
+      }
+    }
+
     if (!currentQuestion) {
       const trimmed = text.trim();
       // Detect "EXERCICE" marker → start collecting intro from here
