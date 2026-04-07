@@ -74,17 +74,18 @@ const SUB_MAP: Record<string, string> = {
   "\u209A": "p", "\u209B": "s", "\u209C": "t", "\u2093": "x",
 };
 
-// Unicode Greek → WinAnsi-safe Latin rendered in italic (sym=true → use oblique font)
+// Unicode Greek → WinAnsi-safe full name in italic (sym=true → use oblique font)
+// Full names avoid ambiguity (e.g. π≠p, σ≠s)
 const GREEK_SYM: Record<string, string> = {
-  "\u03B1": "a", "\u03B2": "b", "\u03B3": "g", "\u03B4": "d",
-  "\u03B5": "e", "\u03B6": "z", "\u03B7": "h", "\u03B8": "th",
-  "\u03B9": "i", "\u03BA": "k", "\u03BB": "l", "\u03BC": "u",
-  "\u03BD": "v", "\u03BE": "x", "\u03C0": "p", "\u03C1": "r",
-  "\u03C3": "s", "\u03C4": "t", "\u03C5": "y", "\u03C6": "ph",
-  "\u03C7": "ch", "\u03C8": "ps", "\u03C9": "w",
-  "\u0391": "A", "\u0392": "B", "\u0393": "G", "\u0394": "D",
-  "\u0398": "Th", "\u039B": "L", "\u03A0": "P", "\u03A3": "S",
-  "\u03A6": "Ph", "\u03A8": "Ps", "\u03A9": "W",
+  "\u03B1": "alpha", "\u03B2": "beta", "\u03B3": "gamma", "\u03B4": "delta",
+  "\u03B5": "epsilon", "\u03B6": "zeta", "\u03B7": "eta", "\u03B8": "theta",
+  "\u03B9": "iota", "\u03BA": "kappa", "\u03BB": "lambda", "\u03BC": "mu",
+  "\u03BD": "nu", "\u03BE": "xi", "\u03C0": "pi", "\u03C1": "rho",
+  "\u03C3": "sigma", "\u03C4": "tau", "\u03C5": "upsilon", "\u03C6": "phi",
+  "\u03C7": "chi", "\u03C8": "psi", "\u03C9": "omega",
+  "\u0391": "A", "\u0392": "B", "\u0393": "Gamma", "\u0394": "Delta",
+  "\u0398": "Theta", "\u039B": "Lambda", "\u03A0": "Pi", "\u03A3": "Sigma",
+  "\u03A6": "Phi", "\u03A8": "Psi", "\u03A9": "Omega",
 };
 
 // ─── prepareText: clean HTML/smart quotes/LaTeX commands, preserve sub/sup/Greek ─
