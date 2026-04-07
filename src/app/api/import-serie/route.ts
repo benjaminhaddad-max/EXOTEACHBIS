@@ -1222,21 +1222,16 @@ export async function POST(req: NextRequest) {
         created++;
       }
 
-      // Clean up the .docx: cover page, question formatting, page breaks
+      // Fix page breaks only (safe minimal XML change)
       try {
         const docXmlFile = zip.file("word/document.xml");
         if (docXmlFile) {
           let docXml = await docXmlFile.async("string");
-          // 1. Replace cover page with DS-branded one
-          docXml = replaceCoverPage(docXml, examMeta);
-          // 2. Reformat question headings: "Question X." → "QCM X :"
-          docXml = reformatQuestionHeadings(docXml);
-          // 3. Add keepNext to prevent question/option page splits
           docXml = addKeepNextToQuestions(docXml);
           zip.file("word/document.xml", docXml);
         }
       } catch (e) {
-        console.warn("[import-serie] Could not clean docx:", e);
+        console.warn("[import-serie] Could not fix page breaks:", e);
       }
 
       // Store cleaned .docx in Supabase for direct download
