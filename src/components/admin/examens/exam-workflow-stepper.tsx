@@ -166,8 +166,11 @@ export default function ExamWorkflowStepper({
           serieId,
           questionCount: GRID_QUESTION_COUNT,
           examTitle: serieName,
+          ueCode: propUeCode || "",
           subjectName: propSubjectName || "",
           examDate,
+          institution: "Diploma Santé",
+          academicYear: "2025 - 2026",
         }),
       });
       const data = await res.json();
