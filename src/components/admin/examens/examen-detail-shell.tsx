@@ -914,18 +914,28 @@ export function ExamenDetailShell({
                   Détail des réponses — {epreuves.find(es => es.series_id === studentDetail.serieId)?.series?.name?.replace(`${initialExamen.name} — `, "") ?? ""}
                 </p>
               </div>
-              {studentAnswers && (
-                <div className="text-right mr-4">
-                  <span className={`text-lg font-bold ${(() => {
-                    const correct = studentAnswers.filter((a: any) => a.isCorrect).length;
-                    const pct = studentAnswers.length > 0 ? (correct / studentAnswers.length) * 100 : 0;
-                    return pct >= 70 ? "text-green-400" : pct >= 50 ? "text-orange-400" : "text-red-400";
-                  })()}`}>
-                    {studentAnswers.filter((a: any) => a.isCorrect).length}/{studentAnswers.length}
-                  </span>
-                  <p className="text-[10px] text-white/30">bonnes réponses</p>
-                </div>
-              )}
+              {studentAnswers && (() => {
+                // Compute total score with barème
+                let totalPts = 0;
+                for (const q of studentAnswers) {
+                  let errs = 0;
+                  for (const l of ["A","B","C","D","E"]) {
+                    if (q.correctLabels.includes(l) && !q.selectedLabels.includes(l)) errs++;
+                    if (!q.correctLabels.includes(l) && q.selectedLabels.includes(l)) errs++;
+                  }
+                  totalPts += errs === 0 ? 1 : errs === 1 ? 0.7 : errs === 2 ? 0.1 : 0;
+                }
+                const note20 = studentAnswers.length > 0 ? +(totalPts / studentAnswers.length * 20).toFixed(1) : 0;
+                const perfect = studentAnswers.filter((q: any) => q.isCorrect).length;
+                return (
+                  <div className="text-right mr-4">
+                    <span className={`text-lg font-bold ${note20 >= 14 ? "text-green-400" : note20 >= 10 ? "text-orange-400" : "text-red-400"}`}>
+                      {note20}<span className="text-sm text-white/30">/20</span>
+                    </span>
+                    <p className="text-[10px] text-white/30">{perfect} parfaites · {totalPts.toFixed(1)}/{studentAnswers.length} pts</p>
+                  </div>
+                );
+              })()}
               <button onClick={() => { setStudentDetail(null); setStudentAnswers(null); }}
                 className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">
                 <X size={16} />
@@ -936,38 +946,59 @@ export function ExamenDetailShell({
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
               {loadingDetail && <p className="text-center text-white/30 text-xs py-8"><Loader2 size={16} className="animate-spin inline mr-2" />Chargement...</p>}
               {studentAnswers && studentAnswers.map((q: any) => {
-                const correct = q.correctLabels;
-                const selected = q.selectedLabels;
+                const correct: string[] = q.correctLabels;
+                const selected: string[] = q.selectedLabels;
+                // Count errors for this question
+                let nbErrors = 0;
+                for (const label of ["A", "B", "C", "D", "E"]) {
+                  if (correct.includes(label) && !selected.includes(label)) nbErrors++;
+                  if (!correct.includes(label) && selected.includes(label)) nbErrors++;
+                }
+                const qScoreLabel = nbErrors === 0 ? "1.00" : nbErrors === 1 ? "0.70" : nbErrors === 2 ? "0.10" : "0.00";
+                const qScoreColor = nbErrors === 0 ? "text-green-400" : nbErrors === 1 ? "text-yellow-400" : "text-red-400";
+
                 return (
-                  <div key={q.number} className={`rounded-xl border p-3 ${q.isCorrect ? "border-green-500/20 bg-green-500/5" : "border-red-500/20 bg-red-500/5"}`}>
+                  <div key={q.number} className={`rounded-xl border p-3 ${nbErrors === 0 ? "border-green-500/20 bg-green-500/5" : nbErrors <= 1 ? "border-yellow-500/15 bg-yellow-500/5" : "border-red-500/20 bg-red-500/5"}`}>
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${q.isCorrect ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${nbErrors === 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
                           {q.number}
                         </span>
-                        <span className="text-xs text-white/60 line-clamp-1">{q.text || `Question ${q.number}`}</span>
+                        <span className="text-xs text-white/60 line-clamp-1 min-w-0">{q.text || `Question ${q.number}`}</span>
                       </div>
-                      <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${q.isCorrect ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
-                        {q.isCorrect ? "CORRECT" : "FAUX"}
-                      </span>
+                      <div className="shrink-0 text-right">
+                        <span className={`text-sm font-bold ${qScoreColor}`}>{qScoreLabel}</span>
+                        <span className="text-[9px] text-white/20">/1</span>
+                        {nbErrors > 0 && <p className="text-[9px] text-white/30">{nbErrors} erreur{nbErrors > 1 ? "s" : ""}</p>}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 mt-2 ml-8">
+                    {/* Options grid: Réponse élève vs Correction */}
+                    <div className="mt-2 ml-8 space-y-1">
                       {q.options.map((opt: any) => {
                         const isSelected = selected.includes(opt.label);
-                        const isCorrect = correct.includes(opt.label);
-                        let style = "bg-white/5 text-white/30 border-white/8"; // default: not selected, not correct
-                        if (isSelected && isCorrect) style = "bg-green-500/20 text-green-400 border-green-500/30"; // correct pick
-                        else if (isSelected && !isCorrect) style = "bg-red-500/20 text-red-400 border-red-500/30 line-through"; // wrong pick
-                        else if (!isSelected && isCorrect) style = "bg-orange-500/15 text-orange-400 border-orange-500/30"; // missed correct
+                        const isCorrectOpt = correct.includes(opt.label);
+                        // Determine status
+                        let icon = "";
+                        let rowStyle = "text-white/25"; // default: nothing
+                        if (isSelected && isCorrectOpt) { icon = "✓"; rowStyle = "text-green-400 font-medium"; }
+                        else if (isSelected && !isCorrectOpt) { icon = "✗"; rowStyle = "text-red-400"; }
+                        else if (!isSelected && isCorrectOpt) { icon = "○"; rowStyle = "text-orange-400"; }
+
                         return (
-                          <span key={opt.label} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-medium ${style}`}>
-                            <strong>{opt.label}.</strong> {opt.text?.substring(0, 40)}{(opt.text?.length || 0) > 40 ? "…" : ""}
-                            {isSelected && isCorrect && <Check size={10} />}
-                            {isSelected && !isCorrect && <X size={10} />}
-                            {!isSelected && isCorrect && <span className="text-[9px]">manqué</span>}
-                          </span>
+                          <div key={opt.label} className={`flex items-center gap-2 text-[11px] ${rowStyle}`}>
+                            <span className="w-4 text-center font-bold">{opt.label}</span>
+                            <span className="w-5 text-center">{isSelected ? "■" : "□"}</span>
+                            <span className="w-5 text-center">{isCorrectOpt ? "●" : "○"}</span>
+                            <span className="flex-1 truncate">{opt.text?.substring(0, 60)}</span>
+                            <span className="shrink-0 w-4 text-center">{icon}</span>
+                          </div>
                         );
                       })}
+                      <div className="flex items-center gap-2 text-[9px] text-white/20 mt-1 pt-1 border-t border-white/5">
+                        <span className="w-4" />
+                        <span className="w-5 text-center">Élève</span>
+                        <span className="w-5 text-center">Corr.</span>
+                      </div>
                     </div>
                   </div>
                 );
