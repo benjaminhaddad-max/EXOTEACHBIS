@@ -635,6 +635,7 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
   };
 
   let liCount = 0; // track consecutive <li> items for unlabeled options
+  let legendLiCount = 0; // track consecutive <li> items for figure legend sub-items (A), (B), etc.
   let pendingImages: string[] = []; // images before the next QCM (context figures)
   let pendingCaptions: string[] = []; // "Figure N." captions
   let pendingIntroLines: string[] = []; // intro text before figures
@@ -701,13 +702,18 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       continue;
     }
 
-    // Image paragraph — buffer as context for next section
+    // Image paragraph — assign to current question OR buffer for next section
     if (imgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
       // Skip images before any meaningful content (likely document header logo)
       if (pendingIntroLines.length === 0 && pendingCaptions.length === 0 && questions.length === 0 && !seenFirstQcm) {
         continue;
       }
-      // Deduplicate: skip if this exact image data URI is already pending
+      // If inside a question that doesn't have all its options yet, this image belongs to the question
+      if (currentQuestion && currentQuestion.options.length < 5) {
+        currentQuestion.images.push(imgMatch[1]);
+        continue;
+      }
+      // Otherwise buffer for next section — deduplicate
       const imgFingerprint = imgMatch[1].slice(0, 200) + imgMatch[1].slice(-200);
       const isDuplicate = pendingImages.some(pi => pi.slice(0, 200) + pi.slice(-200) === imgFingerprint);
       if (!isDuplicate) pendingImages.push(imgMatch[1]);
@@ -717,6 +723,7 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
     // "Figure N." caption → buffer for section
     if (/^Figure\s+\d+/i.test(text.trim()) && !currentQuestion) {
       pendingCaptions.push(text.trim());
+      legendLiCount = 0; // reset sub-item counter for new figure
       continue;
     }
 
@@ -798,9 +805,17 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
         }
       } else if (/^Figure\s+\d+/i.test(text.trim())) {
         pendingCaptions.push(text.trim());
+        legendLiCount = 0;
       } else if (pendingCaptions.length > 0 && text.trim().length > 2) {
         // Legend continuation: append to last Figure caption
-        pendingCaptions[pendingCaptions.length - 1] += "\n" + text.trim();
+        // If <li> starts with ":" it's a sub-item — prefix with (A), (B), etc.
+        let line = text.trim();
+        if (/^:/.test(line)) {
+          const subLabel = String.fromCharCode(65 + legendLiCount); // A, B, C...
+          line = `(${subLabel}) ${line}`;
+          legendLiCount++;
+        }
+        pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
       } else if (text.trim().length > 10) {
         pendingIntroLines.push(text.trim());
       }
@@ -874,6 +889,17 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
   }
 
   flushQuestion();
+
+  // ── Post-parse deduplication: remove question images already in their section ──
+  for (const q of questions) {
+    if (q.images.length > 0 && q.sectionIndex != null && sections[q.sectionIndex]) {
+      const secImgFps = new Set(sections[q.sectionIndex].images.map(
+        img => img.slice(0, 200) + img.slice(-200)
+      ));
+      q.images = q.images.filter(img => !secImgFps.has(img.slice(0, 200) + img.slice(-200)));
+    }
+  }
+
   return { questions, sections };
 }
 

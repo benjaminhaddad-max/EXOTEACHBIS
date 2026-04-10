@@ -688,9 +688,17 @@ function PlayingScreen({
                   <div className="px-5 py-4">
                     <div className="text-sm font-medium text-gray-800 leading-relaxed">
                       <QuestionText text={q.text} />
-                      {(q as any).image_url && (
-                        <QuestionImages imageUrl={(q as any).image_url} />
-                      )}
+                      {(() => {
+                        // Skip question images already shown in the section to avoid duplicates
+                        const qImgUrls = parseImageUrls((q as any).image_url);
+                        const secImgUrls = qSectionId && sectionInfo ? parseImageUrls(sectionInfo.image_url) : (
+                          // If not the first question of a section, look up the section for dedup
+                          qSectionId ? parseImageUrls(sections?.find(s => s.id === qSectionId)?.image_url) : []
+                        );
+                        const secSet = new Set(secImgUrls);
+                        const uniqueQImgs = qImgUrls.filter(u => !secSet.has(u));
+                        return uniqueQImgs.length > 0 ? <>{uniqueQImgs.map((url, i) => <ZoomableImage key={i} src={url} />)}</> : null;
+                      })()}
                     </div>
                   </div>
 

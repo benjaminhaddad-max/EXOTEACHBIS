@@ -237,6 +237,150 @@ console.log("\n[Test 4] Real document parsing (Bioch sujet .docx)");
   }
 }
 
+// ─── Test 5: Image goes to question (not section) when inside QCM ─────────────
+console.log("\n[Test 5] Image inside QCM goes to question, not pendingImages");
+{
+  const html = `
+    <p><strong>QCM 19 : A propos de Tyr842 et Met843 :</strong></p>
+    <p><img src="data:image/tiff;base64,AMINO_ACIDS_TABLE_DATA" /></p>
+    <p><strong>E.</strong> Grâce à son résidu soufré</p>
+    <p><strong>QCM 20 : on aurait pu obtenir une coupure</strong></p>
+  `;
+
+  const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
+  const paragraphs = [];
+  let m;
+  while ((m = elemRegex.exec(html)) !== null) {
+    const raw = m[2];
+    const text = raw
+      .replace(/<img[^>]*>/gi, " [image] ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+    paragraphs.push({ text, tag: m[1].toLowerCase(), imgUri: imgMatch?.[1] || null });
+  }
+
+  let currentQuestion = null;
+  let pendingImages = [];
+  let questions = [];
+
+  for (const p of paragraphs) {
+    const text = p.text;
+    const qcmMatch = text.match(/^\s*(?:QCM|Question)\s*\d+/i);
+
+    if (qcmMatch) {
+      if (currentQuestion) questions.push(currentQuestion);
+      currentQuestion = { text, options: [], images: [] };
+      continue;
+    }
+
+    // NEW LOGIC: image goes to question if options < 5
+    if (p.imgUri && text.replace(/\[image\]/g, "").trim().length < 5) {
+      if (currentQuestion && currentQuestion.options.length < 5) {
+        currentQuestion.images.push(p.imgUri);
+      } else {
+        pendingImages.push(p.imgUri);
+      }
+      continue;
+    }
+
+    // Option
+    const optMatch = text.match(/^\s*([A-E])\.\s*(.*)/);
+    if (optMatch && currentQuestion) {
+      currentQuestion.options.push({ label: optMatch[1], text: optMatch[2] });
+    }
+  }
+  if (currentQuestion) questions.push(currentQuestion);
+
+  assert(
+    pendingImages.length === 0,
+    `No images in pendingImages (got ${pendingImages.length})`
+  );
+  assert(
+    questions[0]?.images.length === 1,
+    `QCM 19 has 1 question-level image (got ${questions[0]?.images.length})`
+  );
+  assert(
+    questions[0]?.images[0]?.includes("AMINO_ACIDS"),
+    "QCM 19's image is the amino acids table"
+  );
+}
+
+// ─── Test 6: (A)/(B) labels added for <li> sub-descriptions ─────────────────
+console.log("\n[Test 6] (A)/(B) labels added to <li> sub-descriptions starting with ':'");
+{
+  // Simulate extra <li> after 5 options with figure caption
+  let pendingCaptions = ["Figure 3 : Liaison de vWF"];
+  let legendLiCount = 0;
+
+  const subItems = [
+    ": dosage de la liaison de FVIII",
+    ": immunoprécipitation (anticorps utilisé)",
+  ];
+
+  for (const text of subItems) {
+    let line = text.trim();
+    if (/^:/.test(line)) {
+      const subLabel = String.fromCharCode(65 + legendLiCount);
+      line = `(${subLabel}) ${line}`;
+      legendLiCount++;
+    }
+    pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
+  }
+
+  assert(
+    pendingCaptions[0].includes("(A) :"),
+    `First sub-item has (A) label: "${pendingCaptions[0].split("\\n")[1]?.substring(0, 30)}"`
+  );
+  assert(
+    pendingCaptions[0].includes("(B) :"),
+    `Second sub-item has (B) label: "${pendingCaptions[0].split("\\n")[2]?.substring(0, 30)}"`
+  );
+  assert(
+    legendLiCount === 2,
+    `legendLiCount is 2 (got ${legendLiCount})`
+  );
+}
+
+// ─── Test 7: Post-parse deduplication ────────────────────────────────────────
+console.log("\n[Test 7] Post-parse deduplication removes question images already in section");
+{
+  const sharedImg = "data:image/tiff;base64,SHARED_IMAGE_LONG_DATA_URI_GOES_HERE";
+  const uniqueImg = "data:image/tiff;base64,UNIQUE_TO_QUESTION_ONLY";
+
+  const sections = [{ images: [sharedImg], title: "", intro_text: "" }];
+  const questions = [
+    { images: [sharedImg, uniqueImg], sectionIndex: 0, text: "Q1", options: [] },
+    { images: [], sectionIndex: 0, text: "Q2", options: [] },
+  ];
+
+  // Apply deduplication (same logic as in route.ts)
+  for (const q of questions) {
+    if (q.images.length > 0 && q.sectionIndex != null && sections[q.sectionIndex]) {
+      const secImgFps = new Set(
+        sections[q.sectionIndex].images.map((img) => img.slice(0, 200) + img.slice(-200))
+      );
+      q.images = q.images.filter(
+        (img) => !secImgFps.has(img.slice(0, 200) + img.slice(-200))
+      );
+    }
+  }
+
+  assert(
+    questions[0].images.length === 1,
+    `Q1 has 1 image after dedup (got ${questions[0].images.length})`
+  );
+  assert(
+    questions[0].images[0]?.includes("UNIQUE"),
+    "Q1 kept only the unique image"
+  );
+  assert(
+    questions[1].images.length === 0,
+    `Q2 still has 0 images (got ${questions[1].images.length})`
+  );
+}
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"=".repeat(50)}`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
