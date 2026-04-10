@@ -171,6 +171,7 @@ interface QOption {
 interface QuestionWithOptions extends Omit<Question, "options"> {
   options: QOption[];
   image_url?: string | null;
+  explanation_image_url?: string | null;
 }
 
 interface SectionInfo {
@@ -1007,6 +1008,11 @@ function ResultsScreen({
                         <div className="text-xs leading-5 text-slate-700">
                           <MathText text={q.explanation} />
                         </div>
+                      </div>
+                    )}
+                    {(q as any).explanation_image_url && (
+                      <div className="mt-2">
+                        <QuestionImages imageUrl={(q as any).explanation_image_url} />
                       </div>
                     )}
                     <div className="flex items-center justify-end pt-1">

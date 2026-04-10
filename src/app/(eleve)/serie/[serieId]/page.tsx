@@ -42,7 +42,7 @@ export default async function SeriePage({ params }: Props) {
       order_index,
       section_id,
       question:questions (
-        id, text, type, explanation, tags, image_url,
+        id, text, type, explanation, explanation_image_url, tags, image_url,
         options (id, label, text, is_correct, order_index, justification, image_url)
       )
     `)
