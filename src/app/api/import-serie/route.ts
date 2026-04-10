@@ -564,8 +564,8 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
   }
   let xmlSearchFrom = 0; // track position to avoid finding wrong options
   const sections: ParsedSection[] = [];
-  // Extract both <p> and <li> elements to capture options in ordered lists
-  const elemRegex = /<(p|li)[^>]*>([\s\S]*?)<\/(?:p|li)>/gi;
+  // Extract <p>, <li>, and heading elements (h1-h6) — some DOCX editors emit Figure captions as headings
+  const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
   const paragraphs: { raw: string; text: string; tag: string }[] = [];
   let m: RegExpExecArray | null;
   while ((m = elemRegex.exec(html)) !== null) {
@@ -707,7 +707,10 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       if (pendingIntroLines.length === 0 && pendingCaptions.length === 0 && questions.length === 0 && !seenFirstQcm) {
         continue;
       }
-      pendingImages.push(imgMatch[1]);
+      // Deduplicate: skip if this exact image data URI is already pending
+      const imgFingerprint = imgMatch[1].slice(0, 200) + imgMatch[1].slice(-200);
+      const isDuplicate = pendingImages.some(pi => pi.slice(0, 200) + pi.slice(-200) === imgFingerprint);
+      if (!isDuplicate) pendingImages.push(imgMatch[1]);
       continue;
     }
 
@@ -789,7 +792,10 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
     if (p.tag === "li" && currentQuestion.options.length >= 5) {
       const liImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
       if (liImgMatch) {
-        pendingImages.push(liImgMatch[1]);
+        const liFp = liImgMatch[1].slice(0, 200) + liImgMatch[1].slice(-200);
+        if (!pendingImages.some(pi => pi.slice(0, 200) + pi.slice(-200) === liFp)) {
+          pendingImages.push(liImgMatch[1]);
+        }
       } else if (/^Figure\s+\d+/i.test(text.trim())) {
         pendingCaptions.push(text.trim());
       } else if (pendingCaptions.length > 0 && text.trim().length > 2) {
@@ -841,12 +847,21 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
     if (text.trim().length < 3) continue;
 
     // Text after a question's options that doesn't look like an option → inter-group context
-    if (currentQuestion && currentQuestion.options.length >= 5 && p.tag === "p" && !/^\s*[A-E]\s*[.):\t]/.test(text)) {
-      // Could be a figure caption or transition text (e.g., "Les 20 questions suivantes sont indépendantes")
-      if (/^Figure\s+\d+/i.test(text.trim())) {
-        pendingCaptions.push(text.trim());
-      } else if (text.trim().length > 10) {
-        pendingIntroLines.push(text.trim());
+    // Accept both <p> and heading tags (h1-h6) — some editors emit Figure captions as headings
+    if (currentQuestion && currentQuestion.options.length >= 5 && p.tag !== "li" && !/^\s*[A-E]\s*[.):\t]/.test(text)) {
+      // Could be a figure caption, legend continuation, or transition text
+      const trimmed = text.trim();
+      if (/^Figure\s+\d+/i.test(trimmed)) {
+        pendingCaptions.push(trimmed);
+      } else if (pendingCaptions.length > 0 && trimmed.length > 2) {
+        // Legend continuation: same rules as lines 721-728
+        if (/^[:;(]/.test(trimmed) || /^[A-Z]{2,}\s/.test(trimmed) || trimmed.length < 80) {
+          pendingCaptions[pendingCaptions.length - 1] += "\n" + trimmed;
+        } else if (trimmed.length > 10) {
+          pendingIntroLines.push(trimmed);
+        }
+      } else if (trimmed.length > 10) {
+        pendingIntroLines.push(trimmed);
       }
       continue;
     }
