@@ -170,6 +170,20 @@ export function ExamenDetailShell({
     }
   };
 
+  // ─── Refetch attempts after scan (avoids full page reload) ──────────────────
+  const refetchAttempts = async () => {
+    const supabase = createClient();
+    const seriesIds = epreuves.map(es => es.series_id);
+    if (seriesIds.length === 0) return;
+    const { data } = await supabase
+      .from("serie_attempts")
+      .select("*, user:profiles(id, first_name, last_name, email, filiere_id, groupe_id, filiere:filieres(id, name, code, color))")
+      .in("series_id", seriesIds)
+      .not("ended_at", "is", null)
+      .order("score", { ascending: false });
+    if (data) setAttempts(data);
+  };
+
   // ─── Scan copies handler ────────────────────────────────────────────────────
   const handleScanCopies = async (serieId: string, file: File) => {
     setScanningSerieId(serieId);
@@ -190,8 +204,8 @@ export function ExamenDetailShell({
           message: `Scan terminé : ${data.matched}/${data.totalPages} élèves identifiés${data.unmatched > 0 ? ` (${data.unmatched} non trouvés)` : ""}`,
           kind: data.matched > 0 ? "success" : "error",
         });
-        // Reload to show results
-        setTimeout(() => window.location.reload(), 2000);
+        // Refresh attempts data to show new scores in the results table
+        await refetchAttempts();
       }
     } catch (e: any) {
       setToast({ message: "Erreur scan : " + (e.message || "timeout"), kind: "error" });

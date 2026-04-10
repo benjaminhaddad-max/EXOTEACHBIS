@@ -25,9 +25,8 @@ const PH = 841.89; // A4 height in points
 const MX = mm(8); // left/right margin
 const CW = PW - 2 * MX; // content width
 
-// Header
+// Header — bar is flush with page top in gen-grid
 const BAR_H = mm(20);
-const Y_START = PH - mm(6); // top of content area (PDF coords, Y from bottom)
 
 // Student ID
 const DIGITS = 6;
@@ -142,6 +141,7 @@ export async function readOMR(
   // Convert to grayscale binary image
   const { data: pixels, info } = await sharp(pageImage)
     .grayscale()
+    .normalize() // stretch contrast for scan robustness
     .threshold(140) // binarize: dark=0, light=255
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -149,62 +149,61 @@ export async function readOMR(
   const w = info.width;
   const h = info.height;
 
-  // ─── Auto-alignment: detect header bar position ────────────────────────
+  // ─── Auto-alignment: detect header bar or fall back to direct scaling ─
   const header = findHeaderBar(pixels, w, h);
+  // Header is valid only if tall enough and spans enough of the page width
+  const headerDetected = (header.bottom - header.top) > 10
+    && (header.right - header.left) > w * 0.3;
 
-  // Expected header in PDF coords: top of bar = Y_START, bottom = Y_START - BAR_H
-  // In image coords (flipped Y): top ≈ (PH - Y_START) * scale, bottom ≈ (PH - Y_START + BAR_H) * scale
-  const expectedBarTopImg = (PH - Y_START) / PH * h;
-  const expectedBarBottomImg = (PH - Y_START + BAR_H) / PH * h;
+  let scaleXVal: number;
+  let toImgXLeft: (pdfX: number) => number;
+  let toImgXRight: (pdfX: number) => number;
+  let toImgY: (pdfY: number) => number;
 
-  // Compute offset: difference between expected and actual
-  const yOffset = header.top - expectedBarTopImg;
-  const yScale = (header.bottom - header.top) / (expectedBarBottomImg - expectedBarTopImg);
+  if (headerDetected) {
+    // Header bar: top at PDF Y = PH (flush with page top), height = BAR_H, width = CW
+    const scaleX = (header.right - header.left) / CW;
+    const scaleY = (header.bottom - header.top) / BAR_H;
+    const offsetX = header.left - MX * scaleX;
+    const offsetY = header.top; // bar top in image ≈ 0
 
-  // Scale factors
-  const scaleXContent = (header.bottom - header.top) > 0
-    ? (header.right - header.left) / CW
-    : w / PW;
-  const offsetXLeft = header.left - MX * scaleXContent;
-  const scaleYContent = (header.bottom - header.top) / BAR_H;
-  const offsetYContent = header.top - (PH - Y_START) * scaleYContent;
+    scaleXVal = scaleX;
+    toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX + offsetX);
+    toImgXRight = (pdfX: number) => {
+      const distFromRight = (MX + CW) - pdfX;
+      return Math.round(header.right - distFromRight * scaleX);
+    };
+    toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY + offsetY);
+  } else {
+    // Fallback: direct scaling from page dimensions (works for PDF-to-image renders)
+    const scaleX = w / PW;
+    const scaleY = h / PH;
 
-  // Two X converters: left-aligned for QCM, right-aligned for student ID
-  // This handles non-uniform X distortion from scanners
-  function toImgXLeft(pdfX: number): number {
-    return Math.round(pdfX * scaleXContent + offsetXLeft);
+    scaleXVal = scaleX;
+    toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX);
+    toImgXRight = toImgXLeft; // no distortion correction without header
+    toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY);
   }
-  function toImgXRight(pdfX: number): number {
-    // Compute from right edge of header bar
-    const distFromRight = (MX + CW) - pdfX;
-    return Math.round(header.right - distFromRight * scaleXContent);
-  }
-  function toImgY(pdfY: number): number {
-    return Math.round((PH - pdfY) * scaleYContent + offsetYContent);
-  }
 
-  const boxPx = Math.round(BOX * scaleXContent);
-  const smallBoxPx = Math.round(SMALL_BOX * scaleXContent);
+  const boxPx = Math.round(BOX * scaleXVal);
+  const smallBoxPx = Math.round(SMALL_BOX * scaleXVal);
 
   // ─── Read Student ID ───────────────────────────────────────────────────
-  const sectionTop = Y_START - BAR_H - mm(6);
+  // Replicate gen-grid layout exactly for correct position calculations
+  const sectionTop = PH - BAR_H - mm(6);
   let gy = sectionTop;
   gy -= mm(3); // title "Saisir votre N°"
   gy -= BIG_BOX * 1.5 + mm(2); // write-in boxes
 
-  // Correction: shift grid X left by one column to compensate for
-  // systematic scanner distortion on the right side of the page
-  const adjustedIdGridX = ID_GRID_X - (BIG_BOX + BIG_GAP);
-
   const studentDigits: string[] = [];
   for (let col = 0; col < DIGITS; col++) {
-    const bx = adjustedIdGridX + col * (BIG_BOX + BIG_GAP) + (BIG_BOX - SMALL_BOX) / 2;
+    const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP) + (BIG_BOX - SMALL_BOX) / 2;
     let bestRow = -1;
     let bestRatio = 0;
 
     for (let row = 0; row < 10; row++) {
       const ry = gy - row * (SMALL_BOX + SMALL_GAP);
-      const ix = toImgXRight(bx); // RIGHT-aligned X for student ID
+      const ix = toImgXRight(bx);
       const iy = toImgY(ry);
       const ratio = measureRegion(pixels, w, h, ix, iy, smallBoxPx);
       if (ratio > bestRatio) {
@@ -220,11 +219,11 @@ export async function readOMR(
 
   // ─── Read QCM Answers ──────────────────────────────────────────────────
 
-  // Compute gridTop (QCM area start)
+  // Compute gridTop (QCM area start) — matching gen-grid exactly:
+  // gen-grid: y = Math.min(leftEndY, gridEndY) - mm(2) [gap] - mm(1) [separator] - mm(3.5) [instruction]
   const gridEndY = gy - 10 * (SMALL_BOX + SMALL_GAP);
-  const yAfterPrenom = sectionTop - FH - mm(2) - FH;
-  const sepY = Math.min(yAfterPrenom, gridEndY) - mm(3);
-  const gridTop = sepY - mm(12);
+  const leftEndY = sectionTop - FH - mm(2) - mm(1.5);
+  const gridTop = Math.min(leftEndY, gridEndY) - mm(2) - mm(1) - mm(3.5);
 
   const answers: Record<string, string[]> = {};
   const doubtfulQuestions: number[] = [];
