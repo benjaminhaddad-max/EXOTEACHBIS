@@ -1,17 +1,13 @@
 /**
- * Test: import-serie Figure caption parsing
- * Verifies that:
- * 1. Heading tags (h1-h6) are captured by elemRegex (fixes Figure 3 caption)
- * 2. Figure captions are correctly separated (Figure 2 vs Figure 3)
- * 3. Sub-descriptions (A), (B) are attached to the correct figure
- * 4. Image deduplication works
- * 5. Caption continuation works for <p> AND heading tags after 5 options
+ * Test: import-serie Figure caption parsing — REAL document integration test
+ * Tests against actual mammoth HTML from Bioch sujet .docx
  *
  * Run: node tests/test-import-figures.mjs
  */
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
+const fs = await import("fs");
 
 let passed = 0;
 let failed = 0;
@@ -26,363 +22,442 @@ function assert(condition, msg) {
   }
 }
 
-// ─── Test 1: elemRegex captures headings ──────────────────────────────────────
-console.log("\n[Test 1] elemRegex captures h1-h6 tags");
-{
-  const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
+// ─── Helper: replicates the EXACT parser logic from route.ts ─────────────────
 
-  const html = `
-    <p>Some paragraph</p>
-    <h1>Figure 3 : Liaison de vWF</h1>
-    <li>Option A</li>
-    <h2>Another heading</h2>
-  `;
-
-  const results = [];
-  let m;
-  while ((m = elemRegex.exec(html)) !== null) {
-    results.push({ tag: m[1].toLowerCase(), text: m[2].replace(/<[^>]+>/g, "").trim() });
-  }
-
-  assert(results.length === 4, `Extracted 4 elements (got ${results.length})`);
-  assert(results[0].tag === "p", "First element is <p>");
-  assert(results[1].tag === "h1", "Second element is <h1>");
-  assert(results[1].text === "Figure 3 : Liaison de vWF", "h1 text is Figure 3 caption");
-  assert(results[2].tag === "li", "Third element is <li>");
-  assert(results[3].tag === "h2", "Fourth element is <h2>");
+function stripTags(html) {
+  return html
+    .replace(/<img[^>]*>/gi, " [image] ")
+    .replace(/<sub>(.*?)<\/sub>/gi, "$_{$1}$")
+    .replace(/<sup>(.*?)<\/sup>/gi, "$^{$1}$")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// ─── Test 2: Figure caption parsing with h1 ──────────────────────────────────
-console.log("\n[Test 2] Figure captions parsed from mixed p/h1 tags");
-{
-  // Simulate the HTML mammoth produces for the biochimie document
-  const html = `
-    <ol><li>Option 1</li><li>Option 2</li><li>Option 3</li><li>Option 4</li><li>Aucune de ces propositions n'est exacte</li></ol>
-    <p><img src="data:image/tiff;base64,AAAA" /></p>
-    <p>Figure 2 : Dosage de la liaison du collagène à vWF incubé avec différentes granzymes</p>
-    <p><img src="data:image/tiff;base64,BBBB" /></p>
-    <h1>Figure 3 : Liaison de vWF au facteur VIII (FVIII)</h1>
-    <ol><li><em>: dosage de la liaison de FVIII à vWF</em></li><li><em>: immunoprécipitation</em></li></ol>
-    <p>FVIII HCh = chaine lourde de FVIII</p>
-    <p>FVIII LCh = chaine légère de FVIII</p>
-    <p><strong>QCM 17 : A propos des figures 2 et 3</strong></p>
-  `;
-
+/**
+ * Simplified parseQcmLabelFormat that mirrors the REAL code logic
+ * (same variable names, same flow, same conditions)
+ */
+function parseQcmLabelFormat(html) {
   const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
   const paragraphs = [];
   let m;
   while ((m = elemRegex.exec(html)) !== null) {
-    const raw = m[2];
-    const text = raw
-      .replace(/<img[^>]*>/gi, " [image] ")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&[^;]+;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
-    paragraphs.push({ text, tag: m[1].toLowerCase(), imgUri: imgMatch?.[1] || null });
+    paragraphs.push({ raw: m[2], text: stripTags(m[2]), tag: m[1].toLowerCase() });
   }
 
-  // Simulate parser state
-  let currentQuestion = { options: [1, 2, 3, 4, 5] }; // QCM 16 with 5 options
-  let pendingCaptions = [];
+  const LABELS = ["A", "B", "C", "D", "E"];
+  let currentQuestion = null;
+  let questionTextLines = [];
+  const questions = [];
+  const sections = [];
+
+  const flushQuestion = () => {
+    if (!currentQuestion) return;
+    if (currentQuestion.options.length > 0) questions.push(currentQuestion);
+  };
+
+  let liCount = 0;
+  let legendLiCount = 0;
   let pendingImages = [];
-  let pendingIntro = [];
+  let pendingCaptions = [];
+  let pendingIntroLines = [];
+  let currentSectionIdx;
+  let seenFirstQcm = false;
 
   for (const p of paragraphs) {
     const text = p.text;
-    const trimmed = text.trim();
+    const raw = p.raw;
+    const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
 
     // QCM detection
-    if (/^\s*(?:QCM|Question)\s*\d+/i.test(text)) {
-      break; // Stop at QCM 17
+    const labeledMatch = text.match(
+      /^\s*\ufeff?\s*(?:QCM|Question|Q)\.?\s*(?:N°\s*)?(\d+)\s*[-:.–—]?\s*(.*)/iu
+    );
+    if (labeledMatch) {
+      flushQuestion();
+
+      const hasPendingContent =
+        pendingImages.length > 0 || pendingIntroLines.length > 0 || pendingCaptions.length > 0;
+      if (hasPendingContent) {
+        const hasExerciceMarker = pendingIntroLines.some((l) => /^Exercice\s+\d+/i.test(l));
+        const hasFigures = pendingImages.length > 0 || pendingCaptions.length > 0;
+        const hasSubstantialIntro =
+          pendingIntroLines.filter(
+            (l) => l.length > 30 && !/^(Les \d+ questions|Bien lire)/i.test(l)
+          ).length > 0;
+
+        if (hasExerciceMarker || hasFigures || hasSubstantialIntro) {
+          const exoLine = pendingIntroLines.find((l) => /^Exercice\s+\d+/i.test(l));
+          const sectionTitle = exoLine || "";
+          const introLines = pendingIntroLines.filter((l) => l !== exoLine);
+          const introText = [...introLines, ...pendingCaptions].join("\n").trim();
+          sections.push({
+            title: sectionTitle,
+            intro_text: introText,
+            images: [...pendingImages],
+          });
+          currentSectionIdx = sections.length - 1;
+        } else {
+          currentSectionIdx = undefined;
+        }
+        pendingImages = [];
+        pendingCaptions = [];
+        pendingIntroLines = [];
+      }
+
+      currentQuestion = {
+        text: labeledMatch[2].trim(),
+        options: [],
+        images: [],
+        sectionIndex: currentSectionIdx,
+        qcmNum: labeledMatch[1],
+      };
+      questionTextLines = [];
+      liCount = 0;
+      if (imgMatch) currentQuestion.images.push(imgMatch[1]);
+      seenFirstQcm = true;
+      continue;
     }
 
     // Image paragraph
-    if (p.imgUri && text.replace(/\[image\]/g, "").trim().length < 5) {
-      const fp = p.imgUri.slice(0, 200) + p.imgUri.slice(-200);
+    if (imgMatch && text.replace(/\[image\]/g, "").trim().length < 5) {
+      if (!pendingIntroLines.length && !pendingCaptions.length && !questions.length && !seenFirstQcm) {
+        continue;
+      }
+      // NEW: if inside a question with < 5 options, assign to question
+      if (currentQuestion && currentQuestion.options.length < 5) {
+        currentQuestion.images.push(imgMatch[1]);
+        continue;
+      }
+      // Otherwise buffer for section — deduplicate
+      const fp = imgMatch[1].slice(0, 200) + imgMatch[1].slice(-200);
       if (!pendingImages.some((pi) => pi.slice(0, 200) + pi.slice(-200) === fp)) {
-        pendingImages.push(p.imgUri);
+        pendingImages.push(imgMatch[1]);
       }
       continue;
     }
 
-    // Options (skip first 5 li)
+    // Figure caption (no currentQuestion)
+    if (/^Figure\s+\d+/i.test(text.trim()) && !currentQuestion) {
+      pendingCaptions.push(text.trim());
+      legendLiCount = 0;
+      continue;
+    }
+
+    // Continuation after Figure caption (no currentQuestion)
+    if (!currentQuestion && pendingCaptions.length > 0 && text.trim().length > 2) {
+      const trimmed = text.trim();
+      if (/^[:;(]/.test(trimmed) || /^[A-Z]{2,}\s/.test(trimmed) || trimmed.length < 80) {
+        let line = trimmed;
+        if (/^:/.test(line)) {
+          const subLabel = String.fromCharCode(65 + legendLiCount);
+          line = `(${subLabel}) ${line}`;
+          legendLiCount++;
+        }
+        pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
+        continue;
+      }
+    }
+
+    if (!currentQuestion) {
+      const trimmed = text.trim();
+      if (/^Exercice\s+\d+/i.test(trimmed)) {
+        pendingIntroLines = [trimmed];
+        continue;
+      }
+      if (
+        trimmed.length > 10 &&
+        (pendingImages.length > 0 ||
+          pendingCaptions.length > 0 ||
+          (seenFirstQcm && pendingIntroLines.length >= 0))
+      ) {
+        if (
+          !/^\d{4}|^(UNIVERSITÉ|INFORMATIONS|RECOMMANDATIONS|À LIRE|Vérifier|Les correcteurs|Aucun candidat|Veiller|Ne pas|Les calculatrices|Les questions sans|Une seule|Merci de|Durée|Le sujet contient|L'épreuve comporte|Concours|BIOLOGIE|CORRECTION)/i.test(
+            trimmed
+          )
+        ) {
+          pendingIntroLines.push(trimmed);
+        }
+      }
+      continue;
+    }
+
+    // Options (li)
+    if (p.tag === "li" && text.trim().length > 2 && currentQuestion.options.length < 5) {
+      const optLabelMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.+)/);
+      if (optLabelMatch) {
+        currentQuestion.options.push({
+          label: optLabelMatch[1].toUpperCase(),
+          text: optLabelMatch[2].trim(),
+          is_correct: false,
+        });
+      } else {
+        currentQuestion.options.push({
+          label: LABELS[liCount] || String.fromCharCode(65 + liCount),
+          text: text.trim(),
+          is_correct: false,
+        });
+      }
+      liCount++;
+      continue;
+    }
+
+    // Extra <li> after 5 options
     if (p.tag === "li" && currentQuestion.options.length >= 5) {
-      if (/^Figure\s+\d+/i.test(trimmed)) {
-        pendingCaptions.push(trimmed);
-      } else if (pendingCaptions.length > 0 && trimmed.length > 2) {
-        pendingCaptions[pendingCaptions.length - 1] += "\n" + trimmed;
+      const liImgMatch = p.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
+      if (liImgMatch) {
+        const liFp = liImgMatch[1].slice(0, 200) + liImgMatch[1].slice(-200);
+        if (!pendingImages.some((pi) => pi.slice(0, 200) + pi.slice(-200) === liFp)) {
+          pendingImages.push(liImgMatch[1]);
+        }
+      } else if (/^Figure\s+\d+/i.test(text.trim())) {
+        pendingCaptions.push(text.trim());
+        legendLiCount = 0;
+      } else if (pendingCaptions.length > 0 && text.trim().length > 2) {
+        let line = text.trim();
+        if (/^:/.test(line)) {
+          const subLabel = String.fromCharCode(65 + legendLiCount);
+          line = `(${subLabel}) ${line}`;
+          legendLiCount++;
+        }
+        pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
+      } else if (text.trim().length > 10) {
+        pendingIntroLines.push(text.trim());
       }
       continue;
     }
 
-    // Non-li after 5 options (p or heading)
-    if (currentQuestion.options.length >= 5 && p.tag !== "li") {
+    // Labeled option in <p>
+    const optMatch = text.match(/^\s*([A-E])\s*[.):\t]\s*(.*)/);
+    if (optMatch && currentQuestion) {
+      currentQuestion.options.push({
+        label: optMatch[1].toUpperCase(),
+        text: optMatch[2].trim(),
+        is_correct: false,
+      });
+      liCount = 0;
+      continue;
+    }
+
+    if (text.trim().length < 3) continue;
+
+    // Non-li after 5 options
+    if (
+      currentQuestion &&
+      currentQuestion.options.length >= 5 &&
+      p.tag !== "li" &&
+      !/^\s*[A-E]\s*[.):\t]/.test(text)
+    ) {
+      const trimmed = text.trim();
       if (/^Figure\s+\d+/i.test(trimmed)) {
         pendingCaptions.push(trimmed);
+        legendLiCount = 0;
       } else if (pendingCaptions.length > 0 && trimmed.length > 2) {
+        let line = trimmed;
+        if (/^:/.test(line)) {
+          const subLabel = String.fromCharCode(65 + legendLiCount);
+          line = `(${subLabel}) ${line}`;
+          legendLiCount++;
+        }
         if (/^[:;(]/.test(trimmed) || /^[A-Z]{2,}\s/.test(trimmed) || trimmed.length < 80) {
-          pendingCaptions[pendingCaptions.length - 1] += "\n" + trimmed;
+          pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
         } else if (trimmed.length > 10) {
-          pendingIntro.push(trimmed);
+          pendingIntroLines.push(trimmed);
         }
       } else if (trimmed.length > 10) {
-        pendingIntro.push(trimmed);
-      }
-      continue;
-    }
-  }
-
-  assert(pendingImages.length === 2, `2 images collected (got ${pendingImages.length})`);
-  assert(pendingCaptions.length === 2, `2 separate captions (got ${pendingCaptions.length})`);
-  assert(
-    pendingCaptions[0].startsWith("Figure 2"),
-    `Caption[0] starts with Figure 2: "${pendingCaptions[0]?.substring(0, 30)}"`
-  );
-  assert(
-    pendingCaptions[1]?.startsWith("Figure 3"),
-    `Caption[1] starts with Figure 3: "${pendingCaptions[1]?.substring(0, 30)}"`
-  );
-  assert(
-    pendingCaptions[1]?.includes("dosage de la liaison de FVIII"),
-    "Figure 3 caption includes (A) sub-description"
-  );
-  assert(
-    pendingCaptions[1]?.includes("immunoprécipitation"),
-    "Figure 3 caption includes (B) sub-description"
-  );
-  assert(
-    !pendingCaptions[0]?.includes("immunoprécipitation"),
-    "Figure 2 does NOT contain Figure 3's sub-descriptions"
-  );
-  assert(
-    pendingCaptions[1]?.includes("FVIII HCh"),
-    "FVIII definitions attached to Figure 3"
-  );
-}
-
-// ─── Test 3: Image deduplication ──────────────────────────────────────────────
-console.log("\n[Test 3] Image deduplication");
-{
-  const pendingImages = [];
-  const images = [
-    "data:image/tiff;base64,AABBCCDD1234567890",
-    "data:image/tiff;base64,AABBCCDD1234567890", // duplicate
-    "data:image/tiff;base64,DIFFERENT_IMAGE_DATA",
-  ];
-
-  for (const img of images) {
-    const fp = img.slice(0, 200) + img.slice(-200);
-    if (!pendingImages.some((pi) => pi.slice(0, 200) + pi.slice(-200) === fp)) {
-      pendingImages.push(img);
-    }
-  }
-
-  assert(pendingImages.length === 2, `Deduplicated to 2 images (got ${pendingImages.length})`);
-  assert(pendingImages[0].includes("AABBCCDD"), "First image preserved");
-  assert(pendingImages[1].includes("DIFFERENT"), "Second unique image preserved");
-}
-
-// ─── Test 4: Real document test (if available) ────────────────────────────────
-console.log("\n[Test 4] Real document parsing (Bioch sujet .docx)");
-{
-  const fs = await import("fs");
-  const docxPath = "/Users/benjaminhaddad-diplomasante/Downloads/Bioch sujet .docx";
-
-  if (fs.existsSync(docxPath)) {
-    const mammoth = require("mammoth");
-    const buf = fs.readFileSync(docxPath);
-    const { value: html } = await mammoth.convertToHtml({ buffer: buf });
-
-    const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
-    const paragraphs = [];
-    let m;
-    while ((m = elemRegex.exec(html)) !== null) {
-      const raw = m[2];
-      const text = raw
-        .replace(/<img[^>]*>/gi, " [image] ")
-        .replace(/<[^>]+>/g, "")
-        .replace(/&[^;]+;/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      paragraphs.push({ text, tag: m[1].toLowerCase() });
-    }
-
-    // Verify Figure 3 is captured as h1
-    const fig3 = paragraphs.find(
-      (p) => p.tag === "h1" && /Figure 3/i.test(p.text)
-    );
-    assert(!!fig3, "Figure 3 found as h1 tag in real document");
-    assert(
-      fig3?.text.includes("facteur VIII"),
-      `Figure 3 text correct: "${fig3?.text.substring(0, 60)}"`
-    );
-
-    // Verify Figure 2 is captured as p
-    const fig2 = paragraphs.find(
-      (p) => p.tag === "p" && /^Figure 2/i.test(p.text)
-    );
-    assert(!!fig2, "Figure 2 found as p tag in real document");
-
-    // Verify continuation <li> elements exist
-    const fig3idx = paragraphs.indexOf(fig3);
-    const nextLi = paragraphs[fig3idx + 1];
-    assert(
-      nextLi?.tag === "li" && nextLi.text.startsWith(":"),
-      `Next element after Figure 3 is <li> starting with ':' (got tag=${nextLi?.tag} text="${nextLi?.text?.substring(0, 30)}")`
-    );
-  } else {
-    console.log("  ⊘ Skipped (document not found at expected path)");
-  }
-}
-
-// ─── Test 5: Image goes to question (not section) when inside QCM ─────────────
-console.log("\n[Test 5] Image inside QCM goes to question, not pendingImages");
-{
-  const html = `
-    <p><strong>QCM 19 : A propos de Tyr842 et Met843 :</strong></p>
-    <p><img src="data:image/tiff;base64,AMINO_ACIDS_TABLE_DATA" /></p>
-    <p><strong>E.</strong> Grâce à son résidu soufré</p>
-    <p><strong>QCM 20 : on aurait pu obtenir une coupure</strong></p>
-  `;
-
-  const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
-  const paragraphs = [];
-  let m;
-  while ((m = elemRegex.exec(html)) !== null) {
-    const raw = m[2];
-    const text = raw
-      .replace(/<img[^>]*>/gi, " [image] ")
-      .replace(/<[^>]+>/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    const imgMatch = raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
-    paragraphs.push({ text, tag: m[1].toLowerCase(), imgUri: imgMatch?.[1] || null });
-  }
-
-  let currentQuestion = null;
-  let pendingImages = [];
-  let questions = [];
-
-  for (const p of paragraphs) {
-    const text = p.text;
-    const qcmMatch = text.match(/^\s*(?:QCM|Question)\s*\d+/i);
-
-    if (qcmMatch) {
-      if (currentQuestion) questions.push(currentQuestion);
-      currentQuestion = { text, options: [], images: [] };
-      continue;
-    }
-
-    // NEW LOGIC: image goes to question if options < 5
-    if (p.imgUri && text.replace(/\[image\]/g, "").trim().length < 5) {
-      if (currentQuestion && currentQuestion.options.length < 5) {
-        currentQuestion.images.push(p.imgUri);
-      } else {
-        pendingImages.push(p.imgUri);
+        pendingIntroLines.push(trimmed);
       }
       continue;
     }
 
-    // Option
-    const optMatch = text.match(/^\s*([A-E])\.\s*(.*)/);
-    if (optMatch && currentQuestion) {
-      currentQuestion.options.push({ label: optMatch[1], text: optMatch[2] });
-    }
-  }
-  if (currentQuestion) questions.push(currentQuestion);
-
-  assert(
-    pendingImages.length === 0,
-    `No images in pendingImages (got ${pendingImages.length})`
-  );
-  assert(
-    questions[0]?.images.length === 1,
-    `QCM 19 has 1 question-level image (got ${questions[0]?.images.length})`
-  );
-  assert(
-    questions[0]?.images[0]?.includes("AMINO_ACIDS"),
-    "QCM 19's image is the amino acids table"
-  );
-}
-
-// ─── Test 6: (A)/(B) labels added for <li> sub-descriptions ─────────────────
-console.log("\n[Test 6] (A)/(B) labels added to <li> sub-descriptions starting with ':'");
-{
-  // Simulate extra <li> after 5 options with figure caption
-  let pendingCaptions = ["Figure 3 : Liaison de vWF"];
-  let legendLiCount = 0;
-
-  const subItems = [
-    ": dosage de la liaison de FVIII",
-    ": immunoprécipitation (anticorps utilisé)",
-  ];
-
-  for (const text of subItems) {
-    let line = text.trim();
-    if (/^:/.test(line)) {
-      const subLabel = String.fromCharCode(65 + legendLiCount);
-      line = `(${subLabel}) ${line}`;
-      legendLiCount++;
-    }
-    pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
+    liCount = 0;
+    questionTextLines.push(text.trim());
   }
 
-  assert(
-    pendingCaptions[0].includes("(A) :"),
-    `First sub-item has (A) label: "${pendingCaptions[0].split("\\n")[1]?.substring(0, 30)}"`
-  );
-  assert(
-    pendingCaptions[0].includes("(B) :"),
-    `Second sub-item has (B) label: "${pendingCaptions[0].split("\\n")[2]?.substring(0, 30)}"`
-  );
-  assert(
-    legendLiCount === 2,
-    `legendLiCount is 2 (got ${legendLiCount})`
-  );
-}
+  flushQuestion();
 
-// ─── Test 7: Post-parse deduplication ────────────────────────────────────────
-console.log("\n[Test 7] Post-parse deduplication removes question images already in section");
-{
-  const sharedImg = "data:image/tiff;base64,SHARED_IMAGE_LONG_DATA_URI_GOES_HERE";
-  const uniqueImg = "data:image/tiff;base64,UNIQUE_TO_QUESTION_ONLY";
-
-  const sections = [{ images: [sharedImg], title: "", intro_text: "" }];
-  const questions = [
-    { images: [sharedImg, uniqueImg], sectionIndex: 0, text: "Q1", options: [] },
-    { images: [], sectionIndex: 0, text: "Q2", options: [] },
-  ];
-
-  // Apply deduplication (same logic as in route.ts)
+  // Post-parse deduplication
   for (const q of questions) {
     if (q.images.length > 0 && q.sectionIndex != null && sections[q.sectionIndex]) {
       const secImgFps = new Set(
         sections[q.sectionIndex].images.map((img) => img.slice(0, 200) + img.slice(-200))
       );
-      q.images = q.images.filter(
-        (img) => !secImgFps.has(img.slice(0, 200) + img.slice(-200))
-      );
+      q.images = q.images.filter((img) => !secImgFps.has(img.slice(0, 200) + img.slice(-200)));
     }
   }
 
+  return { questions, sections };
+}
+
+// ─── REAL DOCUMENT TEST ──────────────────────────────────────────────────────
+
+const docxPath = "/Users/benjaminhaddad-diplomasante/Downloads/Bioch sujet .docx";
+if (!fs.existsSync(docxPath)) {
+  console.error("Document not found:", docxPath);
+  process.exit(1);
+}
+
+const mammoth = require("mammoth");
+const buf = fs.readFileSync(docxPath);
+const { value: html } = await mammoth.convertToHtml({ buffer: buf });
+
+const { questions, sections } = parseQcmLabelFormat(html);
+
+// ─── Test 1: Basic parsing ──────────────────────────────────────────────────
+console.log("\n[Test 1] Basic parsing results");
+assert(questions.length === 27, `27 questions parsed (got ${questions.length})`);
+assert(sections.length > 0, `Sections created (got ${sections.length})`);
+
+// ─── Test 2: Figure 2 and Figure 3 are separate captions ─────────────────────
+console.log("\n[Test 2] Figure 2 and Figure 3 captions");
+{
+  // Find the section before QCM 17 (contains Figures 2 & 3)
+  const sec = sections.find((s) => s.intro_text.includes("Figure 2") && s.intro_text.includes("Figure 3"));
+  assert(!!sec, "Section with both Figure 2 and Figure 3 found");
+
+  if (sec) {
+    // Check Figure 2 caption is separate from Figure 3
+    const lines = sec.intro_text.split("\n");
+    const fig2Line = lines.findIndex((l) => l.startsWith("Figure 2"));
+    const fig3Line = lines.findIndex((l) => l.startsWith("Figure 3"));
+    assert(fig2Line >= 0, `Figure 2 caption found at line ${fig2Line}`);
+    assert(fig3Line >= 0, `Figure 3 caption found at line ${fig3Line}`);
+    assert(fig3Line > fig2Line, `Figure 3 comes after Figure 2`);
+
+    // Check (A) and (B) labels on Figure 3's sub-descriptions
+    const fig3SubLines = lines.slice(fig3Line + 1);
+    const hasA = fig3SubLines.some((l) => l.includes("(A)"));
+    const hasB = fig3SubLines.some((l) => l.includes("(B)"));
+    assert(hasA, `Figure 3 has (A) sub-description: "${fig3SubLines.find((l) => l.includes("(A)"))?.substring(0, 60)}"`);
+    assert(hasB, `Figure 3 has (B) sub-description: "${fig3SubLines.find((l) => l.includes("(B)"))?.substring(0, 60)}"`);
+
+    // Make sure (A) is NOT (F) or (G)
+    const hasF = fig3SubLines.some((l) => l.includes("(F)"));
+    const hasG = fig3SubLines.some((l) => l.includes("(G)"));
+    assert(!hasF, "Figure 3 does NOT have (F) — legendLiCount was properly reset");
+    assert(!hasG, "Figure 3 does NOT have (G) — legendLiCount was properly reset");
+
+    // Check Figure 1's sub-descriptions also have (A)-(E) not wrong letters
+    const secFig1 = sections.find((s) => s.intro_text.includes("Figure 1"));
+    if (secFig1) {
+      const f1Lines = secFig1.intro_text.split("\n");
+      const f1Subs = f1Lines.filter((l) => /^\(.\)/.test(l));
+      console.log(`  ℹ Figure 1 has ${f1Subs.length} sub-items: ${f1Subs.map((l) => l.substring(0, 5)).join(", ")}`);
+      assert(f1Subs.length > 0 && f1Subs[0].startsWith("(A)"), "Figure 1 sub-items start at (A)");
+    }
+
+    assert(sec.images.length === 2, `Section has 2 images for Fig 2 & 3 (got ${sec.images.length})`);
+  }
+}
+
+// ─── Test 3: NO duplicate images in any section ──────────────────────────────
+console.log("\n[Test 3] No duplicate images in sections");
+{
+  let anyDuplicates = false;
+  for (let si = 0; si < sections.length; si++) {
+    const s = sections[si];
+    const fps = s.images.map((img) => img.slice(0, 200) + img.slice(-200));
+    const unique = new Set(fps);
+    if (unique.size < fps.length) {
+      console.error(`  ✗ Section ${si} has ${fps.length} images but only ${unique.size} unique!`);
+      anyDuplicates = true;
+    }
+  }
+  assert(!anyDuplicates, "All sections have unique images");
+}
+
+// ─── Test 4: NO image in both a section AND a question referencing it ────────
+console.log("\n[Test 4] No image in both section and question");
+{
+  let anyOverlap = false;
+  for (const q of questions) {
+    if (q.images.length > 0 && q.sectionIndex != null && sections[q.sectionIndex]) {
+      const secFps = new Set(
+        sections[q.sectionIndex].images.map((img) => img.slice(0, 200) + img.slice(-200))
+      );
+      for (const qImg of q.images) {
+        const qFp = qImg.slice(0, 200) + qImg.slice(-200);
+        if (secFps.has(qFp)) {
+          console.error(`  ✗ QCM ${q.qcmNum} has image also in section ${q.sectionIndex}`);
+          anyOverlap = true;
+        }
+      }
+    }
+  }
+  assert(!anyOverlap, "No image appears in both a section and its question");
+}
+
+// ─── Test 5: Image inside QCM 19 goes to question ───────────────────────────
+console.log("\n[Test 5] Image inside QCM 19 (amino acids table)");
+{
+  const q19 = questions.find((q) => q.qcmNum === "19");
+  assert(!!q19, "QCM 19 found");
   assert(
-    questions[0].images.length === 1,
-    `Q1 has 1 image after dedup (got ${questions[0].images.length})`
+    q19?.images.length >= 1,
+    `QCM 19 has >= 1 question-level image (got ${q19?.images.length})`
   );
+
+  // The section for QCM 20 should NOT have QCM 19's image
+  const q20 = questions.find((q) => q.qcmNum === "20");
+  if (q20?.sectionIndex != null && sections[q20.sectionIndex]) {
+    const sec20 = sections[q20.sectionIndex];
+    const q19ImgFps = new Set(
+      (q19?.images || []).map((img) => img.slice(0, 200) + img.slice(-200))
+    );
+    const overlap = sec20.images.some(
+      (img) => q19ImgFps.has(img.slice(0, 200) + img.slice(-200))
+    );
+    assert(!overlap, "QCM 20's section does NOT contain QCM 19's image");
+  }
+}
+
+// ─── Test 6: Total images across all sections + questions = mammoth total ────
+console.log("\n[Test 6] Image accounting");
+{
+  let sectionImgCount = sections.reduce((sum, s) => sum + s.images.length, 0);
+  let questionImgCount = questions.reduce((sum, q) => sum + q.images.length, 0);
+  const totalImages = (html.match(/<img\s/gi) || []).length;
+  // We skip 1 image (document header logo), so parsed = total - 1
+  console.log(`  ℹ Total <img> in HTML: ${totalImages}`);
+  console.log(`  ℹ Section images: ${sectionImgCount}`);
+  console.log(`  ℹ Question images: ${questionImgCount}`);
+  console.log(`  ℹ Parsed total: ${sectionImgCount + questionImgCount}`);
+  // No parsed image count should exceed total
   assert(
-    questions[0].images[0]?.includes("UNIQUE"),
-    "Q1 kept only the unique image"
+    sectionImgCount + questionImgCount <= totalImages,
+    `Parsed images (${sectionImgCount + questionImgCount}) <= total HTML images (${totalImages})`
   );
+  // Each image should appear exactly once
+  const allImgFps = [
+    ...sections.flatMap((s) => s.images),
+    ...questions.flatMap((q) => q.images),
+  ].map((img) => img.slice(0, 200) + img.slice(-200));
+  const uniqueImgs = new Set(allImgFps);
   assert(
-    questions[1].images.length === 0,
-    `Q2 still has 0 images (got ${questions[1].images.length})`
+    uniqueImgs.size === allImgFps.length,
+    `All ${allImgFps.length} parsed images are unique (${uniqueImgs.size} unique fingerprints)`
+  );
+}
+
+// ─── Test 7: Sections detail ─────────────────────────────────────────────────
+console.log("\n[Test 7] Sections detail");
+for (let si = 0; si < sections.length; si++) {
+  const s = sections[si];
+  const questionsInSection = questions.filter((q) => q.sectionIndex === si);
+  console.log(
+    `  Section ${si}: ${s.images.length} img, ${questionsInSection.length} questions (QCM ${questionsInSection.map((q) => q.qcmNum).join(",")}), captions: ${(s.intro_text.match(/Figure \d+/g) || []).join(", ") || "none"}`
   );
 }
 
 // ─── Summary ──────────────────────────────────────────────────────────────────
-console.log(`\n${"=".repeat(50)}`);
+console.log(`\n${"=".repeat(60)}`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

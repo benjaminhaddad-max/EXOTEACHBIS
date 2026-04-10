@@ -732,7 +732,14 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       // If it starts with ":" or is a short definition, it's part of the previous caption
       const trimmed = text.trim();
       if (/^[:;(]/.test(trimmed) || /^[A-Z]{2,}\s/.test(trimmed) || trimmed.length < 80) {
-        pendingCaptions[pendingCaptions.length - 1] += "\n" + trimmed;
+        // Prefix sub-items starting with ":" with (A), (B), etc.
+        let line = trimmed;
+        if (/^:/.test(line)) {
+          const subLabel = String.fromCharCode(65 + legendLiCount);
+          line = `(${subLabel}) ${line}`;
+          legendLiCount++;
+        }
+        pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
         continue;
       }
     }
@@ -868,10 +875,18 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       const trimmed = text.trim();
       if (/^Figure\s+\d+/i.test(trimmed)) {
         pendingCaptions.push(trimmed);
+        legendLiCount = 0; // reset sub-item counter for new figure
       } else if (pendingCaptions.length > 0 && trimmed.length > 2) {
         // Legend continuation: same rules as lines 721-728
+        // Prefix sub-items starting with ":" with (A), (B), etc.
+        let line = trimmed;
+        if (/^:/.test(line)) {
+          const subLabel = String.fromCharCode(65 + legendLiCount);
+          line = `(${subLabel}) ${line}`;
+          legendLiCount++;
+        }
         if (/^[:;(]/.test(trimmed) || /^[A-Z]{2,}\s/.test(trimmed) || trimmed.length < 80) {
-          pendingCaptions[pendingCaptions.length - 1] += "\n" + trimmed;
+          pendingCaptions[pendingCaptions.length - 1] += "\n" + line;
         } else if (trimmed.length > 10) {
           pendingIntroLines.push(trimmed);
         }
