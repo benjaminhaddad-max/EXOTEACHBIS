@@ -70,29 +70,31 @@ async function readAnswerSheet(
         },
         {
           type: "text",
-          text: `Tu vois une grille QCM scannée d'un concours de médecine. Extrais PRÉCISÉMENT :
+          text: `Analyse cette grille QCM scannée d'un examen de médecine.
 
-1. Le NUMÉRO ÉTUDIANT : regarde en haut à droite, il y a des cases noircies formant un nombre (5-6 chiffres). Lis les cases noircies de gauche à droite pour reconstituer le numéro.
+## NUMÉRO ÉTUDIANT
+En haut à droite, il y a une grille de bulles pour le numéro étudiant.
+- Il y a 6 colonnes (chiffres de gauche à droite)
+- Chaque colonne a 10 lignes (chiffres 0 à 9)
+- Pour chaque colonne, identifie LE chiffre dont la bulle est noircie
+- Le numéro étudiant fait 6 chiffres. Si tu n'es pas sûr d'un chiffre, donne ta meilleure estimation.
 
-2. Le NOM et PRÉNOM : écrits à la main en haut à gauche.
+## NOM / PRÉNOM
+Lis le texte manuscrit en haut à gauche (NOM et Prénom).
 
-3. Les RÉPONSES : pour chaque question de 1 à ${questionCount}, indique quelles lettres (A, B, C, D, E) sont noircies.
-   - La grille a 2 lignes par question : la ligne du HAUT = réponse principale, la ligne du BAS = remord (correction).
-   - Si la ligne de remord a des cases noircies, utilise CELLE-LÀ (elle remplace la réponse principale).
-   - Si seule la ligne du haut est remplie, utilise celle-là.
-   - Si aucune case n'est noircies pour une question, mets un tableau vide [].
+## RÉPONSES AUX QUESTIONS
+La grille a ${questionCount} questions numérotées de 1 à ${questionCount}, organisées en colonnes.
+Chaque question a 2 rangées de 5 cases (A B C D E) :
+- Rangée du HAUT = réponse
+- Rangée du BAS = remord/correction (lettres entre les deux rangées)
 
-Réponds UNIQUEMENT avec un JSON valide, sans commentaire :
-{
-  "studentId": "50205",
-  "studentName": "NOM Prénom",
-  "answers": {
-    "1": ["A", "D"],
-    "2": ["C"],
-    "3": [],
-    ...
-  }
-}`,
+RÈGLE : si la rangée du BAS (remord) a des cases noircies, elle REMPLACE la rangée du haut.
+
+Pour chaque question, liste les lettres dont la case est noircie (remplie en noir).
+Case vide = pas sélectionnée. Si aucune case n'est noircie, mets [].
+
+Réponds UNIQUEMENT avec un JSON valide :
+{"studentId":"502035","studentName":"MOREAU Inès","answers":{"1":["A","D"],"2":["C"],"3":[]}}`,
         },
       ],
     }],
@@ -175,13 +177,40 @@ export async function POST(req: NextRequest) {
       .eq("role", "eleve");
 
     const studentIdToUser: Record<string, { id: string; name: string }> = {};
+    const allStudentIds: string[] = [];
     for (const p of (profiles || [])) {
       if (p.student_id) {
         studentIdToUser[p.student_id] = {
           id: p.id,
           name: `${p.last_name || ""} ${p.first_name || ""}`.trim(),
         };
+        allStudentIds.push(p.student_id);
       }
+    }
+
+    // Fuzzy match: find closest student_id (max 1 digit difference)
+    function fuzzyMatchStudentId(scannedId: string): string | null {
+      if (!scannedId) return null;
+      // Exact match first
+      if (studentIdToUser[scannedId]) return scannedId;
+      // Try matching with 1 digit tolerance (Levenshtein distance = 1)
+      let bestMatch: string | null = null;
+      let bestDist = Infinity;
+      for (const dbId of allStudentIds) {
+        if (dbId.length !== scannedId.length) continue;
+        let diff = 0;
+        for (let i = 0; i < dbId.length; i++) {
+          if (dbId[i] !== scannedId[i]) diff++;
+        }
+        if (diff < bestDist && diff <= 1) {
+          bestDist = diff;
+          bestMatch = dbId;
+        }
+      }
+      if (bestMatch) {
+        console.log(`[scan-copies] Fuzzy match: scanned "${scannedId}" → DB "${bestMatch}" (${bestDist} digit diff)`);
+      }
+      return bestMatch;
     }
 
     // ─── Create scan session ─────────────────────────────────────────────────
@@ -224,11 +253,18 @@ export async function POST(req: NextRequest) {
           client, pageBuffers[i], questionCount
         );
 
-        // Match student
+        // Match student (exact or fuzzy — 1 digit tolerance)
         let userId: string | null = null;
-        if (studentId && studentIdToUser[studentId]) {
-          userId = studentIdToUser[studentId].id;
-          matchedCount++;
+        let matchedId = studentId;
+        if (studentId) {
+          const resolved = fuzzyMatchStudentId(studentId);
+          if (resolved && studentIdToUser[resolved]) {
+            userId = studentIdToUser[resolved].id;
+            matchedId = resolved;
+            matchedCount++;
+          } else {
+            unmatchedCount++;
+          }
         } else {
           unmatchedCount++;
         }
@@ -277,7 +313,7 @@ export async function POST(req: NextRequest) {
             // Delete old answers
             await supabase.from("user_answers").delete().eq("attempt_id", attemptId);
           } else {
-            const { data: newAttempt } = await supabase
+            const { data: newAttempt, error: attemptErr } = await supabase
               .from("serie_attempts")
               .insert({
                 user_id: userId, series_id: serieId,
@@ -288,7 +324,11 @@ export async function POST(req: NextRequest) {
               })
               .select("id")
               .single();
-            attemptId = newAttempt!.id;
+            if (attemptErr || !newAttempt) {
+              console.error(`[scan-copies] Failed to create attempt for user ${userId}:`, attemptErr?.message);
+              throw new Error(`Erreur création attempt: ${attemptErr?.message}`);
+            }
+            attemptId = newAttempt.id;
           }
 
           // Insert answers

@@ -99,6 +99,7 @@ export function ExamenDetailShell({
   const handleScanCopies = async (serieId: string, file: File) => {
     setScanningSerieId(serieId);
     setScanResult(null);
+    setToast({ message: `Scan en cours... ${file.name} (peut prendre 2-3 min)`, kind: "success" });
     try {
       const formData = new FormData();
       formData.append("serieId", serieId);
@@ -110,12 +111,15 @@ export function ExamenDetailShell({
         setToast({ message: data.error || "Erreur scan", kind: "error" });
       } else {
         setScanResult({ serieId, matched: data.matched, unmatched: data.unmatched, total: data.totalPages });
-        setToast({ message: `${data.matched} copies scannées avec succès`, kind: "success" });
-        // Reload results
-        window.location.reload();
+        setToast({
+          message: `Scan terminé : ${data.matched}/${data.totalPages} élèves identifiés${data.unmatched > 0 ? ` (${data.unmatched} non trouvés)` : ""}`,
+          kind: data.matched > 0 ? "success" : "error",
+        });
+        // Reload to show results
+        setTimeout(() => window.location.reload(), 2000);
       }
     } catch (e: any) {
-      setToast({ message: e.message, kind: "error" });
+      setToast({ message: "Erreur scan : " + (e.message || "timeout"), kind: "error" });
     } finally {
       setScanningSerieId(null);
     }
