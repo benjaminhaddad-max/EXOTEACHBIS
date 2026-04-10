@@ -94,9 +94,13 @@ Réponds UNIQUEMENT en JSON, pas d'explication.`,
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
+  // Normalize studentName from various formats Claude may return
+  const name = parsed.studentName || parsed.name ||
+    [parsed.lastName || parsed.last_name || "", parsed.firstName || parsed.first_name || ""].filter(Boolean).join(" ") || null;
+
   return {
-    studentId: parsed.studentId || null,
-    studentName: parsed.studentName || null,
+    studentId: String(parsed.studentId || "").trim() || null,
+    studentName: name,
     answers: parsed.answers || {},
   };
 }
@@ -261,7 +265,16 @@ export async function POST(req: NextRequest) {
 
         for (let qIdx = 0; qIdx < questionCount; qIdx++) {
           const qNum = String(qIdx + 1);
-          const selected = answers[qNum] || [];
+          // Normalize: Claude may return string "A" instead of array ["A"], or "A,B" instead of ["A","B"]
+          const rawAnswer: any = answers[qNum];
+          let selected: string[];
+          if (Array.isArray(rawAnswer)) {
+            selected = rawAnswer.map((l: any) => String(l).trim().toUpperCase()).filter((l: string) => /^[A-E]$/.test(l));
+          } else if (typeof rawAnswer === "string" && (rawAnswer as string).trim()) {
+            selected = (rawAnswer as string).split(/[,\s]+/).map(l => l.trim().toUpperCase()).filter(l => /^[A-E]$/.test(l));
+          } else {
+            selected = [];
+          }
           const questionId = orderToQuestionId[qIdx];
           const correct = correctAnswers[questionId] || [];
 
