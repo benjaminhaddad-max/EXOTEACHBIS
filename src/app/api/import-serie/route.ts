@@ -1861,7 +1861,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Parser (essaie les trois formats)
+    console.log(`[import-serie] mammoth HTML: ${(html.length / 1024).toFixed(0)} KB, <img> tags: ${(html.match(/<img\s/gi) || []).length}`);
     const { questions: parsed, sections: parsedSections } = await parseDocx(html, docXml, drawingImages, pageImages);
+    console.log(`[import-serie] Parsed: ${parsed.length} questions, ${parsedSections.length} sections`);
+    for (let si = 0; si < parsedSections.length; si++) {
+      const s = parsedSections[si];
+      const qInSec = parsed.filter(q => q.sectionIndex === si);
+      console.log(`[import-serie]   Section ${si}: ${s.images.length} images, ${qInSec.length} questions, title="${s.title.substring(0, 40)}"`);
+    }
+    // Log questions with images
+    const qWithImgs = parsed.filter(q => q.images.length > 0);
+    if (qWithImgs.length > 0) {
+      console.log(`[import-serie]   Questions with images: ${qWithImgs.map(q => `Q(${q.images.length}img)`).join(", ")}`);
+    }
     if (parsed.length === 0) {
       return NextResponse.json({ error: "Aucune question trouvée dans le fichier. Vérifiez le format (questions numérotées 1) ou 1. suivies d'options A-E)." }, { status: 422 });
     }
