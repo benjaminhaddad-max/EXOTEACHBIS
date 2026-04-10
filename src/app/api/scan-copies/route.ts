@@ -1,7 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { readOMR, pdfPageToImage } from "@/lib/omr-reader";
 
 export const maxDuration = 300; // 5 min max for processing multiple pages
 
@@ -24,96 +24,25 @@ type PageResult = {
   error: string | null;
 };
 
-// ─── PDF page extraction using macOS sips (serverless-compatible fallback) ───
+// ─── PDF page extraction ─────────────────────────────────────────────────────
 
 async function extractPdfPages(buffer: Buffer): Promise<Buffer[]> {
-  // Use pdf-lib to get page count, then sharp to convert
   const { PDFDocument } = await import("pdf-lib");
   const pdfDoc = await PDFDocument.load(buffer);
-  const pageCount = pdfDoc.getPageCount();
-
   const pages: Buffer[] = [];
-  const sharp = (await import("sharp")).default;
-
-  // Convert entire PDF to images page by page
-  // pdf-lib can extract individual pages → render via sharp (limited)
-  // Better approach: use the PDF buffer directly and split with external tool
-  // For Vercel: send each page as a separate PDF to Claude Vision (it accepts PDFs!)
-  for (let i = 0; i < pageCount; i++) {
-    const singlePageDoc = await PDFDocument.create();
-    const [copiedPage] = await singlePageDoc.copyPages(pdfDoc, [i]);
-    singlePageDoc.addPage(copiedPage);
-    const singlePageBytes = await singlePageDoc.save();
-    pages.push(Buffer.from(singlePageBytes));
+  for (let i = 0; i < pdfDoc.getPageCount(); i++) {
+    const singleDoc = await PDFDocument.create();
+    const [copiedPage] = await singleDoc.copyPages(pdfDoc, [i]);
+    singleDoc.addPage(copiedPage);
+    pages.push(Buffer.from(await singleDoc.save()));
   }
-
   return pages;
-}
-
-// ─── Claude Vision: read one scanned answer sheet ───────────────────────────
-
-async function readAnswerSheet(
-  client: Anthropic,
-  pageBuffer: Buffer,
-  questionCount: number,
-): Promise<{ studentId: string | null; studentName: string | null; answers: Record<string, string[]> }> {
-  const b64 = pageBuffer.toString("base64");
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: b64 },
-          },
-          {
-            type: "text",
-            text: `Grille QCM scannée. Extrais :
-1. NUMÉRO ÉTUDIANT : bulles noircies en haut à droite (6 colonnes × lignes 0-9). Lis le chiffre noirci par colonne.
-2. NOM/PRÉNOM : manuscrit en haut à gauche.
-3. RÉPONSES : ${questionCount} questions (1-${questionCount}). Chaque question a 2 rangées de cases A-E. Si rangée du BAS (remord) est remplie, elle remplace celle du haut. Liste les lettres noircies par question.
-Réponds UNIQUEMENT en JSON, pas d'explication.`,
-          },
-        ],
-      },
-      {
-        role: "assistant",
-        content: '{"studentId":"',
-      },
-    ],
-  });
-
-  // Response is continuation of the prefilled assistant message
-  const rawText = '{"studentId":"' + (response.content[0].type === "text" ? response.content[0].text : "");
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Claude n'a pas retourné de JSON valide: " + rawText.substring(0, 100));
-  }
-
-  const parsed = JSON.parse(jsonMatch[0]);
-  // Normalize studentName from various formats Claude may return
-  const name = parsed.studentName || parsed.name ||
-    [parsed.lastName || parsed.last_name || "", parsed.firstName || parsed.first_name || ""].filter(Boolean).join(" ") || null;
-
-  return {
-    studentId: String(parsed.studentId || "").trim() || null,
-    studentName: name,
-    answers: parsed.answers || {},
-  };
 }
 
 // ─── Route POST ──────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: "ANTHROPIC_API_KEY non configurée." }, { status: 500 });
-    }
-
     const formData = await req.formData();
     const serieId = formData.get("serieId") as string;
     const examenId = formData.get("examenId") as string;
@@ -315,8 +244,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`[scan-copies] Grading scale: ${gradingScale.length > 0 ? gradingScale.map(r => r.nb_errors + "err→" + r.points).join(", ") : "tout-ou-rien (no scale found)"}`);
 
-    // ─── Process each page with Claude Vision ────────────────────────────────
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // ─── Process each page with OMR (pixel-level bubble detection) ─────────
     const results: PageResult[] = [];
     let matchedCount = 0;
     let unmatchedCount = 0;
@@ -325,9 +253,12 @@ export async function POST(req: NextRequest) {
       try {
         console.log(`[scan-copies] Processing page ${i + 1}/${pageBuffers.length}...`);
 
-        const { studentId, studentName, answers } = await readAnswerSheet(
-          client, pageBuffers[i], questionCount
-        );
+        // Convert PDF page to image, then run OMR
+        const pageImage = await pdfPageToImage(pageBuffers[i]);
+        const omrResult = await readOMR(pageImage, questionCount);
+        const studentId = omrResult.studentId;
+        const studentName = omrResult.studentName;
+        const answers = omrResult.answers;
 
         // Match student: ID (exact → fuzzy) → name fallback
         let userId: string | null = null;
