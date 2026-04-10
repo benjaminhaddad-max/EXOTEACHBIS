@@ -1309,20 +1309,33 @@ async function uploadBase64Image(
     let base64 = match[2];
     let buffer = Buffer.from(base64, "base64");
 
-    // EMF/WMF: convert to PNG via CloudConvert for perfect quality
+    // Non-web formats: convert to displayable format
     if (NON_WEB_FORMATS.has(format)) {
-      const converted = await convertDataUriToPng(dataUri);
-      if (converted && converted !== dataUri) {
-        const pngMatch = converted.match(/^data:image\/png;base64,(.+)$/);
-        if (pngMatch) {
-          buffer = Buffer.from(pngMatch[1], "base64");
-          format = "png";
-          base64 = pngMatch[1];
-          console.log(`[upload-img] CloudConvert: ${match[1]} → PNG for Q ${questionId}`);
+      // TIFF/BMP: convert locally via sharp (fast, no external API needed)
+      if (["tiff", "bmp", "x-bmp"].includes(format)) {
+        try {
+          const jpegBuf = await sharp(buffer).jpeg({ quality: 85 }).toBuffer();
+          buffer = Buffer.from(jpegBuf);
+          format = "jpeg";
+          base64 = jpegBuf.toString("base64");
+          console.log(`[upload-img] sharp: ${match[1]} → JPEG for Q ${questionId}`);
+        } catch (e: any) {
+          console.warn(`[upload-img] sharp conversion failed for ${format}: ${e.message}`);
         }
       } else {
-        // CloudConvert unavailable — keep EMF for browser-side conversion
-        console.log(`[upload-img] Keeping ${format} for Q ${questionId} (no CloudConvert key)`);
+        // EMF/WMF: convert to PNG via CloudConvert
+        const converted = await convertDataUriToPng(dataUri);
+        if (converted && converted !== dataUri) {
+          const pngMatch = converted.match(/^data:image\/png;base64,(.+)$/);
+          if (pngMatch) {
+            buffer = Buffer.from(pngMatch[1], "base64");
+            format = "png";
+            base64 = pngMatch[1];
+            console.log(`[upload-img] CloudConvert: ${match[1]} → PNG for Q ${questionId}`);
+          }
+        } else {
+          console.log(`[upload-img] Keeping ${format} for Q ${questionId} (no CloudConvert key)`);
+        }
       }
     }
 
