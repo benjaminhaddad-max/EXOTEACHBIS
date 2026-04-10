@@ -565,12 +565,26 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
   let xmlSearchFrom = 0; // track position to avoid finding wrong options
   const sections: ParsedSection[] = [];
   // Extract <p>, <li>, and heading elements (h1-h6) — some DOCX editors emit Figure captions as headings
+  // Extract <p>, <li>, <h1-h6> elements AND <table> elements (in document order)
   const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
-  const paragraphs: { raw: string; text: string; tag: string }[] = [];
+  const tableRegex = /<table>([\s\S]*?)<\/table>/gi;
+
+  // Build a combined list sorted by position in the HTML
+  type ParsedElem = { raw: string; text: string; tag: string; pos: number };
+  const allElems: ParsedElem[] = [];
   let m: RegExpExecArray | null;
   while ((m = elemRegex.exec(html)) !== null) {
-    paragraphs.push({ raw: m[2], text: stripTags(m[2]), tag: m[1].toLowerCase() });
+    allElems.push({ raw: m[2], text: stripTags(m[2]), tag: m[1].toLowerCase(), pos: m.index });
   }
+  // Insert <table> elements — stored with tag "table" and raw HTML preserved
+  while ((m = tableRegex.exec(html)) !== null) {
+    const tableHtml = m[0]; // full <table>...</table>
+    const tableText = stripTags(m[1]);
+    allElems.push({ raw: tableHtml, text: tableText, tag: "table", pos: m.index });
+  }
+  // Sort by position in the HTML to maintain document order
+  allElems.sort((a, b) => a.pos - b.pos);
+  const paragraphs = allElems;
 
   const LABELS = ["A", "B", "C", "D", "E"];
   let currentQuestion: ParsedQuestion | null = null;
@@ -717,6 +731,13 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
       const imgFingerprint = imgMatch[1].slice(0, 200) + imgMatch[1].slice(-200);
       const isDuplicate = pendingImages.some(pi => pi.slice(0, 200) + pi.slice(-200) === imgFingerprint);
       if (!isDuplicate) pendingImages.push(imgMatch[1]);
+      continue;
+    }
+
+    // <table> element → store raw HTML as section context
+    if (p.tag === "table") {
+      // Store the raw HTML table with a marker prefix so the renderer can detect it
+      pendingIntroLines.push("[HTML_TABLE]" + p.raw);
       continue;
     }
 

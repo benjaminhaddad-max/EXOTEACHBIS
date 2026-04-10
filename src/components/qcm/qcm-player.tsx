@@ -616,12 +616,18 @@ function PlayingScreen({
                       <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm space-y-4">
                         {sectionInfo.title && <h3 className="text-sm font-bold text-blue-900">{sectionInfo.title}</h3>}
 
-                        {/* Intro text (before figures) */}
-                        {introLines.filter(l => l.trim()).map((line, li) => (
-                          <p key={"intro" + li} className="text-xs text-blue-800/80 leading-relaxed">
-                            <MathText text={line} className="text-xs" />
-                          </p>
-                        ))}
+                        {/* Intro text (before figures) — supports [HTML_TABLE] for Word tables */}
+                        {introLines.filter(l => l.trim()).map((line, li) =>
+                          line.startsWith("[HTML_TABLE]") ? (
+                            <div key={"intro" + li} className="overflow-x-auto my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-blue-200 [&_td]:border [&_td]:border-blue-200 [&_td]:px-2 [&_td]:py-1 [&_td]:text-center [&_th]:border [&_th]:border-blue-200 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-blue-100/50 [&_th]:font-semibold"
+                              dangerouslySetInnerHTML={{ __html: line.slice("[HTML_TABLE]".length) }}
+                              style={{ fontSize: "11px" }} />
+                          ) : (
+                            <p key={"intro" + li} className="text-xs text-blue-800/80 leading-relaxed">
+                              <MathText text={line} className="text-xs" />
+                            </p>
+                          )
+                        )}
 
                         {/* Each Figure: caption box → image → sub-lines */}
                         {figureBlocks.map((fb, fi) => (
