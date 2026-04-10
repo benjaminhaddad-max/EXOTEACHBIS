@@ -1821,34 +1821,105 @@ export async function POST(req: NextRequest) {
         .order("order_index");
       const existingIds = (sqData ?? []).map((r: any) => r.question_id).filter(Boolean);
 
-      // Extract correction images from mammoth HTML (images between question blocks)
-      const { value: corrHtml } = await mammoth.convertToHtml({ buffer });
+      // Extract correction images from XML drawings (respects Word crop via a:srcRect)
       const correctionImages: (string | null)[] = [];
       {
-        // Split HTML by question headers to find images per question
-        const qHeaderRegex = /(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]/i;
-        const allElems: { text: string; raw: string }[] = [];
-        const elemRx = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-        let em;
-        while ((em = elemRx.exec(corrHtml)) !== null) {
-          allElems.push({ raw: em[1], text: em[1].replace(/<[^>]+>/g, " ").trim() });
+        // Parse relationships for image file mapping
+        const relsFile = zip?.file("word/_rels/document.xml.rels");
+        const relsXml = relsFile ? await relsFile.async("string") : "";
+        const imgRels: Record<string, string> = {};
+        const relRx = /Id="([^"]+)"[^>]*Target="([^"]+)"/g;
+        let relM;
+        while ((relM = relRx.exec(relsXml)) !== null) {
+          if (relM[2].includes("media/")) imgRels[relM[1]] = relM[2];
         }
 
+        // Walk XML paragraphs: track question markers and extract drawings with crop
+        const imgsByQ: Map<number, Buffer> = new Map();
         let currentQIdx = -1;
-        const imgsByQ: Map<number, string> = new Map();
-        for (const el of allElems) {
-          if (qHeaderRegex.test(el.text)) { currentQIdx++; continue; }
-          if (currentQIdx >= 0 && !imgsByQ.has(currentQIdx)) {
-            const imgMatch = el.raw.match(/<img[^>]+src="(data:image\/[^"]+)"/i);
-            if (imgMatch && el.text.replace(/\[image\]/g, "").trim().length < 10) {
-              imgsByQ.set(currentQIdx, imgMatch[1]);
+
+        // Re-parse paragraphs to find question markers and drawings in order
+        const pWalkRegex = /<w:p[^/]*?>([\s\S]*?)<\/w:p>/g;
+        let pwm;
+        while ((pwm = pWalkRegex.exec(docXml)) !== null) {
+          const content = pwm[1];
+          // Extract text
+          const texts: string[] = [];
+          const twRx = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+          let tw;
+          while ((tw = twRx.exec(content)) !== null) texts.push(tw[1]);
+          const text = texts.join("").trim();
+
+          // Check if this is a question marker
+          const isBold = content.includes("<w:b/>") || content.includes("<w:b ");
+          if ((isBold && /^question$/i.test(text)) || /^(?:QCM|Question|Q)\.?\s*(?:N°\s*)?\d+\s*[-:.–—]/i.test(text)) {
+            currentQIdx++;
+            continue;
+          }
+
+          // Check for drawings with images (only take first per question)
+          if (currentQIdx >= 0 && !imgsByQ.has(currentQIdx) && content.includes("<w:drawing>")) {
+            const drawRegex = /<w:drawing>([\s\S]*?)<\/w:drawing>/g;
+            let dm;
+            while ((dm = drawRegex.exec(content)) !== null) {
+              if (imgsByQ.has(currentQIdx)) break;
+              const drawing = dm[1];
+              const blipMatch = drawing.match(/a:blip[^>]*r:embed="([^"]+)"/);
+              if (!blipMatch) continue;
+              const target = imgRels[blipMatch[1]];
+              if (!target) continue;
+              const imgFile = zip?.file("word/" + target);
+              if (!imgFile) continue;
+
+              const imgBuf = await imgFile.async("nodebuffer");
+
+              // Parse crop from a:srcRect (values in 1/1000 of percent)
+              const srcRectMatch = drawing.match(/a:srcRect([^/]*)\//);
+              let finalBuf = imgBuf;
+              if (srcRectMatch) {
+                const l = parseInt(srcRectMatch[1].match(/l="(\d+)"/)?.[1] || "0") / 1000;
+                const t = parseInt(srcRectMatch[1].match(/t="(\d+)"/)?.[1] || "0") / 1000;
+                const r = parseInt(srcRectMatch[1].match(/r="(\d+)"/)?.[1] || "0") / 1000;
+                const b = parseInt(srcRectMatch[1].match(/b="(\d+)"/)?.[1] || "0") / 1000;
+
+                if (l > 1 || t > 1 || r > 1 || b > 1) {
+                  try {
+                    const meta = await sharp(imgBuf).metadata();
+                    if (meta.width && meta.height) {
+                      const cropLeft = Math.round(meta.width * l / 100);
+                      const cropTop = Math.round(meta.height * t / 100);
+                      const cropWidth = Math.max(1, Math.round(meta.width * (100 - l - r) / 100));
+                      const cropHeight = Math.max(1, Math.round(meta.height * (100 - t - b) / 100));
+                      finalBuf = Buffer.from(await sharp(imgBuf)
+                        .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
+                        .jpeg({ quality: 85 })
+                        .toBuffer());
+                      console.log(`[import-serie] Cropped correction image Q${currentQIdx + 1}: ${meta.width}x${meta.height} → ${cropWidth}x${cropHeight}`);
+                    }
+                  } catch (e: any) {
+                    console.warn(`[import-serie] Crop failed Q${currentQIdx + 1}:`, e.message);
+                  }
+                }
+              }
+              imgsByQ.set(currentQIdx, finalBuf);
             }
           }
         }
+
+        // Convert buffers to data URIs for the upload pipeline
         for (let i = 0; i < parsed.length; i++) {
-          correctionImages.push(imgsByQ.get(i) ?? null);
+          const buf = imgsByQ.get(i);
+          if (buf) {
+            // Detect format from buffer magic bytes
+            const isJpeg = buf[0] === 0xFF && buf[1] === 0xD8;
+            const isPng = buf[0] === 0x89 && buf[1] === 0x50;
+            const mime = isJpeg ? "image/jpeg" : isPng ? "image/png" : "image/jpeg";
+            correctionImages.push(`data:${mime};base64,${buf.toString("base64")}`);
+          } else {
+            correctionImages.push(null);
+          }
         }
-        console.log(`[import-serie] Correction images found: ${imgsByQ.size}/${parsed.length}`);
+        console.log(`[import-serie] Correction images found: ${imgsByQ.size}/${parsed.length} (with crop applied)`);
       }
 
       // Update correct answers on existing questions
