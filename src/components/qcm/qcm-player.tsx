@@ -641,8 +641,8 @@ function PlayingScreen({
                           </div>
                         ))}
 
-                        {/* Extra images not paired with a figure */}
-                        {extraImages.map((url, ei) => <ZoomableImage key={"extra" + ei} src={url} />)}
+                        {/* Extra images not paired with a figure (only when there ARE figure blocks) */}
+                        {figureBlocks.length > 0 && extraImages.map((url, ei) => <ZoomableImage key={"extra" + ei} src={url} />)}
 
                         {/* If no figure blocks but has images, show them */}
                         {figureBlocks.length === 0 && urls.length > 0 && <QuestionImages imageUrl={sectionInfo.image_url} />}
