@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < dbId.length; i++) {
           if (dbId[i] !== scannedId[i]) diff++;
         }
-        if (diff < bestDist && diff <= 1) {
+        if (diff < bestDist && diff <= 2) {
           bestDist = diff;
           bestMatch = dbId;
         }

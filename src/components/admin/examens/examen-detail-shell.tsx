@@ -86,6 +86,9 @@ export function ExamenDetailShell({
   const [scanningSerieId, setScanningSerieId] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{ serieId: string; matched: number; unmatched: number; total: number } | null>(null);
   const scanFileRef = useRef<HTMLInputElement>(null);
+  const [studentDetail, setStudentDetail] = useState<{ userId: string; name: string; serieId: string } | null>(null);
+  const [studentAnswers, setStudentAnswers] = useState<any[] | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   // Editable header fields
   const [examenName, setExamenName] = useState(initialExamen.name);
@@ -94,6 +97,78 @@ export function ExamenDetailShell({
   const [finAt, setFinAt] = useState(initialExamen.fin_at);
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Student detail loader ──────────────────────────────────────────────────
+  const loadStudentDetail = async (userId: string, name: string, serieId: string) => {
+    setStudentDetail({ userId, name, serieId });
+    setLoadingDetail(true);
+    setStudentAnswers(null);
+    try {
+      const supabase = createClient();
+      // Get the attempt for this student + serie
+      const { data: attempt } = await supabase
+        .from("serie_attempts")
+        .select("id, score, nb_correct, nb_total")
+        .eq("user_id", userId)
+        .eq("series_id", serieId)
+        .maybeSingle();
+      if (!attempt) { setLoadingDetail(false); return; }
+
+      // Get user answers
+      const { data: answers } = await supabase
+        .from("user_answers")
+        .select("question_id, selected_labels, is_correct")
+        .eq("attempt_id", attempt.id);
+
+      // Get questions + correct options for this serie
+      const { data: sqData } = await supabase
+        .from("series_questions")
+        .select("question_id, order_index")
+        .eq("series_id", serieId)
+        .order("order_index");
+
+      const questionIds = (sqData || []).map((sq: any) => sq.question_id);
+      const { data: questions } = await supabase
+        .from("questions")
+        .select("id, text")
+        .in("id", questionIds);
+      const { data: options } = await supabase
+        .from("options")
+        .select("question_id, label, text, is_correct")
+        .in("question_id", questionIds)
+        .order("label");
+
+      // Build detail per question
+      const qMap = new Map((questions || []).map((q: any) => [q.id, q]));
+      const optMap = new Map<string, any[]>();
+      for (const o of (options || [])) {
+        if (!optMap.has(o.question_id)) optMap.set(o.question_id, []);
+        optMap.get(o.question_id)!.push(o);
+      }
+      const ansMap = new Map((answers || []).map((a: any) => [a.question_id, a]));
+
+      const detail = (sqData || []).map((sq: any, idx: number) => {
+        const q = qMap.get(sq.question_id);
+        const opts = optMap.get(sq.question_id) || [];
+        const ans = ansMap.get(sq.question_id);
+        const correctLabels = opts.filter((o: any) => o.is_correct).map((o: any) => o.label);
+        const selectedLabels: string[] = ans?.selected_labels || [];
+        return {
+          number: idx + 1,
+          text: q?.text || "",
+          options: opts,
+          correctLabels,
+          selectedLabels,
+          isCorrect: ans?.is_correct ?? false,
+        };
+      });
+      setStudentAnswers(detail);
+    } catch (e: any) {
+      console.error("[detail]", e.message);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
 
   // ─── Scan copies handler ────────────────────────────────────────────────────
   const handleScanCopies = async (serieId: string, file: File) => {
@@ -785,7 +860,10 @@ export function ExamenDetailShell({
                         if (!sc) return <td key={es.series_id} className="py-1.5 px-1 text-center text-[9px] text-white/15">—</td>;
                         const s20 = sc.nb_total > 0 ? (sc.nb_correct / sc.nb_total) * notationSur : 0;
                         const pct = sc.nb_total > 0 ? (sc.nb_correct / sc.nb_total) * 100 : 0;
-                        return <td key={es.series_id} className="py-1.5 px-1 text-center"><span className={`text-xs font-medium ${pct >= 70 ? "text-green-400" : pct >= 50 ? "text-orange-400" : "text-red-400"}`}>{s20.toFixed(1)}</span></td>;
+                        return <td key={es.series_id} className="py-1.5 px-1 text-center cursor-pointer hover:bg-white/5 rounded"
+                          onClick={() => loadStudentDetail(s.userId, s.name, es.series_id)}>
+                          <span className={`text-xs font-medium ${pct >= 70 ? "text-green-400" : pct >= 50 ? "text-orange-400" : "text-red-400"}`}>{s20.toFixed(1)}</span>
+                        </td>;
                       })}
                       <td className="py-1.5 px-2 text-center"><span className={`text-sm font-bold ${s.moyenne20 >= notationSur * 0.7 ? "text-green-400" : s.moyenne20 >= notationSur * 0.5 ? "text-orange-400" : "text-red-400"}`}>{s.moyenne20.toFixed(1)}</span></td>
                     </tr>
@@ -807,7 +885,8 @@ export function ExamenDetailShell({
                   {serieStudents.map((s: any, i: number) => {
                     const pct = (s.serieScore20 / notationSur) * 100;
                     return (
-                      <tr key={s.userId} className="border-b border-white/5 hover:bg-white/[0.02]">
+                      <tr key={s.userId} className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer"
+                        onClick={() => selectedSerie && loadStudentDetail(s.userId, s.name, selectedSerie)}>
                         <td className="py-1.5 px-2"><RankBadge rank={i + 1} /></td>
                         <td className="py-1.5 px-2"><p className="text-xs text-white/80 font-medium">{s.name}</p><p className="text-[9px] text-white/25">{s.email}</p></td>
                         <td className="py-1.5 px-2 text-[10px] text-white/40">{new Date(s.serieEndedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
@@ -822,6 +901,84 @@ export function ExamenDetailShell({
           </div>
         </div>
       </div>
+
+      {/* Student detail modal */}
+      {studentDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <div className="bg-[#0e1e35] rounded-2xl shadow-2xl border border-white/10 w-full max-w-2xl max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-white">{studentDetail.name}</h3>
+                <p className="text-[10px] text-white/40 mt-0.5">
+                  Détail des réponses — {epreuves.find(es => es.series_id === studentDetail.serieId)?.series?.name?.replace(`${initialExamen.name} — `, "") ?? ""}
+                </p>
+              </div>
+              {studentAnswers && (
+                <div className="text-right mr-4">
+                  <span className={`text-lg font-bold ${(() => {
+                    const correct = studentAnswers.filter((a: any) => a.isCorrect).length;
+                    const pct = studentAnswers.length > 0 ? (correct / studentAnswers.length) * 100 : 0;
+                    return pct >= 70 ? "text-green-400" : pct >= 50 ? "text-orange-400" : "text-red-400";
+                  })()}`}>
+                    {studentAnswers.filter((a: any) => a.isCorrect).length}/{studentAnswers.length}
+                  </span>
+                  <p className="text-[10px] text-white/30">bonnes réponses</p>
+                </div>
+              )}
+              <button onClick={() => { setStudentDetail(null); setStudentAnswers(null); }}
+                className="p-2 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+              {loadingDetail && <p className="text-center text-white/30 text-xs py-8"><Loader2 size={16} className="animate-spin inline mr-2" />Chargement...</p>}
+              {studentAnswers && studentAnswers.map((q: any) => {
+                const correct = q.correctLabels;
+                const selected = q.selectedLabels;
+                return (
+                  <div key={q.number} className={`rounded-xl border p-3 ${q.isCorrect ? "border-green-500/20 bg-green-500/5" : "border-red-500/20 bg-red-500/5"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${q.isCorrect ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                          {q.number}
+                        </span>
+                        <span className="text-xs text-white/60 line-clamp-1">{q.text || `Question ${q.number}`}</span>
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${q.isCorrect ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+                        {q.isCorrect ? "CORRECT" : "FAUX"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2 ml-8">
+                      {q.options.map((opt: any) => {
+                        const isSelected = selected.includes(opt.label);
+                        const isCorrect = correct.includes(opt.label);
+                        let style = "bg-white/5 text-white/30 border-white/8"; // default: not selected, not correct
+                        if (isSelected && isCorrect) style = "bg-green-500/20 text-green-400 border-green-500/30"; // correct pick
+                        else if (isSelected && !isCorrect) style = "bg-red-500/20 text-red-400 border-red-500/30 line-through"; // wrong pick
+                        else if (!isSelected && isCorrect) style = "bg-orange-500/15 text-orange-400 border-orange-500/30"; // missed correct
+                        return (
+                          <span key={opt.label} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-medium ${style}`}>
+                            <strong>{opt.label}.</strong> {opt.text?.substring(0, 40)}{(opt.text?.length || 0) > 40 ? "…" : ""}
+                            {isSelected && isCorrect && <Check size={10} />}
+                            {isSelected && !isCorrect && <X size={10} />}
+                            {!isSelected && isCorrect && <span className="text-[9px]">manqué</span>}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              {studentAnswers && studentAnswers.length === 0 && (
+                <p className="text-center text-white/25 text-xs py-8">Aucune réponse trouvée</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hidden file input for scan upload */}
       <input
