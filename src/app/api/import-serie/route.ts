@@ -569,19 +569,27 @@ function parseQcmLabelFormat(html: string, docXml?: string): { questions: Parsed
   const elemRegex = /<(p|li|h[1-6])[^>]*>([\s\S]*?)<\/(?:p|li|h[1-6])>/gi;
   const tableRegex = /<table>([\s\S]*?)<\/table>/gi;
 
-  // Build a combined list sorted by position in the HTML
+  // Collect table ranges first so we can skip <p>/<li> inside tables
   type ParsedElem = { raw: string; text: string; tag: string; pos: number };
   const allElems: ParsedElem[] = [];
   let m: RegExpExecArray | null;
-  while ((m = elemRegex.exec(html)) !== null) {
-    allElems.push({ raw: m[2], text: stripTags(m[2]), tag: m[1].toLowerCase(), pos: m.index });
-  }
-  // Insert <table> elements — stored with tag "table" and raw HTML preserved
+
+  const tableRanges: { start: number; end: number }[] = [];
   while ((m = tableRegex.exec(html)) !== null) {
-    const tableHtml = m[0]; // full <table>...</table>
+    const tableHtml = m[0];
     const tableText = stripTags(m[1]);
+    tableRanges.push({ start: m.index, end: m.index + m[0].length });
     allElems.push({ raw: tableHtml, text: tableText, tag: "table", pos: m.index });
   }
+
+  // Extract <p>/<li>/<h> but skip those inside a <table>
+  while ((m = elemRegex.exec(html)) !== null) {
+    const pos = m.index;
+    const insideTable = tableRanges.some(r => pos >= r.start && pos < r.end);
+    if (insideTable) continue; // skip — already captured as part of the table
+    allElems.push({ raw: m[2], text: stripTags(m[2]), tag: m[1].toLowerCase(), pos });
+  }
+
   // Sort by position in the HTML to maintain document order
   allElems.sort((a, b) => a.pos - b.pos);
   const paragraphs = allElems;
