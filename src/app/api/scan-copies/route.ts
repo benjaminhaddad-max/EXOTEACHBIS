@@ -61,50 +61,36 @@ async function readAnswerSheet(
   const response = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 4096,
-    messages: [{
-      role: "user",
-      content: [
-        {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: b64 },
-        },
-        {
-          type: "text",
-          text: `Analyse cette grille QCM scannée d'un examen de médecine.
-
-## NUMÉRO ÉTUDIANT
-En haut à droite, il y a une grille de bulles pour le numéro étudiant.
-- Il y a 6 colonnes (chiffres de gauche à droite)
-- Chaque colonne a 10 lignes (chiffres 0 à 9)
-- Pour chaque colonne, identifie LE chiffre dont la bulle est noircie
-- Le numéro étudiant fait 6 chiffres. Si tu n'es pas sûr d'un chiffre, donne ta meilleure estimation.
-
-## NOM / PRÉNOM
-Lis le texte manuscrit en haut à gauche (NOM et Prénom).
-
-## RÉPONSES AUX QUESTIONS
-La grille a ${questionCount} questions numérotées de 1 à ${questionCount}, organisées en colonnes.
-Chaque question a 2 rangées de 5 cases (A B C D E) :
-- Rangée du HAUT = réponse
-- Rangée du BAS = remord/correction (lettres entre les deux rangées)
-
-RÈGLE : si la rangée du BAS (remord) a des cases noircies, elle REMPLACE la rangée du haut.
-
-Pour chaque question, liste les lettres dont la case est noircie (remplie en noir).
-Case vide = pas sélectionnée. Si aucune case n'est noircie, mets [].
-
-Réponds UNIQUEMENT avec un JSON valide :
-{"studentId":"502035","studentName":"MOREAU Inès","answers":{"1":["A","D"],"2":["C"],"3":[]}}`,
-        },
-      ],
-    }],
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: { type: "base64", media_type: "application/pdf", data: b64 },
+          },
+          {
+            type: "text",
+            text: `Grille QCM scannée. Extrais :
+1. NUMÉRO ÉTUDIANT : bulles noircies en haut à droite (6 colonnes × lignes 0-9). Lis le chiffre noirci par colonne.
+2. NOM/PRÉNOM : manuscrit en haut à gauche.
+3. RÉPONSES : ${questionCount} questions (1-${questionCount}). Chaque question a 2 rangées de cases A-E. Si rangée du BAS (remord) est remplie, elle remplace celle du haut. Liste les lettres noircies par question.
+Réponds UNIQUEMENT en JSON, pas d'explication.`,
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: '{"studentId":"',
+      },
+    ],
   });
 
-  // Extract JSON from response
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // Response is continuation of the prefilled assistant message
+  const rawText = '{"studentId":"' + (response.content[0].type === "text" ? response.content[0].text : "");
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error("Claude n'a pas retourné de JSON valide");
+    throw new Error("Claude n'a pas retourné de JSON valide: " + rawText.substring(0, 100));
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
