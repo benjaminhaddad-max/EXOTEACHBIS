@@ -269,6 +269,52 @@ export async function POST(req: NextRequest) {
       console.warn("[scan-copies] scan_sessions table not available — proceeding without tracking");
     }
 
+    // ─── Load grading scale (barème) ──────────────────────────────────────────
+    // Try university-specific first, fallback to default
+    type ScaleRow = { nb_errors: number; points: number };
+    let gradingScale: ScaleRow[] = [];
+
+    // Find which university this exam belongs to (via series → cours → dossier)
+    const { data: serieData } = await supabase.from("series").select("cours_id").eq("id", serieId).single();
+    if (serieData?.cours_id) {
+      const { data: cours } = await supabase.from("cours").select("dossier_id").eq("id", serieData.cours_id).single();
+      if (cours?.dossier_id) {
+        // Walk up the dossier tree to find the university dossier
+        let dossierId = cours.dossier_id;
+        for (let depth = 0; depth < 5; depth++) {
+          const { data: dossier } = await supabase.from("dossiers").select("id, parent_id").eq("id", dossierId).single();
+          if (!dossier?.parent_id) break;
+          // Check if this dossier has a grading scale
+          const { data: scale } = await supabase.from("university_grading_scales").select("*").eq("university_dossier_id", dossierId).order("nb_errors");
+          if (scale && scale.length > 0) { gradingScale = scale; break; }
+          dossierId = dossier.parent_id;
+        }
+      }
+    }
+
+    // Fallback to default grading scale
+    if (gradingScale.length === 0) {
+      const { data: defaultScale } = await supabase.from("admin_settings").select("value").eq("key", "default_grading_scale").single();
+      if (defaultScale?.value) {
+        try { gradingScale = JSON.parse(defaultScale.value); } catch {}
+      }
+    }
+
+    // Build scoring function: nb_errors → score (0 to 1)
+    function scoreQuestion(nbErrors: number): number {
+      if (nbErrors === 0) return 1;
+      if (gradingScale.length === 0) return nbErrors === 0 ? 1 : 0; // fallback: tout ou rien
+      // Find the row for this error count
+      const row = gradingScale.find(r => r.nb_errors === nbErrors);
+      if (row) return Math.max(0, row.points);
+      // If more errors than max row, return 0
+      const maxRow = gradingScale[gradingScale.length - 1];
+      if (nbErrors > maxRow.nb_errors) return 0;
+      return 0;
+    }
+
+    console.log(`[scan-copies] Grading scale: ${gradingScale.length > 0 ? gradingScale.map(r => r.nb_errors + "err→" + r.points).join(", ") : "tout-ou-rien (no scale found)"}`);
+
     // ─── Process each page with Claude Vision ────────────────────────────────
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const results: PageResult[] = [];
@@ -293,8 +339,9 @@ export async function POST(req: NextRequest) {
           unmatchedCount++;
         }
 
-        // Calculate score
+        // Calculate score using barème (penalty per error)
         let nbCorrect = 0;
+        let totalScore = 0; // sum of per-question scores (each 0-1)
         const scannedAnswers: ScannedAnswer[] = [];
 
         for (let qIdx = 0; qIdx < questionCount; qIdx++) {
@@ -311,18 +358,26 @@ export async function POST(req: NextRequest) {
           }
           const questionId = orderToQuestionId[qIdx];
           const correct = correctAnswers[questionId] || [];
+          const allLabels = ["A", "B", "C", "D", "E"];
 
-          // QCM scoring: all correct labels selected AND no incorrect ones
-          const isCorrect = correct.length > 0
-            && correct.every(l => selected.includes(l))
-            && selected.every(l => correct.includes(l));
+          // Count errors: VRAIE non cochée + FAUSSE cochée
+          let nbErrors = 0;
+          for (const label of allLabels) {
+            const isCorrectLabel = correct.includes(label);
+            const isSelected = selected.includes(label);
+            if (isCorrectLabel && !isSelected) nbErrors++; // missed a correct answer
+            if (!isCorrectLabel && isSelected) nbErrors++; // selected a wrong answer
+          }
 
-          if (isCorrect) nbCorrect++;
+          const qScore = scoreQuestion(nbErrors);
+          totalScore += qScore;
+          if (nbErrors === 0) nbCorrect++;
 
           scannedAnswers.push({ questionNumber: qIdx + 1, selected });
         }
 
-        const score = questionCount > 0 ? Math.round((nbCorrect / questionCount) * 10000) / 100 : 0;
+        // Score as percentage (totalScore is sum of per-question scores, each 0-1)
+        const score = questionCount > 0 ? Math.round((totalScore / questionCount) * 10000) / 100 : 0;
 
         // ─── Save to DB if student matched ──────────────────────────────────
         if (userId) {
@@ -364,20 +419,23 @@ export async function POST(req: NextRequest) {
             attemptId = newAttempt.id;
           }
 
-          // Insert answers
+          // Insert answers (is_correct = 0 errors only)
           const answersToInsert = scannedAnswers
             .filter(a => a.selected.length > 0)
             .map(a => {
               const questionId = orderToQuestionId[a.questionNumber - 1];
               const correct = correctAnswers[questionId] || [];
-              const isCorrect = correct.length > 0
-                && correct.every(l => a.selected.includes(l))
-                && a.selected.every(l => correct.includes(l));
+              // Count errors for this question
+              let errors = 0;
+              for (const label of ["A", "B", "C", "D", "E"]) {
+                if (correct.includes(label) && !a.selected.includes(label)) errors++;
+                if (!correct.includes(label) && a.selected.includes(label)) errors++;
+              }
               return {
                 attempt_id: attemptId,
                 question_id: questionId,
                 selected_labels: a.selected,
-                is_correct: isCorrect,
+                is_correct: errors === 0,
               };
             });
 
@@ -396,7 +454,7 @@ export async function POST(req: NextRequest) {
 
           if (existingSerieResult) {
             await supabase.from("examen_serie_results").update({
-              attempt_id: attemptId, score, score_20: score / 5,
+              attempt_id: attemptId, score, score_20: +(score * 20 / 100).toFixed(2),
               nb_correct: nbCorrect, nb_total: questionCount,
               completed_at: new Date().toISOString(),
             }).eq("id", existingSerieResult.id);
@@ -427,7 +485,7 @@ export async function POST(req: NextRequest) {
               await supabase.from("examen_serie_results").insert({
                 examen_result_id: examResult.id,
                 examen_id: examenId, series_id: serieId, user_id: userId,
-                attempt_id: attemptId, score, score_20: score / 5,
+                attempt_id: attemptId, score, score_20: +(score * 20 / 100).toFixed(2),
                 nb_correct: nbCorrect, nb_total: questionCount,
                 completed_at: new Date().toISOString(),
               });
