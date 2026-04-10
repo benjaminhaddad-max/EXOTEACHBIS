@@ -1853,6 +1853,8 @@ export async function POST(req: NextRequest) {
 
       // Update correct answers on existing questions
       let updated = 0;
+      let imagesUploaded = 0;
+      let imageErrors: string[] = [];
       for (let i = 0; i < Math.min(parsed.length, existingIds.length); i++) {
         const p = parsed[i];
         const qId = existingIds[i];
@@ -1871,21 +1873,40 @@ export async function POST(req: NextRequest) {
         // Upload correction image if present
         const corrImg = correctionImages[i];
         if (corrImg) {
-          const imgUrl = await uploadBase64Image(supabase, corrImg, qId, 99);
-          if (imgUrl) {
-            await supabase.from("questions").update({ explanation_image_url: imgUrl }).eq("id", qId);
+          try {
+            const imgUrl = await uploadBase64Image(supabase, corrImg, qId, 99);
+            if (imgUrl) {
+              const { error: updateErr } = await supabase.from("questions").update({ explanation_image_url: imgUrl }).eq("id", qId);
+              if (updateErr) {
+                imageErrors.push(`Q${i + 1}: DB update failed: ${updateErr.message}`);
+                console.error(`[import-serie] Q${i + 1} DB update error:`, updateErr.message);
+              } else {
+                imagesUploaded++;
+                console.log(`[import-serie] Q${i + 1} correction image saved: ${imgUrl.substring(0, 80)}...`);
+              }
+            } else {
+              imageErrors.push(`Q${i + 1}: uploadBase64Image returned null`);
+            }
+          } catch (e: any) {
+            imageErrors.push(`Q${i + 1}: ${e.message}`);
+            console.error(`[import-serie] Q${i + 1} image error:`, e.message);
           }
         }
 
         if (p.options.some(o => o.is_correct)) updated++;
       }
 
-      console.log(`[import-serie] Correction: ${updated}/${existingIds.length} questions updated`);
+      console.log(`[import-serie] Correction: ${updated}/${existingIds.length} questions updated, ${imagesUploaded} images, ${imageErrors.length} errors`);
+      const imgMsg = imagesUploaded > 0 ? ` ${imagesUploaded} images de correction.` : "";
+      const errMsg = imageErrors.length > 0 ? ` Erreurs images: ${imageErrors.join("; ")}` : "";
       return NextResponse.json({
         success: true,
-        message: `${updated} questions mises à jour avec les réponses correctes.`,
+        message: `${updated} questions mises à jour avec les réponses correctes.${imgMsg}${errMsg}`,
         questionsUpdated: updated,
         correctAnswersMarked: parsed.reduce((sum, q) => sum + q.options.filter(o => o.is_correct).length, 0),
+        correctionImagesFound: correctionImages.filter(x => x !== null).length,
+        correctionImagesUploaded: imagesUploaded,
+        correctionImageErrors: imageErrors,
       });
     }
 
