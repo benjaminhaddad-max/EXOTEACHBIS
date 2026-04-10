@@ -168,6 +168,25 @@ export function InlineQuestionEditor({
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
 
+  // Sync props → state when data is reloaded (e.g. after correction import)
+  useEffect(() => {
+    setText(q.text);
+    setExplanation(q.explanation ?? "");
+    setExplanationImageUrl(q.explanation_image_url ?? null);
+    setDifficulty(q.difficulty ?? 2);
+    setImageUrl((q as any).image_url ?? null);
+    setOptions(initialOpts.map((o: any) => ({
+      label: o.label as string, text: o.text as string,
+      is_correct: o.is_correct as boolean,
+      justification: (o.justification ?? "") as string,
+      image_url: (o.image_url ?? null) as string | null,
+    })));
+    setDirty(false);
+    setSaved(false);
+  }, [q.id, q.explanation_image_url, q.explanation, (q as any).image_url,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      initialOpts.map((o: any) => o.is_correct).join(",")]);
+
   const setOpt = (i: number, field: string, value: any) => {
     setOptions((prev) => prev.map((o, idx) => idx === i ? { ...o, [field]: value } : o));
     setDirty(true);
