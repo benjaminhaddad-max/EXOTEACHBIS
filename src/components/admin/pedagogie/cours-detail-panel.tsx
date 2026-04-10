@@ -168,25 +168,6 @@ export function InlineQuestionEditor({
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  // Sync props → state when data is reloaded (e.g. after correction import)
-  useEffect(() => {
-    setText(q.text);
-    setExplanation(q.explanation ?? "");
-    setExplanationImageUrl(q.explanation_image_url ?? null);
-    setDifficulty(q.difficulty ?? 2);
-    setImageUrl((q as any).image_url ?? null);
-    setOptions(initialOpts.map((o: any) => ({
-      label: o.label as string, text: o.text as string,
-      is_correct: o.is_correct as boolean,
-      justification: (o.justification ?? "") as string,
-      image_url: (o.image_url ?? null) as string | null,
-    })));
-    setDirty(false);
-    setSaved(false);
-  }, [q.id, q.explanation_image_url, q.explanation, (q as any).image_url,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      initialOpts.map((o: any) => o.is_correct).join(",")]);
-
   const setOpt = (i: number, field: string, value: any) => {
     setOptions((prev) => prev.map((o, idx) => idx === i ? { ...o, [field]: value } : o));
     setDirty(true);
@@ -559,6 +540,7 @@ function SerieEditorModal({
   const [creatingQ, setCreatingQ] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
+  const [dataVersion, setDataVersion] = useState(0); // incremented on loadAll() to force editor remount
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
@@ -576,6 +558,7 @@ function SerieEditorModal({
       ]);
       setSerieQuestions(qs as any);
       setBankQuestions(bank as any);
+      setDataVersion((v) => v + 1); // force editor remount with fresh data
     } catch (e) {
       console.error("[SerieEditorModal] exception:", e);
     } finally {
@@ -816,6 +799,7 @@ function SerieEditorModal({
                     </div>
                     {isOpen && (
                       <InlineQuestionEditor
+                        key={`${q.id}-v${dataVersion}`}
                         question={q}
                         options={opts}
                         coursId={coursId}
