@@ -186,29 +186,61 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fuzzy match: find closest student_id (max 1 digit difference)
-    function fuzzyMatchStudentId(scannedId: string): string | null {
-      if (!scannedId) return null;
-      // Exact match first
-      if (studentIdToUser[scannedId]) return scannedId;
-      // Try matching with 1 digit tolerance (Levenshtein distance = 1)
-      let bestMatch: string | null = null;
-      let bestDist = Infinity;
-      for (const dbId of allStudentIds) {
-        if (dbId.length !== scannedId.length) continue;
-        let diff = 0;
-        for (let i = 0; i < dbId.length; i++) {
-          if (dbId[i] !== scannedId[i]) diff++;
+    // Build name lookup for fallback matching
+    const nameToStudentId: Record<string, string> = {};
+    for (const p of (profiles || [])) {
+      if (p.student_id && p.last_name) {
+        // Key: normalized "lastname firstname"
+        const key = `${p.last_name} ${p.first_name || ""}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        nameToStudentId[key] = p.student_id;
+      }
+    }
+
+    // Match scanned student: try ID first (fuzzy), then name fallback
+    function matchStudent(scannedId: string | null, scannedName: string | null): string | null {
+      // 1. Exact ID match
+      if (scannedId && studentIdToUser[scannedId]) return scannedId;
+
+      // 2. Fuzzy ID match (up to 2 digit tolerance)
+      if (scannedId) {
+        let bestMatch: string | null = null;
+        let bestDist = Infinity;
+        for (const dbId of allStudentIds) {
+          if (dbId.length !== scannedId.length) continue;
+          let diff = 0;
+          for (let i = 0; i < dbId.length; i++) {
+            if (dbId[i] !== scannedId[i]) diff++;
+          }
+          if (diff < bestDist && diff <= 2) {
+            bestDist = diff;
+            bestMatch = dbId;
+          }
         }
-        if (diff < bestDist && diff <= 2) {
-          bestDist = diff;
-          bestMatch = dbId;
+        if (bestMatch) {
+          console.log(`[scan-copies] Fuzzy ID match: "${scannedId}" → "${bestMatch}" (${bestDist} digit diff)`);
+          return bestMatch;
         }
       }
-      if (bestMatch) {
-        console.log(`[scan-copies] Fuzzy match: scanned "${scannedId}" → DB "${bestMatch}" (${bestDist} digit diff)`);
+
+      // 3. Name fallback: normalize and search
+      if (scannedName) {
+        const normalized = scannedName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        // Try exact name match
+        if (nameToStudentId[normalized]) {
+          console.log(`[scan-copies] Name match: "${scannedName}" → ID "${nameToStudentId[normalized]}"`);
+          return nameToStudentId[normalized];
+        }
+        // Try partial: last name only
+        const parts = normalized.split(/\s+/);
+        for (const [key, sid] of Object.entries(nameToStudentId)) {
+          if (parts[0] && key.startsWith(parts[0]) && parts[0].length >= 3) {
+            console.log(`[scan-copies] Partial name match: "${scannedName}" → "${key}" → ID "${sid}"`);
+            return sid;
+          }
+        }
       }
-      return bestMatch;
+
+      return null;
     }
 
     // ─── Create scan session ─────────────────────────────────────────────────
@@ -251,18 +283,12 @@ export async function POST(req: NextRequest) {
           client, pageBuffers[i], questionCount
         );
 
-        // Match student (exact or fuzzy — 1 digit tolerance)
+        // Match student: ID (exact → fuzzy) → name fallback
         let userId: string | null = null;
-        let matchedId = studentId;
-        if (studentId) {
-          const resolved = fuzzyMatchStudentId(studentId);
-          if (resolved && studentIdToUser[resolved]) {
-            userId = studentIdToUser[resolved].id;
-            matchedId = resolved;
-            matchedCount++;
-          } else {
-            unmatchedCount++;
-          }
+        const resolvedId = matchStudent(studentId, studentName);
+        if (resolvedId && studentIdToUser[resolvedId]) {
+          userId = studentIdToUser[resolvedId].id;
+          matchedCount++;
         } else {
           unmatchedCount++;
         }
