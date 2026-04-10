@@ -83,6 +83,9 @@ export function ExamenDetailShell({
   const [editingSerie, setEditingSerie] = useState<SerieSummary | null>(null);
   const [importingSerieId, setImportingSerieId] = useState<string | null>(null);
   const [importedSerieIds, setImportedSerieIds] = useState<Set<string>>(new Set());
+  const [scanningSerieId, setScanningSerieId] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<{ serieId: string; matched: number; unmatched: number; total: number } | null>(null);
+  const scanFileRef = useRef<HTMLInputElement>(null);
 
   // Editable header fields
   const [examenName, setExamenName] = useState(initialExamen.name);
@@ -91,6 +94,32 @@ export function ExamenDetailShell({
   const [finAt, setFinAt] = useState(initialExamen.fin_at);
   const [examenVisible, setExamenVisible] = useState(initialExamen.visible);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Scan copies handler ────────────────────────────────────────────────────
+  const handleScanCopies = async (serieId: string, file: File) => {
+    setScanningSerieId(serieId);
+    setScanResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("serieId", serieId);
+      formData.append("examenId", initialExamen.id);
+      formData.append("file", file);
+      const res = await fetch("/api/scan-copies", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setToast({ message: data.error || "Erreur scan", kind: "error" });
+      } else {
+        setScanResult({ serieId, matched: data.matched, unmatched: data.unmatched, total: data.totalPages });
+        setToast({ message: `${data.matched} copies scannées avec succès`, kind: "success" });
+        // Reload results
+        window.location.reload();
+      }
+    } catch (e: any) {
+      setToast({ message: e.message, kind: "error" });
+    } finally {
+      setScanningSerieId(null);
+    }
+  };
 
   // Helper: import QCM — server extracts text, client renders page images from PDF
   const triggerPdfImport = async (serieId: string, sujetUrl: string, correctionUrl: string, coursId: string | null) => {
@@ -594,6 +623,20 @@ export function ExamenDetailShell({
                   >
                     <Eye size={10} /> Vue élève
                   </a>
+                  <button
+                    onClick={() => {
+                      setScanningSerieId(es.series_id);
+                      scanFileRef.current?.click();
+                    }}
+                    disabled={scanningSerieId === es.series_id}
+                    className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 rounded-lg text-[10px] text-blue-400/70 hover:text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {scanningSerieId === es.series_id ? (
+                      <><Loader2 size={10} className="animate-spin" /> Scan en cours...</>
+                    ) : (
+                      <><Upload size={10} /> Scanner copies</>
+                    )}
+                  </button>
                 </div>
               </div>
             ))}
@@ -775,6 +818,21 @@ export function ExamenDetailShell({
           </div>
         </div>
       </div>
+
+      {/* Hidden file input for scan upload */}
+      <input
+        ref={scanFileRef}
+        type="file"
+        accept=".pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && scanningSerieId) {
+            handleScanCopies(scanningSerieId, file);
+          }
+          e.target.value = "";
+        }}
+      />
 
       {/* Inline QCM serie editor */}
       {editingSerie && (
