@@ -1497,6 +1497,8 @@ export async function POST(req: NextRequest) {
       // Create sections if any
       const sectionIdMap: Record<number, string> = {};
       if (parsedSections.length > 0) {
+        // Clean up any orphaned sections from previous imports
+        await supabase.from("series_sections").delete().eq("series_id", serieId);
         for (let si = 0; si < parsedSections.length; si++) {
           const s = parsedSections[si];
           // Upload section images if any
@@ -1883,6 +1885,9 @@ export async function POST(req: NextRequest) {
     // ─── Create sections if any ──────────────────────────────────────────────
     const sectionIdMap: Record<number, string> = {}; // sectionIndex -> DB id
     if (parsedSections.length > 0 && existingIds.length === 0) {
+      // Clean up any orphaned sections from previous imports
+      await supabase.from("series_sections").delete().eq("series_id", serieId);
+      console.log("[import-serie] Cleaned up old sections for serie", serieId);
       for (let si = 0; si < parsedSections.length; si++) {
         const s = parsedSections[si];
         // Upload ALL section images and store as JSON array
