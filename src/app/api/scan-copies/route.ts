@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 300; // 5 min max for processing multiple pages
@@ -122,9 +123,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "serieId, examenId et fichier PDF requis" }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    // Auth check with user's client
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+    // Use service role client for all DB operations (bypasses RLS — admin inserting for students)
+    const supabase = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
 
     // ─── Get question count and correct answers for this serie ───────────────
     const { data: sqData } = await supabase
