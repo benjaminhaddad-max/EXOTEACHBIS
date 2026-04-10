@@ -75,6 +75,7 @@ export async function updateQuestion(
     matiere_id?: string | null;
     cours_id?: string | null;
     image_url?: string | null;
+    explanation_image_url?: string | null;
     correct_answer?: string | null;
     options: { label: string; text: string; is_correct: boolean; justification?: string; image_url?: string | null }[];
   }
@@ -92,6 +93,7 @@ export async function updateQuestion(
     updated_at: new Date().toISOString(),
   };
   if (data.image_url !== undefined) updateData.image_url = data.image_url || null;
+  if (data.explanation_image_url !== undefined) updateData.explanation_image_url = data.explanation_image_url || null;
   if (data.correct_answer !== undefined) updateData.correct_answer = data.correct_answer || null;
 
   const { error } = await supabase.from("questions").update(updateData).eq("id", id);

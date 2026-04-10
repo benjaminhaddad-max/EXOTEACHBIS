@@ -33,7 +33,7 @@ type QOption = { label: string; text: string; is_correct: boolean; justification
 
 export type QuestionFull = {
   id: string; text: string; type: string; difficulty: number;
-  explanation: string | null; cours_id: string | null;
+  explanation: string | null; explanation_image_url: string | null; cours_id: string | null;
   options: (QOption & { id: string; order_index: number })[];
 };
 
@@ -152,6 +152,7 @@ export function InlineQuestionEditor({
 }) {
   const [text, setText] = useState(q.text);
   const [explanation, setExplanation] = useState(q.explanation ?? "");
+  const [explanationImageUrl, setExplanationImageUrl] = useState<string | null>(q.explanation_image_url ?? null);
   const [difficulty, setDifficulty] = useState(q.difficulty ?? 2);
   const [imageUrl, setImageUrl] = useState<string | null>((q as any).image_url ?? null);
   const [options, setOptions] = useState(
@@ -175,7 +176,7 @@ export function InlineQuestionEditor({
   const handleSave = async () => {
     setSaving(true);
     await updateQuestion(q.id, {
-      text, explanation, type: "qcm_multiple", difficulty,
+      text, explanation, explanation_image_url: explanationImageUrl, type: "qcm_multiple", difficulty,
       cours_id: coursId, matiere_id: null, image_url: imageUrl, options,
     });
     setSaving(false);
@@ -267,6 +268,14 @@ export function InlineQuestionEditor({
           placeholder="Explication optionnelle..."
           rows={3}
         />
+        {explanationImageUrl && (
+          <div className="mt-2 rounded-lg border border-white/10 overflow-hidden">
+            <img src={explanationImageUrl} alt="Correction" className="w-full object-contain max-h-64" />
+          </div>
+        )}
+        <div className="mt-1.5">
+          <ImageUploadBtn current={explanationImageUrl} onUploaded={(url) => { setExplanationImageUrl(url); setDirty(true); }} folder={`questions/${coursId}/corrections`} label="Image de correction" />
+        </div>
       </div>
 
       {/* Save */}
