@@ -261,8 +261,11 @@ export async function POST(req: NextRequest) {
         console.log(`[scan-copies] Processing page ${i + 1}/${pageBuffers.length}...`);
 
         // Convert PDF page to image, then run OMR
-        const pageImage = await pdfPageToImage(pageBuffers[i]);
-        const omrResult = await readOMR(pageImage, questionCount);
+        const { image: pageImage, pageWidthPts, pageHeightPts } = await pdfPageToImage(pageBuffers[i]);
+        const omrResult = await readOMR(pageImage, questionCount, {
+          widthPts: pageWidthPts,
+          heightPts: pageHeightPts,
+        });
         const studentId = omrResult.studentId;
         const studentName = omrResult.studentName;
         const answers = omrResult.answers;

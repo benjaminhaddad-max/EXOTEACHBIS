@@ -96,6 +96,10 @@ export function ExamenDetailShell({
     debug?: {
       alignMode: string;
       imageSize: { w: number; h: number };
+      pageSize?: { w: number; h: number };
+      anchor?: { imgX: number; imgY: number; imgRight: number; scale: number };
+      detectedHeader?: { top: number; bottom: number; left: number; right: number };
+      detectedBounds?: { top: number; bottom: number; left: number; right: number };
       studentDigits: string[];
       studentDigitRatios: number[];
       nbAnswersFilled: number;
@@ -1086,49 +1090,68 @@ export function ExamenDetailShell({
                   </tr>
                 </thead>
                 <tbody>
-                  {scanReport.results.map((r) => (
-                    <tr key={r.page} className="border-b border-white/5 hover:bg-white/[0.02]">
-                      <td className="px-4 py-2 text-white/70">{r.page}</td>
-                      <td className="px-4 py-2">
-                        {r.matched ? (
-                          <span className="text-emerald-400">✓ matché</span>
-                        ) : r.error ? (
-                          <span className="text-red-400" title={r.error}>✗ erreur</span>
-                        ) : (
-                          <span className="text-orange-400">✗ non trouvé</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-white/80">{r.studentId ?? "—"}</td>
-                      <td className="px-4 py-2 font-mono text-white/60">
-                        {r.debug?.studentDigits?.join(" ") ?? "—"}
-                        {r.debug?.studentDigitRatios && (
-                          <div className="text-[9px] text-white/30 mt-0.5">
-                            {r.debug.studentDigitRatios.map((v: number) => v.toFixed(2)).join(" ")}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-white/60">
-                        {r.debug?.nbAnswersFilled ?? 0} / {r.nbTotal} Q
-                      </td>
-                      <td className="px-4 py-2 text-white/60">
-                        <span className={
-                          r.debug?.alignMode === "header" ? "text-emerald-400" :
-                          r.debug?.alignMode === "bounds" ? "text-yellow-400" :
-                          "text-red-400"
-                        }>
-                          {r.debug?.alignMode ?? "?"}
-                        </span>
-                        {r.debug?.imageSize && (
-                          <span className="text-[9px] text-white/30 ml-1">
-                            {r.debug.imageSize.w}×{r.debug.imageSize.h}
+                  {scanReport.results.map((r) => {
+                    const errIsNonTrouve = r.error?.includes("non trouvé");
+                    const isNonTrouve = !r.matched && (errIsNonTrouve || !r.error);
+                    const isRealError = !!r.error && !errIsNonTrouve;
+                    return (
+                      <tr key={r.page} className="border-b border-white/5 hover:bg-white/[0.02] align-top">
+                        <td className="px-4 py-2 text-white/70">{r.page}</td>
+                        <td className="px-4 py-2">
+                          {r.matched ? (
+                            <span className="text-emerald-400">✓ matché</span>
+                          ) : isRealError ? (
+                            <span className="text-red-400" title={r.error ?? undefined}>✗ erreur</span>
+                          ) : isNonTrouve ? (
+                            <span className="text-orange-400">✗ non trouvé</span>
+                          ) : (
+                            <span className="text-white/40">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 font-mono text-white/80">{r.studentId ?? "—"}</td>
+                        <td className="px-4 py-2 font-mono text-white/60">
+                          {r.debug?.studentDigits?.join(" ") ?? "—"}
+                          {r.debug?.studentDigitRatios && (
+                            <div className="text-[9px] text-white/30 mt-0.5">
+                              {r.debug.studentDigitRatios.map((v: number) => v.toFixed(3)).join(" ")}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-white/60">
+                          {r.debug?.nbAnswersFilled ?? 0} / {r.nbTotal}
+                        </td>
+                        <td className="px-4 py-2 text-white/60">
+                          <span className={
+                            r.debug?.alignMode === "header" ? "text-emerald-400" :
+                            r.debug?.alignMode === "bounds" ? "text-yellow-400" :
+                            "text-red-400"
+                          }>
+                            {r.debug?.alignMode ?? "?"}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-white/70">
-                        {r.score !== null ? `${r.score}%` : "—"}
-                      </td>
-                    </tr>
-                  ))}
+                          {r.debug && (
+                            <div className="text-[9px] text-white/30 mt-0.5 space-y-0.5">
+                              <div>img {r.debug.imageSize.w}×{r.debug.imageSize.h}</div>
+                              {r.debug.pageSize && (
+                                <div>pdf {Math.round(r.debug.pageSize.w)}×{Math.round(r.debug.pageSize.h)}pt</div>
+                              )}
+                              {r.debug.anchor && (
+                                <div>anchor ({r.debug.anchor.imgX},{r.debug.anchor.imgY}) scale {r.debug.anchor.scale}</div>
+                              )}
+                              {r.debug.detectedHeader && (
+                                <div>hdr T{r.debug.detectedHeader.top} B{r.debug.detectedHeader.bottom} L{r.debug.detectedHeader.left} R{r.debug.detectedHeader.right}</div>
+                              )}
+                              {r.debug.detectedBounds && (
+                                <div>bnd T{r.debug.detectedBounds.top} B{r.debug.detectedBounds.bottom} L{r.debug.detectedBounds.left} R{r.debug.detectedBounds.right}</div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-white/70">
+                          {r.score !== null ? `${r.score}%` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

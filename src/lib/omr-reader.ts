@@ -65,6 +65,10 @@ export type OMRResult = {
   debug?: {
     alignMode: "header" | "bounds" | "raw";
     imageSize: { w: number; h: number };
+    pageSize?: { w: number; h: number }; // actual PDF page size in points
+    anchor: { imgX: number; imgY: number; imgRight: number; scale: number };
+    detectedHeader?: { top: number; bottom: number; left: number; right: number };
+    detectedBounds?: { top: number; bottom: number; left: number; right: number };
     studentDigits: string[]; // per-digit readout, "?" if unreadable
     studentDigitRatios: number[]; // darkness ratio of best bubble per digit
     nbAnswersFilled: number; // how many questions had any bubble detected
@@ -207,7 +211,12 @@ function findContentBounds(
 export async function readOMR(
   pageImage: Buffer,
   questionCount: number = 72,
+  pageDimensions?: { widthPts: number; heightPts: number },
 ): Promise<OMRResult> {
+  // Use actual PDF page dimensions if provided, else fallback to A4
+  const actualPW = pageDimensions?.widthPts ?? PW;
+  const actualPH = pageDimensions?.heightPts ?? PH;
+
   // Convert to grayscale binary image
   const { data: pixels, info } = await sharp(pageImage)
     .grayscale()
@@ -219,66 +228,66 @@ export async function readOMR(
   const w = info.width;
   const h = info.height;
 
-  // ─── Auto-alignment: 3-tier strategy ──────────────────────────────────
-  // 1) Header bar detected (filled dark bar — rare with current white-bar design)
-  // 2) Content bounds detected (works for real scans with scanner margins)
-  // 3) Raw dimensions (clean PDF-to-image renders with no margins)
+  // ─── Robust header-relative alignment ──────────────────────────────────
+  // Key insight: all content positions on the paper are known OFFSETS (in PDF points)
+  // from the header bar. By detecting the header bar in the image and anchoring
+  // everything to it, we're immune to PDF page dimension oddities, scanner margins,
+  // re-wrapped PDFs, etc. The only requirement is that the header bar is detectable.
+  //
+  // 3-tier strategy:
+  //   1) Header bar detected (top + bottom borders found)
+  //   2) Content bounds detected (top = header bar top, width = content width)
+  //   3) Raw fallback (clean PDF render)
   const header = findHeaderBar(pixels, w, h);
-  const headerDetected = (header.bottom - header.top) > 10
+  const headerOK = (header.bottom - header.top) > 10
     && (header.right - header.left) > w * 0.3;
 
-  const bounds = headerDetected ? null : findContentBounds(pixels, w, h);
+  const bounds = !headerOK ? findContentBounds(pixels, w, h) : null;
 
-  let scaleXVal: number;
-  let toImgXLeft: (pdfX: number) => number;
-  let toImgXRight: (pdfX: number) => number;
-  let toImgY: (pdfY: number) => number;
+  // Anchor point: top-left of the header bar in IMAGE coordinates
+  // Scale: image pixels per PDF point
+  let anchorImgX: number; // image X of PDF X = MX (header bar left)
+  let anchorImgY: number; // image Y of PDF Y = PH (header bar top)
+  let anchorImgRight: number; // image X of PDF X = MX + CW (header bar right)
+  let scale: number; // image px per PDF pt (scanners preserve aspect ratio → single scale)
   let alignMode: "header" | "bounds" | "raw";
 
-  if (headerDetected) {
-    // Header bar spans the full content width (CW) at the very top (y=PH in PDF coords)
-    const scaleX = (header.right - header.left) / CW;
-    const scaleY = (header.bottom - header.top) / BAR_H;
-    const offsetX = header.left - MX * scaleX;
-    const offsetY = header.top;
-
-    scaleXVal = scaleX;
-    toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX + offsetX);
-    toImgXRight = (pdfX: number) => {
-      const distFromRight = (MX + CW) - pdfX;
-      return Math.round(header.right - distFromRight * scaleX);
-    };
-    toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY + offsetY);
+  if (headerOK) {
+    anchorImgX = header.left;
+    anchorImgRight = header.right;
+    anchorImgY = header.top;
+    // Prefer X-based scale (more reliable — border lines span full width)
+    scale = (header.right - header.left) / CW;
     alignMode = "header";
   } else if (bounds) {
-    // Content bounds: the content spans horizontally from MX to MX+CW (detected
-    // as the QCM frame borders). The top of the header bar is at PDF Y = PH.
-    // We use X scale for Y too (assume proportional — scanners preserve aspect ratio),
-    // which avoids fragility around the clipped bottom of the QCM grid.
-    const scaleX = (bounds.right - bounds.left) / CW;
-    const scaleY = scaleX; // proportional — scanners don't stretch
-    const offsetX = bounds.left - MX * scaleX;
-    const offsetY = bounds.top; // detected top = top of header bar = PDF Y = PH
-
-    scaleXVal = scaleX;
-    toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX + offsetX);
-    toImgXRight = toImgXLeft;
-    toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY + offsetY);
+    anchorImgX = bounds.left;
+    anchorImgRight = bounds.right;
+    anchorImgY = bounds.top; // top of bar = first content row
+    scale = (bounds.right - bounds.left) / CW;
     alignMode = "bounds";
   } else {
-    // Raw dimensions (clean PDF render at exact A4 pixel size)
-    const scaleX = w / PW;
-    const scaleY = h / PH;
-
-    scaleXVal = scaleX;
-    toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX);
-    toImgXRight = toImgXLeft;
-    toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY);
+    // Raw: assume image is exact A4 render
+    anchorImgX = MX * (w / actualPW);
+    anchorImgRight = (MX + CW) * (w / actualPW);
+    anchorImgY = 0;
+    scale = w / actualPW;
     alignMode = "raw";
   }
 
-  const boxPx = Math.round(BOX * scaleXVal);
-  const smallBoxPx = Math.round(SMALL_BOX * scaleXVal);
+  // Convert PDF coordinates to image coordinates using the header anchor
+  // For X: distance from PDF X = MX, in PDF points, times scale
+  // For Y: distance from PDF Y = PH (header top), going DOWN in image as pdfY DECREASES
+  const toImgXLeft = (pdfX: number) =>
+    Math.round(anchorImgX + (pdfX - MX) * scale);
+  // Right-anchored version (compensates for slight left/right scanner distortion)
+  const toImgXRight = (pdfX: number) =>
+    Math.round(anchorImgRight - ((MX + CW) - pdfX) * scale);
+  const toImgY = (pdfY: number) =>
+    Math.round(anchorImgY + (PH - pdfY) * scale);
+
+  const scaleXVal = scale;
+  const boxPx = Math.round(BOX * scale);
+  const smallBoxPx = Math.round(SMALL_BOX * scale);
 
   console.log(`[omr] alignMode=${alignMode} img=${w}x${h} boxPx=${boxPx}`);
 
@@ -381,6 +390,15 @@ export async function readOMR(
     debug: {
       alignMode,
       imageSize: { w, h },
+      pageSize: { w: actualPW, h: actualPH },
+      anchor: {
+        imgX: Math.round(anchorImgX),
+        imgY: Math.round(anchorImgY),
+        imgRight: Math.round(anchorImgRight),
+        scale: Math.round(scale * 1000) / 1000,
+      },
+      detectedHeader: headerOK ? header : undefined,
+      detectedBounds: bounds ?? undefined,
       studentDigits,
       studentDigitRatios: studentDigitRatios.map(r => Math.round(r * 1000) / 1000),
       nbAnswersFilled,
@@ -390,18 +408,28 @@ export async function readOMR(
 
 /**
  * Convert a single PDF page (as PDF buffer) to a high-res PNG image using mupdf.
- * Runs natively in Node.js (works on Vercel out of the box) — no system deps, no external APIs.
- *
- * The input is expected to be a single-page PDF (pages are split beforehand).
- * Renders at ~300 DPI (scale 4.17) to match A4@300DPI = 2480×3508 pixels.
+ * Returns the image buffer AND the PDF page dimensions in points (needed by the
+ * OMR reader to compute bubble positions correctly — not all PDFs are A4).
  */
-export async function pdfPageToImage(pdfBuffer: Buffer): Promise<Buffer> {
+export async function pdfPageToImage(
+  pdfBuffer: Buffer,
+): Promise<{ image: Buffer; pageWidthPts: number; pageHeightPts: number }> {
   const mupdf = await import("mupdf");
   const doc = mupdf.Document.openDocument(pdfBuffer, "application/pdf");
   const pageCount = doc.countPages();
   if (pageCount < 1) throw new Error("PDF has no pages");
 
   const page = doc.loadPage(0);
+
+  // Read page bounds in PDF points (may or may not be A4)
+  const bounds: any = page.getBounds();
+  // getBounds returns [x0, y0, x1, y1] (some bindings return Rect object)
+  const x0 = Array.isArray(bounds) ? bounds[0] : bounds.x0;
+  const y0 = Array.isArray(bounds) ? bounds[1] : bounds.y0;
+  const x1 = Array.isArray(bounds) ? bounds[2] : bounds.x1;
+  const y1 = Array.isArray(bounds) ? bounds[3] : bounds.y1;
+  const pageWidthPts = Math.abs(x1 - x0);
+  const pageHeightPts = Math.abs(y1 - y0);
 
   // Render at 300 DPI: mupdf default is 72 DPI, so scale = 300/72 ≈ 4.17
   const SCALE = 300 / 72;
@@ -412,5 +440,9 @@ export async function pdfPageToImage(pdfBuffer: Buffer): Promise<Buffer> {
     true,  // showExtras
   );
   const pngBytes = pixmap.asPNG();
-  return Buffer.from(pngBytes);
+  return {
+    image: Buffer.from(pngBytes),
+    pageWidthPts: pageWidthPts || 595.28, // fallback to A4 if detection fails
+    pageHeightPts: pageHeightPts || 841.89,
+  };
 }
