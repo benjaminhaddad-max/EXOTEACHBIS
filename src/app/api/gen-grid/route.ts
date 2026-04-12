@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
         borderWidth: 1.0, borderColor: BLACK, color: WRITE_IN_BG,
       });
     }
-    gy -= bigBox + mm(1);
+    gy -= bigBox + mm(2);  // espace entre write-in et grille de bulles
 
     // Bubble grid: 10 rows × 6 cols — capsule shapes (same as QCM)
     const idCapW = mm(4.5);
@@ -160,10 +160,11 @@ export async function POST(req: NextRequest) {
     }
     const idGridEndY = gy - 10 * idRowStep;
 
-    // Cadre englobant (ancre OMR)
-    const frameLeft = idGridX - mm(0.5);
-    const frameW2 = idGridW + mm(1);
-    page.drawRectangle({ x: frameLeft, y: idGridEndY - mm(0.3), width: frameW2, height: gy - idGridEndY + mm(0.6), borderWidth: 2.0, borderColor: BLACK });
+    // Cadre englobant (ancre OMR) — écarté des bulles pour respirer
+    const framePad = mm(2);  // espace entre bulles et cadre
+    const frameLeft = idGridX - framePad;
+    const frameW2 = idGridW + 2 * framePad;
+    page.drawRectangle({ x: frameLeft, y: idGridEndY - framePad, width: frameW2, height: gy - idGridEndY + 2 * framePad, borderWidth: 2.0, borderColor: BLACK });
 
     y = Math.min(y - fH - mm(1), idGridEndY) - mm(1.5);
 
