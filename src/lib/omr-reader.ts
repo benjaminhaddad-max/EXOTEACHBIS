@@ -275,11 +275,27 @@ export async function readOMR(
   let alignMode: "header" | "bounds" | "raw";
 
   if (headerOK) {
-    anchorImgX = header.left;
-    anchorImgRight = header.right;
+    // mupdf always renders at 300 DPI, so the true scale is always:
+    //   scale = image_width / pdf_page_width_pts = 300/72
+    // This is MORE reliable than deriving scale from detected bar width,
+    // which can be corrupted by edge shadows merging into the border.
+    const inferredScale = w / actualPW;
+    const expectedBarWidth = CW * inferredScale;
+    const detectedBarWidth = header.right - header.left;
+
+    if (Math.abs(detectedBarWidth - expectedBarWidth) < expectedBarWidth * 0.02) {
+      // Detection matches expected width (within 2%): trust it
+      anchorImgX = header.left;
+      anchorImgRight = header.right;
+    } else {
+      // Detection deviates (shadow/artifact contamination): use expected
+      // width centered on the detected bar midpoint
+      const midX = (header.left + header.right) / 2;
+      anchorImgX = Math.round(midX - expectedBarWidth / 2);
+      anchorImgRight = Math.round(midX + expectedBarWidth / 2);
+    }
     anchorImgY = header.top;
-    // Prefer X-based scale (more reliable — border lines span full width)
-    scale = (header.right - header.left) / CW;
+    scale = inferredScale;
     alignMode = "header";
   } else if (bounds) {
     anchorImgX = bounds.left;
