@@ -185,8 +185,8 @@ export async function POST(req: NextRequest) {
     const COLS = 4;
     const COL_GAP = (CW - COLS * COL_W) / Math.max(1, COLS - 1);
     const LABEL_H = mm(2.8);   // breathing room for letters
-    const FRAME_PAD_T = mm(0.4);
-    const FRAME_PAD_B = mm(0.3);
+    const FRAME_PAD_T = mm(1.2);  // espace haut entre cadre et capsules
+    const FRAME_PAD_B = mm(1.0);  // espace bas
     const FRAME_H = FRAME_PAD_T + CAP_H + LABEL_H + CAP_H + FRAME_PAD_B;
     const FRAME_GAP = mm(2.5);  // espace entre cadres bien visible au scan
 
