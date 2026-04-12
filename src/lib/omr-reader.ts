@@ -284,42 +284,28 @@ export async function readOMR(
 }
 
 /**
- * Convert a single PDF page (as PDF buffer) to a high-res PNG image.
- * Tries local renderers first (sips/pdftoppm), falls back to CloudConvert for Vercel.
+ * Convert a single PDF page (as PDF buffer) to a high-res PNG image using mupdf.
+ * Runs natively in Node.js (works on Vercel out of the box) — no system deps, no external APIs.
+ *
+ * The input is expected to be a single-page PDF (pages are split beforehand).
+ * Renders at ~300 DPI (scale 4.17) to match A4@300DPI = 2480×3508 pixels.
  */
 export async function pdfPageToImage(pdfBuffer: Buffer): Promise<Buffer> {
-  const { execSync } = await import("child_process");
-  const { writeFileSync, readFileSync, unlinkSync } = await import("fs");
-  const tmpPdf = `/tmp/omr_page_${Date.now()}.pdf`;
-  const tmpPng = `/tmp/omr_page_${Date.now()}.png`;
+  const mupdf = await import("mupdf");
+  const doc = mupdf.Document.openDocument(pdfBuffer, "application/pdf");
+  const pageCount = doc.countPages();
+  if (pageCount < 1) throw new Error("PDF has no pages");
 
-  try {
-    writeFileSync(tmpPdf, pdfBuffer);
+  const page = doc.loadPage(0);
 
-    // Try sips (macOS dev)
-    try {
-      execSync(`sips -s format png --resampleWidth 2480 "${tmpPdf}" --out "${tmpPng}" 2>/dev/null`, { timeout: 10000 });
-      return readFileSync(tmpPng);
-    } catch {
-      // Not macOS
-    }
-
-    // Try pdftoppm (Linux with poppler-utils installed)
-    try {
-      execSync(`pdftoppm -png -r 300 -singlefile "${tmpPdf}" "${tmpPng.replace('.png', '')}"`, { timeout: 10000 });
-      return readFileSync(tmpPng);
-    } catch {
-      // Not available (typical on Vercel)
-    }
-
-    // Fallback: CloudConvert PDF → PNG (works on Vercel if CLOUDCONVERT_API_KEY is set)
-    const { convertPdfToPng } = await import("@/lib/convert-emf");
-    const png = await convertPdfToPng(pdfBuffer);
-    if (png) return png;
-
-    throw new Error("No PDF-to-image converter available (install poppler-utils or set CLOUDCONVERT_API_KEY)");
-  } finally {
-    try { unlinkSync(tmpPdf); } catch {}
-    try { unlinkSync(tmpPng); } catch {}
-  }
+  // Render at 300 DPI: mupdf default is 72 DPI, so scale = 300/72 ≈ 4.17
+  const SCALE = 300 / 72;
+  const pixmap = page.toPixmap(
+    [SCALE, 0, 0, SCALE, 0, 0],
+    mupdf.ColorSpace.DeviceRGB,
+    false, // alpha
+    true,  // showExtras
+  );
+  const pngBytes = pixmap.asPNG();
+  return Buffer.from(pngBytes);
 }
