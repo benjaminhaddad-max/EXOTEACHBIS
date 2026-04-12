@@ -102,38 +102,63 @@ function measureRegion(
 }
 
 /**
- * Find the header bar (dark horizontal band spanning most of the page width).
- * Returns { top, bottom } in image pixel coordinates (Y from top).
+ * Find the header bar by looking for its CONTINUOUS border lines.
+ *
+ * The gen-grid header is a white rectangle with a 1pt black border. At 300 DPI,
+ * the top and bottom borders are ~4px-thick horizontal lines of continuous dark
+ * pixels spanning the full bar width (CW ≈ 550pt ≈ 2290px).
+ *
+ * Key robustness: we track the LONGEST CONTINUOUS dark run per row (not just
+ * "any dark pixel"). This filters out scanner edge shadows, paper frame
+ * artifacts, and isolated dark noise — which all produce dark pixels but in
+ * discontinuous/short runs.
+ *
+ * We also skip rows that touch the image edges (likely scanner artifacts, not
+ * the actual header rectangle).
  */
 function findHeaderBar(
   pixels: Buffer,
   width: number,
   height: number,
 ): { top: number; bottom: number; left: number; right: number } {
+  const searchRange = Math.min(height, Math.round(height * 0.18));
+  // Skip outer 2% of width — scanner edge shadows live there. The real header
+  // rectangle's border is at ~3.8-4% from each edge on an A4 scan.
+  const INTERIOR_L = Math.round(width * 0.02);
+  const INTERIOR_R = width - Math.round(width * 0.02);
+  const MIN_RUN = Math.round((INTERIOR_R - INTERIOR_L) * 0.5);
+
   let barTop = -1;
   let barBottom = -1;
   let barLeft = width;
   let barRight = 0;
 
-  for (let y = 0; y < Math.min(height, Math.round(height * 0.15)); y++) {
-    let dark = 0;
-    let firstDark = width;
-    let lastDark = 0;
-    for (let x = 0; x < width; x++) {
+  for (let y = 0; y < searchRange; y++) {
+    // Find the longest continuous run of dark pixels WITHIN the interior
+    // (shadows at the very edges are ignored — they don't affect detection).
+    let bestStart = -1, bestEnd = -1, bestLen = 0;
+    let curStart = -1;
+    for (let x = INTERIOR_L; x < INTERIOR_R; x++) {
       if (pixels[y * width + x] === 0) {
-        dark++;
-        if (x < firstDark) firstDark = x;
-        if (x > lastDark) lastDark = x;
+        if (curStart < 0) curStart = x;
+      } else if (curStart >= 0) {
+        const len = x - curStart;
+        if (len > bestLen) { bestLen = len; bestStart = curStart; bestEnd = x - 1; }
+        curStart = -1;
       }
     }
-    const ratio = dark / width;
-
-    if (ratio > 0.4) {
-      if (barTop < 0) barTop = y;
-      barBottom = y;
-      if (firstDark < barLeft) barLeft = firstDark;
-      if (lastDark > barRight) barRight = lastDark;
+    if (curStart >= 0) {
+      const len = INTERIOR_R - curStart;
+      if (len > bestLen) { bestLen = len; bestStart = curStart; bestEnd = INTERIOR_R - 1; }
     }
+
+    // Reject rows whose best interior run is too short (not a border line)
+    if (bestLen < MIN_RUN) continue;
+
+    if (barTop < 0) barTop = y;
+    barBottom = y;
+    if (bestStart < barLeft) barLeft = bestStart;
+    if (bestEnd > barRight) barRight = bestEnd;
   }
 
   return {
@@ -145,10 +170,9 @@ function findHeaderBar(
 }
 
 /**
- * Find the bounding box of the actual page content, ignoring scanner margins.
- * Works by scanning from each edge inward and finding the first row/col whose
- * dark-pixel ratio exceeds a small threshold (filters out noise/speckles but
- * catches the header border, QCM frames, etc).
+ * Find the bounding box of the actual page content, ignoring scanner margins
+ * and edge shadows. Uses a tolerance band around each edge to skip the first
+ * few pixels where scanner artifacts live.
  *
  * Returns null if the page appears empty.
  */
@@ -157,34 +181,33 @@ function findContentBounds(
   width: number,
   height: number,
 ): { top: number; bottom: number; left: number; right: number } | null {
-  const ROW_THRESHOLD = 0.02; // 2% of row width dark = significant content
-  const COL_THRESHOLD = 0.02;
+  const ROW_THRESHOLD = 0.05; // 5% of row width dark — content, not speckle
+  const COL_THRESHOLD = 0.05;
+  const EDGE_SKIP_Y = Math.round(height * 0.01); // skip top/bottom 1% (scanner bars)
+  const EDGE_SKIP_X = Math.round(width * 0.01);
 
   let top = -1, bottom = -1, left = -1, right = -1;
 
-  // Scan from top down
-  for (let y = 0; y < height; y++) {
+  for (let y = EDGE_SKIP_Y; y < height - EDGE_SKIP_Y; y++) {
     let dark = 0;
-    for (let x = 0; x < width; x++) {
+    for (let x = EDGE_SKIP_X; x < width - EDGE_SKIP_X; x++) {
       if (pixels[y * width + x] === 0) dark++;
     }
-    if (dark / width > ROW_THRESHOLD) { top = y; break; }
+    if (dark / (width - 2 * EDGE_SKIP_X) > ROW_THRESHOLD) { top = y; break; }
   }
 
-  // Scan from bottom up
-  for (let y = height - 1; y >= 0; y--) {
+  for (let y = height - 1 - EDGE_SKIP_Y; y >= EDGE_SKIP_Y; y--) {
     let dark = 0;
-    for (let x = 0; x < width; x++) {
+    for (let x = EDGE_SKIP_X; x < width - EDGE_SKIP_X; x++) {
       if (pixels[y * width + x] === 0) dark++;
     }
-    if (dark / width > ROW_THRESHOLD) { bottom = y; break; }
+    if (dark / (width - 2 * EDGE_SKIP_X) > ROW_THRESHOLD) { bottom = y; break; }
   }
 
   if (top < 0 || bottom < 0 || bottom - top < height * 0.3) return null;
 
-  // Scan from left, only within vertical content range
   const rangeH = bottom - top + 1;
-  for (let x = 0; x < width; x++) {
+  for (let x = EDGE_SKIP_X; x < width - EDGE_SKIP_X; x++) {
     let dark = 0;
     for (let y = top; y <= bottom; y++) {
       if (pixels[y * width + x] === 0) dark++;
@@ -192,8 +215,7 @@ function findContentBounds(
     if (dark / rangeH > COL_THRESHOLD) { left = x; break; }
   }
 
-  // Scan from right
-  for (let x = width - 1; x >= 0; x--) {
+  for (let x = width - 1 - EDGE_SKIP_X; x >= EDGE_SKIP_X; x--) {
     let dark = 0;
     for (let y = top; y <= bottom; y++) {
       if (pixels[y * width + x] === 0) dark++;
