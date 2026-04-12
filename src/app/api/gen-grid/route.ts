@@ -90,8 +90,7 @@ export async function POST(req: NextRequest) {
     page.drawText(yearText, { x: MX + CW - yw - mm(2), y: y - barH + (barH - 9) / 2, size: 9, font: B, color: BLACK });
 
     if (examTitle) {
-      let titleText = examTitle;
-      if (ueCode && titleText.includes(ueCode)) titleText = titleText.replace(new RegExp(`\\s*[\u2014\\-]\\s*${ueCode}.*$`), "").trim();
+      const titleText = examTitle; // garder tel quel (ex: "UE1 - Chimie")
       let ts = 10;
       while (ts > 5 && B.widthOfTextAtSize(titleText, ts) > CW - mm(60)) ts -= 0.5;
       const tw = B.widthOfTextAtSize(titleText, ts);
