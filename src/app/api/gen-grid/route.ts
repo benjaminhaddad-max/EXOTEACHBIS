@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
     const FRAME_PAD_T = mm(0.4);
     const FRAME_PAD_B = mm(0.3);
     const FRAME_H = FRAME_PAD_T + CAP_H + LABEL_H + CAP_H + FRAME_PAD_B;
-    const FRAME_GAP = mm(0.6);
+    const FRAME_GAP = mm(1.5);  // espace entre cadres pour éviter confusion au scan
 
     function drawQCMFrame(pg: typeof page, q: number, cx: number, frameTop: number) {
       pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.6, borderColor: BLACK, color: WHITE });
