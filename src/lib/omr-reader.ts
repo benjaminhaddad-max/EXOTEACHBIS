@@ -32,8 +32,8 @@ const BAR_H = mm(20);
 const DIGITS = 6;
 const BIG_BOX = mm(5);
 const BIG_GAP = mm(1.5);
-const SMALL_BOX = mm(3.5);
-const SMALL_GAP = mm(0.5);
+const SMALL_BOX = mm(4.5);   // match gen-grid (was 3.5mm, now 4.5mm for OMR robustness)
+const SMALL_GAP = mm(0.8);   // match gen-grid (was 0.5mm, now 0.8mm)
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
@@ -432,7 +432,7 @@ export async function readOMR(
     }
 
     // Find longest run of evenly-spaced lines (expected: 4mm step)
-    const expectedRowStep = 4.0 * mmPx;
+    const expectedRowStep = 5.3 * mmPx; // 4.5mm box + 0.8mm gap = 5.3mm
     const rowTol = expectedRowStep * 0.40;
     let bestRowSeq: number[] = [];
     for (let s = 0; s < hLines.length; s++) {
@@ -480,7 +480,7 @@ export async function readOMR(
       }
 
       // Pair vertical lines into column borders (box width ≈ 3.5mm)
-      const expectedBoxW = 3.5 * mmPx;
+      const expectedBoxW = 4.5 * mmPx; // match gen-grid SMALL_BOX = 4.5mm
       type CP = { left: number; right: number; center: number };
       const colPairs: CP[] = [];
       const usedV = new Set<number>();

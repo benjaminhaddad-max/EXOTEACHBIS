@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
     const DIGITS = 6;
     const bigBox = mm(5);
     const bigGap = mm(1.5);
-    const smallBox = mm(3.5);
-    const smallGap = mm(0.5);
+    const smallBox = mm(4.5);   // ← agrandie (était 3.5mm) pour meilleure détection OMR
+    const smallGap = mm(0.8);   // ← augmenté (était 0.5mm) pour séparation visuelle
     const gridW = DIGITS * (bigBox + bigGap) - bigGap;
     const gridX = MX + CW - gridW - mm(2);
     let gy = sectionTop;
@@ -140,36 +140,49 @@ export async function POST(req: NextRequest) {
     });
     gy -= mm(3);
 
-    // Large write-in boxes
+    // Large write-in boxes — fond gris clair + bordure épaisse
+    const WRITE_IN_BG = rgb(0.93, 0.93, 0.93);
     for (let d = 0; d < DIGITS; d++) {
       page.drawRectangle({
         x: gridX + d * (bigBox + bigGap), y: gy - bigBox * 1.5,
         width: bigBox, height: bigBox * 1.5,
-        borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+        borderWidth: 1.0, borderColor: BLACK, color: WRITE_IN_BG,
       });
     }
     gy -= bigBox * 1.5 + mm(2);
 
     // Bubbling grid: 10 rows (0-9) x DIGITS columns
+    // Bordures épaisses (1.5pt) pour détection OMR fiable
     for (let r = 0; r < 10; r++) {
       const ry = gy - r * (smallBox + smallGap);
       // Row label
       page.drawText(String(r), {
-        x: gridX - mm(3), y: ry - smallBox + mm(0.5),
-        size: 5.5, font: B, color: BLACK,
+        x: gridX - mm(4), y: ry - smallBox + mm(1),
+        size: 7, font: B, color: BLACK,
       });
-      // Boxes (centered under big boxes)
+      // Boxes (centered under big boxes) — bordure épaisse 1.5pt
       for (let d = 0; d < DIGITS; d++) {
         const bx = gridX + d * (bigBox + bigGap) + (bigBox - smallBox) / 2;
         page.drawRectangle({
           x: bx, y: ry - smallBox,
           width: smallBox, height: smallBox,
-          borderWidth: 0.3, borderColor: BLACK, color: WHITE,
+          borderWidth: 1.5, borderColor: BLACK, color: WHITE,
         });
       }
     }
 
     const gridEndY = gy - 10 * (smallBox + smallGap);
+
+    // Cadre englobant autour de toute la grille de bulles (ancre OMR)
+    const bubbleGridTop = gy;
+    const bubbleGridH = bubbleGridTop - gridEndY;
+    const bubbleGridLeft = gridX + (bigBox - smallBox) / 2 - mm(1);
+    const bubbleGridW = (DIGITS - 1) * (bigBox + bigGap) + smallBox + (bigBox - smallBox) + mm(2);
+    page.drawRectangle({
+      x: bubbleGridLeft, y: gridEndY - mm(0.5),
+      width: bubbleGridW, height: bubbleGridH + mm(1),
+      borderWidth: 2.0, borderColor: BLACK,
+    });
     const leftEndY = y - mm(1.5);
     y = Math.min(leftEndY, gridEndY) - mm(2);
 
