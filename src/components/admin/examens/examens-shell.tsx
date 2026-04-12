@@ -571,30 +571,7 @@ export function ExamensShell({
                           </div>
                         )}
 
-                        {/* Generate grid button for upcoming exams */}
-                        {(isProf ? profSubTab === "upcoming" : true) && (e.examen_series?.length ?? 0) > 0 && (
-                          <div className="mt-3" onClick={ev => ev.stopPropagation()}>
-                            <button
-                              onClick={() => {
-                                const totalQ = (e.examen_series ?? []).reduce((sum, es) => {
-                                  return sum + (es.series as any)?.questions_count || 0;
-                                }, 0);
-                                const nb = totalQ > 0 ? totalQ : 30;
-                                const input = prompt(`Nombre de questions pour la grille (défaut: ${nb}) :`, String(nb));
-                                if (input === null) return;
-                                const n = parseInt(input, 10);
-                                if (isNaN(n) || n < 1) return;
-                                handleGenerateGrid(e, n);
-                              }}
-                              disabled={generatingGridExamId === e.id}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50"
-                              style={{ backgroundColor: "rgba(201,168,76,0.12)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.2)" }}
-                            >
-                              {generatingGridExamId === e.id ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
-                              Générer la grille d&apos;examen (PDF)
-                            </button>
-                          </div>
-                        )}
+                        {/* Grid generation moved to serie-level workflow stepper */}
 
                         {/* Admin: Serie pills */}
                         {!isProf && (e.examen_series?.length ?? 0) > 0 && (
