@@ -132,6 +132,68 @@ function findHeaderBar(
   };
 }
 
+/**
+ * Find the bounding box of the actual page content, ignoring scanner margins.
+ * Works by scanning from each edge inward and finding the first row/col whose
+ * dark-pixel ratio exceeds a small threshold (filters out noise/speckles but
+ * catches the header border, QCM frames, etc).
+ *
+ * Returns null if the page appears empty.
+ */
+function findContentBounds(
+  pixels: Buffer,
+  width: number,
+  height: number,
+): { top: number; bottom: number; left: number; right: number } | null {
+  const ROW_THRESHOLD = 0.02; // 2% of row width dark = significant content
+  const COL_THRESHOLD = 0.02;
+
+  let top = -1, bottom = -1, left = -1, right = -1;
+
+  // Scan from top down
+  for (let y = 0; y < height; y++) {
+    let dark = 0;
+    for (let x = 0; x < width; x++) {
+      if (pixels[y * width + x] === 0) dark++;
+    }
+    if (dark / width > ROW_THRESHOLD) { top = y; break; }
+  }
+
+  // Scan from bottom up
+  for (let y = height - 1; y >= 0; y--) {
+    let dark = 0;
+    for (let x = 0; x < width; x++) {
+      if (pixels[y * width + x] === 0) dark++;
+    }
+    if (dark / width > ROW_THRESHOLD) { bottom = y; break; }
+  }
+
+  if (top < 0 || bottom < 0 || bottom - top < height * 0.3) return null;
+
+  // Scan from left, only within vertical content range
+  const rangeH = bottom - top + 1;
+  for (let x = 0; x < width; x++) {
+    let dark = 0;
+    for (let y = top; y <= bottom; y++) {
+      if (pixels[y * width + x] === 0) dark++;
+    }
+    if (dark / rangeH > COL_THRESHOLD) { left = x; break; }
+  }
+
+  // Scan from right
+  for (let x = width - 1; x >= 0; x--) {
+    let dark = 0;
+    for (let y = top; y <= bottom; y++) {
+      if (pixels[y * width + x] === 0) dark++;
+    }
+    if (dark / rangeH > COL_THRESHOLD) { right = x; break; }
+  }
+
+  if (left < 0 || right < 0 || right - left < width * 0.3) return null;
+
+  return { top, bottom, left, right };
+}
+
 // ─── Main OMR reader ─────────────────────────────────────────────────────────
 
 export async function readOMR(
@@ -149,23 +211,28 @@ export async function readOMR(
   const w = info.width;
   const h = info.height;
 
-  // ─── Auto-alignment: detect header bar or fall back to direct scaling ─
+  // ─── Auto-alignment: 3-tier strategy ──────────────────────────────────
+  // 1) Header bar detected (filled dark bar — rare with current white-bar design)
+  // 2) Content bounds detected (works for real scans with scanner margins)
+  // 3) Raw dimensions (clean PDF-to-image renders with no margins)
   const header = findHeaderBar(pixels, w, h);
-  // Header is valid only if tall enough and spans enough of the page width
   const headerDetected = (header.bottom - header.top) > 10
     && (header.right - header.left) > w * 0.3;
+
+  const bounds = headerDetected ? null : findContentBounds(pixels, w, h);
 
   let scaleXVal: number;
   let toImgXLeft: (pdfX: number) => number;
   let toImgXRight: (pdfX: number) => number;
   let toImgY: (pdfY: number) => number;
+  let alignMode: "header" | "bounds" | "raw";
 
   if (headerDetected) {
-    // Header bar: top at PDF Y = PH (flush with page top), height = BAR_H, width = CW
+    // Header bar spans the full content width (CW) at the very top (y=PH in PDF coords)
     const scaleX = (header.right - header.left) / CW;
     const scaleY = (header.bottom - header.top) / BAR_H;
     const offsetX = header.left - MX * scaleX;
-    const offsetY = header.top; // bar top in image ≈ 0
+    const offsetY = header.top;
 
     scaleXVal = scaleX;
     toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX + offsetX);
@@ -174,19 +241,38 @@ export async function readOMR(
       return Math.round(header.right - distFromRight * scaleX);
     };
     toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY + offsetY);
+    alignMode = "header";
+  } else if (bounds) {
+    // Content bounds: the content spans horizontally from MX to MX+CW (detected
+    // as the QCM frame borders). The top of the header bar is at PDF Y = PH.
+    // We use X scale for Y too (assume proportional — scanners preserve aspect ratio),
+    // which avoids fragility around the clipped bottom of the QCM grid.
+    const scaleX = (bounds.right - bounds.left) / CW;
+    const scaleY = scaleX; // proportional — scanners don't stretch
+    const offsetX = bounds.left - MX * scaleX;
+    const offsetY = bounds.top; // detected top = top of header bar = PDF Y = PH
+
+    scaleXVal = scaleX;
+    toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX + offsetX);
+    toImgXRight = toImgXLeft;
+    toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY + offsetY);
+    alignMode = "bounds";
   } else {
-    // Fallback: direct scaling from page dimensions (works for PDF-to-image renders)
+    // Raw dimensions (clean PDF render at exact A4 pixel size)
     const scaleX = w / PW;
     const scaleY = h / PH;
 
     scaleXVal = scaleX;
     toImgXLeft = (pdfX: number) => Math.round(pdfX * scaleX);
-    toImgXRight = toImgXLeft; // no distortion correction without header
+    toImgXRight = toImgXLeft;
     toImgY = (pdfY: number) => Math.round((PH - pdfY) * scaleY);
+    alignMode = "raw";
   }
 
   const boxPx = Math.round(BOX * scaleXVal);
   const smallBoxPx = Math.round(SMALL_BOX * scaleXVal);
+
+  console.log(`[omr] alignMode=${alignMode} img=${w}x${h} boxPx=${boxPx}`);
 
   // ─── Read Student ID ───────────────────────────────────────────────────
   // Replicate gen-grid layout exactly for correct position calculations
