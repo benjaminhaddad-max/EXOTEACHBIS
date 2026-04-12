@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
         borderWidth: 1.0, borderColor: BLACK, color: WRITE_IN_BG,
       });
     }
-    gy -= bigBox + mm(2);  // espace entre write-in et grille de bulles
+    gy -= bigBox + mm(4);  // espace entre write-in et cadre de bulles
 
     // Bubble grid: 10 rows × 6 cols — capsule shapes (same as QCM)
     const idCapW = mm(4.5);
@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     const idRowStep = idCapH + mm(1.5);  // espace entre rangées ID pour bien distinguer
     for (let r = 0; r < 10; r++) {
       const ryTop = gy - r * idRowStep;
-      page.drawText(String(r), { x: idGridX - mm(3), y: ryTop - idCapH / 2 - 2, size: 6, font: B, color: BLACK });
+      page.drawText(String(r), { x: idGridX - mm(5), y: ryTop - idCapH / 2 - 2, size: 6, font: B, color: BLACK });
       for (let d = 0; d < DIGITS; d++) {
         const capX = idGridX + d * (bigBox + bigGap) + (bigBox - idCapW) / 2;
         drawCapsule(page, capX, ryTop - idCapH, idCapW, idCapH, 1.0);
