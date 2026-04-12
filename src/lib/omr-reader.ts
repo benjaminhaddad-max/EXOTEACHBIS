@@ -30,10 +30,10 @@ const BAR_H = mm(20);
 
 // Student ID
 const DIGITS = 6;
-const BIG_BOX = mm(5);
-const BIG_GAP = mm(1.5);
-const SMALL_BOX = mm(4.5);   // match gen-grid (was 3.5mm, now 4.5mm for OMR robustness)
-const SMALL_GAP = mm(0.8);   // match gen-grid (was 0.5mm, now 0.8mm)
+const BIG_BOX = mm(4.5);   // match gen-grid compact
+const BIG_GAP = mm(1);     // match gen-grid compact
+const SMALL_BOX = mm(3.8);   // match gen-grid compact (thick 1.5pt borders for OMR)
+const SMALL_GAP = mm(0.5);   // match gen-grid compact
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
@@ -45,7 +45,7 @@ const LABEL_H = mm(3);
 const FRAME_PAD_T = mm(0.5);
 const FRAME_PAD_B = mm(0.3);
 const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
-const FRAME_GAP = mm(1.5);
+const FRAME_GAP = mm(1);  // match gen-grid compact
 const BOX_GROUP_W = 5 * BOX + 4 * HGAP;
 const COL_W = NUM_W + BOX_GROUP_W + mm(2);
 const COL_GAP = (CW - 4 * COL_W) / 3;
@@ -432,7 +432,7 @@ export async function readOMR(
     }
 
     // Find longest run of evenly-spaced lines (expected: 4mm step)
-    const expectedRowStep = 5.3 * mmPx; // 4.5mm box + 0.8mm gap = 5.3mm
+    const expectedRowStep = 4.3 * mmPx; // 3.8mm box + 0.5mm gap = 4.3mm
     const rowTol = expectedRowStep * 0.40;
     let bestRowSeq: number[] = [];
     for (let s = 0; s < hLines.length; s++) {
@@ -480,7 +480,7 @@ export async function readOMR(
       }
 
       // Pair vertical lines into column borders (box width ≈ 3.5mm)
-      const expectedBoxW = 4.5 * mmPx; // match gen-grid SMALL_BOX = 4.5mm
+      const expectedBoxW = 3.8 * mmPx; // match gen-grid SMALL_BOX = 3.8mm
       type CP = { left: number; right: number; center: number };
       const colPairs: CP[] = [];
       const usedV = new Set<number>();
@@ -498,7 +498,7 @@ export async function readOMR(
       colPairs.sort((a, b) => a.center - b.center);
 
       // Find group of ~6 columns with expected spacing (6.5mm)
-      const expectedColStep = 6.5 * mmPx;
+      const expectedColStep = 5.5 * mmPx; // bigBox(4.5mm) + bigGap(1mm) = 5.5mm
       const colTol = expectedColStep * 0.40;
       let bestCols: CP[] = [];
       for (let s = 0; s < colPairs.length; s++) {
