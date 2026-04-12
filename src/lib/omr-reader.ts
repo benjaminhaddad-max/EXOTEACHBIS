@@ -269,16 +269,27 @@ export async function readOMR(
   const actualPW = pageDimensions?.widthPts ?? PW;
   const actualPH = pageDimensions?.heightPts ?? PH;
 
-  // Convert to grayscale binary image
-  const { data: pixels, info } = await sharp(pageImage)
-    .grayscale()
-    .normalize() // stretch contrast for scan robustness
-    .threshold(140) // binarize: dark=0, light=255
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  // Two-pass binarization:
+  // 1. High threshold (190) for structure detection — captures thin gray box borders
+  // 2. Low threshold (140) for bubble reading — only captures dark filled marks
+  const [structResult, bubbleResult] = await Promise.all([
+    sharp(pageImage)
+      .grayscale()
+      .threshold(190)
+      .raw()
+      .toBuffer({ resolveWithObject: true }),
+    sharp(pageImage)
+      .grayscale()
+      .normalize()
+      .threshold(140)
+      .raw()
+      .toBuffer({ resolveWithObject: true }),
+  ]);
 
-  const w = info.width;
-  const h = info.height;
+  const structPixels = structResult.data; // for grid border detection
+  const pixels = bubbleResult.data; // for bubble fill reading + header detection
+  const w = bubbleResult.info.width;
+  const h = bubbleResult.info.height;
 
   // ─── Robust header-relative alignment ──────────────────────────────────
   // Key insight: all content positions on the paper are known OFFSETS (in PDF points)
@@ -392,12 +403,13 @@ export async function readOMR(
 
   if (idSearchBottom - idSearchTop > 80 && idSearchRight - idSearchLeft > 80) {
     // STEP 1: Find digit grid rows via horizontal projection
+    // Use STRUCT image (high threshold) to capture thin box borders
     const hLen = idSearchBottom - idSearchTop;
     const hProj = new Float64Array(hLen);
     for (let y = idSearchTop; y < idSearchBottom; y++) {
       let dark = 0;
       for (let x = idSearchLeft; x < idSearchRight; x++) {
-        if (pixels[y * w + x] === 0) dark++;
+        if (structPixels[y * w + x] === 0) dark++;
       }
       hProj[y - idSearchTop] = dark / (idSearchRight - idSearchLeft);
     }
@@ -438,6 +450,7 @@ export async function readOMR(
       const rowLines = bestRowSeq.slice(0, 11);
 
       // STEP 2: Find columns via vertical projection within grid rows
+      // Use STRUCT image (high threshold) for thin border detection
       const gridRowTop = rowLines[0];
       const gridRowBottom = rowLines[rowLines.length - 1];
       const vLen = idSearchRight - idSearchLeft;
@@ -445,7 +458,7 @@ export async function readOMR(
       for (let x = idSearchLeft; x < idSearchRight; x++) {
         let dark = 0, total = 0;
         for (let y = gridRowTop; y <= gridRowBottom; y++) {
-          total++; if (pixels[y * w + x] === 0) dark++;
+          total++; if (structPixels[y * w + x] === 0) dark++;
         }
         vProj[x - idSearchLeft] = total > 0 ? dark / total : 0;
       }
@@ -497,7 +510,7 @@ export async function readOMR(
         if (group.length > bestCols.length) bestCols = group;
       }
 
-      // Fallback: if not enough column pairs, try grouping all vertical lines
+      // Fallback 1: if not enough column pairs, try grouping all vertical lines
       if (bestCols.length < 4 && vLines.length >= 7) {
         let bestVSeq: number[] = [];
         for (let s = 0; s < vLines.length; s++) {
@@ -516,6 +529,66 @@ export async function readOMR(
             if (gap > expectedBoxW * 0.3 && gap < expectedBoxW * 2.0)
               bestCols.push({ left: bestVSeq[pi], right: bestVSeq[pi + 1], center: Math.round((bestVSeq[pi] + bestVSeq[pi + 1]) / 2) });
           }
+        }
+      }
+
+      // Fallback 2: per-row horizontal scan to find cell positions
+      // Average dark pixel density across all rows for each X position
+      // This catches borders even if vertical projection missed them
+      if (bestCols.length < 4) {
+        const rowAvgProj = new Float64Array(vLen);
+        const numRows = Math.min(10, rowLines.length - 1);
+        for (let r = 0; r < numRows; r++) {
+          const rTop = rowLines[r];
+          const rBot = rowLines[r + 1];
+          const rH = rBot - rTop;
+          for (let x = idSearchLeft; x < idSearchRight; x++) {
+            let dark = 0;
+            for (let y = rTop; y < rBot; y++) {
+              if (structPixels[y * w + x] === 0) dark++;
+            }
+            rowAvgProj[x - idSearchLeft] += (dark / rH) / numRows;
+          }
+        }
+
+        // Find peaks in the averaged projection
+        const avgVLines: LP[] = [];
+        let avi = 0;
+        while (avi < vLen) {
+          if (rowAvgProj[avi] > 0.04) {
+            let sumP = 0, sumW = 0, avj = avi;
+            while (avj < vLen && rowAvgProj[avj] > 0.02) {
+              sumP += avj * rowAvgProj[avj]; sumW += rowAvgProj[avj]; avj++;
+            }
+            avgVLines.push({ pos: idSearchLeft + Math.round(sumP / sumW) });
+            avi = avj;
+          } else { avi++; }
+        }
+
+        // Try pairing again
+        const avgColPairs: CP[] = [];
+        const usedAv = new Set<number>();
+        for (let a = 0; a < avgVLines.length; a++) {
+          if (usedAv.has(a)) continue;
+          for (let b = a + 1; b < avgVLines.length; b++) {
+            if (usedAv.has(b)) continue;
+            const gap = avgVLines[b].pos - avgVLines[a].pos;
+            if (gap > expectedBoxW * 0.50 && gap < expectedBoxW * 1.60) {
+              avgColPairs.push({ left: avgVLines[a].pos, right: avgVLines[b].pos, center: Math.round((avgVLines[a].pos + avgVLines[b].pos) / 2) });
+              usedAv.add(a); usedAv.add(b); break;
+            }
+          }
+        }
+        avgColPairs.sort((a, b) => a.center - b.center);
+
+        // Find best group with expected spacing
+        for (let s = 0; s < avgColPairs.length; s++) {
+          const group: CP[] = [avgColPairs[s]];
+          for (let n = s + 1; n < avgColPairs.length && group.length < 6; n++) {
+            const gap = avgColPairs[n].center - group[group.length - 1].center;
+            if (gap >= expectedColStep - colTol && gap <= expectedColStep + colTol) group.push(avgColPairs[n]);
+          }
+          if (group.length > bestCols.length) bestCols = group;
         }
       }
 
