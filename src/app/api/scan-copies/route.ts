@@ -22,6 +22,13 @@ type PageResult = {
   nbCorrect: number;
   nbTotal: number;
   error: string | null;
+  debug?: {
+    alignMode: string;
+    imageSize: { w: number; h: number };
+    studentDigits: string[];
+    studentDigitRatios: number[];
+    nbAnswersFilled: number;
+  };
 };
 
 // ─── PDF page extraction ─────────────────────────────────────────────────────
@@ -434,6 +441,7 @@ export async function POST(req: NextRequest) {
           nbCorrect,
           nbTotal: questionCount,
           error: userId ? null : `Étudiant ${studentId || "inconnu"} non trouvé`,
+          debug: omrResult.debug,
         });
 
         // Update session progress (if table exists)
@@ -498,6 +506,7 @@ export async function POST(req: NextRequest) {
         nbCorrect: r.nbCorrect,
         nbTotal: r.nbTotal,
         error: r.error,
+        debug: r.debug,
       })),
     });
 

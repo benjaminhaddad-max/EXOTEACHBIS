@@ -84,7 +84,31 @@ export function ExamenDetailShell({
   const [importingSerieId, setImportingSerieId] = useState<string | null>(null);
   const [importedSerieIds, setImportedSerieIds] = useState<Set<string>>(new Set());
   const [scanningSerieId, setScanningSerieId] = useState<string | null>(null);
-  const [scanResult, setScanResult] = useState<{ serieId: string; matched: number; unmatched: number; total: number } | null>(null);
+  type ScanPageResult = {
+    page: number;
+    studentId: string | null;
+    studentName: string | null;
+    matched: boolean;
+    score: number | null;
+    nbCorrect: number;
+    nbTotal: number;
+    error: string | null;
+    debug?: {
+      alignMode: string;
+      imageSize: { w: number; h: number };
+      studentDigits: string[];
+      studentDigitRatios: number[];
+      nbAnswersFilled: number;
+    };
+  };
+  const [scanReport, setScanReport] = useState<{
+    serieId: string;
+    serieName: string;
+    matched: number;
+    unmatched: number;
+    total: number;
+    results: ScanPageResult[];
+  } | null>(null);
   const scanFileRef = useRef<HTMLInputElement>(null);
   const [studentDetail, setStudentDetail] = useState<{ userId: string; name: string; serieId: string } | null>(null);
   const [studentAnswers, setStudentAnswers] = useState<any[] | null>(null);
@@ -187,7 +211,7 @@ export function ExamenDetailShell({
   // ─── Scan copies handler ────────────────────────────────────────────────────
   const handleScanCopies = async (serieId: string, file: File) => {
     setScanningSerieId(serieId);
-    setScanResult(null);
+    setScanReport(null);
     setToast({ message: `Scan en cours... ${file.name} (peut prendre 2-3 min)`, kind: "success" });
     try {
       const formData = new FormData();
@@ -199,12 +223,19 @@ export function ExamenDetailShell({
       if (!res.ok) {
         setToast({ message: data.error || "Erreur scan", kind: "error" });
       } else {
-        setScanResult({ serieId, matched: data.matched, unmatched: data.unmatched, total: data.totalPages });
+        const serieName = epreuves.find(e => e.series_id === serieId)?.series?.name ?? "Série";
+        setScanReport({
+          serieId,
+          serieName,
+          matched: data.matched,
+          unmatched: data.unmatched,
+          total: data.totalPages,
+          results: data.results || [],
+        });
         setToast({
-          message: `Scan terminé : ${data.matched}/${data.totalPages} élèves identifiés${data.unmatched > 0 ? ` (${data.unmatched} non trouvés)` : ""}`,
+          message: `Scan terminé : ${data.matched}/${data.totalPages} identifiés — voir le rapport détaillé`,
           kind: data.matched > 0 ? "success" : "error",
         });
-        // Refresh attempts data to show new scores in the results table
         await refetchAttempts();
       }
     } catch (e: any) {
@@ -1020,6 +1051,94 @@ export function ExamenDetailShell({
               {studentAnswers && studentAnswers.length === 0 && (
                 <p className="text-center text-white/25 text-xs py-8">Aucune réponse trouvée</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scan diagnostic report modal */}
+      {scanReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setScanReport(null)}>
+          <div className="bg-[#0e1e35] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-white/10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div>
+                <h2 className="text-lg font-bold text-white">Rapport de scan — {scanReport.serieName}</h2>
+                <p className="text-xs text-white/50 mt-0.5">
+                  {scanReport.matched}/{scanReport.total} identifiés
+                  {scanReport.unmatched > 0 && ` · ${scanReport.unmatched} non trouvés`}
+                </p>
+              </div>
+              <button onClick={() => setScanReport(null)} className="p-2 hover:bg-white/10 rounded-lg text-white/60 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-[#0e1e35] border-b border-white/10">
+                  <tr className="text-white/50 uppercase tracking-wider text-[10px]">
+                    <th className="px-4 py-2 text-left">Page</th>
+                    <th className="px-4 py-2 text-left">État</th>
+                    <th className="px-4 py-2 text-left">N° étudiant lu</th>
+                    <th className="px-4 py-2 text-left">Chiffres bruts</th>
+                    <th className="px-4 py-2 text-left">Réponses détectées</th>
+                    <th className="px-4 py-2 text-left">Alignement</th>
+                    <th className="px-4 py-2 text-left">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scanReport.results.map((r) => (
+                    <tr key={r.page} className="border-b border-white/5 hover:bg-white/[0.02]">
+                      <td className="px-4 py-2 text-white/70">{r.page}</td>
+                      <td className="px-4 py-2">
+                        {r.matched ? (
+                          <span className="text-emerald-400">✓ matché</span>
+                        ) : r.error ? (
+                          <span className="text-red-400" title={r.error}>✗ erreur</span>
+                        ) : (
+                          <span className="text-orange-400">✗ non trouvé</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-white/80">{r.studentId ?? "—"}</td>
+                      <td className="px-4 py-2 font-mono text-white/60">
+                        {r.debug?.studentDigits?.join(" ") ?? "—"}
+                        {r.debug?.studentDigitRatios && (
+                          <div className="text-[9px] text-white/30 mt-0.5">
+                            {r.debug.studentDigitRatios.map((v: number) => v.toFixed(2)).join(" ")}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-white/60">
+                        {r.debug?.nbAnswersFilled ?? 0} / {r.nbTotal} Q
+                      </td>
+                      <td className="px-4 py-2 text-white/60">
+                        <span className={
+                          r.debug?.alignMode === "header" ? "text-emerald-400" :
+                          r.debug?.alignMode === "bounds" ? "text-yellow-400" :
+                          "text-red-400"
+                        }>
+                          {r.debug?.alignMode ?? "?"}
+                        </span>
+                        {r.debug?.imageSize && (
+                          <span className="text-[9px] text-white/30 ml-1">
+                            {r.debug.imageSize.w}×{r.debug.imageSize.h}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-white/70">
+                        {r.score !== null ? `${r.score}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-3 border-t border-white/10 text-[10px] text-white/40">
+              <strong className="text-white/60">Chiffres bruts</strong> : chaque chiffre lu du N° étudiant (? = case illisible).
+              <span className="ml-2"><strong className="text-white/60">Alignement</strong> :
+                <span className="text-emerald-400"> header</span> (bordure détectée) /
+                <span className="text-yellow-400"> bounds</span> (limites contenu) /
+                <span className="text-red-400"> raw</span> (fallback dimensions brutes).
+              </span>
             </div>
           </div>
         </div>

@@ -61,6 +61,14 @@ export type OMRResult = {
   answers: Record<string, string[]>; // "1" → ["A", "D"], "2" → ["C"]
   confidence: "ok" | "doubt";
   doubtfulQuestions: number[]; // question numbers with doubtful readings
+  // Debug info (for diagnosing misreads in production)
+  debug?: {
+    alignMode: "header" | "bounds" | "raw";
+    imageSize: { w: number; h: number };
+    studentDigits: string[]; // per-digit readout, "?" if unreadable
+    studentDigitRatios: number[]; // darkness ratio of best bubble per digit
+    nbAnswersFilled: number; // how many questions had any bubble detected
+  };
 };
 
 // ─── Image analysis helpers ──────────────────────────────────────────────────
@@ -282,6 +290,7 @@ export async function readOMR(
   gy -= BIG_BOX * 1.5 + mm(2); // write-in boxes
 
   const studentDigits: string[] = [];
+  const studentDigitRatios: number[] = [];
   for (let col = 0; col < DIGITS; col++) {
     const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP) + (BIG_BOX - SMALL_BOX) / 2;
     let bestRow = -1;
@@ -299,6 +308,7 @@ export async function readOMR(
     }
 
     studentDigits.push(bestRatio >= FILL_THRESHOLD ? String(bestRow) : "?");
+    studentDigitRatios.push(bestRatio);
   }
 
   const studentId = studentDigits.includes("?") ? null : studentDigits.join("");
@@ -360,12 +370,21 @@ export async function readOMR(
     answers[String(q + 1)] = selected;
   }
 
+  const nbAnswersFilled = Object.values(answers).filter(a => a.length > 0).length;
+
   return {
     studentId,
     studentName: null,
     answers,
     confidence: doubtfulQuestions.length > 0 ? "doubt" : "ok",
     doubtfulQuestions,
+    debug: {
+      alignMode,
+      imageSize: { w, h },
+      studentDigits,
+      studentDigitRatios: studentDigitRatios.map(r => Math.round(r * 1000) / 1000),
+      nbAnswersFilled,
+    },
   };
 }
 
