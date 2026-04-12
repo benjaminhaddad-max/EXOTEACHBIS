@@ -104,14 +104,14 @@ export async function POST(req: NextRequest) {
       page.drawText(info, { x: PW / 2 - iw / 2, y: y - mm(7.5), size: 8, font: B, color: BLACK });
     }
 
-    y -= barH + mm(4); // espace sous le header
+    y -= barH + mm(7); // espace sous le header
 
-    // ═══════════════ NOM/Prénom (one line) + N° étudiant ═══════════════
+    // ═══════════════ Nom/Prénom (one line) + N° étudiant ═══════════════
     const sectionTop = y;
 
-    // NOM + Prénom on same line — bien descendu sous le header
+    // Nom + Prénom on same line
     const fH = mm(5);
-    page.drawText("NOM", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
+    page.drawText("Nom", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
     page.drawRectangle({ x: MX + mm(12), y: y - mm(1.5), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
     page.drawText("Pr\u00E9nom", { x: MX + mm(64), y: y - 1, size: 7, font: B, color: BLACK });
     page.drawRectangle({ x: MX + mm(80), y: y - mm(1.5), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
