@@ -164,60 +164,68 @@ export async function POST(req: NextRequest) {
     page.drawText(instrT, { x: PW / 2 - instrW / 2, y, size: 6, font: B, color: BLACK });
     y -= mm(2.5);
 
-    // ═══════════════ QCM GRID — ovales (dynamic, multi-page) ═══════════════
-    const OVAL_W = mm(3.5);    // oval horizontal diameter
-    const OVAL_H = mm(2.2);    // oval vertical diameter (compact)
+    // ═══════════════ QCM GRID — capsule ovals (dynamic, multi-page) ═══════════════
+    const OVAL_W = mm(5);      // wide capsule shape
+    const OVAL_H = mm(1.8);    // flat — like official OMR sheets
     const OVAL_RX = OVAL_W / 2;
     const OVAL_RY = OVAL_H / 2;
-    const HGAP = mm(1.5);
-    const NUM_W = mm(7);
+    const HGAP = mm(0.8);     // tight spacing between ovals
+    const NUM_W = mm(6);
     const ovalGroupW = 5 * OVAL_W + 4 * HGAP;
-    const COL_W = NUM_W + ovalGroupW + mm(2);
+    const COL_W = NUM_W + ovalGroupW + mm(1.5);
     const COLS = 4;
     const COL_GAP = (CW - COLS * COL_W) / (COLS - 1);
-    const LABEL_H = mm(2.2);   // reduced for ovals
-    const FRAME_PAD_T = mm(0.4);
-    const FRAME_PAD_B = mm(0.3);
+    const LABEL_H = mm(2);
+    const FRAME_PAD_T = mm(0.3);
+    const FRAME_PAD_B = mm(0.2);
     const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
-    const FRAME_GAP = mm(0.8);
+    const FRAME_GAP = mm(0.6);
 
     function drawQCMFrame(pg: typeof page, q: number, cx: number, frameTop: number) {
-      pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
-      pg.drawText(String(q), { x: cx + mm(1.5), y: frameTop - FRAME_PAD_T - OVAL_H + mm(0.3), size: 7, font: B, color: BLACK });
+      pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.6, borderColor: BLACK, color: WHITE });
+      pg.drawText(String(q), { x: cx + mm(0.8), y: frameTop - FRAME_PAD_T - OVAL_H + mm(0.1), size: 6.5, font: B, color: BLACK });
       const bx0 = cx + NUM_W;
       const r1y = frameTop - FRAME_PAD_T;
-      // Answer ovals (top row)
+      // Answer capsules (top row)
       for (let li = 0; li < 5; li++) {
         const ovalCX = bx0 + li * (OVAL_W + HGAP) + OVAL_RX;
         const ovalCY = r1y - OVAL_RY;
-        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
+        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.7, borderColor: BLACK, color: WHITE });
       }
       // Letters between rows
-      const letterY = r1y - OVAL_H - (LABEL_H / 2) - 1.5;
+      const letterY = r1y - OVAL_H - (LABEL_H / 2) - 1;
       for (let li = 0; li < 5; li++) {
         const lx = bx0 + li * (OVAL_W + HGAP);
-        const lw = B.widthOfTextAtSize(LETTERS[li], 5.5);
-        pg.drawText(LETTERS[li], { x: lx + OVAL_RX - lw / 2, y: letterY, size: 5.5, font: B, color: BLACK });
+        const lw = B.widthOfTextAtSize(LETTERS[li], 5);
+        pg.drawText(LETTERS[li], { x: lx + OVAL_RX - lw / 2, y: letterY, size: 5, font: B, color: BLACK });
       }
-      // Remord ovals (bottom row)
+      // Remord capsules (bottom row)
       const r3y = r1y - OVAL_H - LABEL_H;
       for (let li = 0; li < 5; li++) {
         const ovalCX = bx0 + li * (OVAL_W + HGAP) + OVAL_RX;
         const ovalCY = r3y - OVAL_RY;
-        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
+        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.7, borderColor: BLACK, color: WHITE });
       }
     }
 
-    // Page 1
-    const availH1 = y - mm(6); // leave 6mm bottom margin
-    const qPerCol1 = Math.floor((availH1 + FRAME_GAP) / (FRAME_H + FRAME_GAP));
-    const qPage1 = Math.min(TOTAL_Q, COLS * qPerCol1);
+    // Page 1 — compute smart column count
+    const availH1 = y - mm(6);
+    const maxPerCol1 = Math.floor((availH1 + FRAME_GAP) / (FRAME_H + FRAME_GAP));
+    // Use minimum columns needed: don't force 4 cols for 24 questions
+    const neededCols1 = Math.min(COLS, Math.ceil(TOTAL_Q / maxPerCol1));
+    const actualCols1 = Math.max(1, neededCols1);
+    const qPerCol1 = Math.ceil(Math.min(TOTAL_Q, actualCols1 * maxPerCol1) / actualCols1);
+    const qPage1 = Math.min(TOTAL_Q, actualCols1 * qPerCol1);
+
+    // Center columns if fewer than 4
+    const totalGridW = actualCols1 * COL_W + (actualCols1 - 1) * COL_GAP;
+    const gridOffsetX = MX + (CW - totalGridW) / 2;
 
     for (let q = 1; q <= qPage1; q++) {
       const idx = q - 1;
       const col = Math.floor(idx / qPerCol1);
       const row = idx % qPerCol1;
-      const cx = MX + col * (COL_W + COL_GAP);
+      const cx = gridOffsetX + col * (COL_W + COL_GAP);
       const frameTop = y - row * (FRAME_H + FRAME_GAP);
       drawQCMFrame(page, q, cx, frameTop);
     }
@@ -235,13 +243,18 @@ export async function POST(req: NextRequest) {
 
       const pg2Top = PH - mm(12);
       const pg2AvailH = pg2Top - mm(6);
-      const pg2QPerCol = Math.floor((pg2AvailH + FRAME_GAP) / (FRAME_H + FRAME_GAP));
-      const pg2Total = Math.min(remaining, COLS * pg2QPerCol);
+      const pg2MaxPerCol = Math.floor((pg2AvailH + FRAME_GAP) / (FRAME_H + FRAME_GAP));
+      const pg2NeededCols = Math.min(COLS, Math.ceil(remaining / pg2MaxPerCol));
+      const pg2ActualCols = Math.max(1, pg2NeededCols);
+      const pg2QPerCol = Math.ceil(Math.min(remaining, pg2ActualCols * pg2MaxPerCol) / pg2ActualCols);
+      const pg2Total = Math.min(remaining, pg2ActualCols * pg2QPerCol);
+      const pg2GridW = pg2ActualCols * COL_W + (pg2ActualCols - 1) * COL_GAP;
+      const pg2OffsetX = MX + (CW - pg2GridW) / 2;
 
       for (let qi = 0; qi < pg2Total; qi++) {
         const col = Math.floor(qi / pg2QPerCol);
         const row = qi % pg2QPerCol;
-        const cx = MX + col * (COL_W + COL_GAP);
+        const cx = pg2OffsetX + col * (COL_W + COL_GAP);
         const frameTop = pg2Top - row * (FRAME_H + FRAME_GAP);
         drawQCMFrame(pg2, nextQ + qi, cx, frameTop);
       }

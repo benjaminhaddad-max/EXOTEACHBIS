@@ -37,18 +37,18 @@ const SMALL_GAP = mm(0.5);   // match gen-grid compact
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
-// QCM Grid (ovals: 3.5mm wide × 2.2mm tall)
-const OVAL_W = mm(3.5);
-const OVAL_H = mm(2.2);
-const HGAP = mm(1.5);
-const NUM_W = mm(7);
-const LABEL_H = mm(2.2);
-const FRAME_PAD_T = mm(0.4);
-const FRAME_PAD_B = mm(0.3);
+// QCM Grid (capsule ovals: 5mm wide × 1.8mm tall)
+const OVAL_W = mm(5);
+const OVAL_H = mm(1.8);
+const HGAP = mm(0.8);
+const NUM_W = mm(6);
+const LABEL_H = mm(2);
+const FRAME_PAD_T = mm(0.3);
+const FRAME_PAD_B = mm(0.2);
 const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
-const FRAME_GAP = mm(0.8);
+const FRAME_GAP = mm(0.6);
 const BOX_GROUP_W = 5 * OVAL_W + 4 * HGAP;
-const COL_W = NUM_W + BOX_GROUP_W + mm(2);
+const COL_W = NUM_W + BOX_GROUP_W + mm(1.5);
 const COL_GAP = (CW - 4 * COL_W) / 3;
 
 const FH = mm(5);
