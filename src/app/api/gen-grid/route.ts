@@ -164,22 +164,22 @@ export async function POST(req: NextRequest) {
     page.drawText(instrT, { x: PW / 2 - instrW / 2, y, size: 6, font: B, color: BLACK });
     y -= mm(2.5);
 
-    // ═══════════════ QCM GRID — capsule ovals (dynamic, multi-page) ═══════════════
-    const OVAL_W = mm(5);      // wide capsule shape
-    const OVAL_H = mm(1.8);    // flat — like official OMR sheets
+    // ═══════════════ QCM GRID — wide capsule ovals (dynamic, multi-page) ═══════════════
+    const OVAL_W = mm(7);      // wide capsule (like official OMR reference)
+    const OVAL_H = mm(2.5);    // flat
     const OVAL_RX = OVAL_W / 2;
     const OVAL_RY = OVAL_H / 2;
-    const HGAP = mm(0.8);     // tight spacing between ovals
-    const NUM_W = mm(6);
+    const HGAP = mm(2.5);     // good spacing between ovals
+    const NUM_W = mm(7);
     const ovalGroupW = 5 * OVAL_W + 4 * HGAP;
-    const COL_W = NUM_W + ovalGroupW + mm(1.5);
+    const COL_W = NUM_W + ovalGroupW + mm(2);
     const COLS = 4;
-    const COL_GAP = (CW - COLS * COL_W) / (COLS - 1);
-    const LABEL_H = mm(2);
-    const FRAME_PAD_T = mm(0.3);
-    const FRAME_PAD_B = mm(0.2);
+    const COL_GAP = (CW - COLS * COL_W) / Math.max(1, COLS - 1);
+    const LABEL_H = mm(2.5);
+    const FRAME_PAD_T = mm(0.5);
+    const FRAME_PAD_B = mm(0.3);
     const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
-    const FRAME_GAP = mm(0.6);
+    const FRAME_GAP = mm(0.8);
 
     function drawQCMFrame(pg: typeof page, q: number, cx: number, frameTop: number) {
       pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.6, borderColor: BLACK, color: WHITE });
@@ -217,15 +217,12 @@ export async function POST(req: NextRequest) {
     const qPerCol1 = Math.ceil(Math.min(TOTAL_Q, actualCols1 * maxPerCol1) / actualCols1);
     const qPage1 = Math.min(TOTAL_Q, actualCols1 * qPerCol1);
 
-    // Center columns if fewer than 4
-    const totalGridW = actualCols1 * COL_W + (actualCols1 - 1) * COL_GAP;
-    const gridOffsetX = MX + (CW - totalGridW) / 2;
-
+    // Left-aligned columns
     for (let q = 1; q <= qPage1; q++) {
       const idx = q - 1;
       const col = Math.floor(idx / qPerCol1);
       const row = idx % qPerCol1;
-      const cx = gridOffsetX + col * (COL_W + COL_GAP);
+      const cx = MX + col * (COL_W + COL_GAP);
       const frameTop = y - row * (FRAME_H + FRAME_GAP);
       drawQCMFrame(page, q, cx, frameTop);
     }
@@ -248,13 +245,10 @@ export async function POST(req: NextRequest) {
       const pg2ActualCols = Math.max(1, pg2NeededCols);
       const pg2QPerCol = Math.ceil(Math.min(remaining, pg2ActualCols * pg2MaxPerCol) / pg2ActualCols);
       const pg2Total = Math.min(remaining, pg2ActualCols * pg2QPerCol);
-      const pg2GridW = pg2ActualCols * COL_W + (pg2ActualCols - 1) * COL_GAP;
-      const pg2OffsetX = MX + (CW - pg2GridW) / 2;
-
       for (let qi = 0; qi < pg2Total; qi++) {
         const col = Math.floor(qi / pg2QPerCol);
         const row = qi % pg2QPerCol;
-        const cx = pg2OffsetX + col * (COL_W + COL_GAP);
+        const cx = MX + col * (COL_W + COL_GAP);
         const frameTop = pg2Top - row * (FRAME_H + FRAME_GAP);
         drawQCMFrame(pg2, nextQ + qi, cx, frameTop);
       }
