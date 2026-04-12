@@ -188,6 +188,69 @@ export async function convertDocxToPages(docxBuffer: Buffer): Promise<Buffer[]> 
 }
 
 /**
+ * Convert a PDF buffer to a high-res PNG page image via CloudConvert.
+ * Used by the OMR reader when no local PDF renderer (sips/pdftoppm) is available.
+ * Returns the PNG buffer, or null if conversion fails.
+ *
+ * Note: this assumes a single-page PDF (the OMR pipeline splits pages first).
+ */
+export async function convertPdfToPng(pdfBuffer: Buffer): Promise<Buffer | null> {
+  const cc = getClient();
+  if (!cc) {
+    console.warn("[convert-pdf-png] No CloudConvert API key — cannot convert PDF to PNG");
+    return null;
+  }
+
+  try {
+    console.log(`[convert-pdf-png] Converting PDF (${Math.round(pdfBuffer.length / 1024)}KB) to PNG...`);
+
+    let job = await cc.jobs.create({
+      tasks: {
+        "upload": { operation: "import/upload" },
+        "convert": {
+          operation: "convert",
+          input: ["upload"],
+          output_format: "png",
+          input_format: "pdf",
+          // 300 DPI for precise OMR detection
+          pixel_density: 300,
+        },
+        "export": { operation: "export/url", input: ["convert"] },
+      },
+    });
+
+    const uploadTask = job.tasks.find((t: any) => t.name === "upload");
+    if (!uploadTask) throw new Error("No upload task found");
+
+    await cc.tasks.upload(uploadTask, pdfBuffer, "page.pdf");
+    job = await cc.jobs.wait(job.id);
+
+    for (const task of job.tasks) {
+      if (task.status === "error") {
+        console.error(`[convert-pdf-png] Task "${task.name}" error:`, (task as any).message);
+        throw new Error(`CloudConvert task "${task.name}" failed`);
+      }
+    }
+
+    const exportTask = job.tasks.find(
+      (t: any) => t.name === "export" && t.status === "finished",
+    );
+    const fileUrl = exportTask?.result?.files?.[0]?.url;
+    if (!fileUrl) throw new Error("No export URL in result");
+
+    const resp = await fetch(fileUrl as string);
+    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+    const ab = await resp.arrayBuffer();
+    const pngBuffer = Buffer.from(ab);
+    console.log(`[convert-pdf-png] Got PNG (${Math.round(pngBuffer.length / 1024)}KB)`);
+    return pngBuffer;
+  } catch (e: any) {
+    console.error("[convert-pdf-png] Conversion failed:", e.message);
+    return null;
+  }
+}
+
+/**
  * Convert a DOCX to PDF via CloudConvert/LibreOffice.
  * Returns the PDF buffer for use with mupdf to render+crop individual images.
  */

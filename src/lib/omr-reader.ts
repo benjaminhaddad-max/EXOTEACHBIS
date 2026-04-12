@@ -285,12 +285,9 @@ export async function readOMR(
 
 /**
  * Convert a single PDF page (as PDF buffer) to a high-res PNG image.
- * Falls back to CloudConvert if local conversion isn't available.
+ * Tries local renderers first (sips/pdftoppm), falls back to CloudConvert for Vercel.
  */
 export async function pdfPageToImage(pdfBuffer: Buffer): Promise<Buffer> {
-  // pdf-lib can't render to images. We need an external tool.
-  // On macOS: use sips (available on all Macs)
-  // On Vercel/Linux: use CloudConvert
   const { execSync } = await import("child_process");
   const { writeFileSync, readFileSync, unlinkSync } = await import("fs");
   const tmpPdf = `/tmp/omr_page_${Date.now()}.pdf`;
@@ -299,28 +296,28 @@ export async function pdfPageToImage(pdfBuffer: Buffer): Promise<Buffer> {
   try {
     writeFileSync(tmpPdf, pdfBuffer);
 
-    // Try sips (macOS)
+    // Try sips (macOS dev)
     try {
-      execSync(`sips -s format png --resampleWidth 2480 "${tmpPdf}" --out "${tmpPng}" 2>/dev/null`);
+      execSync(`sips -s format png --resampleWidth 2480 "${tmpPdf}" --out "${tmpPng}" 2>/dev/null`, { timeout: 10000 });
       return readFileSync(tmpPng);
     } catch {
-      // Not macOS, try CloudConvert
+      // Not macOS
     }
 
-    // Try pdftoppm (Linux with poppler)
+    // Try pdftoppm (Linux with poppler-utils installed)
     try {
       execSync(`pdftoppm -png -r 300 -singlefile "${tmpPdf}" "${tmpPng.replace('.png', '')}"`, { timeout: 10000 });
       return readFileSync(tmpPng);
     } catch {
-      // Not available
+      // Not available (typical on Vercel)
     }
 
-    // Fallback: use the convertDocxToPages approach (CloudConvert)
-    const { convertDocxToPages } = await import("@/lib/convert-emf");
-    const pages = await convertDocxToPages(pdfBuffer);
-    if (pages.length > 0) return pages[0];
+    // Fallback: CloudConvert PDF → PNG (works on Vercel if CLOUDCONVERT_API_KEY is set)
+    const { convertPdfToPng } = await import("@/lib/convert-emf");
+    const png = await convertPdfToPng(pdfBuffer);
+    if (png) return png;
 
-    throw new Error("No PDF-to-image converter available");
+    throw new Error("No PDF-to-image converter available (install poppler-utils or set CLOUDCONVERT_API_KEY)");
   } finally {
     try { unlinkSync(tmpPdf); } catch {}
     try { unlinkSync(tmpPng); } catch {}
