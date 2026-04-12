@@ -218,20 +218,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Page 1 — compute smart column count
+    // Page 1 — fill vertically: fill column 1 fully, then column 2, etc.
     const availH1 = y - mm(6);
     const maxPerCol1 = Math.floor((availH1 + FRAME_GAP) / (FRAME_H + FRAME_GAP));
-    // Use minimum columns needed: don't force 4 cols for 24 questions
-    const neededCols1 = Math.min(COLS, Math.ceil(TOTAL_Q / maxPerCol1));
-    const actualCols1 = Math.max(1, neededCols1);
-    const qPerCol1 = Math.ceil(Math.min(TOTAL_Q, actualCols1 * maxPerCol1) / actualCols1);
-    const qPage1 = Math.min(TOTAL_Q, actualCols1 * qPerCol1);
+    const qPage1 = Math.min(TOTAL_Q, COLS * maxPerCol1);
 
-    // Left-aligned columns
     for (let q = 1; q <= qPage1; q++) {
       const idx = q - 1;
-      const col = Math.floor(idx / qPerCol1);
-      const row = idx % qPerCol1;
+      const col = Math.floor(idx / maxPerCol1);
+      const row = idx % maxPerCol1;
       const cx = MX + col * (COL_W + COL_GAP);
       const frameTop = y - row * (FRAME_H + FRAME_GAP);
       drawQCMFrame(page, q, cx, frameTop);
@@ -251,13 +246,10 @@ export async function POST(req: NextRequest) {
       const pg2Top = PH - mm(12);
       const pg2AvailH = pg2Top - mm(6);
       const pg2MaxPerCol = Math.floor((pg2AvailH + FRAME_GAP) / (FRAME_H + FRAME_GAP));
-      const pg2NeededCols = Math.min(COLS, Math.ceil(remaining / pg2MaxPerCol));
-      const pg2ActualCols = Math.max(1, pg2NeededCols);
-      const pg2QPerCol = Math.ceil(Math.min(remaining, pg2ActualCols * pg2MaxPerCol) / pg2ActualCols);
-      const pg2Total = Math.min(remaining, pg2ActualCols * pg2QPerCol);
+      const pg2Total = Math.min(remaining, COLS * pg2MaxPerCol);
       for (let qi = 0; qi < pg2Total; qi++) {
-        const col = Math.floor(qi / pg2QPerCol);
-        const row = qi % pg2QPerCol;
+        const col = Math.floor(qi / pg2MaxPerCol);
+        const row = qi % pg2MaxPerCol;
         const cx = MX + col * (COL_W + COL_GAP);
         const frameTop = pg2Top - row * (FRAME_H + FRAME_GAP);
         drawQCMFrame(pg2, nextQ + qi, cx, frameTop);
