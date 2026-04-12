@@ -52,6 +52,32 @@ export async function POST(req: NextRequest) {
     let y = PH;
 
     // ═══════════════════════════════════════════════════════════════════
+    // ALIGNMENT BARS — thick black bars on left, right, top edges
+    // Serve as reference points for OMR scanner scale/position detection
+    // ═══════════════════════════════════════════════════════════════════
+    const ALIGN_W = mm(3);    // bar width
+    const ALIGN_MARGIN = mm(2); // distance from page edge
+
+    // Left bar (full height)
+    page.drawRectangle({
+      x: ALIGN_MARGIN, y: mm(10),
+      width: ALIGN_W, height: PH - mm(20),
+      color: BLACK,
+    });
+    // Right bar (full height)
+    page.drawRectangle({
+      x: PW - ALIGN_MARGIN - ALIGN_W, y: mm(10),
+      width: ALIGN_W, height: PH - mm(20),
+      color: BLACK,
+    });
+    // Top bar (full width, above header)
+    page.drawRectangle({
+      x: ALIGN_MARGIN, y: PH - ALIGN_MARGIN - ALIGN_W,
+      width: PW - 2 * ALIGN_MARGIN, height: ALIGN_W,
+      color: BLACK,
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
     // HEADER — Navy bar flush to top, logo + title + year
     // ═══════════════════════════════════════════════════════════════════
 
@@ -222,10 +248,10 @@ export async function POST(req: NextRequest) {
 
         const frameTop = gridTop - i * (FRAME_H + FRAME_GAP);
 
-        // Frame
+        // Frame — bordure plus épaisse pour OMR
         page.drawRectangle({
           x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H,
-          borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+          borderWidth: 0.8, borderColor: BLACK, color: WHITE,
         });
 
         // Question number
@@ -237,12 +263,12 @@ export async function POST(req: NextRequest) {
         const bx0 = cx + NUM_W;
         const r1y = frameTop - FRAME_PAD_T;
 
-        // Answer boxes (top row)
+        // Answer boxes (top row) — bordure épaissie pour OMR
         for (let li = 0; li < 5; li++) {
           page.drawRectangle({
             x: bx0 + li * (BOX + HGAP), y: r1y - BOX,
             width: BOX, height: BOX,
-            borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+            borderWidth: 0.8, borderColor: BLACK, color: WHITE,
           });
         }
 
@@ -257,13 +283,13 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Remords boxes (bottom row)
+        // Remords boxes (bottom row) — bordure épaissie pour OMR
         const r3y = r1y - BOX - LABEL_H;
         for (let li = 0; li < 5; li++) {
           page.drawRectangle({
             x: bx0 + li * (BOX + HGAP), y: r3y - BOX,
             width: BOX, height: BOX,
-            borderWidth: 0.4, borderColor: BLACK, color: WHITE,
+            borderWidth: 0.8, borderColor: BLACK, color: WHITE,
           });
         }
       }
