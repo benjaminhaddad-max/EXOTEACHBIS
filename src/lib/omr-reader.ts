@@ -64,6 +64,7 @@ export type OMRResult = {
   // Debug info (for diagnosing misreads in production)
   debug?: {
     alignMode: "header" | "bounds" | "raw";
+    idGridMethod: string; // "visual" | "coords" | "none"
     imageSize: { w: number; h: number };
     pageSize?: { w: number; h: number }; // actual PDF page size in points
     anchor: { imgX: number; imgY: number; imgRight: number; scale: number };
@@ -76,6 +77,35 @@ export type OMRResult = {
 };
 
 // ─── Image analysis helpers ──────────────────────────────────────────────────
+
+/**
+ * Measure dark pixel fill ratio in a rectangular region.
+ * Insets by 18% on each side to avoid measuring border pixels.
+ */
+function measureFillRatio(
+  pixels: Buffer,
+  imgW: number,
+  imgH: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): number {
+  const padX = Math.max(1, Math.floor(w * 0.18));
+  const padY = Math.max(1, Math.floor(h * 0.18));
+  let dark = 0, total = 0;
+  for (let dy = padY; dy < h - padY; dy++) {
+    for (let dx = padX; dx < w - padX; dx++) {
+      const py = Math.round(y) + dy;
+      const px = Math.round(x) + dx;
+      if (py >= 0 && py < imgH && px >= 0 && px < imgW) {
+        total++;
+        if (pixels[py * imgW + px] === 0) dark++;
+      }
+    }
+  }
+  return total > 0 ? dark / total : 0;
+}
 
 function measureRegion(
   pixels: Buffer,
@@ -329,44 +359,239 @@ export async function readOMR(
 
   console.log(`[omr] alignMode=${alignMode} img=${w}x${h} boxPx=${boxPx}`);
 
-  // ─── Read Student ID ───────────────────────────────────────────────────
-  // Replicate gen-grid layout exactly for correct position calculations
+  // ─── Read Student ID — VISUAL DETECTION ─────────────────────────────────
+  // Instead of computing grid positions from PDF coordinates (fragile when
+  // scanner shifts content), we detect the 6×10 digit grid VISUALLY:
+  //   1. Horizontal projection in the right half → find evenly-spaced row borders
+  //   2. Vertical projection within those rows → find column borders
+  //   3. Read each cell by fill ratio
+  //
+  // This is robust to scanner distortion and PDF dimension mismatches.
+
+  // Search area: right ~45% of page, between header bottom and QCM grid top
+  const mmPx = w / 210; // approximate mm → px (A4 = 210mm wide)
+  const idSearchLeft = Math.round(w * 0.50);
+  const idSearchRight = Math.min(w - 5, Math.round(anchorImgRight) + 20);
+
+  // Compute QCM grid top in image pixels (for search boundary)
   const sectionTop = PH - BAR_H - mm(6);
   let gy = sectionTop;
-  gy -= mm(3); // title "Saisir votre N°"
-  gy -= BIG_BOX * 1.5 + mm(2); // write-in boxes
+  gy -= mm(3);
+  gy -= BIG_BOX * 1.5 + mm(2);
+  const gridEndY = gy - 10 * (SMALL_BOX + SMALL_GAP);
+  const leftEndY = sectionTop - FH - mm(2) - mm(1.5);
+  const gridTopPdf = Math.min(leftEndY, gridEndY) - mm(2) - mm(1) - mm(3.5);
+  const qcmGridTopImg = toImgY(gridTopPdf);
+
+  const idSearchTop = Math.round(anchorImgY) + Math.round(10 * scale); // just below header top
+  const idSearchBottom = Math.min(qcmGridTopImg - 5, h - 5);
 
   const studentDigits: string[] = [];
   const studentDigitRatios: number[] = [];
-  for (let col = 0; col < DIGITS; col++) {
-    const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP) + (BIG_BOX - SMALL_BOX) / 2;
-    let bestRow = -1;
-    let bestRatio = 0;
+  let idGridMethod = "none";
 
-    for (let row = 0; row < 10; row++) {
-      const ry = gy - row * (SMALL_BOX + SMALL_GAP);
-      const ix = toImgXRight(bx);
-      const iy = toImgY(ry);
-      const ratio = measureRegion(pixels, w, h, ix, iy, smallBoxPx);
-      if (ratio > bestRatio) {
-        bestRatio = ratio;
-        bestRow = row;
+  if (idSearchBottom - idSearchTop > 80 && idSearchRight - idSearchLeft > 80) {
+    // STEP 1: Find digit grid rows via horizontal projection
+    const hLen = idSearchBottom - idSearchTop;
+    const hProj = new Float64Array(hLen);
+    for (let y = idSearchTop; y < idSearchBottom; y++) {
+      let dark = 0;
+      for (let x = idSearchLeft; x < idSearchRight; x++) {
+        if (pixels[y * w + x] === 0) dark++;
+      }
+      hProj[y - idSearchTop] = dark / (idSearchRight - idSearchLeft);
+    }
+
+    // Detect horizontal border lines as peaks
+    type LP = { pos: number };
+    const hLines: LP[] = [];
+    {
+      let i = 0;
+      while (i < hLen) {
+        if (hProj[i] > 0.03) {
+          let sumP = 0, sumW = 0, j = i;
+          while (j < hLen && hProj[j] > 0.015) {
+            sumP += j * hProj[j]; sumW += hProj[j]; j++;
+          }
+          hLines.push({ pos: idSearchTop + Math.round(sumP / sumW) });
+          i = j;
+        } else { i++; }
       }
     }
 
-    studentDigits.push(bestRatio >= FILL_THRESHOLD ? String(bestRow) : "?");
-    studentDigitRatios.push(bestRatio);
+    // Find longest run of evenly-spaced lines (expected: 4mm step)
+    const expectedRowStep = 4.0 * mmPx;
+    const rowTol = expectedRowStep * 0.40;
+    let bestRowSeq: number[] = [];
+    for (let s = 0; s < hLines.length; s++) {
+      const seq: number[] = [hLines[s].pos];
+      for (let n = s + 1; n < hLines.length; n++) {
+        const gap = hLines[n].pos - seq[seq.length - 1];
+        if (gap < expectedRowStep - rowTol) continue;
+        if (gap > expectedRowStep + rowTol) break;
+        seq.push(hLines[n].pos);
+      }
+      if (seq.length > bestRowSeq.length) bestRowSeq = seq;
+    }
+
+    if (bestRowSeq.length >= 8) {
+      const rowLines = bestRowSeq.slice(0, 11);
+
+      // STEP 2: Find columns via vertical projection within grid rows
+      const gridRowTop = rowLines[0];
+      const gridRowBottom = rowLines[rowLines.length - 1];
+      const vLen = idSearchRight - idSearchLeft;
+      const vProj = new Float64Array(vLen);
+      for (let x = idSearchLeft; x < idSearchRight; x++) {
+        let dark = 0, total = 0;
+        for (let y = gridRowTop; y <= gridRowBottom; y++) {
+          total++; if (pixels[y * w + x] === 0) dark++;
+        }
+        vProj[x - idSearchLeft] = total > 0 ? dark / total : 0;
+      }
+
+      // Detect vertical border lines
+      const vLines: LP[] = [];
+      {
+        let vi = 0;
+        while (vi < vLen) {
+          if (vProj[vi] > 0.06) {
+            let sumP = 0, sumW = 0, vj = vi;
+            while (vj < vLen && vProj[vj] > 0.03) {
+              sumP += vj * vProj[vj]; sumW += vProj[vj]; vj++;
+            }
+            vLines.push({ pos: idSearchLeft + Math.round(sumP / sumW) });
+            vi = vj;
+          } else { vi++; }
+        }
+      }
+
+      // Pair vertical lines into column borders (box width ≈ 3.5mm)
+      const expectedBoxW = 3.5 * mmPx;
+      type CP = { left: number; right: number; center: number };
+      const colPairs: CP[] = [];
+      const usedV = new Set<number>();
+      for (let a = 0; a < vLines.length; a++) {
+        if (usedV.has(a)) continue;
+        for (let b = a + 1; b < vLines.length; b++) {
+          if (usedV.has(b)) continue;
+          const gap = vLines[b].pos - vLines[a].pos;
+          if (gap > expectedBoxW * 0.50 && gap < expectedBoxW * 1.60) {
+            colPairs.push({ left: vLines[a].pos, right: vLines[b].pos, center: Math.round((vLines[a].pos + vLines[b].pos) / 2) });
+            usedV.add(a); usedV.add(b); break;
+          }
+        }
+      }
+      colPairs.sort((a, b) => a.center - b.center);
+
+      // Find group of ~6 columns with expected spacing (6.5mm)
+      const expectedColStep = 6.5 * mmPx;
+      const colTol = expectedColStep * 0.40;
+      let bestCols: CP[] = [];
+      for (let s = 0; s < colPairs.length; s++) {
+        const group: CP[] = [colPairs[s]];
+        for (let n = s + 1; n < colPairs.length && group.length < 6; n++) {
+          const gap = colPairs[n].center - group[group.length - 1].center;
+          if (gap >= expectedColStep - colTol && gap <= expectedColStep + colTol) group.push(colPairs[n]);
+        }
+        if (group.length > bestCols.length) bestCols = group;
+      }
+
+      // Fallback: if not enough column pairs, try grouping all vertical lines
+      if (bestCols.length < 4 && vLines.length >= 7) {
+        let bestVSeq: number[] = [];
+        for (let s = 0; s < vLines.length; s++) {
+          const seq: number[] = [vLines[s].pos];
+          for (let n = s + 1; n < vLines.length; n++) {
+            const gap = vLines[n].pos - seq[seq.length - 1];
+            if (gap > 2 * mmPx && gap < 8 * mmPx) seq.push(vLines[n].pos);
+            else if (gap >= 8 * mmPx) break;
+          }
+          if (seq.length > bestVSeq.length) bestVSeq = seq;
+        }
+        if (bestVSeq.length >= 7) {
+          bestCols = [];
+          for (let pi = 0; pi + 1 < bestVSeq.length && bestCols.length < 6; pi += 2) {
+            const gap = bestVSeq[pi + 1] - bestVSeq[pi];
+            if (gap > expectedBoxW * 0.3 && gap < expectedBoxW * 2.0)
+              bestCols.push({ left: bestVSeq[pi], right: bestVSeq[pi + 1], center: Math.round((bestVSeq[pi] + bestVSeq[pi + 1]) / 2) });
+          }
+        }
+      }
+
+      // Extrapolate if fewer than 6 columns found
+      if (bestCols.length >= 2 && bestCols.length < 6) {
+        const avgStep = (bestCols[bestCols.length - 1].center - bestCols[0].center) / (bestCols.length - 1);
+        const avgW = Math.round(bestCols.reduce((s, c) => s + (c.right - c.left), 0) / bestCols.length);
+        const halfW = Math.round(avgW / 2);
+        while (bestCols.length < 6) {
+          const last = bestCols[bestCols.length - 1].center;
+          const nc = Math.round(last + avgStep);
+          if (nc + halfW > w - 5) break;
+          bestCols.push({ left: nc - halfW, right: nc + halfW, center: nc });
+        }
+        while (bestCols.length < 6) {
+          const first = bestCols[0].center;
+          const nc = Math.round(first - avgStep);
+          if (nc - halfW < 5) break;
+          bestCols.unshift({ left: nc - halfW, right: nc + halfW, center: nc });
+        }
+      }
+
+      // STEP 3: Read digits
+      if (bestCols.length >= 4) {
+        idGridMethod = "visual";
+        const cols = bestCols.slice(0, 6);
+        console.log(`[omr-id] Visual: ${rowLines.length} rows, ${cols.length} cols`);
+        console.log(`[omr-id]   rows Y: ${rowLines.join(", ")}`);
+        console.log(`[omr-id]   cols X: ${cols.map(c => `${c.left}-${c.right}`).join(", ")}`);
+
+        for (const col of cols) {
+          let bestRow = -1, bestRatio = 0;
+          const bw = Math.max(col.right - col.left, Math.round(2 * mmPx));
+          for (let r = 0; r < Math.min(10, rowLines.length - 1); r++) {
+            const cellH = rowLines[r + 1] - rowLines[r];
+            const ratio = measureFillRatio(pixels, w, h, col.left, rowLines[r], bw, cellH);
+            if (ratio > bestRatio) { bestRatio = ratio; bestRow = r; }
+          }
+          studentDigits.push(bestRatio >= FILL_THRESHOLD ? String(bestRow) : "?");
+          studentDigitRatios.push(Math.round(bestRatio * 1000) / 1000);
+        }
+        // Pad to 6 if needed
+        while (studentDigits.length < 6) { studentDigits.push("?"); studentDigitRatios.push(0); }
+      }
+    }
+  }
+
+  // Fallback: coordinate-based approach if visual detection failed
+  if (studentDigits.length === 0) {
+    idGridMethod = "coords";
+    const sTop = PH - BAR_H - mm(6);
+    let gy2 = sTop - mm(3) - BIG_BOX * 1.5 - mm(2);
+    for (let col = 0; col < DIGITS; col++) {
+      const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP) + (BIG_BOX - SMALL_BOX) / 2;
+      let bestRow = -1, bestRatio = 0;
+      for (let row = 0; row < 10; row++) {
+        const ry = gy2 - row * (SMALL_BOX + SMALL_GAP);
+        const ix = toImgXRight(bx);
+        const iy = toImgY(ry);
+        const ratio = measureRegion(pixels, w, h, ix, iy, smallBoxPx);
+        if (ratio > bestRatio) { bestRatio = ratio; bestRow = row; }
+      }
+      studentDigits.push(bestRatio >= FILL_THRESHOLD ? String(bestRow) : "?");
+      studentDigitRatios.push(Math.round(bestRatio * 1000) / 1000);
+    }
   }
 
   const studentId = studentDigits.includes("?") ? null : studentDigits.join("");
+  console.log(`[omr-id] ${idGridMethod}: ${studentDigits.map((d, i) => `${d}(${studentDigitRatios[i]})`).join(" ")} → ${studentId || "null"}`);
 
   // ─── Read QCM Answers ──────────────────────────────────────────────────
 
   // Compute gridTop (QCM area start) — matching gen-grid exactly:
   // gen-grid: y = Math.min(leftEndY, gridEndY) - mm(2) [gap] - mm(1) [separator] - mm(3.5) [instruction]
-  const gridEndY = gy - 10 * (SMALL_BOX + SMALL_GAP);
-  const leftEndY = sectionTop - FH - mm(2) - mm(1.5);
-  const gridTop = Math.min(leftEndY, gridEndY) - mm(2) - mm(1) - mm(3.5);
+  // (reuse gridTopPdf computed above for student ID search bounds)
+  const gridTop = gridTopPdf;
 
   const answers: Record<string, string[]> = {};
   const doubtfulQuestions: number[] = [];
@@ -427,6 +652,7 @@ export async function readOMR(
     doubtfulQuestions,
     debug: {
       alignMode,
+      idGridMethod,
       imageSize: { w, h },
       pageSize: { w: actualPW, h: actualPH },
       anchor: {
