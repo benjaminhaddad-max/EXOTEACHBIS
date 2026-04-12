@@ -32,23 +32,24 @@ const BAR_H = mm(20);
 const DIGITS = 6;
 const BIG_BOX = mm(4.5);   // match gen-grid compact
 const BIG_GAP = mm(1);     // match gen-grid compact
-const SMALL_BOX = mm(3.8);   // match gen-grid compact (thick 1.5pt borders for OMR)
-const SMALL_GAP = mm(0.5);   // match gen-grid compact
+const SMALL_BOX_W = mm(4.5);  // student ID oval width (match gen-grid)
+const SMALL_BOX_H = mm(1.5); // student ID oval height
+const SMALL_ROW_STEP = SMALL_BOX_H + mm(0.8); // row spacing in ID grid
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
-// QCM Grid (wide capsule ovals: 7mm × 2.5mm)
-const OVAL_W = mm(7);
-const OVAL_H = mm(2.5);
-const HGAP = mm(2.5);
-const NUM_W = mm(7);
-const LABEL_H = mm(2.5);
-const FRAME_PAD_T = mm(0.5);
-const FRAME_PAD_B = mm(0.3);
+// QCM Grid (flat capsule ovals: 4.5mm × 1.5mm)
+const OVAL_W = mm(4.5);
+const OVAL_H = mm(1.5);
+const HGAP = mm(1.8);
+const NUM_W = mm(6);
+const LABEL_H = mm(2);
+const FRAME_PAD_T = mm(0.3);
+const FRAME_PAD_B = mm(0.2);
 const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
-const FRAME_GAP = mm(0.8);
+const FRAME_GAP = mm(0.6);
 const BOX_GROUP_W = 5 * OVAL_W + 4 * HGAP;
-const COL_W = NUM_W + BOX_GROUP_W + mm(2);
+const COL_W = NUM_W + BOX_GROUP_W + mm(1.5);
 const COL_GAP = (CW - 4 * COL_W) / 3;
 
 const FH = mm(5);
@@ -368,7 +369,8 @@ export async function readOMR(
   const scaleXVal = scale;
   const ovalWPx = Math.round(OVAL_W * scale);
   const ovalHPx = Math.round(OVAL_H * scale);
-  const smallBoxPx = Math.round(SMALL_BOX * scale);
+  const idOvalWPx = Math.round(SMALL_BOX_W * scale);
+  const idOvalHPx = Math.round(SMALL_BOX_H * scale);
 
   console.log(`[omr] alignMode=${alignMode} img=${w}x${h} ovalPx=${ovalWPx}x${ovalHPx}`);
 
@@ -391,7 +393,7 @@ export async function readOMR(
   let gy = sectionTop;
   gy -= mm(3);
   gy -= BIG_BOX * 1.5 + mm(2);
-  const gridEndY = gy - 10 * (SMALL_BOX + SMALL_GAP);
+  const gridEndY = gy - 10 * SMALL_ROW_STEP;
   const leftEndY = sectionTop - FH - mm(2) - mm(1.5);
   const gridTopPdf = Math.min(leftEndY, gridEndY) - mm(2) - mm(1) - mm(3.5);
   const qcmGridTopImg = toImgY(gridTopPdf);
@@ -434,7 +436,7 @@ export async function readOMR(
     }
 
     // Find longest run of evenly-spaced lines (expected: 4mm step)
-    const expectedRowStep = 4.3 * mmPx; // 3.8mm box + 0.5mm gap = 4.3mm
+    const expectedRowStep = 2.3 * mmPx; // 1.5mm oval + 0.8mm gap = 2.3mm
     const rowTol = expectedRowStep * 0.40;
     let bestRowSeq: number[] = [];
     for (let s = 0; s < hLines.length; s++) {
@@ -482,7 +484,7 @@ export async function readOMR(
       }
 
       // Pair vertical lines into column borders (box width ≈ 3.5mm)
-      const expectedBoxW = 3.8 * mmPx; // match gen-grid SMALL_BOX = 3.8mm
+      const expectedBoxW = 4.5 * mmPx; // match gen-grid ID oval width
       type CP = { left: number; right: number; center: number };
       const colPairs: CP[] = [];
       const usedV = new Set<number>();
@@ -644,13 +646,13 @@ export async function readOMR(
     const sTop = PH - BAR_H - mm(6);
     let gy2 = sTop - mm(3) - BIG_BOX * 1.5 - mm(2);
     for (let col = 0; col < DIGITS; col++) {
-      const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP) + (BIG_BOX - SMALL_BOX) / 2;
+      const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP);
       let bestRow = -1, bestRatio = 0;
       for (let row = 0; row < 10; row++) {
-        const ry = gy2 - row * (SMALL_BOX + SMALL_GAP);
+        const ry = gy2 - row * SMALL_ROW_STEP;
         const ix = toImgXRight(bx);
         const iy = toImgY(ry);
-        const ratio = measureRegion(pixels, w, h, ix, iy, smallBoxPx);
+        const ratio = measureFillRatio(pixels, w, h, ix, iy, idOvalWPx, idOvalHPx);
         if (ratio > bestRatio) { bestRatio = ratio; bestRow = row; }
       }
       studentDigits.push(bestRatio >= FILL_THRESHOLD ? String(bestRow) : "?");

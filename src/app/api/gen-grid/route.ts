@@ -140,21 +140,26 @@ export async function POST(req: NextRequest) {
     }
     gy -= bigBox + mm(1);
 
-    // Bubble grid: 10 rows × 6 cols — bordures épaisses 1.5pt
+    // Bubble grid: 10 rows × 6 cols — ovals (same style as QCM)
+    const idOvalW = mm(4.5);
+    const idOvalH = mm(1.5);
+    const idOvalRX = idOvalW / 2;
+    const idOvalRY = idOvalH / 2;
+    const idRowStep = idOvalH + mm(0.8);  // row spacing
     for (let r = 0; r < 10; r++) {
-      const ry = gy - r * (smallBox + smallGap);
-      page.drawText(String(r), { x: idGridX - mm(3), y: ry - smallBox + mm(0.8), size: 6, font: B, color: BLACK });
+      const ryCtr = gy - r * idRowStep - idOvalRY;
+      page.drawText(String(r), { x: idGridX - mm(3), y: ryCtr - 2.5, size: 6, font: B, color: BLACK });
       for (let d = 0; d < DIGITS; d++) {
-        const bx = idGridX + d * (bigBox + bigGap) + (bigBox - smallBox) / 2;
-        page.drawRectangle({ x: bx, y: ry - smallBox, width: smallBox, height: smallBox, borderWidth: 1.5, borderColor: BLACK, color: WHITE });
+        const cx = idGridX + d * (bigBox + bigGap) + bigBox / 2;
+        page.drawEllipse({ x: cx, y: ryCtr, xScale: idOvalRX, yScale: idOvalRY, borderWidth: 1.0, borderColor: BLACK, color: WHITE });
       }
     }
-    const idGridEndY = gy - 10 * (smallBox + smallGap);
+    const idGridEndY = gy - 10 * idRowStep;
 
     // Cadre englobant (ancre OMR)
-    const frameLeft = idGridX + (bigBox - smallBox) / 2 - mm(0.5);
-    const frameW = (DIGITS - 1) * (bigBox + bigGap) + smallBox + (bigBox - smallBox) + mm(1);
-    page.drawRectangle({ x: frameLeft, y: idGridEndY - mm(0.3), width: frameW, height: gy - idGridEndY + mm(0.6), borderWidth: 2.0, borderColor: BLACK });
+    const frameLeft = idGridX - mm(0.5);
+    const frameW2 = idGridW + mm(1);
+    page.drawRectangle({ x: frameLeft, y: idGridEndY - mm(0.3), width: frameW2, height: gy - idGridEndY + mm(0.6), borderWidth: 2.0, borderColor: BLACK });
 
     y = Math.min(y - fH - mm(1), idGridEndY) - mm(1.5);
 
@@ -164,22 +169,22 @@ export async function POST(req: NextRequest) {
     page.drawText(instrT, { x: PW / 2 - instrW / 2, y, size: 6, font: B, color: BLACK });
     y -= mm(2.5);
 
-    // ═══════════════ QCM GRID — wide capsule ovals (dynamic, multi-page) ═══════════════
-    const OVAL_W = mm(7);      // wide capsule (like official OMR reference)
-    const OVAL_H = mm(2.5);    // flat
+    // ═══════════════ QCM GRID — flat capsule ovals (like official OMR) ═══════════════
+    const OVAL_W = mm(4.5);    // compact capsule
+    const OVAL_H = mm(1.5);    // very flat
     const OVAL_RX = OVAL_W / 2;
     const OVAL_RY = OVAL_H / 2;
-    const HGAP = mm(2.5);     // good spacing between ovals
-    const NUM_W = mm(7);
+    const HGAP = mm(1.8);     // spacing between ovals
+    const NUM_W = mm(6);
     const ovalGroupW = 5 * OVAL_W + 4 * HGAP;
-    const COL_W = NUM_W + ovalGroupW + mm(2);
+    const COL_W = NUM_W + ovalGroupW + mm(1.5);
     const COLS = 4;
     const COL_GAP = (CW - COLS * COL_W) / Math.max(1, COLS - 1);
-    const LABEL_H = mm(2.5);
-    const FRAME_PAD_T = mm(0.5);
-    const FRAME_PAD_B = mm(0.3);
+    const LABEL_H = mm(2);
+    const FRAME_PAD_T = mm(0.3);
+    const FRAME_PAD_B = mm(0.2);
     const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
-    const FRAME_GAP = mm(0.8);
+    const FRAME_GAP = mm(0.6);
 
     function drawQCMFrame(pg: typeof page, q: number, cx: number, frameTop: number) {
       pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.6, borderColor: BLACK, color: WHITE });
