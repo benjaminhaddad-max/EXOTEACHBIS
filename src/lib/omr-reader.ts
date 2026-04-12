@@ -34,7 +34,7 @@ const BIG_BOX = mm(4.5);   // match gen-grid compact
 const BIG_GAP = mm(1);     // match gen-grid compact
 const ID_CAP_W = mm(4.5);     // student ID capsule width
 const ID_CAP_H = mm(1.6);    // student ID capsule height
-const ID_ROW_STEP = ID_CAP_H + mm(0.8); // row spacing in ID grid
+const ID_ROW_STEP = ID_CAP_H + mm(1.5); // match gen-grid spacing
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
@@ -436,7 +436,7 @@ export async function readOMR(
     }
 
     // Find longest run of evenly-spaced lines (expected: 4mm step)
-    const expectedRowStep = 2.4 * mmPx; // 1.6mm capsule + 0.8mm gap = 2.4mm
+    const expectedRowStep = 3.1 * mmPx; // 1.6mm capsule + 1.5mm gap = 3.1mm
     const rowTol = expectedRowStep * 0.40;
     let bestRowSeq: number[] = [];
     for (let s = 0; s < hLines.length; s++) {

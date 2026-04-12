@@ -104,17 +104,17 @@ export async function POST(req: NextRequest) {
       page.drawText(info, { x: PW / 2 - iw / 2, y: y - mm(7.5), size: 8, font: B, color: BLACK });
     }
 
-    y -= barH + mm(2);
+    y -= barH + mm(4); // espace sous le header
 
     // ═══════════════ NOM/Prénom (one line) + N° étudiant ═══════════════
     const sectionTop = y;
 
-    // NOM + Prénom on same line
-    const fH = mm(4.5);
-    page.drawText("NOM", { x: MX, y: y - 1, size: 6.5, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(10), y: y - mm(1), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
-    page.drawText("Pr\u00E9nom", { x: MX + mm(62), y: y - 1, size: 6.5, font: B, color: BLACK });
-    page.drawRectangle({ x: MX + mm(76), y: y - mm(1), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
+    // NOM + Prénom on same line — bien descendu sous le header
+    const fH = mm(5);
+    page.drawText("NOM", { x: MX, y: y - 1, size: 7, font: B, color: BLACK });
+    page.drawRectangle({ x: MX + mm(12), y: y - mm(1.5), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
+    page.drawText("Pr\u00E9nom", { x: MX + mm(64), y: y - 1, size: 7, font: B, color: BLACK });
+    page.drawRectangle({ x: MX + mm(80), y: y - mm(1.5), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
 
     // Helper: draw a capsule/stadium shape (rectangle with semicircular ends)
     function drawCapsule(pg: typeof page, x: number, y: number, w: number, h: number, bw: number) {
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     // Bubble grid: 10 rows × 6 cols — capsule shapes (same as QCM)
     const idCapW = mm(4.5);
     const idCapH = mm(1.6);
-    const idRowStep = idCapH + mm(0.8);
+    const idRowStep = idCapH + mm(1.5);  // espace entre rangées ID pour bien distinguer
     for (let r = 0; r < 10; r++) {
       const ryTop = gy - r * idRowStep;
       page.drawText(String(r), { x: idGridX - mm(3), y: ryTop - idCapH / 2 - 2, size: 6, font: B, color: BLACK });
