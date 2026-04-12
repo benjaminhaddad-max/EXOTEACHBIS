@@ -164,37 +164,47 @@ export async function POST(req: NextRequest) {
     page.drawText(instrT, { x: PW / 2 - instrW / 2, y, size: 6, font: B, color: BLACK });
     y -= mm(2.5);
 
-    // ═══════════════ QCM GRID (dynamic, multi-page) ═══════════════
-    const BOX = mm(3.5);
+    // ═══════════════ QCM GRID — ovales (dynamic, multi-page) ═══════════════
+    const OVAL_W = mm(3.5);    // oval horizontal diameter
+    const OVAL_H = mm(2.2);    // oval vertical diameter (compact)
+    const OVAL_RX = OVAL_W / 2;
+    const OVAL_RY = OVAL_H / 2;
     const HGAP = mm(1.5);
     const NUM_W = mm(7);
-    const boxGroupW = 5 * BOX + 4 * HGAP;
-    const COL_W = NUM_W + boxGroupW + mm(2);
+    const ovalGroupW = 5 * OVAL_W + 4 * HGAP;
+    const COL_W = NUM_W + ovalGroupW + mm(2);
     const COLS = 4;
     const COL_GAP = (CW - COLS * COL_W) / (COLS - 1);
-    const LABEL_H = mm(3);
-    const FRAME_PAD_T = mm(0.5);
+    const LABEL_H = mm(2.2);   // reduced for ovals
+    const FRAME_PAD_T = mm(0.4);
     const FRAME_PAD_B = mm(0.3);
-    const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
-    const FRAME_GAP = mm(1);  // compact gap
+    const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
+    const FRAME_GAP = mm(0.8);
 
     function drawQCMFrame(pg: typeof page, q: number, cx: number, frameTop: number) {
       pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
-      pg.drawText(String(q), { x: cx + mm(1.5), y: frameTop - FRAME_PAD_T - BOX + mm(1), size: 8, font: B, color: BLACK });
+      pg.drawText(String(q), { x: cx + mm(1.5), y: frameTop - FRAME_PAD_T - OVAL_H + mm(0.3), size: 7, font: B, color: BLACK });
       const bx0 = cx + NUM_W;
       const r1y = frameTop - FRAME_PAD_T;
+      // Answer ovals (top row)
       for (let li = 0; li < 5; li++) {
-        pg.drawRectangle({ x: bx0 + li * (BOX + HGAP), y: r1y - BOX, width: BOX, height: BOX, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
+        const ovalCX = bx0 + li * (OVAL_W + HGAP) + OVAL_RX;
+        const ovalCY = r1y - OVAL_RY;
+        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
       }
-      const letterY = r1y - BOX - (LABEL_H / 2) - 2;
+      // Letters between rows
+      const letterY = r1y - OVAL_H - (LABEL_H / 2) - 1.5;
       for (let li = 0; li < 5; li++) {
-        const lx = bx0 + li * (BOX + HGAP);
-        const lw = B.widthOfTextAtSize(LETTERS[li], 6);
-        pg.drawText(LETTERS[li], { x: lx + BOX / 2 - lw / 2, y: letterY, size: 6, font: B, color: BLACK });
+        const lx = bx0 + li * (OVAL_W + HGAP);
+        const lw = B.widthOfTextAtSize(LETTERS[li], 5.5);
+        pg.drawText(LETTERS[li], { x: lx + OVAL_RX - lw / 2, y: letterY, size: 5.5, font: B, color: BLACK });
       }
-      const r3y = r1y - BOX - LABEL_H;
+      // Remord ovals (bottom row)
+      const r3y = r1y - OVAL_H - LABEL_H;
       for (let li = 0; li < 5; li++) {
-        pg.drawRectangle({ x: bx0 + li * (BOX + HGAP), y: r3y - BOX, width: BOX, height: BOX, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
+        const ovalCX = bx0 + li * (OVAL_W + HGAP) + OVAL_RX;
+        const ovalCY = r3y - OVAL_RY;
+        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.8, borderColor: BLACK, color: WHITE });
       }
     }
 

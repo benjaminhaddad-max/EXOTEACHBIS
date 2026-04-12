@@ -37,16 +37,17 @@ const SMALL_GAP = mm(0.5);   // match gen-grid compact
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
-// QCM Grid
-const BOX = mm(3.5);
+// QCM Grid (ovals: 3.5mm wide × 2.2mm tall)
+const OVAL_W = mm(3.5);
+const OVAL_H = mm(2.2);
 const HGAP = mm(1.5);
 const NUM_W = mm(7);
-const LABEL_H = mm(3);
-const FRAME_PAD_T = mm(0.5);
+const LABEL_H = mm(2.2);
+const FRAME_PAD_T = mm(0.4);
 const FRAME_PAD_B = mm(0.3);
-const FRAME_H = FRAME_PAD_T + BOX + LABEL_H + BOX + FRAME_PAD_B;
-const FRAME_GAP = mm(1);  // match gen-grid compact
-const BOX_GROUP_W = 5 * BOX + 4 * HGAP;
+const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
+const FRAME_GAP = mm(0.8);
+const BOX_GROUP_W = 5 * OVAL_W + 4 * HGAP;
 const COL_W = NUM_W + BOX_GROUP_W + mm(2);
 const COL_GAP = (CW - 4 * COL_W) / 3;
 
@@ -365,10 +366,11 @@ export async function readOMR(
     Math.round(anchorImgY + (PH - pdfY) * scale);
 
   const scaleXVal = scale;
-  const boxPx = Math.round(BOX * scale);
+  const ovalWPx = Math.round(OVAL_W * scale);
+  const ovalHPx = Math.round(OVAL_H * scale);
   const smallBoxPx = Math.round(SMALL_BOX * scale);
 
-  console.log(`[omr] alignMode=${alignMode} img=${w}x${h} boxPx=${boxPx}`);
+  console.log(`[omr] alignMode=${alignMode} img=${w}x${h} ovalPx=${ovalWPx}x${ovalHPx}`);
 
   // ─── Read Student ID — VISUAL DETECTION ─────────────────────────────────
   // Instead of computing grid positions from PDF coordinates (fragile when
@@ -669,31 +671,34 @@ export async function readOMR(
   const answers: Record<string, string[]> = {};
   const doubtfulQuestions: number[] = [];
 
+  // Compute Q_PER_COL dynamically (same logic as gen-grid)
+  const qPerCol = Math.max(1, Math.floor(questionCount / 4) + (questionCount % 4 > 0 ? 1 : 0));
+
   for (let q = 0; q < questionCount; q++) {
-    const col = Math.floor(q / 18);
-    const row = q % 18;
+    const col = Math.floor(q / qPerCol);
+    const row = q % qPerCol;
     const cx = MX + col * (COL_W + COL_GAP);
     const frameTop = gridTop - row * (FRAME_H + FRAME_GAP);
 
     const r1y = frameTop - FRAME_PAD_T; // answer row top
-    const r3y = r1y - BOX - LABEL_H; // remord row top
+    const r3y = r1y - OVAL_H - LABEL_H; // remord row top (oval height, not box)
     const bx0 = cx + NUM_W;
 
     const answerRatios: number[] = [];
     const remordRatios: number[] = [];
 
     for (let li = 0; li < 5; li++) {
-      const bx = bx0 + li * (BOX + HGAP);
+      const bx = bx0 + li * (OVAL_W + HGAP);
 
-      // Answer row (LEFT-aligned X for QCM area)
+      // Answer row — use rectangular measure for ovals
       const ax = toImgXLeft(bx);
       const ay = toImgY(r1y);
-      answerRatios.push(measureRegion(pixels, w, h, ax, ay, boxPx));
+      answerRatios.push(measureFillRatio(pixels, w, h, ax, ay, ovalWPx, ovalHPx));
 
       // Remord row
       const rx = toImgXLeft(bx);
       const ry = toImgY(r3y);
-      remordRatios.push(measureRegion(pixels, w, h, rx, ry, boxPx));
+      remordRatios.push(measureFillRatio(pixels, w, h, rx, ry, ovalWPx, ovalHPx));
     }
 
     // Remord logic: if any remord bubble is filled, use remord row
