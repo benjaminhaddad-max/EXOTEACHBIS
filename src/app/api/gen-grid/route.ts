@@ -116,12 +116,18 @@ export async function POST(req: NextRequest) {
     page.drawText("Pr\u00E9nom", { x: MX + mm(62), y: y - 1, size: 6.5, font: B, color: BLACK });
     page.drawRectangle({ x: MX + mm(76), y: y - mm(1), width: mm(48), height: fH, borderWidth: 0.5, borderColor: BLACK, color: WHITE });
 
+    // Helper: draw a capsule/stadium shape (rectangle with semicircular ends)
+    function drawCapsule(pg: typeof page, x: number, y: number, w: number, h: number, bw: number) {
+      const r = h / 2;
+      const straight = w - h;
+      const path = `M ${r},0 L ${r + straight},0 A ${r},${r} 0 0,1 ${r + straight},${h} L ${r},${h} A ${r},${r} 0 0,1 ${r},0 Z`;
+      pg.drawSvgPath(path, { x, y: y + h, borderWidth: bw, borderColor: BLACK, color: WHITE });
+    }
+
     // ── N° étudiant (right side, compact) ──
     const DIGITS = 6;
     const bigBox = mm(4.5);
     const bigGap = mm(1);
-    const smallBox = mm(3.8);   // compact mais bordures épaisses → détectable
-    const smallGap = mm(0.5);
     const idGridW = DIGITS * (bigBox + bigGap) - bigGap;
     const idGridX = MX + CW - idGridW;
     let gy = sectionTop;
@@ -140,18 +146,16 @@ export async function POST(req: NextRequest) {
     }
     gy -= bigBox + mm(1);
 
-    // Bubble grid: 10 rows × 6 cols — ovals (same style as QCM)
-    const idOvalW = mm(4.5);
-    const idOvalH = mm(1.5);
-    const idOvalRX = idOvalW / 2;
-    const idOvalRY = idOvalH / 2;
-    const idRowStep = idOvalH + mm(0.8);  // row spacing
+    // Bubble grid: 10 rows × 6 cols — capsule shapes (same as QCM)
+    const idCapW = mm(4.5);
+    const idCapH = mm(1.6);
+    const idRowStep = idCapH + mm(0.8);
     for (let r = 0; r < 10; r++) {
-      const ryCtr = gy - r * idRowStep - idOvalRY;
-      page.drawText(String(r), { x: idGridX - mm(3), y: ryCtr - 2.5, size: 6, font: B, color: BLACK });
+      const ryTop = gy - r * idRowStep;
+      page.drawText(String(r), { x: idGridX - mm(3), y: ryTop - idCapH / 2 - 2, size: 6, font: B, color: BLACK });
       for (let d = 0; d < DIGITS; d++) {
-        const cx = idGridX + d * (bigBox + bigGap) + bigBox / 2;
-        page.drawEllipse({ x: cx, y: ryCtr, xScale: idOvalRX, yScale: idOvalRY, borderWidth: 1.0, borderColor: BLACK, color: WHITE });
+        const capX = idGridX + d * (bigBox + bigGap) + (bigBox - idCapW) / 2;
+        drawCapsule(page, capX, ryTop - idCapH, idCapW, idCapH, 1.0);
       }
     }
     const idGridEndY = gy - 10 * idRowStep;
@@ -169,47 +173,47 @@ export async function POST(req: NextRequest) {
     page.drawText(instrT, { x: PW / 2 - instrW / 2, y, size: 6, font: B, color: BLACK });
     y -= mm(2.5);
 
-    // ═══════════════ QCM GRID — flat capsule ovals (like official OMR) ═══════════════
-    const OVAL_W = mm(4.5);    // compact capsule
-    const OVAL_H = mm(1.5);    // very flat
-    const OVAL_RX = OVAL_W / 2;
-    const OVAL_RY = OVAL_H / 2;
-    const HGAP = mm(1.8);     // spacing between ovals
+    // ═══════════════ QCM GRID — capsule shapes (rounded rectangles) ═══════════════
+    const CAP_W = mm(4.5);     // capsule width
+    const CAP_H = mm(1.6);     // capsule height (flat)
+    const CAP_R = CAP_H / 2;   // end radius = half height → perfect semicircle ends
+    const HGAP = mm(1.5);
     const NUM_W = mm(6);
-    const ovalGroupW = 5 * OVAL_W + 4 * HGAP;
-    const COL_W = NUM_W + ovalGroupW + mm(1.5);
+    const capGroupW = 5 * CAP_W + 4 * HGAP;
+    const COL_W = NUM_W + capGroupW + mm(1.5);
     const COLS = 4;
     const COL_GAP = (CW - COLS * COL_W) / Math.max(1, COLS - 1);
-    const LABEL_H = mm(2);
-    const FRAME_PAD_T = mm(0.3);
-    const FRAME_PAD_B = mm(0.2);
-    const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
+    const LABEL_H = mm(2.8);   // breathing room for letters
+    const FRAME_PAD_T = mm(0.4);
+    const FRAME_PAD_B = mm(0.3);
+    const FRAME_H = FRAME_PAD_T + CAP_H + LABEL_H + CAP_H + FRAME_PAD_B;
     const FRAME_GAP = mm(0.6);
 
     function drawQCMFrame(pg: typeof page, q: number, cx: number, frameTop: number) {
       pg.drawRectangle({ x: cx, y: frameTop - FRAME_H, width: COL_W, height: FRAME_H, borderWidth: 0.6, borderColor: BLACK, color: WHITE });
-      pg.drawText(String(q), { x: cx + mm(0.8), y: frameTop - FRAME_PAD_T - OVAL_H + mm(0.1), size: 6.5, font: B, color: BLACK });
+      // Question number — vertically centered in frame
+      const numStr = String(q);
+      const numW = B.widthOfTextAtSize(numStr, 7);
+      pg.drawText(numStr, { x: cx + (NUM_W - numW) / 2, y: frameTop - FRAME_H / 2 - 2.5, size: 7, font: B, color: BLACK });
       const bx0 = cx + NUM_W;
       const r1y = frameTop - FRAME_PAD_T;
       // Answer capsules (top row)
       for (let li = 0; li < 5; li++) {
-        const ovalCX = bx0 + li * (OVAL_W + HGAP) + OVAL_RX;
-        const ovalCY = r1y - OVAL_RY;
-        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.7, borderColor: BLACK, color: WHITE });
+        const capX = bx0 + li * (CAP_W + HGAP);
+        drawCapsule(pg, capX, r1y - CAP_H, CAP_W, CAP_H, 0.6);
       }
-      // Letters between rows
-      const letterY = r1y - OVAL_H - (LABEL_H / 2) - 1;
+      // Letters between rows — well centered
+      const letterY = r1y - CAP_H - (LABEL_H / 2) - 2;
       for (let li = 0; li < 5; li++) {
-        const lx = bx0 + li * (OVAL_W + HGAP);
-        const lw = B.widthOfTextAtSize(LETTERS[li], 5);
-        pg.drawText(LETTERS[li], { x: lx + OVAL_RX - lw / 2, y: letterY, size: 5, font: B, color: BLACK });
+        const lx = bx0 + li * (CAP_W + HGAP);
+        const lw = B.widthOfTextAtSize(LETTERS[li], 5.5);
+        pg.drawText(LETTERS[li], { x: lx + CAP_W / 2 - lw / 2, y: letterY, size: 5.5, font: B, color: BLACK });
       }
       // Remord capsules (bottom row)
-      const r3y = r1y - OVAL_H - LABEL_H;
+      const r3y = r1y - CAP_H - LABEL_H;
       for (let li = 0; li < 5; li++) {
-        const ovalCX = bx0 + li * (OVAL_W + HGAP) + OVAL_RX;
-        const ovalCY = r3y - OVAL_RY;
-        pg.drawEllipse({ x: ovalCX, y: ovalCY, xScale: OVAL_RX, yScale: OVAL_RY, borderWidth: 0.7, borderColor: BLACK, color: WHITE });
+        const capX = bx0 + li * (CAP_W + HGAP);
+        drawCapsule(pg, capX, r3y - CAP_H, CAP_W, CAP_H, 0.6);
       }
     }
 

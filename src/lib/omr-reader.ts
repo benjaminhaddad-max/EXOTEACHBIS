@@ -32,23 +32,23 @@ const BAR_H = mm(20);
 const DIGITS = 6;
 const BIG_BOX = mm(4.5);   // match gen-grid compact
 const BIG_GAP = mm(1);     // match gen-grid compact
-const SMALL_BOX_W = mm(4.5);  // student ID oval width (match gen-grid)
-const SMALL_BOX_H = mm(1.5); // student ID oval height
-const SMALL_ROW_STEP = SMALL_BOX_H + mm(0.8); // row spacing in ID grid
+const ID_CAP_W = mm(4.5);     // student ID capsule width
+const ID_CAP_H = mm(1.6);    // student ID capsule height
+const ID_ROW_STEP = ID_CAP_H + mm(0.8); // row spacing in ID grid
 const ID_GRID_W = DIGITS * (BIG_BOX + BIG_GAP) - BIG_GAP;
 const ID_GRID_X = MX + CW - ID_GRID_W - mm(2);
 
-// QCM Grid (flat capsule ovals: 4.5mm × 1.5mm)
-const OVAL_W = mm(4.5);
-const OVAL_H = mm(1.5);
-const HGAP = mm(1.8);
+// QCM Grid (capsule shapes: 4.5mm × 1.6mm)
+const CAP_W = mm(4.5);
+const CAP_H = mm(1.6);
+const HGAP = mm(1.5);
 const NUM_W = mm(6);
-const LABEL_H = mm(2);
-const FRAME_PAD_T = mm(0.3);
-const FRAME_PAD_B = mm(0.2);
-const FRAME_H = FRAME_PAD_T + OVAL_H + LABEL_H + OVAL_H + FRAME_PAD_B;
+const LABEL_H = mm(2.8);
+const FRAME_PAD_T = mm(0.4);
+const FRAME_PAD_B = mm(0.3);
+const FRAME_H = FRAME_PAD_T + CAP_H + LABEL_H + CAP_H + FRAME_PAD_B;
 const FRAME_GAP = mm(0.6);
-const BOX_GROUP_W = 5 * OVAL_W + 4 * HGAP;
+const BOX_GROUP_W = 5 * CAP_W + 4 * HGAP;
 const COL_W = NUM_W + BOX_GROUP_W + mm(1.5);
 const COL_GAP = (CW - 4 * COL_W) / 3;
 
@@ -367,12 +367,12 @@ export async function readOMR(
     Math.round(anchorImgY + (PH - pdfY) * scale);
 
   const scaleXVal = scale;
-  const ovalWPx = Math.round(OVAL_W * scale);
-  const ovalHPx = Math.round(OVAL_H * scale);
-  const idOvalWPx = Math.round(SMALL_BOX_W * scale);
-  const idOvalHPx = Math.round(SMALL_BOX_H * scale);
+  const capWPx = Math.round(CAP_W * scale);
+  const capHPx = Math.round(CAP_H * scale);
+  const idCapWPx = Math.round(ID_CAP_W * scale);
+  const idCapHPx = Math.round(ID_CAP_H * scale);
 
-  console.log(`[omr] alignMode=${alignMode} img=${w}x${h} ovalPx=${ovalWPx}x${ovalHPx}`);
+  console.log(`[omr] alignMode=${alignMode} img=${w}x${h} capPx=${capWPx}x${capHPx}`);
 
   // ─── Read Student ID — VISUAL DETECTION ─────────────────────────────────
   // Instead of computing grid positions from PDF coordinates (fragile when
@@ -393,7 +393,7 @@ export async function readOMR(
   let gy = sectionTop;
   gy -= mm(3);
   gy -= BIG_BOX * 1.5 + mm(2);
-  const gridEndY = gy - 10 * SMALL_ROW_STEP;
+  const gridEndY = gy - 10 * ID_ROW_STEP;
   const leftEndY = sectionTop - FH - mm(2) - mm(1.5);
   const gridTopPdf = Math.min(leftEndY, gridEndY) - mm(2) - mm(1) - mm(3.5);
   const qcmGridTopImg = toImgY(gridTopPdf);
@@ -436,7 +436,7 @@ export async function readOMR(
     }
 
     // Find longest run of evenly-spaced lines (expected: 4mm step)
-    const expectedRowStep = 2.3 * mmPx; // 1.5mm oval + 0.8mm gap = 2.3mm
+    const expectedRowStep = 2.4 * mmPx; // 1.6mm capsule + 0.8mm gap = 2.4mm
     const rowTol = expectedRowStep * 0.40;
     let bestRowSeq: number[] = [];
     for (let s = 0; s < hLines.length; s++) {
@@ -649,10 +649,10 @@ export async function readOMR(
       const bx = ID_GRID_X + col * (BIG_BOX + BIG_GAP);
       let bestRow = -1, bestRatio = 0;
       for (let row = 0; row < 10; row++) {
-        const ry = gy2 - row * SMALL_ROW_STEP;
+        const ry = gy2 - row * ID_ROW_STEP;
         const ix = toImgXRight(bx);
         const iy = toImgY(ry);
-        const ratio = measureFillRatio(pixels, w, h, ix, iy, idOvalWPx, idOvalHPx);
+        const ratio = measureFillRatio(pixels, w, h, ix, iy, idCapWPx, idCapHPx);
         if (ratio > bestRatio) { bestRatio = ratio; bestRow = row; }
       }
       studentDigits.push(bestRatio >= FILL_THRESHOLD ? String(bestRow) : "?");
@@ -683,24 +683,24 @@ export async function readOMR(
     const frameTop = gridTop - row * (FRAME_H + FRAME_GAP);
 
     const r1y = frameTop - FRAME_PAD_T; // answer row top
-    const r3y = r1y - OVAL_H - LABEL_H; // remord row top (oval height, not box)
+    const r3y = r1y - CAP_H - LABEL_H; // remord row top
     const bx0 = cx + NUM_W;
 
     const answerRatios: number[] = [];
     const remordRatios: number[] = [];
 
     for (let li = 0; li < 5; li++) {
-      const bx = bx0 + li * (OVAL_W + HGAP);
+      const bx = bx0 + li * (CAP_W + HGAP);
 
-      // Answer row — use rectangular measure for ovals
+      // Answer row
       const ax = toImgXLeft(bx);
       const ay = toImgY(r1y);
-      answerRatios.push(measureFillRatio(pixels, w, h, ax, ay, ovalWPx, ovalHPx));
+      answerRatios.push(measureFillRatio(pixels, w, h, ax, ay, capWPx, capHPx));
 
       // Remord row
       const rx = toImgXLeft(bx);
       const ry = toImgY(r3y);
-      remordRatios.push(measureFillRatio(pixels, w, h, rx, ry, ovalWPx, ovalHPx));
+      remordRatios.push(measureFillRatio(pixels, w, h, rx, ry, capWPx, capHPx));
     }
 
     // Remord logic: if any remord bubble is filled, use remord row
